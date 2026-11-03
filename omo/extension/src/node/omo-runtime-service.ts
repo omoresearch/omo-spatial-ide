@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {
-    AgentKind, HostStatus, OmoRuntimeService, RuntimePoll, SessionWorkspace
+    AgentKind, CopyResult, FindResult, HostStatus, OmoRuntimeService, PASTE_MAX_BYTES, PasteResult, ResumeResult,
+    RuntimePoll, SessionWorkspace, ViewModes, WorkspaceSummary
 } from '../common/runtime-protocol';
 import { RuntimeLocations } from './runtime-discovery';
 import { RuntimeHost } from './runtime-host';
@@ -167,6 +168,91 @@ export class OmoRuntimeServiceImpl implements OmoRuntimeService {
     async detach(viewId: string): Promise<void> {
         this.views.delete(viewId);
         await this.host.request('detach', { viewId: requireString(viewId, 'viewId', 64) });
+    }
+
+    // --- advanced parity: thin validated forwards to the host (the bridge enforces limits) ---
+    async listWorkspaces(): Promise<WorkspaceSummary[]> {
+        return this.host.request('ws_list');
+    }
+
+    async renameWorkspace(input: { workspaceId: string; name: string }): Promise<SessionWorkspace> {
+        return this.host.request('ws_rename', { workspaceId: requireString(input?.workspaceId, 'workspaceId', 64), name: requireString(input.name, 'name', 80) });
+    }
+
+    async deleteWorkspace(input: { workspaceId: string; confirmedDelete: boolean; confirmedBusy?: boolean }): Promise<{ deleted: boolean; detail: string }> {
+        return this.host.request('ws_delete', {
+            workspaceId: requireString(input?.workspaceId, 'workspaceId', 64),
+            confirmedDelete: input.confirmedDelete === true, confirmedBusy: input.confirmedBusy === true
+        });
+    }
+
+    async bindStation(input: { stationId: string; projectUri: string; workspaceId: string }): Promise<SessionWorkspace> {
+        const stationId = requireString(input?.stationId, 'stationId', 128);
+        const projectUri = requireString(input.projectUri, 'projectUri', 4096);
+        return this.host.request('station_bind', {
+            stationId, projectUri, projectDir: projectDirectory(projectUri), workspaceId: requireString(input.workspaceId, 'workspaceId', 64)
+        });
+    }
+
+    async setWorkspaceProfile(input: { workspaceId: string; profile: string }): Promise<SessionWorkspace> {
+        return this.host.request('ws_profile', {
+            workspaceId: requireString(input?.workspaceId, 'workspaceId', 64), profile: typeof input.profile === 'string' ? input.profile.slice(0, 64) : ''
+        });
+    }
+
+    async setKeepAwake(input: { workspaceId: string; on: boolean }): Promise<SessionWorkspace> {
+        return this.host.request('ws_keep_awake', { workspaceId: requireString(input?.workspaceId, 'workspaceId', 64), on: input.on === true });
+    }
+
+    async resumeAgent(input: { workspaceId: string; tabId: string; confirmedStart: boolean }): Promise<ResumeResult> {
+        return this.host.request('agent_resume', {
+            workspaceId: requireString(input?.workspaceId, 'workspaceId', 64), tabId: requireString(input.tabId, 'tabId', 64),
+            confirmedStart: input.confirmedStart === true
+        });
+    }
+
+    async scroll(input: { viewId: string; lines: number }): Promise<ViewModes> {
+        return this.host.request('scroll', { viewId: requireString(input?.viewId, 'viewId', 64), lines: requireSize(input.lines, 'lines') });
+    }
+
+    async wheel(input: { viewId: string; notches: number; x?: number; y?: number }): Promise<ViewModes> {
+        return this.host.request('wheel', {
+            viewId: requireString(input?.viewId, 'viewId', 64), notches: requireSize(input.notches, 'notches'),
+            x: typeof input.x === 'number' && Number.isFinite(input.x) ? Math.round(input.x) : 0,
+            y: typeof input.y === 'number' && Number.isFinite(input.y) ? Math.round(input.y) : 0
+        });
+    }
+
+    async find(input: { viewId: string; query: string; step: number }): Promise<FindResult> {
+        if (typeof input?.query !== 'string') {
+            throw new Error('query must be a string');
+        }
+        return this.host.request('find', {
+            viewId: requireString(input.viewId, 'viewId', 64), query: input.query.slice(0, 200),
+            step: typeof input.step === 'number' && Number.isFinite(input.step) ? Math.sign(input.step) : 0
+        });
+    }
+
+    async copyText(input: { viewId: string; x1: number; y1: number; x2: number; y2: number; unit?: 'char' | 'word' | 'line' }): Promise<CopyResult> {
+        return this.host.request('copy', {
+            viewId: requireString(input?.viewId, 'viewId', 64),
+            x1: requireSize(input.x1, 'x1'), y1: requireSize(input.y1, 'y1'), x2: requireSize(input.x2, 'x2'), y2: requireSize(input.y2, 'y2'),
+            unit: input.unit === 'word' || input.unit === 'line' ? input.unit : 'char'
+        });
+    }
+
+    async clearHistory(input: { viewId: string; confirmedClear: boolean }): Promise<ViewModes> {
+        return this.host.request('clear_history', { viewId: requireString(input?.viewId, 'viewId', 64), confirmedClear: input.confirmedClear === true });
+    }
+
+    async paste(input: { viewId: string; text: string }): Promise<PasteResult> {
+        if (typeof input?.text !== 'string') {
+            throw new Error('text must be a string');
+        }
+        if (Buffer.byteLength(input.text, 'utf8') > PASTE_MAX_BYTES) {
+            throw new Error(`paste too large (the limit is ${PASTE_MAX_BYTES / 1024} KiB)`);
+        }
+        return this.host.request('paste', { viewId: requireString(input.viewId, 'viewId', 64), text: input.text });
     }
 
     /** Detach this connection's views only; the tabs keep running. */

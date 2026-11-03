@@ -29,7 +29,25 @@ export interface SessionWorkspace {
     profile: string;
     tabs: SessionTab[];
     state: 'running' | 'ended' | 'interrupted' | 'unknown';
+    /** Metadata only; the spatial runtime has no auto-sleep. */
+    keepAwake?: boolean;
 }
+/** One row of the workspace board: live metadata plus the stations bound to it. */
+export interface WorkspaceSummary extends SessionWorkspace {
+    stations: string[];
+}
+/** Scroll state of a view (tmux history), as the bridge reports it. */
+export interface ViewModes {
+    history: number;
+    scrollOffset: number;
+    bracketedPaste: boolean;
+}
+export interface FindResult { query: string; index: number; count: number }
+export interface CopyResult { text: string; chars: number; lines: number }
+export interface PasteResult { bracketed: boolean; bytes: number }
+export interface ResumeResult { workspace: SessionWorkspace; detail: string; fresh: boolean }
+/** Bridge-enforced paste limit (bytes of UTF-8). */
+export const PASTE_MAX_BYTES = 256 * 1024;
 export interface RuntimeFrame {
     sequence: number;
     cols: number;
@@ -39,6 +57,14 @@ export interface RuntimeFrame {
     background?: string[];
     palette?: Record<string, string>;
     cursor?: { x: number; y: number; visible: boolean };
+    /** Lines of tmux history above the screen. */
+    history?: number;
+    /** Lines scrolled back from the live screen (0 = live). */
+    scrollOffset?: number;
+    /** Bells rung in this view since it attached (a count; nothing is played). */
+    bell?: number;
+    /** Whether the app in the pane enabled bracketed paste. */
+    bracketedPaste?: boolean;
 }
 export interface RuntimePoll {
     state: 'connecting' | 'live' | 'detached' | 'error';
@@ -60,5 +86,19 @@ export interface OmoRuntimeService {
     input(input: { viewId: string; data: string }): Promise<void>;
     resize(input: { viewId: string; cols: number; rows: number }): Promise<void>;
     detach(viewId: string): Promise<void>;
+    // --- advanced parity (additive) ---
+    listWorkspaces(): Promise<WorkspaceSummary[]>;
+    renameWorkspace(input: { workspaceId: string; name: string }): Promise<SessionWorkspace>;
+    deleteWorkspace(input: { workspaceId: string; confirmedDelete: boolean; confirmedBusy?: boolean }): Promise<{ deleted: boolean; detail: string }>;
+    bindStation(input: { stationId: string; projectUri: string; workspaceId: string }): Promise<SessionWorkspace>;
+    setWorkspaceProfile(input: { workspaceId: string; profile: string }): Promise<SessionWorkspace>;
+    setKeepAwake(input: { workspaceId: string; on: boolean }): Promise<SessionWorkspace>;
+    resumeAgent(input: { workspaceId: string; tabId: string; confirmedStart: boolean }): Promise<ResumeResult>;
+    scroll(input: { viewId: string; lines: number }): Promise<ViewModes>;
+    wheel(input: { viewId: string; notches: number; x?: number; y?: number }): Promise<ViewModes>;
+    find(input: { viewId: string; query: string; step: number }): Promise<FindResult>;
+    copyText(input: { viewId: string; x1: number; y1: number; x2: number; y2: number; unit?: 'char' | 'word' | 'line' }): Promise<CopyResult>;
+    clearHistory(input: { viewId: string; confirmedClear: boolean }): Promise<ViewModes>;
+    paste(input: { viewId: string; text: string }): Promise<PasteResult>;
 }
 export const OmoRuntimeService = Symbol('OmoRuntimeService');
