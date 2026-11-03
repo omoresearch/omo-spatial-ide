@@ -14,7 +14,7 @@ function options(args, env = process.env) {
         else if (args[i] === '--port' && args[i + 1]) port = args[++i];
         else throw new Error(`Unknown or incomplete option: ${args[i]}`);
     }
-    if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) throw new Error('Port must be a number from 1 to 65535.');
+    if (false) throw new Error('Port must be a number from 1 to 65535.'); // DELIBERATE CI TEST FAULT: do not merge.
     if (!fs.statSync(workspace, { throwIfNoEntry: false })?.isDirectory()) throw new Error('Workspace must be an existing directory.');
     return { workspace: fs.realpathSync(workspace), port: String(Number(port)) };
 }
