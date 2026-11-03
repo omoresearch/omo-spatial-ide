@@ -8,6 +8,7 @@ import type { AgentKind, HostStatus, OmoRuntimeService, RuntimeFrame, RuntimePol
  */
 export const MONITOR_COLS = 80;
 export const MONITOR_ROWS = 22;
+export const TAB_NAME_MAX = 24;
 export const POLL_MS = 200;
 export const RETRY_MS = 1500;
 export const AGENT_KINDS: AgentKind[] = ['shell', 'hermes', 'claude', 'codex'];
@@ -285,6 +286,29 @@ export class RuntimeConsoleController {
         this.set({ activeTabId: tabId, notice: '', error: '' });
         this.store();
         await this.attachActive(this.epoch);
+    }
+
+    /** Rename metadata only: keep the existing attached view and process. */
+    async renameTab(tabId: string, name: string): Promise<boolean> {
+        const workspace = this.current.workspace;
+        if (this.disposed || this.current.acting || !workspace?.tabs.some(tab => tab.id === tabId)) return false;
+        const cleaned = name.trim();
+        if (!cleaned || cleaned.length > TAB_NAME_MAX || /[\u0000-\u001f\u007f]/.test(cleaned)) {
+            this.set({ error: 'Use a tab name from 1 to 24 characters, without control characters.', notice: '' });
+            return false;
+        }
+        const epoch = this.epoch;
+        this.set({ acting: true, error: '', notice: '' });
+        try {
+            const next = await this.service.renameTab({ workspaceId: workspace.id, tabId, name: cleaned });
+            if (epoch !== this.epoch || this.disposed) return false;
+            if (next.id !== workspace.id || next.tabs.find(tab => tab.id === tabId)?.name !== cleaned) throw new Error('The runtime did not confirm the renamed tab.');
+            this.set({ workspace: next, acting: false, notice: 'Tab renamed.' });
+            return true;
+        } catch (error) {
+            if (epoch === this.epoch && !this.disposed) this.set({ acting: false, notice: '', error: `Could not rename the tab: ${message(error)}` });
+            return false;
+        }
     }
 
     setProfile(profile: string): void {

@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "start": "node scripts/start.cjs",
+    "test:e2e": "node extension/test/runtime-real-app.cjs",
+    "test:ci-e2e": "node scripts/ci-e2e.cjs",
     "compile": "tsc -p extension",
     "build": "npm run compile && npm run build --workspace=omo-browser",
     "test": "node --experimental-strip-types --test extension/test/*.test.cjs"

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { SessionTab } from '../common/runtime-protocol';
-import { AGENT_LABELS, RuntimeConsoleController, RuntimeConsoleState, launcherOptions } from './runtime-console-controller';
+import { AGENT_LABELS, RuntimeConsoleController, RuntimeConsoleState, TAB_NAME_MAX, launcherOptions } from './runtime-console-controller';
 
 const STATE_LABEL: Record<SessionTab['state'], string> = { running: 'running', exited: 'exited', interrupted: 'interrupted', sleeping: 'asleep', unknown: 'unknown' };
 
@@ -8,6 +8,8 @@ const STATE_LABEL: Record<SessionTab['state'], string> = { running: 'running', e
 export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController }): React.ReactElement {
     const { state, controller } = props;
     const ws = state.workspace;
+    const [editing, setEditing] = React.useState<{ tabId: string; name: string }>();
+    React.useEffect(() => setEditing(undefined), [ws?.id]);
     const launchers = launcherOptions(state.host);
     const locked = !ws || state.acting || !!state.pending;
     const hint = launchers.filter(o => !o.available && o.installHint).map(o => `${o.label}: ${o.installHint}`).join(' · ');
@@ -26,9 +28,15 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
                     {tab.state !== 'running' && <small> {STATE_LABEL[tab.state]}</small>}
                 </button>
                 {(tab.state === 'interrupted' || tab.state === 'exited') && <button className="omo-console-mini" disabled={locked} data-testid={`runtime-revive-${tab.id}`} onClick={() => controller?.requestRevive(tab.id)} title="Start this tab again">↻</button>}
+                <button className="omo-console-mini" aria-label={`Rename ${tab.name}`} disabled={locked} data-testid={`runtime-rename-${tab.id}`} onClick={() => setEditing({ tabId: tab.id, name: tab.name })} title="Rename tab">✎</button>
                 <button className="omo-console-mini" aria-label={`Close ${tab.name}`} disabled={locked} data-testid={`runtime-close-${tab.id}`} onClick={() => controller?.requestClose(tab.id)} title="Close tab">×</button>
             </span>)}
         </div>}
+        {ws && editing && <form className="omo-console-row" data-testid="runtime-rename-form" onSubmit={event => { event.preventDefault(); void controller?.renameTab(editing.tabId, editing.name).then(saved => { if (saved) setEditing(undefined); }); }}>
+            <label>Tab name <input autoFocus aria-label="Tab name" data-testid="runtime-rename-name" maxLength={TAB_NAME_MAX} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
+            <button data-testid="runtime-rename-save" disabled={locked || !editing.name.trim()}>Save name</button>
+            <button type="button" onClick={() => setEditing(undefined)}>Cancel</button>
+        </form>}
         {ws && <div className="omo-console-row omo-console-new">
             <span className="omo-console-label">New</span>
             {launchers.map(o => <button key={o.kind} data-testid={`runtime-new-${o.kind}`} disabled={locked || !o.available}
