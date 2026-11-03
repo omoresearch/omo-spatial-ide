@@ -9,6 +9,7 @@ const ROOT = path.resolve(__dirname, '../..');
 const EVIDENCE = path.join(ROOT, 'evidence');
 const PROJECT = fs.realpathSync(process.env.OMO_PROJECT || path.join(ROOT, 'demo-project'));
 const RUN = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
+const PRIMARY_NAME = `Primary ${RUN}`;
 const CANVAS = 'canvas[data-testid="omo-world-canvas"]';
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const checks = [];
@@ -29,6 +30,13 @@ async function focusMonitor(page) {
 }
 async function command(page, text) { await focusMonitor(page); await page.keyboard.type(text); await page.keyboard.press('Enter'); }
 async function visibleLine(page, value) { await page.waitForFunction(v => document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.terminalText.split('\n').some(line => line.trim() === v), { timeout: 20000 }, value); }
+async function serverReady(url) {
+    for (let n = 0; n < 200; n++) {
+        try { const response = await fetch(url, { signal: AbortSignal.timeout(500) }); if (response.ok) return; } catch { /* bounded restart readiness */ }
+        await wait(100);
+    }
+    throw new Error('Actual application did not become HTTP-ready after restart');
+}
 async function trustAuthoredProject(page) {
     const end = Date.now() + 15000;
     while (Date.now() < end) {
@@ -49,10 +57,24 @@ async function trustAuthoredProject(page) {
         await page.goto(process.env.OMO_URL || 'http://127.0.0.1:3190', { waitUntil: 'domcontentloaded' });
         await trustAuthoredProject(page);
         await page.waitForSelector('[data-testid="omo-onboarding"]', { timeout: 25000 });
-        await page.click('[data-testid="create-room"]');
+        await page.waitForSelector('[data-testid="omo-scene"][data-ready="true"]', { timeout: 25000 });
+        // Theia's first layout and workspace-trust prompt may settle after the form mounts.
+        // Retry only this idempotent, non-sending room save, and assert that the real click landed.
+        for (let attempt = 0; attempt < 3; attempt++) {
+            await trustAuthoredProject(page);
+            await page.waitForFunction(() => { const b = document.querySelector('[data-testid="create-room"]'); return b && !b.disabled; });
+            await page.click('[data-testid="create-room"]');
+            try { await page.waitForSelector('canvas[data-testid="omo-world-canvas"][data-navigation="walk"]', { timeout: 5000 }); break; }
+            catch (error) { if (attempt === 2) throw error; }
+        }
         await page.waitForSelector('[data-testid="runtime-console"]', { timeout: 20000 });
         check('Real rendered route includes persistent-runtime console, not just an unmounted component', true);
         check('Room still starts in first person at eye height', await page.$eval(CANVAS, e => e.dataset.navigation === 'walk' && e.dataset.eyeY === '1.75'));
+        check('Session controls have their own layout row and never cover the 3D viewport', await page.evaluate(() => {
+            const controls = document.querySelector('[data-testid="runtime-console"]').getBoundingClientRect();
+            const canvas = document.querySelector('canvas[data-testid="omo-world-canvas"]').getBoundingClientRect();
+            return controls.bottom <= canvas.top + 1;
+        }));
         await approach(page); await focusMonitor(page);
         const firstBinding = await binding(page);
         check('Physical station stores an actual workspace and active tab binding', !!firstBinding?.workspaceId && !!firstBinding?.tabId);
@@ -68,9 +90,9 @@ async function trustAuthoredProject(page) {
         await page.click(`[data-testid="runtime-rename-${firstBinding.tabId}"]`);
         await page.click('[data-testid="runtime-rename-name"]');
         await page.keyboard.down('Control'); await page.keyboard.press('a'); await page.keyboard.up('Control');
-        await page.keyboard.type('Primary shell');
+        await page.keyboard.type(PRIMARY_NAME);
         await page.click('[data-testid="runtime-rename-save"]');
-        await page.waitForFunction(id => document.querySelector(`[data-testid="runtime-tab-${id}"]`)?.textContent.trim() === 'Primary shell', {}, firstBinding.tabId);
+        await page.waitForFunction((id, name) => document.querySelector(`[data-testid="runtime-tab-${id}"]`)?.textContent.trim() === name, {}, firstBinding.tabId, PRIMARY_NAME);
         check('Real rename control changes persisted tab metadata without a replacement tab', (await binding(page)).tabId === firstBinding.tabId);
         const originalTabs = await page.$$eval('[data-testid="runtime-console"] [role="tab"]', elements => elements.length);
         await page.click('[data-testid="runtime-new-shell"]');
@@ -93,7 +115,7 @@ async function trustAuthoredProject(page) {
         await page.waitForSelector('[data-testid="in-world-terminal-output"][data-ready="true"]', { timeout: 35000 });
         const reloaded = await binding(page);
         check('Page refresh reconnects the same workspace/tab without duplicates', reloaded.workspaceId === firstBinding.workspaceId && reloaded.tabId === firstBinding.tabId && await page.$$eval('[data-testid="runtime-console"] [role="tab"]', elements => elements.length) === originalTabs + 1);
-        await page.waitForFunction(id => document.querySelector(`[data-testid="runtime-tab-${id}"]`)?.textContent.trim() === 'Primary shell', {}, firstBinding.tabId);
+        await page.waitForFunction((id, name) => document.querySelector(`[data-testid="runtime-tab-${id}"]`)?.textContent.trim() === name, {}, firstBinding.tabId, PRIMARY_NAME);
         check('Renamed tab survives a full page reload and server metadata read', true);
         await approach(page);
         await command(page, `printf '%s:%s:%s\\n' "$$" "$OMO_E2E_MARK" "$PWD" > ${path.basename(proofs[2])}`);
@@ -106,6 +128,7 @@ async function trustAuthoredProject(page) {
             assert.equal(restarted.status, 0, restarted.stderr);
             const after = spawnSync('systemctl', ['--user', 'show', unit, '-p', 'MainPID', '--value'], { encoding: 'utf8' }).stdout.trim();
             assert.notEqual(before, after, 'Theia backend process must actually change');
+            await serverReady(process.env.OMO_URL || 'http://127.0.0.1:3190');
             await page.reload({ waitUntil: 'domcontentloaded' });
             await page.waitForSelector('[data-testid="in-world-terminal-output"][data-ready="true"]', { timeout: 45000 });
             await approach(page);

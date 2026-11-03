@@ -20,7 +20,7 @@ const THEMES = {
     jungle: { title: 'Prehistoric jungle', eyebrow: 'EXPEDITION / 02', description: 'A green retreat. Room to think, space to build.', symbol: '✳' }
 };
 
-function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSelect: (station: Workstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrame: MonitorFrame; overlay?: React.ReactNode; onInput: (text: string) => void; onMessage: (text: string) => void }): React.ReactElement {
+function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSelect: (station: Workstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrame: MonitorFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onMessage: (text: string) => void }): React.ReactElement {
     const host = React.useRef<HTMLDivElement>(null);
     const instance = React.useRef<RoomScene>();
     const callbacks = React.useRef(props); callbacks.current = props;
@@ -37,15 +37,15 @@ function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSel
             onInput: text=>callbacks.current.onInput(text),onMessage:text=>callbacks.current.onMessage(text),
             onSelect: action => callbacks.current.onSelect(action), onCameraChange: camera => callbacks.current.onCamera(camera),
             onReady: () => setReady(true), onError: message => setError(message) });
-        instance.current = scene;scene.setTerminalFrame(callbacks.current.terminalFrame);
-        return () => { scene.dispose(); instance.current = undefined; };
+        instance.current = scene;scene.setTerminalFrame(callbacks.current.terminalFrame);callbacks.current.onInstance?.(scene);
+        return () => { scene.dispose(); instance.current = undefined; callbacks.current.onInstance?.(undefined); };
     }, [props.theme]);
     return <div className={`omo-scene-wrap ${mode==='walk'?'omo-walking':''}`} data-theme={props.theme} data-navigation={mode}>
         <div ref={host} className="omo-scene" data-testid="omo-scene" data-ready={ready ? 'true' : 'false'} />
         {error && <div className="omo-render-error" role="alert"><strong>3D rendering could not start.</strong><p>{error}</p><p>The project terminal and editor are still available from the toolbar.</p></div>}
         {mode==='walk'&&<div className="omo-crosshair" aria-hidden="true">+</div>}
         {props.walk&&<div className="omo-navigation-switch"><button data-testid="walk-mode" aria-pressed={mode==='walk'} onClick={()=>setMode('walk')}>First person</button><button data-testid="overview-mode" aria-pressed={mode==='overview'} onClick={()=>setMode('overview')}>Overview</button></div>}
-        {props.overlay && <div className="omo-console-host" onPointerDownCapture={()=>instance.current?.releaseTyping()}>{props.overlay}</div>}
+
         <div className="omo-scene-controls"><span>{mode==='walk'?'WASD to walk · Drag to look · Click a screen · Esc to leave it':'Drag to orbit · Scroll to zoom'}</span><button aria-label="Reset room camera" onClick={() => instance.current?.resetCamera()}>↺ Reset view</button></div>
     </div>;
 }
@@ -72,6 +72,7 @@ export class OmoWorldWidget extends ReactWidget {
     private console?: RuntimeConsoleController;
     private consoleState: RuntimeConsoleState = RuntimeConsoleController.initial();
     private monitor: MonitorFrame = { lines: [] };
+    private worldScene?: RoomScene;
 
     @postConstruct()
     protected init(): void {
@@ -215,7 +216,8 @@ export class OmoWorldWidget extends ReactWidget {
                     <div className="omo-stage-heading"><div><span className="omo-kicker">{THEMES[theme].eyebrow}</span><h2>{this.configuring ? THEMES[theme].title : this.room!.projectName}</h2><p>{this.configuring ? THEMES[theme].description : 'Same project. A different perspective.'}</p></div>
                         {!this.configuring && <button className="omo-outline" data-testid="edit-room" onClick={this.configure}>◌ Customise room</button>}
                     </div>
-                    <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrame={this.monitor} overlay={this.room && !this.configuring ? <RuntimeConsoleStrip state={this.consoleState} controller={this.console} /> : undefined} onInput={this.terminalInput} onMessage={text=>{this.feedback=text;this.update();}}/>
+                    {this.room && !this.configuring && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}><RuntimeConsoleStrip state={this.consoleState} controller={this.console}/></div>}
+                    <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrame={this.monitor} onInstance={scene=>{this.worldScene=scene;}} onInput={this.terminalInput} onMessage={text=>{this.feedback=text;this.update();}}/>
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>
                     {!this.configuring && <aside className="omo-tool-dock" aria-label="Project tools"><span>YOUR WORKSTATIONS</span><button disabled={this.busy} data-testid="terminal-action" onClick={() => this.selectStation('terminal')}><b>01</b><div><strong>Terminal</strong><small>A real shell. Your project folder.</small></div><span>↗</span></button><button disabled={this.busy} data-testid="code-action" onClick={() => this.selectStation('code')}><b>02</b><div><strong>Code</strong><small>Files, editing and your next change.</small></div><span>↗</span></button><p>Nothing starts unless you choose it.</p></aside>}
                     {this.configuring && <div className="omo-preview-badge"><i/> LIVE ROOM PREVIEW</div>}

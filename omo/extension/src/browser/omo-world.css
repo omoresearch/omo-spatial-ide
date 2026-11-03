@@ -91,8 +91,12 @@
 @media(max-width:1100px) { .omo-onboarding { width:306px; padding:24px 20px 16px; } .omo-onboarding h1 { font-size:34px; } .omo-header { padding:0 20px; height:65px; } .omo-local { font-size:8px; letter-spacing:.8px; } .omo-scene-wrap { right:190px; } .omo-tool-dock { right:16px; width:178px; } }
 @media(max-width:760px) { .omo-brand-caption,.omo-local { display:none; } .omo-header { gap:8px; padding:0 14px; } .omo-onboarding { width:270px; padding:20px 16px; } .omo-onboarding h1 { font-size:29px; } .omo-kicker { font-size:7px; } .omo-stage-heading { left:18px; top:22px; right:14px; } .omo-stage-heading h2 { font-size:20px; } .omo-stage-heading p { display:none; } .omo-tool-dock { top:auto; bottom:60px; right:15px; width:160px; } .omo-tool-dock > button { padding:12px 0; } .omo-scene-wrap { right:0; } .omo-tool-dock small,.omo-tool-dock p { display:none; } .omo-scene-controls { left:15px; font-size:9px; } .omo-scene-controls > span { max-width:120px; } }
 
-/* Terminal station console strip: a compact world overlay. It manages tabs; the physical monitor stays the terminal. */
-.omo-console-host { position:absolute; left:30px; top:118px; z-index:4; max-width:min(560px, calc(100% - 60px)); }
+/* Reserve layout space for session controls: they must never cover a physical screen. */
+.omo-root[data-configured="true"] .omo-body:not(.is-onboarding) .omo-stage { display:flex; flex-direction:column; }
+.omo-root[data-configured="true"] .omo-body:not(.is-onboarding) .omo-stage-heading { position:relative; inset:auto; margin:22px 30px 14px; flex-shrink:0; }
+.omo-root[data-configured="true"] .omo-body:not(.is-onboarding) .omo-scene-wrap { position:relative; inset:auto; width:100%; flex:1; min-height:0; }
+.omo-console-dock { margin:0 30px 12px; flex:0 0 auto; z-index:2; }
+.omo-console-dock .omo-console-strip { backdrop-filter:none; box-shadow:none; }
 .omo-console-strip { background:#101c27e6; border:1px solid #9ac5b640; border-radius:8px; padding:8px 10px; color:#cfdeda; font-size:10px; box-shadow:0 8px 20px #0004; display:flex; flex-direction:column; gap:6px; backdrop-filter:blur(8px); }
 .omo-console-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .omo-console-dot { width:7px; height:7px; border-radius:50%; background:#6e6259; flex-shrink:0; }
