@@ -1,6 +1,18 @@
 import * as THREE from 'three';
 import type { RoomState, RoomTheme } from '../common/room-state';
 import { FirstPersonControls } from './first-person-controls';
+import { cellRuns, dominantKey, MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
+
+/** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
+export interface MonitorFrame {
+    lines: string[];
+    foreground?: string[];
+    background?: string[];
+    palette?: Record<string, string>;
+    cursor?: { x: number; y: number; visible: boolean };
+    title?: string;
+    status?: string;
+}
 
 export type Workstation = 'terminal' | 'code';
 export interface RoomSceneOptions {
@@ -31,7 +43,7 @@ export class RoomScene {
     private lastFrame = performance.now();
     private terminalSurface?: HTMLCanvasElement;
     private terminalTexture?: THREE.CanvasTexture;
-    private terminalLines: string[] = [];
+    private terminalFrame: MonitorFrame = { lines: [] };
     private pointer?: { x: number; y: number; startX: number; startY: number; dragged: boolean };
     private cleanup: Array<() => void> = [];
     constructor(private host: HTMLElement, private options: RoomSceneOptions) {
@@ -167,7 +179,7 @@ export class RoomScene {
         if(action==='terminal'){
             this.terminalSurface=document.createElement('canvas');this.terminalSurface.width=1024;this.terminalSurface.height=576;
             this.terminalTexture=new THREE.CanvasTexture(this.terminalSurface);this.terminalTexture.colorSpace=THREE.SRGBColorSpace;
-            this.setTerminalLines([]);return this.terminalTexture;
+            this.setTerminalFrame(this.terminalFrame);return this.terminalTexture;
         }
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
         const c = canvas.getContext('2d')!;
@@ -233,21 +245,49 @@ export class RoomScene {
         this.labels.forEach(label => label.classList.toggle('is-walk', mode === 'walk'));
         this.positionCamera();
     }
-    setTerminalLines(lines: string[]): void {
-        this.terminalLines = lines;
+    setTerminalLines(lines: string[]): void { this.setTerminalFrame({ ...this.terminalFrame, lines, foreground: undefined, background: undefined, cursor: undefined }); }
+    setTerminalFrame(frame: MonitorFrame): void {
+        this.terminalFrame = frame;
         if (!this.terminalSurface || !this.terminalTexture) return;
         const c = this.terminalSurface.getContext('2d')!;
-        c.fillStyle = '#091119'; c.fillRect(0,0,1024,576);
-        c.fillStyle = '#87cdb4'; c.font = '17px monospace'; c.fillText('OMO / LIVE PROJECT TERMINAL',24,29);
+        const base = '#091119';
+        c.fillStyle = base; c.fillRect(0,0,1024,576);
+        c.fillStyle = '#87cdb4'; c.font = '17px monospace'; c.fillText((frame.title ?? 'OMO / LIVE PROJECT TERMINAL').slice(0,52),24,29);
+        if (frame.status) { c.fillStyle = '#7e9a9e'; c.textAlign = 'right'; c.fillText(frame.status.slice(0,38),1000,29); c.textAlign = 'left'; }
         c.fillStyle = '#283e48'; c.fillRect(20,42,984,1);
-        c.font = '20px monospace';
+        c.font = '20px monospace'; c.textBaseline = 'alphabetic';
+        const lines = frame.lines.slice(-MONITOR_ROWS);
         if (!lines.length) {
             c.fillStyle='#c7ded4';c.fillText('Walk up and click this screen.',24,104);
-            c.fillStyle='#7e9a9e';c.fillText('A real project shell will run here.',24,140);
-        } else lines.slice(-22).forEach((line,i) => { c.fillStyle=line.includes('$')?'#b8e6ca':'#e0e8eb';c.fillText(line.slice(0,80),24,70+i*22); });
+            c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140);
+        } else {
+            const offset = frame.lines.length - lines.length;
+            const cell = Math.min(12.3, c.measureText('M').width || 12);
+            // The frame's most common background is the terminal's own background; the monitor keeps its accepted base colour for it.
+            const plainBg = frame.background ? frame.palette?.[dominantKey(frame.background) ?? ''] : undefined;
+            const skip = plainBg ? (plainBg.startsWith('#') ? plainBg : `#${plainBg}`).toLowerCase() : base;
+            lines.forEach((line,i) => {
+                const y = 70 + i*22; const text = line.slice(0,MONITOR_COLS);
+                const fallback = { fg: frame.foreground ? '#e0e8eb' : line.includes('$') ? '#b8e6ca' : '#e0e8eb', bg: base };
+                for (const run of cellRuns(text, frame.foreground?.[offset+i], frame.background?.[offset+i], frame.palette, fallback)) {
+                    const x = 24 + run.x*cell;
+                    if (run.bg.toLowerCase() !== skip && run.bg !== base) { c.fillStyle = run.bg; c.fillRect(x, y-17, Array.from(run.text).length*cell, 22); }
+                    c.fillStyle = run.fg; c.fillText(run.text, x, y);
+                }
+            });
+            const cursor = frame.cursor;
+            if (cursor?.visible && cursor.y - offset >= 0 && cursor.y - offset < MONITOR_ROWS && cursor.x >= 0 && cursor.x < MONITOR_COLS) {
+                const x = 24 + cursor.x*cell; const y = 70 + (cursor.y - offset)*22;
+                c.fillStyle = '#b8e6ca'; c.fillRect(x, y-17, cell, 22);
+                const ch = Array.from(lines[cursor.y - offset] ?? '')[cursor.x];
+                if (ch && ch !== ' ') { c.fillStyle = base; c.fillText(ch, x, y); }
+            }
+        }
         this.terminalTexture.needsUpdate = true;
-        if(this.renderer)this.renderer.domElement.dataset.terminalText=lines.join('\n');
+        if(this.renderer){this.renderer.domElement.dataset.terminalText=frame.lines.join('\n');this.renderer.domElement.dataset.terminalCursor=frame.cursor?`${frame.cursor.x},${frame.cursor.y},${frame.cursor.visible}`:'';}
     }
+    /** Pointer moved to an overlay control: stop typing into the monitor so keys go to that control. */
+    releaseTyping(): void { this.walker?.releaseTyping(); }
     private interactAt(x: number, y: number): Workstation | undefined {
         const rect=this.renderer.domElement.getBoundingClientRect();
         const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1),this.camera);

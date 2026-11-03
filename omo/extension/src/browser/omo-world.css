@@ -90,3 +90,33 @@
 .omo-jungle .omo-stage { background:#101c1a; }
 @media(max-width:1100px) { .omo-onboarding { width:306px; padding:24px 20px 16px; } .omo-onboarding h1 { font-size:34px; } .omo-header { padding:0 20px; height:65px; } .omo-local { font-size:8px; letter-spacing:.8px; } .omo-scene-wrap { right:190px; } .omo-tool-dock { right:16px; width:178px; } }
 @media(max-width:760px) { .omo-brand-caption,.omo-local { display:none; } .omo-header { gap:8px; padding:0 14px; } .omo-onboarding { width:270px; padding:20px 16px; } .omo-onboarding h1 { font-size:29px; } .omo-kicker { font-size:7px; } .omo-stage-heading { left:18px; top:22px; right:14px; } .omo-stage-heading h2 { font-size:20px; } .omo-stage-heading p { display:none; } .omo-tool-dock { top:auto; bottom:60px; right:15px; width:160px; } .omo-tool-dock > button { padding:12px 0; } .omo-scene-wrap { right:0; } .omo-tool-dock small,.omo-tool-dock p { display:none; } .omo-scene-controls { left:15px; font-size:9px; } .omo-scene-controls > span { max-width:120px; } }
+
+/* Terminal station console strip: a compact world overlay. It manages tabs; the physical monitor stays the terminal. */
+.omo-console-host { position:absolute; left:30px; top:118px; z-index:4; max-width:min(560px, calc(100% - 60px)); }
+.omo-console-strip { background:#101c27e6; border:1px solid #9ac5b640; border-radius:8px; padding:8px 10px; color:#cfdeda; font-size:10px; box-shadow:0 8px 20px #0004; display:flex; flex-direction:column; gap:6px; backdrop-filter:blur(8px); }
+.omo-console-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.omo-console-dot { width:7px; height:7px; border-radius:50%; background:#6e6259; flex-shrink:0; }
+.omo-console-dot.is-live { background:#6fd08c; } .omo-console-dot.is-reconnecting, .omo-console-dot.is-attaching, .omo-console-dot.is-opening, .omo-console-dot.is-checking { background:#dda744; }
+.omo-console-dot.is-error, .omo-console-dot.is-unavailable, .omo-console-dot.is-interrupted { background:#e5645a; }
+.omo-console-status { color:#b9cdc9; overflow:hidden; text-overflow:ellipsis; max-width:380px; white-space:nowrap; }
+.omo-console-ws { margin-left:auto; color:#7e959e; font-family:monospace; }
+.omo-console-tabs { display:flex; gap:4px; flex-wrap:wrap; }
+.omo-console-tab { display:inline-flex; align-items:center; border:1px solid #ffffff1a; border-radius:5px; background:#17232c; }
+.omo-console-tab.active { border-color:#9ac5b6aa; background:#25393b; }
+.omo-console-tab.kind-hermes button[role=tab] { color:#f7d774; } .omo-console-tab.kind-claude button[role=tab] { color:#e2a6d6; } .omo-console-tab.kind-codex button[role=tab] { color:#9cc3f0; }
+.omo-console-tab.state-interrupted, .omo-console-tab.state-exited { border-style:dashed; }
+.omo-console-strip button { background:transparent; border:0; color:#cfdeda; padding:4px 7px; font-size:10px; border-radius:4px; }
+.omo-console-strip button:not(:disabled):hover { background:#2c4947; }
+.omo-console-tab small { color:#e5645a; }
+.omo-console-busy { color:#6fd08c; font-style:normal; }
+.omo-console-mini { color:#8ea5aa!important; padding:4px 5px!important; }
+.omo-console-new button { border:1px solid #ffffff14; }
+.omo-console-label { color:#7e959e; letter-spacing:1px; font-size:8px; text-transform:uppercase; }
+.omo-console-profile { display:inline-flex; gap:4px; align-items:center; color:#7e959e; }
+.omo-console-profile select { background:#17232c; color:#cfdeda; border:1px solid #ffffff1a; border-radius:4px; font-size:10px; padding:2px 4px; }
+.omo-console-hint { color:#8ea5aa; font-size:9px; }
+.omo-console-error { color:#f4b29f; font-size:9px; }
+.omo-console-confirm { border-top:1px solid #ffffff14; padding-top:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.omo-console-confirm p { margin:0; flex-basis:100%; color:#e8e1d5; line-height:1.5; }
+.omo-console-confirm .omo-console-go { background:#3b595a; color:#edf5ed; }
+@media(max-width:760px) { .omo-console-host { left:15px; top:96px; max-width:calc(100% - 30px); } .omo-console-status { max-width:200px; } }
