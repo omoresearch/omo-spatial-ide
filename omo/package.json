@@ -7,6 +7,7 @@
     "browser-app"
   ],
   "scripts": {
+    "start": "node scripts/start.cjs",
     "compile": "tsc -p extension",
     "build": "npm run compile && npm run build --workspace=omo-browser",
     "test": "node --experimental-strip-types --test extension/test/*.test.cjs"

@@ -1,0 +1,2517 @@
+{
+  "generated_by": "build_audit.py (read-only scan, no model calls, no running sessions)",
+  "sources": {
+    "minecraft": {
+      "head": "5f85b26ab8d7401584f9e61bdd63c2d845c9ccb4",
+      "dirty_tracked": "",
+      "repository": "omoresearch/omo-space"
+    },
+    "standalone": {
+      "branch": "omo/agent-runtime-v1",
+      "head": "5fe860fa23e14bf3c364b13b53f9f8c3986a3c2b",
+      "accepted_baseline": "af1d5fb25 (omo/usable-room-v1)",
+      "contract_commit": "5fe860fa2 refactor(omo): define local persistent-runtime contract",
+      "repository": "omoresearch/theia"
+    }
+  },
+  "counts": {
+    "entries": 60,
+    "by_category": {
+      "integration": 44,
+      "minecraft_only": 13,
+      "experiment_media_demo": 3
+    },
+    "by_priority": {
+      "P0": 16,
+      "P2": 15,
+      "P1": 17,
+      "DROP": 12
+    },
+    "by_standalone_status": {
+      "contract_only": 8,
+      "partial": 12,
+      "missing": 23,
+      "not_applicable": 14,
+      "present": 3
+    },
+    "integration_by_status": {
+      "contract_only": 8,
+      "partial": 10,
+      "missing": 21,
+      "present": 3,
+      "not_applicable": 2
+    },
+    "anchors_total": 202,
+    "anchors_ok": 202,
+    "distinct_files": 68,
+    "ranked_acceptance_tests": 15
+  },
+  "problems": [],
+  "entries": [
+    {
+      "id": "RT-01",
+      "area": "runtime",
+      "name": "Persistent tmux session server owns every shell",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "contract_only",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "config/omo-tmux.conf",
+          "line": 9,
+          "needle": "exit-unattached off",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "config/omo-tmux.conf",
+          "line": 15,
+          "needle": "detach-on-destroy on",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "scripts/omo-tmux.service",
+          "line": 17,
+          "needle": "Restart=on-failure",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 127,
+          "needle": "omo-tmux.service",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 11,
+          "needle": "tmux: boolean",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "FIRST-PERSON.md",
+          "line": 21,
+          "needle": "not implemented or claimed",
+          "ok": true
+        }
+      ],
+      "user_visible": "Closing the screen, quitting the game or restarting the bridge never kills a shell or running job.",
+      "standalone_equivalent": "Dedicated tmux socket (its own -L omo-spatial-* socket, same conf) started by the Theia backend or a user service; Theia only attaches views.",
+      "acceptance": "Start `sleep 600` in a tab, restart the Theia backend process, reattach: same PID alive, prior output visible."
+    },
+    {
+      "id": "RT-02",
+      "area": "workspaces",
+      "name": "Workspace create/get/list/rename/delete",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1711,
+          "needle": "kind == \"ws_list\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1719,
+          "needle": "kind == \"ws_delete\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1723,
+          "needle": "kind == \"ws_rename\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 702,
+          "needle": "def create(self, name, kind",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 52,
+          "needle": "openWorkspace(",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 53,
+          "needle": "getWorkspace(",
+          "ok": true
+        }
+      ],
+      "user_visible": "Each desk has a named workspace that can be listed, renamed and closed.",
+      "standalone_equivalent": "Contract has open/get only. Add listWorkspaces, renameWorkspace, deleteWorkspace({confirmed}).",
+      "acceptance": "listWorkspaces returns every workspace after a page reload; rename persists in meta; delete with a busy tab refuses without confirmation."
+    },
+    {
+      "id": "RT-03",
+      "area": "agents",
+      "name": "Tab kinds: Shell, Hermes, Claude Code, Codex",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "contract_only",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/TabKind.java",
+          "line": 21,
+          "needle": "SHELL(\"shell\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/TabKind.java",
+          "line": 24,
+          "needle": "CODEX(\"codex\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 106,
+          "needle": "TAB_NAMES",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 2,
+          "needle": "export type AgentKind",
+          "ok": true
+        }
+      ],
+      "user_visible": "The + button opens Shell, Hermes, Claude Code or Codex tabs with distinct colours.",
+      "standalone_equivalent": "Same four kinds in AgentKind; in-world tab strip with the same labels.",
+      "acceptance": "newTab for each kind returns a tab of that kind; the monitor tab strip shows four distinct labels."
+    },
+    {
+      "id": "RT-04",
+      "area": "agents",
+      "name": "Agent CLI discovery and honest install hint",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "contract_only",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 539,
+          "needle": "def find_agent(kind)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 558,
+          "needle": "def agents_info()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/mcshell.bashrc",
+          "line": 46,
+          "needle": "not found:",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 1199,
+          "needle": "def find_agent_cli",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "scripts/omo-bridge.service",
+          "line": 15,
+          "needle": "OMO_CLAUDE_BIN",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 7,
+          "needle": "installHint?: string",
+          "ok": true
+        }
+      ],
+      "user_visible": "A missing CLI says 'not installed' and prints the install command inside the tab; no crash.",
+      "standalone_equivalent": "status().agents from the same PATH probe plus OMO_*_BIN overrides; tab prints hint.",
+      "acceptance": "With claude absent from PATH, status() shows claude available=false with installHint, and a new Claude tab shows that hint text."
+    },
+    {
+      "id": "RT-05",
+      "area": "agents",
+      "name": "Claude Code per-tab session id and resume after restore",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 567,
+          "needle": "def claude_session(ws_id, tab_id)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/mcshell.bashrc",
+          "line": 58,
+          "needle": "--session-id",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "docs/AGENTS-AND-TERMINALS.md",
+          "line": 94,
+          "needle": "claude --resume",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 17,
+          "needle": "export interface SessionTab",
+          "ok": true
+        }
+      ],
+      "user_visible": "A Claude Code tab comes back in the same conversation after a PC restart.",
+      "standalone_equivalent": "Backend derives a stable UUID per (workspace, tab) and launches `claude --session-id`, then `--resume` on restore. SessionTab has no session field yet.",
+      "acceptance": "Stub `claude` logs argv: first launch has --session-id U; after tmux kill-server + reopen, argv is --resume U (same U)."
+    },
+    {
+      "id": "RT-06",
+      "area": "agents",
+      "name": "Codex starts a fresh session after revive (documented limit)",
+      "category": "integration",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "docs/AGENTS-AND-TERMINALS.md",
+          "line": 138,
+          "needle": "Codex starts a new session",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Codex tabs restart fresh; the product says so.",
+      "standalone_equivalent": "Keep the same honest behaviour and wording; do not claim Codex resume.",
+      "acceptance": "Revived Codex tab launches plain `codex`; UI detail text says the session is new."
+    },
+    {
+      "id": "RT-07",
+      "area": "profiles",
+      "name": "Hermes profile list and per-workspace profile",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 453,
+          "needle": "def hermes_profiles()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 811,
+          "needle": "def set_profile(self, ws_id, profile)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1725,
+          "needle": "kind == \"ws_profile\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/ProfilePicker.java",
+          "line": 29,
+          "needle": "final class ProfilePicker",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 801,
+          "needle": "Hermes profile...",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/station/StationCommands.java",
+          "line": 58,
+          "needle": "literal(\"profile\")",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 14,
+          "needle": "profiles: string[]",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 52,
+          "needle": "profile?: string",
+          "ok": true
+        }
+      ],
+      "user_visible": "A filterable profile picker (Ctrl+Shift+P); new Hermes tabs and resumes use the chosen profile.",
+      "standalone_equivalent": "Contract lists profiles and accepts one at openWorkspace; add setWorkspaceProfile for an existing workspace and an in-world picker.",
+      "acceptance": "Set profile P on an open workspace; next Hermes tab's stub argv contains profile P; existing running tab untouched."
+    },
+    {
+      "id": "RT-08",
+      "area": "agents",
+      "name": "Resume Hermes inside a live shell tab",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 925,
+          "needle": "def hermes(self, ws_id, tab_id)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 510,
+          "needle": "Resume Hermes",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 57,
+          "needle": "reviveTab(",
+          "ok": true
+        }
+      ],
+      "user_visible": "Button starts or resumes the tab's Hermes conversation; refuses if another command is running.",
+      "standalone_equivalent": "Map to reviveTab(kind='hermes') or a resumeAgent op; must refuse when the shell is busy.",
+      "acceptance": "With `sleep 100` running, resume Hermes returns a refusal and types nothing; on an idle shell it launches the stub hermes."
+    },
+    {
+      "id": "RT-09",
+      "area": "tabs",
+      "name": "Tab rename, close (busy needs confirmation) and revive",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "contract_only",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 850,
+          "needle": "def tab_rename(self",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 865,
+          "needle": "def tab_close(self, ws_id, tab_id, force=False)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 892,
+          "needle": "def tab_revive(self, ws_id, tab_id, mode)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 815,
+          "needle": "Close tab",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 55,
+          "needle": "renameTab(",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 56,
+          "needle": "closeTab(",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 57,
+          "needle": "reviveTab(",
+          "ok": true
+        }
+      ],
+      "user_visible": "Tabs can be renamed, closed with a warning when busy, and revived after exit.",
+      "standalone_equivalent": "Contract already names these ops with confirmedClose/confirmedStart; needs implementation and in-world UI.",
+      "acceptance": "closeTab(confirmedClose=false) on a busy tab is refused; true closes it; reviveTab on an exited tab returns state running."
+    },
+    {
+      "id": "RT-10",
+      "area": "persistence",
+      "name": "Restore tabs after session-server loss (names, order, cwd)",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "contract_only",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 748,
+          "needle": "def restore(self, ws_id)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1586,
+          "needle": "after a restart",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 2041,
+          "needle": "def reconcile_on_start()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "docs/AGENTS-AND-TERMINALS.md",
+          "line": 131,
+          "needle": "## 5. What survives what",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 21,
+          "needle": "'interrupted'",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "FIRST-PERSON.md",
+          "line": 21,
+          "needle": "not implemented or claimed",
+          "ok": true
+        }
+      ],
+      "user_visible": "After a reboot the desk reopens the same tabs in their last folders and says 'restored N terminals'; never re-runs commands.",
+      "standalone_equivalent": "Backend meta file per workspace; on attach of a workspace whose tmux session is gone, recreate windows and report restored count.",
+      "acceptance": "kill tmux server; openWorkspace again: same tab names/order, each shell's pwd equals the saved cwd, no previous command re-executed, toast/detail says restored N."
+    },
+    {
+      "id": "RT-11",
+      "area": "persistence",
+      "name": "Remember shell working directories periodically",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 738,
+          "needle": "def remember_cwds(self)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1256,
+          "needle": "async def remember_loop()",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Restored shells open in the folder they were last in.",
+      "standalone_equivalent": "Backend timer that records pane_current_path into workspace meta.",
+      "acceptance": "cd $TMPDIR/x in a tab, wait one remember interval, kill server, restore: pwd is $TMPDIR/x."
+    },
+    {
+      "id": "RT-12",
+      "area": "lifecycle",
+      "name": "Auto-sleep idle unwatched Hermes tabs; wake on view",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 138,
+          "needle": "SLEEP_AFTER = float",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 411,
+          "needle": "def sleep_check(target, pane_pid)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 152,
+          "needle": "AWAKE_MARKS = re.compile",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1168,
+          "needle": "class Sleeper",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1004,
+          "needle": "def wake(self, ws_id, tab_id)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 437,
+          "needle": "asleep to save memory",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 21,
+          "needle": "'sleeping'",
+          "ok": true
+        }
+      ],
+      "user_visible": "Idle Hermes tabs exit cleanly after 20 min unseen and resume the same conversation when looked at.",
+      "standalone_equivalent": "Contract only has the state value. Backend needs the safety rules (ready, empty input, no goal/question, no child process, unwatched) and attach-wakes.",
+      "acceptance": "Stub hermes idle + OMO_SLEEP_AFTER small: tab becomes sleeping with a clean /exit; attach resumes it. Watched, drafted, or working tabs never sleep."
+    },
+    {
+      "id": "RT-13",
+      "area": "lifecycle",
+      "name": "Keep-awake per workspace",
+      "category": "integration",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 946,
+          "needle": "def set_keep_awake(self, ws_id, on)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "docs/AGENTS-AND-TERMINALS.md",
+          "line": 153,
+          "needle": "no in-game button",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Bridge switch exists; Minecraft has no button for it (documented).",
+      "standalone_equivalent": "Expose setKeepAwake in contract and a toggle in the workspace menu.",
+      "acceptance": "keep_awake=true workspace never sleeps across two scans; value survives backend restart."
+    },
+    {
+      "id": "RT-14",
+      "area": "views",
+      "name": "Several screens on one tab; panel steers all screens of a station",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1768,
+          "needle": "kind == \"steer\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 342,
+          "needle": "\"steer\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 467,
+          "needle": "two views of one tab",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 478,
+          "needle": "tab switch from the panel moves both views",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 58,
+          "needle": "attach(input",
+          "ok": true
+        }
+      ],
+      "user_visible": "A desk monitor and a big wall show the same tab at their own sizes; switching tab moves both.",
+      "standalone_equivalent": "attach returns a viewId per surface (already in contract); add a station-level 'select tab' that moves every view of that station.",
+      "acceptance": "Attach two views (80x22 and 120x40) to one tab: both receive frames at their sizes; selecting another tab moves both."
+    },
+    {
+      "id": "RT-15",
+      "area": "terminal",
+      "name": "Colour frames (ANSI/truecolour to palette, cursor)",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/termcore.py",
+          "line": 194,
+          "needle": "def encode_rows(",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/termcore.py",
+          "line": 70,
+          "needle": "def nearest(hexstr)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 353,
+          "needle": "ANSI colours land on the palette",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 38,
+          "needle": "foreground?: string[]",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "FIRST-PERSON.md",
+          "line": 19,
+          "needle": "not the full ANSI colour",
+          "ok": true
+        }
+      ],
+      "user_visible": "TUIs (Hermes, Claude Code) show colours and cursor on the screen.",
+      "standalone_equivalent": "Use xterm/pyte full colour (no 16-colour CC palette); render fg/bg/cursor into the monitor texture.",
+      "acceptance": "printf '\\e[31mRED\\e[0m' -> frame foreground for those cells is red and the monitor texture pixel under 'R' is red; cursor drawn."
+    },
+    {
+      "id": "RT-16",
+      "area": "terminal",
+      "name": "Scrollback: wheel scroll, find across history, clear",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 165,
+          "needle": "TERM_OPS = {",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1096,
+          "needle": "def scroll(self, by)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1117,
+          "needle": "def find(self, q, step, current)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1148,
+          "needle": "def clear_history(self)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "config/omo-tmux.conf",
+          "line": 17,
+          "needle": "history-limit 20000",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 382,
+          "needle": "find searches the whole history",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 59,
+          "needle": "poll(input",
+          "ok": true
+        }
+      ],
+      "user_visible": "Mouse wheel scrolls history, find bar searches it, 'Clear scrollback' empties it.",
+      "standalone_equivalent": "Add scroll/find/clearHistory ops (or keep scrollback in the browser xterm and reattach with tmux capture-pane history).",
+      "acceptance": "seq 1 5000; wheel up 3 notches shows earlier lines; find '1234' scrolls it into view; clear sets max scroll 0."
+    },
+    {
+      "id": "RT-17",
+      "area": "clipboard",
+      "name": "Select and copy to host clipboard",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/termcore.py",
+          "line": 270,
+          "needle": "def selection_text(",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1366,
+          "needle": "def clipboard_copy(text)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1847,
+          "needle": "kind == \"copy\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 291,
+          "needle": "copy puts the selection on the host clipboard",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 60,
+          "needle": "input(input",
+          "ok": true
+        }
+      ],
+      "user_visible": "Drag/double/triple-click select on the screen and copy; wrapped lines copy as one line.",
+      "standalone_equivalent": "Browser selection on the monitor texture mapped to cells; copy via navigator.clipboard (no host clipboard tool needed in a browser IDE).",
+      "acceptance": "Double-click a word on the in-world monitor, press copy: navigator.clipboard text equals the word; a 100-char wrapped line copies without newline."
+    },
+    {
+      "id": "RT-18",
+      "area": "clipboard",
+      "name": "Bracketed multi-line paste with size cap",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1396,
+          "needle": "def paste_text(given)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1408,
+          "needle": "def bracketed(text)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 168,
+          "needle": "PASTE_MAX = 256 * 1024",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 323,
+          "needle": "multi-line paste arrives as one bracketed block",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/browser/first-person-controls.ts",
+          "line": 47,
+          "needle": "ctrlKey",
+          "ok": true
+        }
+      ],
+      "user_visible": "Ctrl+V pastes the clipboard as one block that only runs on Enter.",
+      "standalone_equivalent": "Handle paste events on the focused monitor; wrap with ESC[200~..ESC[201~ when the app enabled bracketed mode; cap 256 KiB.",
+      "acceptance": "Paste 'a\\nb' into bash on the monitor: nothing runs until Enter; a 300 KiB paste is refused with a message."
+    },
+    {
+      "id": "RT-19",
+      "area": "clipboard",
+      "name": "App copy via OSC 52 (write only, never read)",
+      "category": "integration",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/termcore.py",
+          "line": 324,
+          "needle": "def osc52_text(payload)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 341,
+          "needle": "OSC 52",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Copy inside Hermes/Claude Code/vim reaches the desktop clipboard; queries are not answered.",
+      "standalone_equivalent": "Forward OSC 52 writes to navigator.clipboard after a user gesture; never answer reads.",
+      "acceptance": "printf '\\e]52;c;aGk=\\a' puts 'hi' on the clipboard; '\\e]52;c;?\\a' gets no reply."
+    },
+    {
+      "id": "RT-20",
+      "area": "terminal",
+      "name": "Open link under cursor (token links refused)",
+      "category": "integration",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1417,
+          "needle": "def open_url(url)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/termcore.py",
+          "line": 297,
+          "needle": "def url_at(",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 425,
+          "needle": "link opens in the host browser",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Ctrl-click a URL in a terminal opens it on the desktop; links carrying the bridge token never open.",
+      "standalone_equivalent": "Open in a new browser tab or an in-world web monitor; same token filter.",
+      "acceptance": "Ctrl-click a wrapped https URL opens the whole URL; a URL containing the runtime token is refused."
+    },
+    {
+      "id": "RT-21",
+      "area": "terminal",
+      "name": "Bell reaches the screen",
+      "category": "integration",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 359,
+          "needle": "bell reaches the screen",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Terminal bell shows on the monitor.",
+      "standalone_equivalent": "Flash the monitor frame / play a short positional sound.",
+      "acceptance": "printf '\\a' -> poll reports a bell event and the monitor flashes."
+    },
+    {
+      "id": "RT-22",
+      "area": "security",
+      "name": "Loopback-only bridge, token file, short-lived tickets",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "contract_only",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 178,
+          "needle": "if HOST not in",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 212,
+          "needle": "def load_token()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 242,
+          "needle": "def mint_ticket(station, ws_id)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1970,
+          "needle": "def _host_ok(host)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/lua/OmoLuaApi.java",
+          "line": 24,
+          "needle": "omo.ticket()",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 49,
+          "needle": "No bridge credentials are returned to the browser",
+          "ok": true
+        }
+      ],
+      "user_visible": "Nothing on the network can drive a terminal; the screen never sees the bridge token.",
+      "standalone_equivalent": "Theia backend service is the only client of tmux; bind 127.0.0.1; no token in any frontend payload.",
+      "acceptance": "Backend listens on 127.0.0.1 only; captured frontend websocket traffic contains no token; a request with a foreign Host header is refused."
+    },
+    {
+      "id": "RT-23",
+      "area": "limits",
+      "name": "Workspace/tab/view caps",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 162,
+          "needle": "LIMITS = {\"workspaces\": 128",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "docs/MAPS.md",
+          "line": 74,
+          "needle": "The bridge allows 128",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Bounded counts (128 workspaces, 12 tabs, 192 views) with a clear refusal.",
+      "standalone_equivalent": "Same caps enforced in the backend, reported in status().",
+      "acceptance": "Creating tab 13 in one workspace is refused with a readable message."
+    },
+    {
+      "id": "RT-24",
+      "area": "status",
+      "name": "Hermes Board + /health read-only status",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 1947,
+          "needle": "async def board()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/board.html",
+          "line": 6,
+          "needle": "<title>Hermes Board</title>",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 2016,
+          "needle": "path == \"/health\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "docs/AGENTS-AND-TERMINALS.md",
+          "line": 27,
+          "needle": "Hermes Board",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "A desktop page lists every workspace/tab with state, busy, command, sleeping; no ids or tokens.",
+      "standalone_equivalent": "Theia view (or in-world wall) built from listWorkspaces; read-only.",
+      "acceptance": "Board view lists each workspace name, profile and tab state; DOM contains no workspace ids or tokens."
+    },
+    {
+      "id": "RT-25",
+      "area": "status",
+      "name": "Busy/idle detection from agent status bar",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "contract_only",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/omobridge.py",
+          "line": 443,
+          "needle": "def agent_status(target)",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 22,
+          "needle": "busy: boolean",
+          "ok": true
+        }
+      ],
+      "user_visible": "Tabs show working vs waiting.",
+      "standalone_equivalent": "SessionTab.busy from foreground process + Hermes status line.",
+      "acceptance": "During `sleep 5` busy=true; after it ends busy=false within one poll."
+    },
+    {
+      "id": "RT-26",
+      "area": "status",
+      "name": "Status lamp: gold working, green idle, red interrupted",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/block/StatusLampBlock.java",
+          "line": 25,
+          "needle": "gold while Hermes or a command is working",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/station/StationSignals.java",
+          "line": 37,
+          "needle": "public final class StationSignals",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "A physical light near the desk shows agent state.",
+      "standalone_equivalent": "In-world desk light / badge colour from SessionTab.busy and workspace state (no redstone).",
+      "acceptance": "Desk light material colour changes gold->green when a `sleep 3` ends, red after kill-server."
+    },
+    {
+      "id": "RT-27",
+      "area": "keys",
+      "name": "Station keyboard shortcuts and terminal-owned Ctrl keys",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 607,
+          "needle": "Ctrl+Shift+T",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 795,
+          "needle": "Ctrl+Shift+O",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 1113,
+          "needle": "Alt+1-9 tabs",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/mixin/TerminalShortcutsMixin.java",
+          "line": 15,
+          "needle": "Ctrl+S / Ctrl+R / Ctrl+T",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/browser/first-person-controls.ts",
+          "line": 47,
+          "needle": "ctrlKey",
+          "ok": true
+        }
+      ],
+      "user_visible": "Ctrl+Shift+T/H new shell/Hermes, Ctrl+Shift+O workspaces, Ctrl+Shift+W close, Alt+1-9 switch; Ctrl+S/R/T go to the shell.",
+      "standalone_equivalent": "Theia keybindings scoped to 'monitor focused'; ctrl-letter already forwarded; Escape releases.",
+      "acceptance": "With the monitor focused, Ctrl+R reaches bash reverse-search; Ctrl+Shift+T adds a shell tab; Alt+2 switches to tab 2."
+    },
+    {
+      "id": "RT-28",
+      "area": "workspaces",
+      "name": "Workspace switcher and rebinding a desk",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 742,
+          "needle": "New Hermes workspace",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/station/StationCommands.java",
+          "line": 53,
+          "needle": "literal(\"workspaces\")",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/station/StationCommands.java",
+          "line": 54,
+          "needle": "literal(\"rebind\")",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/station/StationCommands.java",
+          "line": 63,
+          "needle": "literal(\"forget\")",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Pick any workspace on this PC for the desk you look at; create new Hermes/terminal workspaces.",
+      "standalone_equivalent": "In-world picker on the monitor; rebind writes stationId->workspaceId in room state.",
+      "acceptance": "Bind desk A to an existing workspace W from the picker; reload: desk A attaches W."
+    },
+    {
+      "id": "RT-29",
+      "area": "views",
+      "name": "Reconnect screen / detached state",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 817,
+          "needle": "Reconnect screen",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 491,
+          "needle": "Click to reconnect this screen",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 44,
+          "needle": "'detached'",
+          "ok": true
+        }
+      ],
+      "user_visible": "A dropped screen shows its state and reconnects with one action.",
+      "standalone_equivalent": "RuntimePoll.state drives a monitor overlay and a Reconnect action.",
+      "acceptance": "Kill the backend websocket: monitor shows 'detached'; Reconnect restores frames without restarting the shell."
+    },
+    {
+      "id": "RT-30",
+      "area": "shell",
+      "name": "In-game shell profile layered over ~/.bashrc (hermes/agent wrappers)",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/mcshell.bashrc",
+          "line": 17,
+          "needle": "hermes()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "bridge/mcshell.bashrc",
+          "line": 37,
+          "needle": "omo_agent()",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Shells behave like the desktop one plus agent launch helpers.",
+      "standalone_equivalent": "Ship an rcfile for runtime shells that sources ~/.bashrc first; drop CC-screen-only tweaks.",
+      "acceptance": "New shell tab has the user's aliases; `type omo_agent` resolves."
+    },
+    {
+      "id": "WEB-01",
+      "area": "web",
+      "name": "Web monitor walls (Chromium page, tabs, zoom, interact)",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/block/OmoMonitorBlockEntity.java",
+          "line": 31,
+          "needle": "Source is either a terminal or a web page",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/MonitorScreen.java",
+          "line": 26,
+          "needle": "choose a source, pin a page, zoom",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/WebPages.java",
+          "line": 63,
+          "needle": "MAX_PAGES = 12",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/WebPages.java",
+          "line": 65,
+          "needle": "MAX_TABS = 6",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/resources/fabric.mod.json",
+          "line": 27,
+          "needle": "mcef-modern",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "absent": "@theia/mini-browser",
+          "globs": [
+            "browser-app/package.json"
+          ],
+          "files_checked": 1,
+          "hits": [],
+          "ok": true
+        }
+      ],
+      "user_visible": "Pin a live web page on a wall, use it in place, up to 6 tabs per wall.",
+      "standalone_equivalent": "Theia mini-browser or a sandboxed iframe rendered as an in-world surface; persist URL+zoom per monitor in room state.",
+      "acceptance": "Bind https://example.com to wall W: page renders on the wall texture, clicks reach the page, binding survives reload."
+    },
+    {
+      "id": "WEB-02",
+      "area": "web",
+      "name": "URL safety: only http(s), loopback gets http",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/block/OmoMonitorBlockEntity.java",
+          "line": 302,
+          "needle": "public static String safeUrl(String raw)",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "file:, javascript:, data:, chrome: URLs are refused.",
+      "standalone_equivalent": "Same normaliser in the frontend before binding.",
+      "acceptance": "javascript:alert(1) and file:///etc/passwd are refused; 'localhost:3000' becomes http://localhost:3000."
+    },
+    {
+      "id": "WEB-03",
+      "area": "web",
+      "name": "Per-wall audio volume/mute with distance falloff",
+      "category": "integration",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/AudioPrefs.java",
+          "line": 23,
+          "needle": "omolife-web-audio.json",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/WebPages.java",
+          "line": 69,
+          "needle": "AUDIO_FAR = 40",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Walk away from a wall and its sound fades; mute per wall.",
+      "standalone_equivalent": "Web Audio gain from player distance; prefs in local storage.",
+      "acceptance": "Gain at 40+ units is 0, at <=6 is full; muted state persists across reload."
+    },
+    {
+      "id": "WEB-04",
+      "area": "web",
+      "name": "Chromium leak guard, helper watchdog, delayed close",
+      "category": "minecraft_only",
+      "priority": "P2",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/BrowserGuard.java",
+          "line": 34,
+          "needle": "final class BrowserGuard",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/HelperWatchdog.java",
+          "line": 15,
+          "needle": "jcef_helper",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/ClosingQueue.java",
+          "line": 10,
+          "needle": "Things to close later",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Game stays alive with many walls.",
+      "standalone_equivalent": "Do not port MCEF plumbing; keep only a cap on live iframes and unload far ones.",
+      "acceptance": "With 13 bound walls only 12 are live; far walls show a static snapshot."
+    },
+    {
+      "id": "WEB-05",
+      "area": "web",
+      "name": "GLFW to AWT/X keysym mapping for pages",
+      "category": "minecraft_only",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/PageKeys.java",
+          "line": 119,
+          "needle": "public static int linuxKeysym",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Typing works in wall pages.",
+      "standalone_equivalent": "Browser DOM keyboard events need no mapping.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "WEB-06",
+      "area": "web",
+      "name": "MCEF Chromium flags (no GPU) and codec limits",
+      "category": "minecraft_only",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/mixin/McefArgsMixin.java",
+          "line": 39,
+          "needle": "\"--disable-gpu\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "docs/GUIDE.md",
+          "line": 263,
+          "needle": "H.264/AAC/HLS do not",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Known video limits in game.",
+      "standalone_equivalent": "Host browser has its own codecs and GPU; nothing to carry.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "WLD-01",
+      "area": "control",
+      "name": "Use a screen from where you stand (crosshair pointer, key capture, release)",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "present",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/remote/RemoteWalls.java",
+          "line": 62,
+          "needle": "RANGE = 24",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/remote/RemoteWall.java",
+          "line": 43,
+          "needle": "the crosshair is the pointer",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/mixin/KeyboardCaptureMixin.java",
+          "line": 16,
+          "needle": "keys and characters go to the",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "FIRST-PERSON.md",
+          "line": 11,
+          "needle": "Click its physical monitor to use it",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "extension/src/browser/room-scene.ts",
+          "line": 226,
+          "needle": "addEventListener('keydown'",
+          "ok": true
+        }
+      ],
+      "user_visible": "Walk up, click the monitor, type; Esc walks again.",
+      "standalone_equivalent": "Already present in af1d5fb25 first-person room (single terminal).",
+      "acceptance": "Existing node extension/test/first-person.cjs 11 checks stay green on every runtime change."
+    },
+    {
+      "id": "WLD-02",
+      "area": "persistence",
+      "name": "Desk/station bound to a durable workspace id",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/block/StationBlockEntity.java",
+          "line": 41,
+          "needle": "{@code Workspace} - the bridge's workspace id",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/room-state.ts",
+          "line": 5,
+          "needle": "projectUri: string",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 52,
+          "needle": "stationId: string",
+          "ok": true
+        }
+      ],
+      "user_visible": "A desk always reopens its own workspace, independent of position or label.",
+      "standalone_equivalent": "RoomState v2 with stations: {stationId -> workspaceId}; contract openWorkspace already takes stationId.",
+      "acceptance": "Open desk A, create tabs, reload the IDE: desk A reattaches the same workspace id and tabs."
+    },
+    {
+      "id": "WLD-03",
+      "area": "persistence",
+      "name": "Station preset/recipe and Station Setup editor",
+      "category": "integration",
+      "priority": "P1",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/station/StationPreset.java",
+          "line": 29,
+          "needle": "public record StationPreset",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/link/StationSetup.java",
+          "line": 23,
+          "needle": "what a station is (name, kind, Hermes",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/builder/BuilderCommands.java",
+          "line": 78,
+          "needle": "literal(\"preset\")",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "A desk defines name, kind, profile and starting tabs; a fresh copy builds its workspace from it.",
+      "standalone_equivalent": "Project file (e.g. .omo/room.json) with desk presets; setup dialog in world.",
+      "acceptance": "Preset desk {kind: hermes, tabs:[Hermes, Shell]} on a clean machine opens with those two tabs."
+    },
+    {
+      "id": "WLD-04",
+      "area": "persistence",
+      "name": "Share-safe export check/clean",
+      "category": "integration",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/builder/ExportCheck.java",
+          "line": 59,
+          "needle": "public final class ExportCheck",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/builder/BuilderCommands.java",
+          "line": 69,
+          "needle": "\"export-clean\"",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Before sharing a map, list and strip PC-specific bindings/tokens/paths.",
+      "standalone_equivalent": "Room config splits shareable presets from local bindings; local bindings live outside the project.",
+      "acceptance": "Committed room file contains no workspace ids, tokens or absolute home paths (grep check)."
+    },
+    {
+      "id": "WLD-05",
+      "area": "control",
+      "name": "Linker: wire extra screens/lamps/nameplates to a desk",
+      "category": "minecraft_only",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/link/Links.java",
+          "line": 37,
+          "needle": "Linking screens to stations",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/link/LinkerItem.java",
+          "line": 25,
+          "needle": "The Omo Linker",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/link/LinkMirror.java",
+          "line": 45,
+          "needle": "public final class LinkMirror",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Any wall can mirror a desk's screen.",
+      "standalone_equivalent": "Equivalent is a monitor setting 'mirror desk X' using RT-14 multi-view; no wand item.",
+      "acceptance": "Set wall W to mirror desk A: W shows A's active tab live."
+    },
+    {
+      "id": "WLD-06",
+      "area": "world",
+      "name": "Name plates on desks",
+      "category": "minecraft_only",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/block/NamePlateBlock.java",
+          "line": 42,
+          "needle": "public final class NamePlateBlock",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Each desk shows its workspace name.",
+      "standalone_equivalent": "3D label above each desk from workspace name.",
+      "acceptance": "Rename workspace -> desk label text updates."
+    },
+    {
+      "id": "WLD-07",
+      "area": "world",
+      "name": "Room kits (hermes_desk, terminal_nook, web_gallery...)",
+      "category": "minecraft_only",
+      "priority": "P2",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/builder/Kits.java",
+          "line": 29,
+          "needle": "\"hermes_desk\"",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/room-state.ts",
+          "line": 1,
+          "needle": "'station' | 'jungle'",
+          "ok": true
+        }
+      ],
+      "user_visible": "Builders drop ready-made rooms.",
+      "standalone_equivalent": "Standalone has two themes; add desk layouts as data, not structures.",
+      "acceptance": "Choosing a layout with 2 desks + 1 web wall renders 3 interactable surfaces."
+    },
+    {
+      "id": "WLD-08",
+      "area": "world",
+      "name": "Pocket computers as stations",
+      "category": "minecraft_only",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/pocket/Pockets.java",
+          "line": 27,
+          "needle": "Every pocket computer a player uses is a station",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Hand-held station.",
+      "standalone_equivalent": "No equivalent needed (Theia panels cover off-world use).",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "WLD-09",
+      "area": "plumbing",
+      "name": "CC:Tweaked Lua station client and omo Lua API",
+      "category": "minecraft_only",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/resources/data/computercraft/lua/rom/programs/omo/station.lua",
+          "line": 15,
+          "needle": "omo.ticket",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/lua/OmoLuaApi.java",
+          "line": 41,
+          "needle": "public final class OmoLuaApi",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Screens paint terminal frames.",
+      "standalone_equivalent": "Replaced by Theia frontend <-> backend service; do not port Lua.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "WLD-10",
+      "area": "plumbing",
+      "name": "CC 16-colour palette and glyph folding",
+      "category": "minecraft_only",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "bridge/termcore.py",
+          "line": 145,
+          "needle": "def fold_char(ch)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 265,
+          "needle": "CC glyphs",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "ASCII-faithful TUIs on CC font.",
+      "standalone_equivalent": "Use full Unicode + truecolour; do not port the fold.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "WLD-11",
+      "area": "control",
+      "name": "Redstone/comparator signal and /omo signal",
+      "category": "minecraft_only",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/builder/BuilderCommands.java",
+          "line": 64,
+          "needle": "literal(\"signal\")",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Redstone reacts to agent state.",
+      "standalone_equivalent": "Covered by RT-26 status light.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "MP-01",
+      "area": "multiplayer",
+      "name": "Only world owner/op may use stations",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "present",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/station/Stations.java",
+          "line": 34,
+          "needle": "public static boolean allowed(ServerPlayer player)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/station/Stations.java",
+          "line": 42,
+          "needle": "Only the world owner can use Omo stations",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 49,
+          "needle": "Local, single-user backend",
+          "ok": true
+        }
+      ],
+      "user_visible": "Visitors cannot type into your shells.",
+      "standalone_equivalent": "Single-user local backend by design; keep it, no remote control.",
+      "acceptance": "Second browser origin/host cannot attach (see RT-22)."
+    },
+    {
+      "id": "MP-02",
+      "area": "multiplayer",
+      "name": "Agent bodies join the world over LAN (offline logins)",
+      "category": "experiment_media_demo",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/AgentLan.java",
+          "line": 21,
+          "needle": "join your",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/mixin/AgentSkinMixin.java",
+          "line": 18,
+          "needle": "bundled Omo skin",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "docs/AGENTS-AND-TERMINALS.md",
+          "line": 176,
+          "needle": "Agent bodies in your world",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Mineflayer agent avatars walk in the world.",
+      "standalone_equivalent": "Out of scope for the IDE; separate runtime. Do not claim parity.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "SET-01",
+      "area": "setup",
+      "name": "Host bootstrap: tmux, Python, Hermes/Claude/Codex discovery, user services",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "contract_only",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 694,
+          "needle": "def ensure_tmux(",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 1154,
+          "needle": "def ensure_services(tmux)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 1192,
+          "needle": "def find_hermes()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "scripts/install.sh",
+          "line": 130,
+          "needle": "Hermes Agent not found",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/runtime-protocol.ts",
+          "line": 9,
+          "needle": "export interface HostStatus",
+          "ok": true
+        }
+      ],
+      "user_visible": "One install makes the session server and agents ready; missing Hermes is explained, not fatal.",
+      "standalone_equivalent": "Backend status() performs the same checks; first-run card in world shows what is missing with fix text.",
+      "acceptance": "On a host without tmux, status().tmux=false and the world shows a fix message; nothing crashes."
+    },
+    {
+      "id": "SET-02",
+      "area": "setup",
+      "name": "macOS launchd and Windows WSL2 services",
+      "category": "integration",
+      "priority": "P2",
+      "standalone_status": "missing",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 1067,
+          "needle": "def ensure_services_macos(tmux)",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 1117,
+          "needle": "def ensure_services_windows()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "docs/PLATFORMS.md",
+          "line": 68,
+          "needle": "## Windows (WSL2)",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Mac/Windows hosts get the same session server (tested offline only per docs).",
+      "standalone_equivalent": "Later: same backend on mac; WSL bridge on Windows.",
+      "acceptance": "Linux first; mark mac/Windows unverified."
+    },
+    {
+      "id": "SET-03",
+      "area": "setup",
+      "name": "Minecraft, Java, Prism and Microsoft sign-in install",
+      "category": "minecraft_only",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 419,
+          "needle": "def ensure_minecraft(",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 617,
+          "needle": "def ensure_prism()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "launcher/omo_auth.py",
+          "line": 83,
+          "needle": "def device_code(client_id)",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Launcher installs the game.",
+      "standalone_equivalent": "Not needed for a Theia app.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "SET-04",
+      "area": "setup",
+      "name": "Self-update",
+      "category": "integration",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "launcher/omo_setup.py",
+          "line": 866,
+          "needle": "\"AutoUpdate\": \"false\"",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "absent": "self[_-]?update|check_update",
+          "globs": [
+            "launcher/*.py",
+            "bridge/*.py",
+            "scripts/*.sh"
+          ],
+          "files_checked": 8,
+          "hits": [],
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "None: the Minecraft product has no self-update (Prism auto-update is switched off).",
+      "standalone_equivalent": "Nothing to carry. Do not claim a parity gap.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "SET-05",
+      "area": "setup",
+      "name": "Game window title 'Omo Space'",
+      "category": "minecraft_only",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/mixin/WindowTitleMixin.java",
+          "line": 11,
+          "needle": "The game window is Omo Space",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Branding.",
+      "standalone_equivalent": "Theia app name already set.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "FIL-01",
+      "area": "files",
+      "name": "Files/editor/diffs",
+      "category": "integration",
+      "priority": "P2",
+      "standalone_status": "present",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "absent": "(?i)\\bdiff view|code editor|monaco",
+          "globs": [
+            "mod/src/main/java/space/omo/life/client/*.java",
+            "bridge/*.py"
+          ],
+          "files_checked": 29,
+          "hits": [],
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/StationPanel.java",
+          "line": 44,
+          "needle": "upload",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/browser/omo-world-widget.tsx",
+          "line": 8,
+          "needle": "EditorManager",
+          "ok": true
+        },
+        {
+          "repo": "si",
+          "path": "browser-app/package.json",
+          "line": 24,
+          "needle": "\"@theia/scm\"",
+          "ok": true
+        }
+      ],
+      "user_visible": "Minecraft has no editor or diff view; only CC:T file upload into the computer.",
+      "standalone_equivalent": "Conventional code editor exists; a complete Git/PR workflow is separate work. No Minecraft code/diff editor exists to port.",
+      "acceptance": "Code desk opens the project file in the real editor (already in first-person suite)."
+    },
+    {
+      "id": "VOI-01",
+      "area": "voice",
+      "name": "Voice input/output",
+      "category": "integration",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "absent": "(?i)\\b(voice|whisper|microphone|speech[- ]to|text[- ]to[- ]speech)\\b",
+          "globs": [
+            "mod/src/main/java/space/omo/life/**/*.java",
+            "bridge/*.py",
+            "launcher/*.py",
+            "mod/src/main/resources/data/computercraft/lua/rom/programs/omo/*.lua"
+          ],
+          "files_checked": 104,
+          "hits": [],
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "None: no voice code in the Minecraft product.",
+      "standalone_equivalent": "Nothing to carry.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "THM-01",
+      "area": "themes",
+      "name": "Omo visual style and frame finishes",
+      "category": "minecraft_only",
+      "priority": "P2",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/OmoStyle.java",
+          "line": 14,
+          "needle": "class OmoStyle",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/block/FrameFinish.java",
+          "line": 16,
+          "needle": "FrameFinish",
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/src/common/room-state.ts",
+          "line": 1,
+          "needle": "export type RoomTheme",
+          "ok": true
+        }
+      ],
+      "user_visible": "Copper/gold Omo palette on panels and frames.",
+      "standalone_equivalent": "Reuse palette tokens in Theia CSS; themes already exist.",
+      "acceptance": "Visual check only."
+    },
+    {
+      "id": "MED-01",
+      "area": "media",
+      "name": "Demo video transcript, loop/reel media, README buttons",
+      "category": "experiment_media_demo",
+      "priority": "DROP",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "docs/demo/TRANSCRIPT.md",
+          "line": 1,
+          "needle": "Demo transcript",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "docs/media/hero.png",
+          "line": null,
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Marketing/demo assets.",
+      "standalone_equivalent": "Not product features.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "MED-02",
+      "area": "content",
+      "name": "Map building with Claude Code (datapack generator, world packer)",
+      "category": "experiment_media_demo",
+      "priority": "P2",
+      "standalone_status": "not_applicable",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "docs/MAPS.md",
+          "line": 1,
+          "needle": "# Building maps with Claude Code",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "worlds/build_workshop.py",
+          "line": 53,
+          "needle": "def build()",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "worlds/pack_world.py",
+          "line": 48,
+          "needle": "def strip_owner",
+          "ok": true
+        }
+      ],
+      "si_anchors": [],
+      "user_visible": "Docs workflow for building Minecraft maps.",
+      "standalone_equivalent": "Equivalent later: generate room layouts as data. Not a runtime integration.",
+      "acceptance": "n/a"
+    },
+    {
+      "id": "TST-01",
+      "area": "tests",
+      "name": "In-game test driver and bridge acceptance suites",
+      "category": "integration",
+      "priority": "P0",
+      "standalone_status": "partial",
+      "mc_anchors": [
+        {
+          "repo": "mc",
+          "path": "mod/src/main/java/space/omo/life/client/TestDriver.java",
+          "line": 73,
+          "needle": "take a screenshot",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/test_bridge.py",
+          "line": 36,
+          "needle": "def check(name, ok",
+          "ok": true
+        },
+        {
+          "repo": "mc",
+          "path": "tests/acceptance.py",
+          "line": null,
+          "ok": true
+        }
+      ],
+      "si_anchors": [
+        {
+          "repo": "si",
+          "path": "extension/test/first-person.cjs",
+          "line": null,
+          "ok": true
+        }
+      ],
+      "user_visible": "Real-path tests with stub agents (no model calls).",
+      "standalone_equivalent": "Port test_bridge scenarios to the Theia backend with stub hermes/claude/codex binaries; keep first-person.cjs.",
+      "acceptance": "Each ranked acceptance test below runs in CI with stub CLIs and no network."
+    }
+  ],
+  "ranked_acceptance_tests": [
+    {
+      "rank": 1,
+      "id": "AT-01",
+      "covers": [
+        "RT-01",
+        "RT-10"
+      ],
+      "title": "Shell survives backend restart and tmux loss",
+      "check": "Start `sleep 600` and `cd /tmp/omo-at`, restart Theia backend -> same PID alive. Then kill the omo tmux server and reopen the workspace -> same tab names/order, pwd /tmp/omo-at, nothing re-run, detail says restored N.",
+      "contract_surface": "openWorkspace, newTab, attach, poll"
+    },
+    {
+      "rank": 2,
+      "id": "AT-02",
+      "covers": [
+        "RT-03",
+        "RT-04",
+        "SET-01"
+      ],
+      "title": "Honest agent availability",
+      "check": "PATH with stub hermes only: status() -> hermes available, claude/codex available=false with installHint; new Claude tab shows the hint; no crash.",
+      "contract_surface": "status, newTab"
+    },
+    {
+      "rank": 3,
+      "id": "AT-03",
+      "covers": [
+        "RT-15",
+        "WLD-01"
+      ],
+      "title": "Colour + cursor on the in-world monitor",
+      "check": "printf red text in a focused monitor tab: RuntimeFrame.foreground marks red cells; screenshot pixel under the glyph is red; cursor drawn. Existing 11 first-person checks stay green.",
+      "contract_surface": "attach, poll"
+    },
+    {
+      "rank": 4,
+      "id": "AT-04",
+      "covers": [
+        "RT-18",
+        "RT-27"
+      ],
+      "title": "Typing, Ctrl keys and safe paste",
+      "check": "Monitor focused: Ctrl+R reaches bash; paste 'echo a\\necho b' runs nothing until Enter; 300 KiB paste refused; Esc returns to walking.",
+      "contract_surface": "input"
+    },
+    {
+      "rank": 5,
+      "id": "AT-05",
+      "covers": [
+        "RT-07"
+      ],
+      "title": "Hermes profile per workspace",
+      "check": "openWorkspace(profile=P1) -> stub hermes argv carries P1; setWorkspaceProfile(P2) -> next Hermes tab carries P2; running tab untouched. No model calls.",
+      "contract_surface": "openWorkspace, newTab (+ new setWorkspaceProfile)"
+    },
+    {
+      "rank": 6,
+      "id": "AT-06",
+      "covers": [
+        "RT-05"
+      ],
+      "title": "Claude Code resume after restore",
+      "check": "Stub claude logs argv: --session-id U on first launch; after kill-server + reopen, --resume U.",
+      "contract_surface": "newTab, openWorkspace (+ session field)"
+    },
+    {
+      "rank": 7,
+      "id": "AT-07",
+      "covers": [
+        "RT-09",
+        "RT-08"
+      ],
+      "title": "Tab lifecycle with confirmation",
+      "check": "closeTab(confirmedClose=false) on busy tab refused; true closes; reviveTab on exited tab -> running; Resume Hermes refused while `sleep` runs.",
+      "contract_surface": "closeTab, reviveTab, renameTab"
+    },
+    {
+      "rank": 8,
+      "id": "AT-08",
+      "covers": [
+        "RT-22",
+        "MP-01"
+      ],
+      "title": "Local-only, no credentials in the browser",
+      "check": "Backend bound to 127.0.0.1; frontend traffic contains no token; foreign Host header refused.",
+      "contract_surface": "all"
+    },
+    {
+      "rank": 9,
+      "id": "AT-09",
+      "covers": [
+        "WLD-02",
+        "RT-28"
+      ],
+      "title": "Desk keeps its workspace across reload",
+      "check": "Desk A -> workspace W with 2 tabs; reload IDE; desk A reattaches W (same id, same tabs); rebind desk A to W2 via picker persists.",
+      "contract_surface": "openWorkspace(stationId)"
+    },
+    {
+      "rank": 10,
+      "id": "AT-10",
+      "covers": [
+        "RT-12",
+        "RT-13"
+      ],
+      "title": "Auto-sleep safety",
+      "check": "Stub hermes idle and unwatched with short OMO_SLEEP_AFTER -> sleeping after clean /exit; attach wakes same conversation; watched/drafted/working/keep-awake tabs never sleep.",
+      "contract_surface": "poll state 'sleeping'"
+    },
+    {
+      "rank": 11,
+      "id": "AT-11",
+      "covers": [
+        "RT-14",
+        "WLD-05"
+      ],
+      "title": "Two surfaces, one tab",
+      "check": "Desk monitor 80x22 and wall 120x40 on one tab both get frames; selecting another tab moves both.",
+      "contract_surface": "attach x2"
+    },
+    {
+      "rank": 12,
+      "id": "AT-12",
+      "covers": [
+        "RT-16",
+        "RT-17"
+      ],
+      "title": "Scrollback, find, copy",
+      "check": "seq 1 5000: wheel scrolls history; find '1234' brings it into view; double-click copy puts the word on navigator.clipboard; clear empties history.",
+      "contract_surface": "new scroll/find/copy ops"
+    },
+    {
+      "rank": 13,
+      "id": "AT-13",
+      "covers": [
+        "RT-25",
+        "RT-26",
+        "RT-24"
+      ],
+      "title": "Visible agent state",
+      "check": "During `sleep 3` desk light gold and busy=true; after, green; after kill-server, red. Board view lists names/states with no ids/tokens.",
+      "contract_surface": "poll, listWorkspaces"
+    },
+    {
+      "rank": 14,
+      "id": "AT-14",
+      "covers": [
+        "WEB-01",
+        "WEB-02"
+      ],
+      "title": "Web wall",
+      "check": "Bind https://example.com to a wall: renders on texture, clicks reach page, binding survives reload; javascript:/file: refused.",
+      "contract_surface": "frontend only"
+    },
+    {
+      "rank": 15,
+      "id": "AT-15",
+      "covers": [
+        "WLD-03",
+        "WLD-04"
+      ],
+      "title": "Preset rooms are shareable",
+      "check": "Preset desk {hermes, tabs [Hermes, Shell]} builds those tabs on a clean host; committed room file has no workspace ids, tokens or home paths.",
+      "contract_surface": "openWorkspace"
+    }
+  ],
+  "snapshot_label": "Baseline audit at 5fe860fa2, before runtime integration; consult INTEGRATION.md for actual verified delivery."
+}

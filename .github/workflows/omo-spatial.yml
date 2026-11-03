@@ -1,0 +1,48 @@
+name: Omo spatial IDE
+
+on:
+  push:
+    branches: ['omo/**']
+    paths: ['omo/**', '.github/workflows/omo-spatial.yml']
+  pull_request:
+    branches: ['omo/**']
+    paths: ['omo/**', '.github/workflows/omo-spatial.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omo-spatial-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-runtime:
+    if: github.repository == 'omoresearch/theia' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, ci-shared]
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: omo
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NODE_OPTIONS: '--max-old-space-size=4096'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Check isolated runner prerequisites
+        run: |
+          node --version
+          python3 --version
+          tmux -V
+      - name: Install locked compile/test dependencies (no lifecycle hooks)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Type-check and test Omo code and local runtime
+        run: |
+          npm run compile
+          npm test
+      - name: Build the real Theia browser application
+        run: npm run build --workspace=omo-browser
