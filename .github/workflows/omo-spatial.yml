@@ -46,3 +46,5 @@ jobs:
           npm test
       - name: Build the real Theia browser application
         run: npm run build --workspace=omo-browser
+      - name: Exercise the actual app with real tmux shells and headless Chrome
+        run: npm run test:ci-e2e
