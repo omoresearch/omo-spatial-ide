@@ -5,7 +5,8 @@
   "main": "lib/browser/omo-frontend-module.js",
   "theiaExtensions": [
     {
-      "frontend": "lib/browser/omo-frontend-module"
+      "frontend": "lib/browser/omo-frontend-module",
+      "backend": "lib/node/omo-backend-module"
     }
   ],
   "dependencies": {
