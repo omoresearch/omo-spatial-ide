@@ -1,4 +1,4 @@
-import type { AgentKind, HostStatus, OmoRuntimeService, RuntimeFrame, RuntimePoll, SessionTab, SessionWorkspace } from '../common/runtime-protocol';
+import type { AgentKind, FindResult, HostStatus, OmoRuntimeService, RuntimeFrame, RuntimePoll, SessionTab, SessionWorkspace, ViewModes, WorkspaceSummary } from '../common/runtime-protocol';
 
 /**
  * Frontend state machine for the in-world terminal monitor. It owns the
@@ -13,10 +13,14 @@ export const POLL_MS = 200;
 export const RETRY_MS = 1500;
 export const AGENT_KINDS: AgentKind[] = ['shell', 'hermes', 'claude', 'codex'];
 export const AGENT_LABELS: Record<AgentKind, string> = { shell: 'Shell', hermes: 'Hermes', claude: 'Claude Code', codex: 'Codex' };
+export const WORKSPACE_NAME_MAX = 40;
+/** Same limit the bridge enforces; checked here too so a refused paste never leaves the browser. */
+export const PASTE_LIMIT_BYTES = 256 * 1024;
+export interface CopyRange { x1: number; y1: number; x2: number; y2: number; unit?: 'char' | 'word' | 'line' }
 
 export interface StationBinding { stationId: string; projectUri: string; name: string }
 export type RuntimePhase = 'idle' | 'checking' | 'unavailable' | 'opening' | 'attaching' | 'live' | 'reconnecting' | 'interrupted' | 'error';
-export interface PendingAction { type: 'new' | 'close' | 'revive'; kind?: AgentKind; tabId?: string; message: string; confirmLabel: string }
+export interface PendingAction { type: 'new' | 'close' | 'revive' | 'deleteWorkspace' | 'deleteWorkspaceBusy' | 'resume' | 'clearHistory'; kind?: AgentKind; tabId?: string; workspaceId?: string; message: string; confirmLabel: string }
 export interface RuntimeConsoleState {
     phase: RuntimePhase;
     statusText: string;
@@ -34,6 +38,14 @@ export interface RuntimeConsoleState {
     sequence: number;
     pending?: PendingAction;
     acting: boolean;
+    /** From the latest frame, when the runtime reports them. */
+    history?: number;
+    scrollOffset?: number;
+    bell?: number;
+    bracketedPaste?: boolean;
+    /** Workspace board (read-only list from live metadata), loaded on request. */
+    board?: WorkspaceSummary[];
+    find?: FindResult;
 }
 export interface LauncherOption { kind: AgentKind; label: string; available: boolean; reason: string; installHint?: string }
 export interface StorageLike { getItem(key: string): string | null; setItem(key: string, value: string): void }
@@ -48,6 +60,18 @@ export interface RuntimeConsoleOptions {
 }
 
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
+const EXTRA_ACTIONS: PendingAction['type'][] = ['deleteWorkspace', 'deleteWorkspaceBusy', 'resume', 'clearHistory'];
+const CONTROL = /[\u0000-\u001f\u007f]/;
+const RESUME_NOTE: Record<AgentKind, string> = {
+    shell: '', hermes: 'It resumes this tab’s own Hermes conversation.',
+    claude: 'Claude Code resumes this tab’s saved session when there is one.',
+    codex: 'Codex starts a fresh session: an earlier Codex conversation is not resumed.'
+};
+function utf8Bytes(text: string): number {
+    let n = 0;
+    for (const ch of text) { const c = ch.codePointAt(0)!; n += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4; }
+    return n;
+}
 const ACTIVE_PHASES: RuntimePhase[] = ['checking', 'opening', 'attaching', 'live', 'reconnecting', 'interrupted'];
 
 export function bindingKey(binding: Pick<StationBinding, 'stationId' | 'projectUri'>): string {
@@ -219,7 +243,7 @@ export class RuntimeConsoleController {
         this.releaseView();
         const gen = this.viewGen;
         const workspace = this.current.workspace; const tab = this.activeTab();
-        this.set({ lines: [], foreground: undefined, background: undefined, cursor: undefined, sequence: 0 });
+        this.set({ lines: [], foreground: undefined, background: undefined, cursor: undefined, sequence: 0, history: undefined, scrollOffset: undefined, bell: undefined, bracketedPaste: undefined, find: undefined });
         if (!workspace || !tab) { this.set({ phase: 'idle', statusText: 'This workspace has no tabs. Start a shell from the console strip.' }); return; }
         if (tab.state === 'interrupted' || tab.state === 'exited') { this.set({ phase: 'interrupted', statusText: describeTab(tab) }); return; }
         this.set({ phase: 'attaching', statusText: `Connecting the monitor to ${tab.name}…` });
@@ -266,6 +290,7 @@ export class RuntimeConsoleController {
         const frame = result.frame;
         if (frame && frame.sequence > this.current.sequence) {
             Object.assign(patch, { sequence: frame.sequence, lines: frame.lines, foreground: frame.foreground, background: frame.background, cursor: frame.cursor, palette: frame.palette ?? this.current.palette });
+            for (const key of ['history', 'scrollOffset', 'bell', 'bracketedPaste'] as const) if (frame[key] !== undefined) Object.assign(patch, { [key]: frame[key] });
         }
         this.set(patch);
         this.later(() => void this.pollOnce(epoch, gen), this.options.pollMs ?? POLL_MS);
@@ -348,7 +373,8 @@ export class RuntimeConsoleController {
     async confirmPending(): Promise<void> {
         const pending = this.current.pending;
         if (!pending || this.current.acting) return;
-        await this.run(pending);
+        if (EXTRA_ACTIONS.includes(pending.type)) await this.runExtra(pending);
+        else await this.run(pending);
     }
 
     private async run(action: PendingAction): Promise<void> {
@@ -386,6 +412,207 @@ export class RuntimeConsoleController {
             if (epoch !== this.epoch) return;
             this.set({ acting: false, notice: '', error: `${action.type === 'new' ? 'Could not start the tab' : action.type === 'revive' ? 'Could not revive the tab' : 'Could not close the tab'}: ${message(error)}` });
         }
+    }
+
+    // ------------------------------------------------------------ advanced parity
+    private modes(m: ViewModes): Partial<RuntimeConsoleState> { return { history: m.history, scrollOffset: m.scrollOffset, bracketedPaste: m.bracketedPaste }; }
+    private needView(what: string): string | undefined {
+        if (!this.viewId) this.set({ error: `The monitor is not connected to a terminal, so ${what} was not done.`, notice: '' });
+        return this.viewId;
+    }
+
+    /** Read-only workspace board from live metadata. */
+    async refreshBoard(): Promise<void> {
+        if (this.disposed) return;
+        const epoch = this.epoch;
+        try {
+            const board = await this.service.listWorkspaces();
+            if (epoch === this.epoch) this.set({ board });
+        } catch (error) { if (epoch === this.epoch) this.set({ error: `Could not list workspaces: ${message(error)}` }); }
+    }
+
+    async renameWorkspace(workspaceId: string, name: string): Promise<boolean> {
+        if (this.disposed || this.current.acting) return false;
+        const cleaned = name.trim();
+        if (!cleaned || cleaned.length > WORKSPACE_NAME_MAX || CONTROL.test(cleaned)) {
+            this.set({ error: `Use a workspace name from 1 to ${WORKSPACE_NAME_MAX} characters, without control characters.`, notice: '' });
+            return false;
+        }
+        const epoch = this.epoch;
+        this.set({ acting: true, error: '', notice: '' });
+        try {
+            const next = await this.service.renameWorkspace({ workspaceId, name: cleaned });
+            if (epoch !== this.epoch) return false;
+            if (next.name !== cleaned) throw new Error('The runtime did not confirm the new name.');
+            this.set({ acting: false, notice: 'Workspace renamed.', ...(this.current.workspace?.id === workspaceId ? { workspace: next } : {}) });
+            if (this.current.board) await this.refreshBoard();
+            return true;
+        } catch (error) {
+            if (epoch === this.epoch) this.set({ acting: false, error: `Could not rename the workspace: ${message(error)}` });
+            return false;
+        }
+    }
+
+    requestDeleteWorkspace(workspaceId: string): void {
+        if (this.current.acting) return;
+        const name = this.current.board?.find(w => w.id === workspaceId)?.name ?? (this.current.workspace?.id === workspaceId ? this.current.workspace.name : 'this workspace');
+        this.set({ error: '', notice: '', pending: { type: 'deleteWorkspace', workspaceId, confirmLabel: 'Delete workspace',
+            message: `Delete “${name}”? This ends every tab in it and cannot be undone. Stations bound to it are unbound.` } });
+    }
+
+    /** Point this station at an existing workspace of the same project. Starts nothing. */
+    async bindToWorkspace(workspaceId: string): Promise<void> {
+        const binding = this.binding;
+        if (this.disposed || this.current.acting || !binding) return;
+        const epoch = this.epoch;
+        this.set({ acting: true, error: '', notice: '' });
+        try {
+            await this.service.bindStation({ stationId: binding.stationId, projectUri: binding.projectUri, workspaceId });
+        } catch (error) {
+            if (epoch === this.epoch) this.set({ acting: false, error: `Could not bind this station: ${message(error)}` });
+            return;
+        }
+        if (epoch !== this.epoch) return;
+        this.set({ acting: false });
+        await this.open(binding, undefined);
+        if (this.current.workspace?.id === workspaceId) this.set({ notice: 'This station now shows that workspace.' });
+    }
+
+    /** Default Hermes profile for tabs started from now on. Running tabs keep their process. */
+    async setWorkspaceProfile(profile: string): Promise<void> {
+        const ws = this.current.workspace;
+        if (this.disposed || this.current.acting || !ws) return;
+        if (!this.current.host?.profiles.includes(profile)) { this.set({ error: `No Hermes profile named “${profile}”.` }); return; }
+        const epoch = this.epoch;
+        try {
+            const next = await this.service.setWorkspaceProfile({ workspaceId: ws.id, profile });
+            if (epoch === this.epoch) this.set({ workspace: next, error: '', notice: `Saved. New tabs use the “${next.profile}” profile; running tabs keep theirs.` });
+        } catch (error) { if (epoch === this.epoch) this.set({ error: `Could not set the profile: ${message(error)}` }); }
+    }
+
+    /** Metadata only: this runtime has no auto-sleep, so nothing is started or stopped. */
+    async setKeepAwake(on: boolean): Promise<void> {
+        const ws = this.current.workspace;
+        if (this.disposed || this.current.acting || !ws) return;
+        const epoch = this.epoch;
+        try {
+            const next = await this.service.setKeepAwake({ workspaceId: ws.id, on });
+            if (epoch === this.epoch) this.set({ workspace: next, error: '', notice: `Keep awake ${next.keepAwake ? 'on' : 'off'}. Auto-sleep is off in this runtime, so nothing changes now.` });
+        } catch (error) { if (epoch === this.epoch) this.set({ error: `Could not save keep awake: ${message(error)}` }); }
+    }
+
+    /** Explicit, confirmed restart of an agent in its own idle shell. */
+    requestResume(tabId: string): void {
+        const tab = this.current.workspace?.tabs.find(t => t.id === tabId);
+        if (!tab || this.current.acting) return;
+        if (tab.kind === 'shell') { this.set({ pending: undefined, notice: '', error: 'A shell tab has no agent to resume.' }); return; }
+        if (tab.state !== 'running' && tab.state !== 'sleeping') { this.set({ pending: undefined, notice: '', error: `${tab.name} is not running. Revive it first.` }); return; }
+        if (tab.busy) { this.set({ pending: undefined, notice: '', error: `${tab.name} is working right now. Finish or interrupt it first.` }); return; }
+        const option = this.launchers.find(o => o.kind === tab.kind)!;
+        if (!option.available) { this.set({ pending: undefined, error: `${option.label} is not available: ${option.reason}` }); return; }
+        this.set({ error: '', notice: '', pending: { type: 'resume', tabId, confirmLabel: `Start ${option.label}`,
+            message: `Start ${option.label} again in “${tab.name}”? ${RESUME_NOTE[tab.kind]} It runs under your own account and may use your plan or API credits.` } });
+    }
+
+    requestClearHistory(): void {
+        if (this.current.acting || !this.needView('clearing scrollback')) return;
+        this.set({ error: '', notice: '', pending: { type: 'clearHistory', confirmLabel: 'Clear scrollback',
+            message: 'Clear this tab’s scrollback? Earlier output can no longer be scrolled to or found. What is on screen stays.' } });
+    }
+
+    private async runExtra(action: PendingAction): Promise<void> {
+        const epoch = this.epoch;
+        this.set({ pending: undefined, acting: true, error: '', notice: '' });
+        try {
+            if (action.type === 'resume') {
+                const ws = this.current.workspace!;
+                const r = await this.service.resumeAgent({ workspaceId: ws.id, tabId: action.tabId!, confirmedStart: true });
+                if (epoch === this.epoch) this.set({ acting: false, workspace: r.workspace, notice: r.detail });
+            } else if (action.type === 'clearHistory') {
+                const viewId = this.viewId;
+                if (!viewId) throw new Error('the monitor is not connected');
+                const m = await this.service.clearHistory({ viewId, confirmedClear: true });
+                if (epoch === this.epoch) this.set({ acting: false, ...this.modes(m), find: undefined, notice: 'Scrollback cleared.' });
+            } else {
+                const workspaceId = action.workspaceId!;
+                let result: { deleted: boolean; detail: string };
+                try {
+                    result = await this.service.deleteWorkspace({ workspaceId, confirmedDelete: true, confirmedBusy: action.type === 'deleteWorkspaceBusy' });
+                } catch (error) {
+                    if (epoch === this.epoch && action.type === 'deleteWorkspace' && /still has work running/.test(message(error))) {
+                        this.set({ acting: false, pending: { type: 'deleteWorkspaceBusy', workspaceId, confirmLabel: 'Delete anyway', message: message(error) } });
+                        return;
+                    }
+                    throw error;
+                }
+                if (epoch !== this.epoch) return;
+                if (this.current.workspace?.id === workspaceId) {
+                    this.epoch++; this.releaseView();
+                    if (this.binding) { try { this.options.storage?.setItem(bindingKey(this.binding), ''); } catch { /* optional */ } }
+                    this.current = { ...RuntimeConsoleController.initial(), host: this.current.host, board: this.current.board };
+                }
+                this.set({ acting: false, notice: result.detail || 'Workspace deleted.' });
+                await this.refreshBoard();
+            }
+        } catch (error) {
+            if (epoch === this.epoch) this.set({ acting: false, error: `${action.type === 'resume' ? 'Could not resume the agent' : action.type === 'clearHistory' ? 'Could not clear scrollback' : 'Could not delete the workspace'}: ${message(error)}` });
+        }
+    }
+
+    /** Move through tmux history (positive = older). */
+    async scroll(lines: number): Promise<void> {
+        const viewId = this.needView('scrolling');
+        if (!viewId || !Number.isFinite(lines) || !lines) return;
+        try { const m = await this.service.scroll({ viewId, lines: Math.round(lines) }); if (viewId === this.viewId) this.set(this.modes(m)); } catch (error) { if (viewId === this.viewId) this.set({ error: `Could not scroll: ${message(error)}` }); }
+    }
+    /** Mouse wheel over the monitor (positive = up); x/y are the cell under the pointer. */
+    async wheel(notches: number, x = 0, y = 0): Promise<void> {
+        const viewId = this.viewId;
+        if (!viewId || !Number.isFinite(notches) || !notches) return;
+        try { const m = await this.service.wheel({ viewId, notches: Math.round(notches), x, y }); if (viewId === this.viewId) this.set(this.modes(m)); } catch (error) { if (viewId === this.viewId) this.set({ error: `Could not scroll: ${message(error)}` }); }
+    }
+    /** Find across the whole history. step: 0 = newest/same, 1 = older, -1 = newer. Empty query clears. */
+    async find(query: string, step = 0): Promise<void> {
+        const viewId = this.needView('find');
+        if (!viewId) return;
+        try {
+            const r = await this.service.find({ viewId, query: query.slice(0, 200), step: Math.sign(step) });
+            if (viewId === this.viewId) this.set({ find: r.query ? r : undefined, error: '', notice: r.query && !r.count ? `“${r.query}” was not found.` : '' });
+        } catch (error) { if (viewId === this.viewId) this.set({ error: `Find failed: ${message(error)}` }); }
+    }
+    /** The selected text, returned to the caller. This class never touches a clipboard. */
+    async copySelection(range: CopyRange): Promise<string> {
+        const viewId = this.needView('copying');
+        if (!viewId) return '';
+        try {
+            const r = await this.service.copyText({ viewId, x1: range.x1, y1: range.y1, x2: range.x2, y2: range.y2, unit: range.unit ?? 'char' });
+            if (!r.text) this.set({ notice: 'Nothing selected.' });
+            return r.text;
+        } catch (error) { if (viewId === this.viewId) this.set({ error: `Could not copy: ${message(error)}` }); return ''; }
+    }
+    /** Every row on the monitor now. */
+    copyScreen(): Promise<string> {
+        return this.copySelection({ x1: 0, y1: 0, x2: MONITOR_COLS - 1, y2: Math.max(0, (this.current.lines.length || MONITOR_ROWS) - 1) });
+    }
+    /**
+     * Safe paste of text the browser already holds (never read from a device clipboard here).
+     * Multi-line text needs bracketed paste from the app, so nothing runs before Enter.
+     */
+    async paste(text: string): Promise<boolean> {
+        if (this.disposed || typeof text !== 'string' || !text) return false;
+        if (utf8Bytes(text) > PASTE_LIMIT_BYTES) { this.set({ error: `That paste is too large: the limit is ${PASTE_LIMIT_BYTES / 1024} KiB.`, notice: '' }); return false; }
+        const multiLine = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '').includes('\n');
+        if (multiLine && this.current.bracketedPaste !== true) {
+            this.set({ error: 'This program has not turned on bracketed paste, so multi-line text could run line by line. Paste one line at a time.', notice: '' });
+            return false;
+        }
+        const viewId = this.needView('pasting');
+        if (!viewId) return false;
+        try {
+            await this.service.paste({ viewId, text });
+            if (viewId === this.viewId) this.set({ error: '', notice: multiLine ? 'Pasted as one block. Press Enter to run it.' : '' });
+            return true;
+        } catch (error) { if (viewId === this.viewId) this.set({ error: `Paste was not delivered: ${message(error)}` }); return false; }
     }
 
     /** Project closed: detach the monitor view and forget the binding. The tabs keep running. */

@@ -131,6 +131,20 @@ class Stations:
     def bind(self, station, project_uri, project_dir, ws_id):
         self.data["bindings"][self.key(station, project_uri)] = {
             "station": station, "projectUri": project_uri, "projectDir": project_dir, "workspace": ws_id}
+        self._save()
+
+    def stations_for(self, ws_id):
+        return sorted(b["station"] for b in self.data["bindings"].values()
+                      if isinstance(b, dict) and b.get("workspace") == ws_id and b.get("station"))
+
+    def unbind_workspace(self, ws_id):
+        keys = [k for k, b in self.data["bindings"].items() if isinstance(b, dict) and b.get("workspace") == ws_id]
+        for k in keys:
+            del self.data["bindings"][k]
+        if keys:
+            self._save()
+
+    def _save(self):
         tmp = f"{self.path}.tmp-{os.getpid()}"
         with open(tmp, "w") as fh:
             json.dump(self.data, fh, indent=2, sort_keys=True)
@@ -255,7 +269,8 @@ def describe(ws_id):
         tabs.append(tab)
     ws_state = {"live": "running", "ended": "ended", "interrupted": "interrupted"}.get(d["state"], "unknown")
     return {"id": d["id"], "name": d["name"], "projectUri": raw.get("project_uri", ""),
-            "profile": d["profile"] or "default", "tabs": tabs, "state": ws_state}
+            "profile": d["profile"] or "default", "tabs": tabs, "state": ws_state,
+            "keepAwake": bool(d.get("keep_awake"))}
 
 
 def check_ws(ws_id):
@@ -345,6 +360,121 @@ def op_tab_revive(a):
     return describe(ws_id)
 
 
+# --------------------------------------------------------------------------- workspace management
+def op_ws_list(_a):
+    """Every workspace, from live metadata (state and busy come from tmux, never guessed)."""
+    out = []
+    for ws_id in list(ob.META.workspaces):
+        try:
+            d = describe(ws_id)
+        except (HostError, ob.BridgeError):
+            continue
+        d["stations"] = STATIONS.stations_for(ws_id)
+        out.append(d)
+    return out
+
+
+def op_ws_rename(a):
+    ws_id = check_ws(a.get("workspaceId"))
+    WS.rename(ws_id, a.get("name"))
+    return describe(ws_id)
+
+
+def op_ws_delete(a):
+    """Destructive: needs an explicit confirmation, and a second one while any tab is busy."""
+    ws_id = check_ws(a.get("workspaceId"))
+    if a.get("confirmedDelete") is not True:
+        raise HostError("deleting a workspace ends every tab in it; confirm the delete first")
+    ensure_server()
+    with VIEWS_LOCK:
+        mine = [v for v in VIEWS.values() if v.ws_id == ws_id]
+    ok, msg = WS.delete(ws_id, force=a.get("confirmedBusy") is True)
+    if not ok:
+        raise HostError(msg)
+    with VIEWS_LOCK:
+        for v in mine:
+            VIEWS.pop(v.id, None)
+    for v in mine:
+        try:
+            v.close()
+        except Exception:
+            pass
+    STATIONS.unbind_workspace(ws_id)
+    return {"deleted": True, "detail": msg}
+
+
+def op_station_bind(a):
+    """Point a station at an EXISTING workspace of the same project (no new workspace)."""
+    station = str(a.get("stationId") or "")
+    project_uri = str(a.get("projectUri") or "")
+    project_dir = str(a.get("projectDir") or "")
+    if not STATION_RE.match(station):
+        raise HostError("invalid station id")
+    if not project_uri.startswith("file://") or not os.path.isabs(project_dir) or not os.path.isdir(project_dir):
+        raise HostError("project directory does not exist")
+    ws_id = check_ws(a.get("workspaceId"))
+    project_dir = os.path.realpath(project_dir)
+    if ob.META.workspaces[ws_id].get("project_dir") != project_dir:
+        raise HostError("that workspace belongs to another project")
+    with OPEN_LOCK:
+        STATIONS.bind(station, project_uri, project_dir, ws_id)
+    return describe(ws_id)
+
+
+def op_ws_profile(a):
+    """The Hermes profile for tabs started FROM NOW ON. Running tabs keep their process."""
+    ws_id = check_ws(a.get("workspaceId"))
+    WS.set_profile(ws_id, a.get("profile") or "")
+    return describe(ws_id)
+
+
+def op_ws_keep_awake(a):
+    """Metadata only. The spatial host runs no auto-sleep, so this starts and stops nothing."""
+    ws_id = check_ws(a.get("workspaceId"))
+    WS.set_keep_awake(ws_id, a.get("on") is True)
+    return describe(ws_id)
+
+
+RESUME_NOTES = {
+    "hermes": "Resuming this tab's own Hermes conversation",
+    "claude": "Claude Code resumes this tab's saved session when one exists; otherwise it starts one with this tab's session id",
+    "codex": "Codex starts a fresh session: an earlier Codex conversation is not resumed",
+}
+
+
+def op_agent_resume(a):
+    """Type this tab's agent command into its idle shell. Explicit and confirmed only;
+    refused on shell tabs, on tabs that are not live and while anything is running."""
+    ws_id = check_ws(a.get("workspaceId"))
+    tab_id = str(a.get("tabId") or "")
+    if a.get("confirmedStart") is not True:
+        raise HostError("resuming an agent starts it; confirm the start first")
+    tab = tab_of(ws_id, tab_id)
+    if tab["kind"] == "shell":
+        raise HostError("a shell tab has no agent to resume")
+    need_agent(tab["kind"])
+    with WS.lock:
+        ws = ob.META.workspaces[ws_id]
+        tab = next(t for t in ws["tabs"] if t["id"] == tab_id)
+        state = next(t for t in WS._describe_locked(ws, ob.TM.server_id())["tabs"] if t["id"] == tab_id)
+        if state["state"] != "live":
+            raise HostError("this tab is not running; revive it first")
+        if state["busy"]:
+            raise HostError(f"'{ob.clean(state['command'], 40)}' is running in this tab; finish or interrupt it first")
+        if tab["kind"] == "hermes":
+            view = dict(ws, profile=tab["profile"]) if tab.get("profile") else ws
+            command = ob.hermes_command(view, tab_id)
+        else:
+            command = ob.agent_command(ws, tab)
+        target = f"={ob.ws_session(ws_id)}:{state['window']}"
+        ob.TM.run("send-keys", "-t", target, "-l", command)
+        ob.TM.run("send-keys", "-t", target, "Enter")
+        tab.pop("asleep", None)
+        ob.META.save()
+    ob.log(f"spatial agent resume {ws_id}/{tab_id} kind={tab['kind']}")
+    return {"workspace": describe(ws_id), "detail": RESUME_NOTES[tab["kind"]], "fresh": tab["kind"] == "codex"}
+
+
 # --------------------------------------------------------------------------- views
 class SpatialView:
     def __init__(self, ws_id, tab_id, window, cols, rows):
@@ -357,17 +487,31 @@ class SpatialView:
         self.last_poll = time.monotonic()
         self.closed = False
         self.lock = threading.Lock()
+        self.find_at, self.find_mark = None, None
+        self.bracketed, self.modes_at = False, 0.0
+
+    def modes(self, fresh=False):
+        """Scroll position, history size (bridge View.poll) and whether the app
+        in the pane enabled bracketed paste (tmux's own flag). Cached briefly."""
+        now = time.monotonic()
+        if fresh or now - self.modes_at > 0.3:
+            self.view.poll()
+            flag = ob.TM.out("display", "-p", "-t", self.view.target, "#{bracket_paste_flag}",
+                             timeout=ob.POLL_TIMEOUT).strip()
+            self.bracketed, self.modes_at = flag == "1", now
+        return {"history": self.view.history, "scrollOffset": self.view.scroll_pos,
+                "bracketedPaste": self.bracketed}
 
     def frame(self):
         pty = self.view.pty
-        f = pty.frame()
+        f = pty.frame(find=self.find_mark)
         texts = pty.text_lines()
         fg = ["".join(run[2] * run[0] for run in row) for row in f["lines"]]
         bg = ["".join(run[3] * run[0] for run in row) for row in f["lines"]]
         lines = [line.replace(termcore.WIDE, "") for line in texts]
         cursor = {"x": f["cursor"][0], "y": f["cursor"][1], "visible": not f["cursor_hidden"]}
         return {"cols": f["cols"], "rows": f["rows"], "lines": lines, "foreground": fg,
-                "background": bg, "palette": PALETTE, "cursor": cursor}
+                "background": bg, "palette": PALETTE, "cursor": cursor, "bell": pty.bells, **self.modes()}
 
     def dead_reason(self):
         if not self.view.pty.alive:
@@ -520,6 +664,113 @@ def sync_size(v, cols, rows, limit=3.0):
     return False
 
 
+def live_view(a):
+    v = get_view(a.get("viewId"))
+    if v.dead_reason():
+        raise HostError("view is not live")
+    return v
+
+
+def op_scroll(a):
+    """Move through tmux history by `lines` (positive = older)."""
+    v = live_view(a)
+    v.view.scroll(max(-100000, min(int(a.get("lines") or 0), 100000)))
+    v.modes(fresh=True)
+    return v.modes()
+
+
+def op_wheel(a):
+    """As the bridge's wheel: to an app that asked for the mouse, arrow keys to a
+    full-screen app without it, otherwise tmux history. Positive = up."""
+    v = live_view(a)
+    notches = max(-50, min(int(a.get("notches") or 0), 50))
+    pty = v.view.pty
+    v.modes(fresh=True)
+    if notches and pty.mouse and not v.view.scroll_pos:
+        x = max(0, min(int(a.get("x") or 0), pty.cols - 1))
+        y = max(0, min(int(a.get("y") or 0), pty.rows - 1))
+        pty.write(f"\x1b[<{64 if notches > 0 else 65};{x + 1};{y + 1}M".encode() * min(abs(notches), 10))
+    elif notches and v.view.alt and not v.view.scroll_pos:
+        pty.write((b"\x1b[A" if notches > 0 else b"\x1b[B") * min(abs(notches) * 3, 60))
+    elif notches:
+        v.view.scroll(notches * 3)
+    v.modes(fresh=True)
+    return v.modes()
+
+
+def op_find(a):
+    """Find across the whole history and screen; the chosen match is scrolled into view
+    and every match on screen is marked. Empty query clears the marks."""
+    v = live_view(a)
+    q = str(a.get("query") or "")[:200]
+    if not q:
+        v.find_at = v.find_mark = None
+        v.changed.set()
+        return {"query": "", "index": 0, "count": 0}
+    step = max(-1, min(int(a.get("step") or 0), 1))
+    hit, i, n, row = v.view.find(q, step, v.find_at)
+    v.find_at, v.find_mark = hit, (q, row)
+    v.modes(fresh=True)
+    v.changed.set()
+    return {"query": q, "index": i, "count": n}
+
+
+def op_copy(a):
+    """The text of a screen selection, returned to the caller (the browser decides what
+    to do with it). Never reads or writes the host clipboard."""
+    v = live_view(a)
+    pty = v.view.pty
+    lines = pty.text_lines()
+    cell = lambda kx, ky: (max(0, min(int(a.get(kx) or 0), pty.cols - 1)), max(0, min(int(a.get(ky) or 0), pty.rows - 1)))
+    unit = str(a.get("unit") or "char")
+    sel = termcore.expand(lines, (*cell("x1", "y1"), *cell("x2", "y2")), unit if unit in ("char", "word", "line") else "char", pty.cols)
+    text = termcore.selection_text(lines, sel, pty.cols)
+    return {"text": text, "chars": len(text), "lines": text.count("\n") + 1 if text else 0}
+
+
+def op_clear_history(a):
+    v = live_view(a)
+    if a.get("confirmedClear") is not True:
+        raise HostError("clearing scrollback cannot be undone; confirm the clear first")
+    v.view.clear_history()
+    v.find_at = v.find_mark = None
+    v.modes(fresh=True)
+    v.changed.set()
+    return v.modes()
+
+
+CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\x80-\x9f]")
+
+
+def op_paste(a):
+    """Safe paste. Control characters (ESC included, so a pasted end-of-paste marker can
+    not run the rest) are stripped; at most 256 KiB. Multi-line text is sent only inside
+    bracketed paste, and only when the app in the pane enabled it, so nothing runs until
+    the user presses Enter. Without that mode multi-line text is refused."""
+    v = live_view(a)
+    text = str(a.get("text") or "")
+    size = len(text.encode("utf-8", "replace"))
+    if size > ob.PASTE_MAX:
+        raise HostError(f"paste too large ({size} bytes; the limit is {ob.PASTE_MAX // 1024} KiB)")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    if not CONTROL_RE.sub("", text).strip():
+        raise HostError("nothing to paste")
+    with v.lock:
+        v.view.live_again()
+        if v.modes(fresh=True)["bracketedPaste"]:
+            data = ob.bracketed(re.sub(r"[\x80-\x9f]", "", text))     # the bridge strips C0; C1 controls go too
+        else:
+            single = text.rstrip("\n")
+            if "\n" in single:
+                raise HostError("this program did not turn on bracketed paste, so multi-line text "
+                                "could run line by line; paste one line at a time")
+            data = CONTROL_RE.sub("", single).encode("utf-8", "replace")
+        if not v.view.pty.write(data):
+            raise HostError("paste could not be delivered: the view is closed")
+        v.last_text = time.monotonic()
+    return {"bracketed": data.startswith(b"\x1b[200~"), "bytes": len(data)}
+
+
 def op_detach(a):
     with VIEWS_LOCK:
         v = VIEWS.pop(str(a.get("viewId") or ""), None)
@@ -568,7 +819,12 @@ OPS = {
     "tab_new": op_tab_new, "tab_rename": op_tab_rename, "tab_close": op_tab_close,
     "tab_revive": op_tab_revive, "attach": op_attach, "poll": op_poll, "input": op_input,
     "resize": op_resize, "detach": op_detach,
+    "ws_list": op_ws_list, "ws_rename": op_ws_rename, "ws_delete": op_ws_delete, "station_bind": op_station_bind,
+    "ws_profile": op_ws_profile, "ws_keep_awake": op_ws_keep_awake, "agent_resume": op_agent_resume,
+    "scroll": op_scroll, "wheel": op_wheel, "find": op_find, "copy": op_copy, "clear_history": op_clear_history,
+    "paste": op_paste,
 }
+ORDERED_OPS = ("input", "resize", "detach", "paste", "scroll", "wheel", "find", "clear_history")
 
 
 def handle(msg):
@@ -615,7 +871,7 @@ def main():
             close_all_views()
             send({"id": msg.get("id"), "ok": True, "result": None})
             break
-        (ordered if msg.get("op") in ("input", "resize", "detach") else pool).submit(handle, msg)
+        (ordered if msg.get("op") in ORDERED_OPS else pool).submit(handle, msg)
     close_all_views()
     pool.shutdown(wait=False, cancel_futures=True)
     os._exit(0)
