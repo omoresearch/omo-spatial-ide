@@ -1,0 +1,46 @@
+{
+  "name": "omo-browser",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "theia build --mode development",
+    "start": "theia start --hostname 127.0.0.1 --port 3190"
+  },
+  "dependencies": {
+    "@theia/core": "1.74.3",
+    "@theia/editor": "1.74.3",
+    "@theia/filesystem": "1.74.3",
+    "@theia/workspace": "1.74.3",
+    "@theia/terminal": "1.74.3",
+    "@theia/monaco": "1.74.3",
+    "@theia/navigator": "1.74.3",
+    "@theia/preferences": "1.74.3",
+    "@theia/messages": "1.74.3",
+    "@theia/output": "1.74.3",
+    "@theia/markers": "1.74.3",
+    "@theia/file-search": "1.74.3",
+    "@theia/search-in-workspace": "1.74.3",
+    "@theia/getting-started": "1.74.3",
+    "@theia/scm": "1.74.3",
+    "@theia/task": "1.74.3",
+    "omo-world": "0.1.0"
+  },
+  "devDependencies": {
+    "@theia/cli": "1.74.3"
+  },
+  "theia": {
+    "target": "browser",
+    "frontend": {
+      "config": {
+        "applicationName": "Omo \u00b7 Spatial IDE",
+        "defaultTheme": "dark",
+        "preferences": {
+          "workbench.colorTheme": "Theia Dark",
+          "security.workspace.trust.enabled": true,
+          "files.autoSave": "off",
+          "workbench.startupEditor": "none"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "omo-world",
+  "version": "0.1.0",
+  "private": true,
+  "main": "lib/browser/omo-frontend-module.js",
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/omo-frontend-module"
+    }
+  ],
+  "dependencies": {
+    "@theia/core": "1.74.3",
+    "@theia/editor": "1.74.3",
+    "@theia/filesystem": "1.74.3",
+    "@theia/workspace": "1.74.3",
+    "@theia/terminal": "1.74.3",
+    "three": "0.180.0"
+  }
+}
