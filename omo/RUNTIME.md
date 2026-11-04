@@ -31,6 +31,13 @@ RPC reply, log line or frame contains it.
 - Agent CLIs: `OMO_SPATIAL_HERMES_BIN`, `OMO_SPATIAL_CLAUDE_BIN`, `OMO_SPATIAL_CODEX_BIN` and
   `OMO_SPATIAL_HERMES_ROOT` pin them. Otherwise the bridge's own discovery runs (PATH, then usual
   install locations).
+- With `OMO_SPATIAL_HERMES_ROOT` set, Hermes tabs launch with `HERMES_HOME=<that root>`. Profiles
+  are checked there, and `hermes -p <name>` then finds the same profile. Other tabs get
+  `HERMES_HOME` set to empty.
+- One host per data directory. The host takes an exclusive lock on `<data>/spatial-host.lock`
+  before it loads any metadata. A second host on the same directory (a symlink alias counts)
+  exits with an error and writes nothing. The lock is released when the host exits or is
+  killed. The tmux server and its tabs keep running.
 - Stripped from the host and from every shell: `HERMES_*`, `OMO_*` (also the bridge's
   `OMO_DATA`/`OMO_TMUX_SOCKET`), `TMUX`, `TMUX_PANE`, `CLAUDECODE`, `CLAUDE_CODE_*`, `THEIA_*`,
   `VSCODE_*`, `ELECTRON_*` and `NODE_OPTIONS`.
