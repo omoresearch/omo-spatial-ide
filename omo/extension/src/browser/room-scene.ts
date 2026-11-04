@@ -520,8 +520,11 @@ export class RoomScene {
                 const root = this.roots[i], action = root.userData.workstation as Workstation;
                 const p=new THREE.Vector3().copy(root.position).add(new THREE.Vector3(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3)).project(this.camera);
                 label.style.left=`${(p.x*0.5+0.5)*this.host.clientWidth}px`;label.style.top=`${(-p.y*0.5+0.5)*this.host.clientHeight}px`;
-                label.style.visibility=p.z>1||p.z< -1?'hidden':'visible';
                 const mesh = this.screens.get(action);
+                // A distant HTML label has no 3D depth test: it can otherwise sit on
+                // foreground terminal text and steal selection from the canvas.
+                const codeOutOfReach=action==='code'&&this.navigation==='walk'&&(!mesh||this.camera.position.distanceTo(mesh.getWorldPosition(new THREE.Vector3()))>3.2);
+                label.style.visibility=p.z>1||p.z< -1||codeOutOfReach?'hidden':'visible';
                 if (mesh) {
                     const projected = mesh.getWorldPosition(new THREE.Vector3()).project(this.camera);
                     const point = { x: (projected.x*.5+.5)*this.host.clientWidth, y: (-projected.y*.5+.5)*this.host.clientHeight, visible: projected.z >= -1 && projected.z <= 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 };

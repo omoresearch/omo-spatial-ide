@@ -25,6 +25,7 @@ const {ROOT,CANVAS,openWorld,walkTo,clickStation,pause}=require('./world-test-dr
   async function selectFile(){const handle=await p.evaluateHandle(name=>[...document.querySelectorAll('button[data-review-path]')].find(e=>e.getAttribute('data-review-path')===name),name);const button=handle.asElement();assert.ok(button,'The exact literal filename must be listed');await button.click();await handle.dispose();}
   assert.ok(await p.$('[data-testid="review-action"]'),'The real world has no change-review entry point');
   await walkTo(p,-4.8,-1.4);await p.waitForFunction(()=>JSON.parse(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.stationTargets||'{}').code?.visible);
+  await p.waitForFunction(()=>getComputedStyle(document.querySelector('[data-workstation="code"]')).visibility==='visible');
   async function screen(){const clip=await p.$eval(CANVAS,e=>{const r=e.getBoundingClientRect(),q=JSON.parse(e.dataset.codeReviewQuad);return{x:r.x+Math.min(...q.map(v=>v.x)),y:r.y+Math.min(...q.map(v=>v.y)),width:Math.max(...q.map(v=>v.x))-Math.min(...q.map(v=>v.x)),height:Math.max(...q.map(v=>v.y))-Math.min(...q.map(v=>v.y))};});return p.screenshot({clip,encoding:'base64'});}
   const before=await screen();await clickStation(p,'code');await p.waitForSelector('[data-testid="git-review-panel"][data-phase="ready"]');
   assert.deepEqual(await p.$$eval('button[data-review-path]',buttons=>buttons.map(e=>e.getAttribute('data-review-path'))),[name],'Parent-repository changes must be excluded from the nested project list');
