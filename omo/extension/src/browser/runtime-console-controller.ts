@@ -1,4 +1,6 @@
 import type { AgentKind, FindResult, HostStatus, OmoRuntimeService, RuntimeFrame, RuntimePoll, SessionTab, SessionWorkspace, ViewModes, WorkspaceSummary } from '../common/runtime-protocol';
+import type { AgentTaskTarget } from './agent-task-draft';
+export type { AgentTaskTarget } from './agent-task-draft';
 
 /**
  * Frontend state machine for the in-world terminal monitor. It owns the
@@ -65,6 +67,8 @@ export interface RuntimeConsoleOptions {
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const EXTRA_ACTIONS: PendingAction['type'][] = ['deleteWorkspace', 'deleteWorkspaceBusy', 'resume', 'clearHistory'];
 const CONTROL = /[\u0000-\u001f\u007f]/;
+const TASK_DRAFT_LIMIT_BYTES = 32 * 1024;
+const TASK_UNSAFE_CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/;
 const RESUME_NOTE: Record<AgentKind, string> = {
     shell: '', hermes: 'It resumes this tab’s own Hermes conversation.',
     claude: 'Claude Code resumes this tab’s saved session when there is one.',
@@ -74,6 +78,25 @@ function utf8Bytes(text: string): number {
     let n = 0;
     for (const ch of text) { const c = ch.codePointAt(0)!; n += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4; }
     return n;
+}
+function wellFormed(text: string): boolean {
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        if (code >= 0xd800 && code <= 0xdbff) {
+            const next = text.charCodeAt(i + 1);
+            if (i + 1 >= text.length || next < 0xdc00 || next > 0xdfff) return false;
+            i++;
+        } else if (code >= 0xdc00 && code <= 0xdfff) return false;
+    }
+    return true;
+}
+function validTaskText(text: unknown): text is string {
+    return typeof text === 'string' && text.length > 0 && text.trim().length > 0 && wellFormed(text)
+        && !TASK_UNSAFE_CONTROL.test(text) && utf8Bytes(text) <= TASK_DRAFT_LIMIT_BYTES;
+}
+function sameTaskTarget(a: AgentTaskTarget | undefined, b: AgentTaskTarget | undefined): boolean {
+    return !!a && !!b && a.projectUri === b.projectUri && a.stationId === b.stationId
+        && a.workspaceId === b.workspaceId && a.tabId === b.tabId && a.viewId === b.viewId;
 }
 const ACTIVE_PHASES: RuntimePhase[] = ['checking', 'opening', 'attaching', 'live', 'reconnecting', 'interrupted'];
 
@@ -162,6 +185,43 @@ export class RuntimeConsoleController {
         this.options.onChange(this.current);
     }
     private activeTab(): SessionTab | undefined { return this.current.workspace?.tabs.find(t => t.id === this.current.activeTabId); }
+
+    /** Return the exact live destination snapshot, never a redirect to another tab. */
+    taskTarget(): AgentTaskTarget | undefined {
+        const binding = this.binding;
+        const workspace = this.current.workspace;
+        const tab = this.activeTab();
+        if (this.disposed || this.current.phase !== 'live' || this.current.acting || this.current.pending
+            || !this.viewId || !binding || !workspace || workspace.state !== 'running'
+            || workspace.projectUri !== binding.projectUri || !tab || tab.kind === 'shell'
+            || tab.state !== 'running') return undefined;
+        return {
+            projectUri: binding.projectUri,
+            stationId: binding.stationId,
+            workspaceId: workspace.id,
+            tabId: tab.id,
+            viewId: this.viewId,
+        };
+    }
+
+    /** Prepare task text with semantic paste only. It never submits or starts anything. */
+    async prepareTask(target: AgentTaskTarget, text: string): Promise<boolean> {
+        if (!validTaskText(text)) {
+            this.set({ notice: '', error: `Task text must be non-empty, valid Unicode, free of terminal controls, and at most ${TASK_DRAFT_LIMIT_BYTES / 1024} KiB.` });
+            return false;
+        }
+        const requested = target && typeof target === 'object' ? { ...target } : undefined;
+        const current = this.taskTarget();
+        if (!sameTaskTarget(current, requested)) {
+            this.set({ notice: '', error: 'The selected agent tab changed, so this task was not pasted.' });
+            return false;
+        }
+        const viewId = current!.viewId;
+        if (!await this.paste(text)) return false;
+        if (!sameTaskTarget(this.taskTarget(), requested) || viewId !== this.viewId) return false;
+        this.set({ error: '', notice: 'Task text pasted without Enter. It remains a draft.' });
+        return true;
+    }
 
     private readStored(binding: StationBinding): { workspaceId?: string; tabId?: string } | undefined {
         try {

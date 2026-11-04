@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { AgentTaskDrawer } from './agent-task-drawer';
 import type { SessionTab } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
 import { AGENT_LABELS, PASTE_LIMIT_BYTES, RuntimeConsoleController, RuntimeConsoleState, TAB_NAME_MAX, WORKSPACE_NAME_MAX, launcherOptions } from './runtime-console-controller';
@@ -103,10 +104,11 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
 }
 
 /** Compact world overlay for the terminal station. It manages tabs; the monitor itself stays the terminal. */
-export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean; onOpenLink?: (url: string) => void }): React.ReactElement {
+export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean; onOpenLink?: (url: string) => void; onReview?: () => void }): React.ReactElement {
     const { state, controller } = props;
     const ws = state.workspace;
     const [drawer, setDrawer] = React.useState(!!props.initialDrawer);
+    const [task, setTask] = React.useState(false);
     const [editing, setEditing] = React.useState<{ tabId: string; name: string }>();
     React.useEffect(() => setEditing(undefined), [ws?.id]);
     const launchers = launcherOptions(state.host);
@@ -146,8 +148,10 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
                 <select data-testid="runtime-profile" value={state.profile} disabled={locked} onChange={event => controller?.setProfile(event.target.value)}>
                     {state.host.profiles.map(p => <option key={p} value={p}>{p}</option>)}
                 </select></label>}
-            <button data-testid="runtime-manage-toggle" aria-expanded={drawer} onClick={() => setDrawer(!drawer)} title="Find, scrollback, copy, paste and workspaces">{drawer ? 'Manage ▴' : 'Manage ▾'}</button>
+            <button type="button" data-testid="runtime-task-toggle" aria-expanded={task} onClick={() => { setTask(!task); setDrawer(false); }}>Task {task ? '▴' : '▾'}</button>
+            <button data-testid="runtime-manage-toggle" aria-expanded={drawer} onClick={() => { setDrawer(!drawer); setTask(false); }} title="Find, scrollback, copy, paste and workspaces">{drawer ? 'Manage ▴' : 'Manage ▾'}</button>
         </div>}
+        {ws && task && <AgentTaskDrawer state={state} controller={controller} onReview={props.onReview} />}
         {ws && drawer && <ManageDrawer state={state} controller={controller} locked={locked} onOpenLink={props.onOpenLink} />}
         {ws && hint && <div className="omo-console-hint" data-testid="runtime-install-hint">Not installed — {hint}</div>}
         {state.pending && <div className="omo-console-confirm" role="alertdialog" aria-label="Confirm" data-testid="runtime-confirm">
