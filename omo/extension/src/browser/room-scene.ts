@@ -10,6 +10,7 @@ import { PLAYER_HOME, PlayerPose, ROOM_LAYOUTS } from '../common/player-state';
 import type { RoomLayoutId } from '../common/player-state';
 import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-preview';
 export type { CodeReviewFrame } from '../common/code-review-preview';
+import { workstationLabelVisible } from './workstation-label-visibility';
 
 /** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
 export interface MonitorFrame {
@@ -529,10 +530,8 @@ export class RoomScene {
                 const p=new THREE.Vector3().copy(root.position).add(new THREE.Vector3(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3)).project(this.camera);
                 label.style.left=`${(p.x*0.5+0.5)*this.host.clientWidth}px`;label.style.top=`${(-p.y*0.5+0.5)*this.host.clientHeight}px`;
                 const mesh = this.screens.get(action);
-                // A distant HTML label has no 3D depth test: it can otherwise sit on
-                // foreground terminal text and steal selection from the canvas.
-                const codeOutOfReach=action==='code'&&this.navigation==='walk'&&(!mesh||this.camera.position.distanceTo(mesh.getWorldPosition(new THREE.Vector3()))>3.2);
-                label.style.visibility=p.z>1||p.z< -1||codeOutOfReach?'hidden':'visible';
+                const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(new THREE.Vector3())) : undefined;
+                label.style.visibility = workstationLabelVisible(this.navigation, p.z, distance) ? 'visible' : 'hidden';
                 if (mesh) {
                     const projected = mesh.getWorldPosition(new THREE.Vector3()).project(this.camera);
                     const point = { x: (projected.x*.5+.5)*this.host.clientWidth, y: (-projected.y*.5+.5)*this.host.clientHeight, visible: projected.z >= -1 && projected.z <= 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 };
