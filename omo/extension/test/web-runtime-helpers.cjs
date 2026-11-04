@@ -43,6 +43,7 @@ body{margin:0;background:#fff;font:20px sans-serif}
 const post = e => fetch('/beacon', { method: 'POST', body: JSON.stringify(e) });
 btn.addEventListener('click', () => { document.body.style.background = '#f00'; document.title = 'clicked'; post({ ev: 'click' }); });
 field.addEventListener('input', () => { document.title = 'typed:' + field.value; post({ ev: 'input', value: field.value }); });
+field.addEventListener('keydown', event => { if (event.key === 'Enter') post({ ev: 'unexpected-enter' }); });
 let t; addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(() => post({ ev: 'scroll', y: scrollY }), 50); });
 addEventListener('contextmenu', e => { post({ ev: 'contextmenu', button: e.button }); });
 </script></body></html>`;

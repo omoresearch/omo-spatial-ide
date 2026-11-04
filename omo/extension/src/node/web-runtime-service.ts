@@ -277,7 +277,9 @@ function popupPolicyScript(): void {
         try {
             const href = new URL(String(url ?? ''), location.href).href;
             if (/^https?:/i.test(href)) {
-                window.top!.location.assign(href);
+                const navigate = (window as unknown as { __omoNavigate?: (url: string) => Promise<void> }).__omoNavigate;
+                if (navigate) void navigate(href).catch(() => undefined);
+                else window.top!.location.assign(href);
                 return null;
             }
         } catch {
@@ -387,6 +389,12 @@ export class WebRuntimeService implements OmoWebService {
             await withTimeout((async () => {
                 await page!.setViewport({ width, height, deviceScaleFactor: 1 });
                 await page!.emulateFocusedPage(true);
+                // Keep popup navigation in the same operation queue as clicks and screenshots.
+                // Direct location.assign can detach Chrome's capture target mid-screenshot.
+                await page!.exposeFunction('__omoNavigate', (href: string) => {
+                    const target = normalizeWebUrl(href);
+                    void this.#serial(surface, () => this.#goto(surface, target)).catch(() => undefined);
+                });
                 await page!.evaluateOnNewDocument(popupPolicyScript);
                 surface.audioScriptId = (await page!.evaluateOnNewDocument(audioPolicyScript, surface.muted, surface.volume)).identifier;
             })(), this.#operationTimeoutMs, 'Preparing the page');
@@ -457,16 +465,8 @@ export class WebRuntimeService implements OmoWebService {
             throw new Error(`text is larger than ${MAX_TEXT_BYTES} bytes`);
         }
         await this.#serial(surface, async () => {
-            // Text goes in as committed input (like an IME), newlines as real Enter presses.
-            const lines = text.replace(/\r\n?/g, '\n').split('\n');
-            for (let i = 0; i < lines.length; i++) {
-                if (i > 0) {
-                    await surface.page.keyboard.press('Enter');
-                }
-                if (lines[i]) {
-                    await surface.page.keyboard.sendCharacter(lines[i]);
-                }
-            }
+            // Insert committed text, not key presses. A pasted newline must not submit a form.
+            if (text) await surface.page.keyboard.sendCharacter(text.replace(/\r\n?/g, '\n'));
         });
     }
 
@@ -610,6 +610,9 @@ export class WebRuntimeService implements OmoWebService {
     }
 
     async #capture(s: Surface): Promise<void> {
+        // Focus before capture. A timed-out screenshot can hold Chrome's capture queue,
+        // so waiting until after that timeout to foreground a navigated tab is too late.
+        await withTimeout(s.page.bringToFront(), 1000, 'bringToFront').catch(() => undefined);
         const shot = () => withTimeout(s.page.screenshot({ type: 'jpeg', quality: this.#jpegQuality, encoding: 'base64', optimizeForSpeed: true }),
             3000, 'Screenshot');
         let data: string;

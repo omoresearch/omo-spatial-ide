@@ -27,6 +27,8 @@ function service(extra = {}) {
   const svc = new WebRuntimeService({
     env: { HOME: s.home, OMO_SPATIAL_DATA: s.data, PATH: '/usr/bin:/bin' },
     home: s.home,
+    // Test harness only: the locked-down CI container has no user namespaces. Production DI never passes this.
+    extraArgs: process.env.OMO_WEB_TEST_CONTAINER === '1' ? ['--no-sandbox'] : [],
     navigationTimeoutMs: 8000,
     ...extra
   });
@@ -117,7 +119,7 @@ test('real Chrome: status never launches; open renders a real JPEG; click/type/k
   const pids = w.processesUsing(s.profile);
   assert.ok(pids.length > 0, 'Chrome runs on the Omo scratch profile');
   const cmdline = fs.readFileSync(`/proc/${pids[0]}/cmdline`, 'utf8').split('\0');
-  assert.ok(!cmdline.includes('--no-sandbox'), 'production defaults keep the Chrome sandbox on');
+  assert.equal(cmdline.includes('--no-sandbox'), process.env.OMO_WEB_TEST_CONTAINER === '1', 'sandbox stays on except in the explicitly isolated container test harness');
   assert.ok(fs.existsSync(s.profile), 'profile created under OMO_SPATIAL_DATA');
 
   const f0 = await nextFrame(svc, surf.id, 0);
@@ -339,4 +341,11 @@ test('audio: muted by default even if the page unmutes itself; setAudio clamps a
   await svc.setAudio({ id: surf.id, muted: false, volume: 0.25 });
   await svc.navigate({ id: surf.id, url: site.url('/audio') });
   await report(false, 0.25);
+});
+
+test('multiline browser text insertion never synthesizes Enter or submits a form', async()=>{
+ const{svc}=service(); const surf=await svc.open({url:site.url('/'),width:960,height:600});
+ const start=site.beacons.length; await svc.click({id:surf.id,x:120,y:320}); await svc.typeText({id:surf.id,text:'paste-first\npaste-second'});
+ assert.ok(await site.waitFor(b=>b.ev==='input'&&b.value.includes('paste-second')));
+ await new Promise(r=>setTimeout(r,150)); assert.equal(site.beacons.slice(start).some(b=>b.ev==='unexpected-enter'),false);
 });
