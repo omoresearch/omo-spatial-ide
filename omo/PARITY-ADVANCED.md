@@ -76,11 +76,13 @@ npx --yes --package=node@22.23.4 --call 'npm run compile && node --experimental-
   and the widget calls `controller.paste(text)`. Wheel input calls `controller.wheel`. The fallback
   without a paste handler refuses multiline/control input instead of sending it raw.
 - The integrated physical screens now support Shift+drag selection and Ctrl/Meta+Shift+C copy.
+  Shift+double-click expands a code/path token using the bridge's word rules; Shift+triple-click
+  selects a visible line. Native multi-clicks do not replace a completed drag range.
   This uses a local snapshot of the visible 80 × 22 grid, not the host copy op. The selection
   highlight is part of the actual monitor texture; output/context changes and focus loss clear it.
   Selection routes to a local desk switch, not the runtime-open action. Ctrl+C still interrupts.
   The real-app test checks both desks, actual highlight pixels, exact clipboard contents,
-  denied-write handling and stale-selection refusal. Word/line gestures, cross-history ranges,
+  denied-write handling, native word/line clicks and stale-selection refusal. Cross-history ranges,
   soft-wrap reconstruction and full wide/combining Unicode cell mapping remain unfinished.
 - Find highlights are passed to the bridge's `frame(find=…)`. The colour strings carry them only as
   palette keys, and no test checks the highlight colours. The scroll position and the "i of n"

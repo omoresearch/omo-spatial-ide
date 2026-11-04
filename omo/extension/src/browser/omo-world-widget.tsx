@@ -53,7 +53,7 @@ function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSel
         {mode==='walk'&&<div className="omo-crosshair" aria-hidden="true">+</div>}
         {props.walk&&<div className="omo-navigation-switch"><button data-testid="walk-mode" aria-pressed={mode==='walk'} onClick={()=>setMode('walk')}>First person</button><button data-testid="overview-mode" aria-pressed={mode==='overview'} onClick={()=>setMode('overview')}>Overview</button></div>}
 
-        <div className="omo-scene-controls"><span>{mode==='walk'?'WASD to walk · Drag to look · Shift+drag screen text · Ctrl+Shift+C to copy · Esc to leave':'Drag to orbit · Scroll to zoom'}</span><button aria-label="Reset room camera" onClick={() => instance.current?.resetCamera()}>↺ Reset view</button></div>
+        <div className="omo-scene-controls"><span>{mode==='walk'?'WASD · Drag to look · Shift+drag text · Shift+double/triple-click word/line · Ctrl+Shift+C copy · Esc':'Drag to orbit · Scroll to zoom'}</span><button aria-label="Reset room camera" onClick={() => instance.current?.resetCamera()}>↺ Reset view</button></div>
     </div>;
 }
 

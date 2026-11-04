@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { advancePlayer, PLAYER_HOME, PlayerPose } from '../common/player-state';
+import type { SelectionUnit } from '../common/monitor-selection';
 
 export interface SelectionGestures {
-    start(x: number, y: number): boolean;
+    start(x: number, y: number, unit?: SelectionUnit): boolean;
     move(x: number, y: number): void;
     end(): void;
     clear(): void;
@@ -15,6 +16,8 @@ export class FirstPersonControls {
     pose: PlayerPose = { ...PLAYER_HOME };
     private keys = new Set<string>();
     private selecting = false;
+    private selectionOrigin?: { x: number; y: number };
+    private selectionDragged = false;
     private pointer?: { x: number; y: number; startX: number; startY: number; dragged: boolean };
     private listeners: Array<() => void> = [];
     constructor(private canvas: HTMLCanvasElement, private camera: THREE.PerspectiveCamera,
@@ -36,6 +39,7 @@ export class FirstPersonControls {
             if (!this.enabled || event.button !== 0) return; event.stopImmediatePropagation(); canvas.focus();
             if (event.shiftKey) {
                 event.preventDefault();
+                this.selectionOrigin = { x:event.clientX,y:event.clientY }; this.selectionDragged = false;
                 this.pointer = undefined; this.keys.clear(); this.selecting = this.selection?.start(event.clientX, event.clientY) ?? false;
                 if (this.selecting) { this.typing = true; this.apply(); canvas.setPointerCapture(event.pointerId); }
                 return;
@@ -46,7 +50,10 @@ export class FirstPersonControls {
         });
         on('pointermove', event => {
             if (!this.enabled) return; event.stopImmediatePropagation();
-            if (this.selecting) { this.selection?.move(event.clientX, event.clientY); return; }
+            if (this.selecting) {
+                if (this.selectionOrigin && Math.hypot(event.clientX-this.selectionOrigin.x,event.clientY-this.selectionOrigin.y)>4) this.selectionDragged = true;
+                this.selection?.move(event.clientX, event.clientY); return;
+            }
             if (!this.pointer || this.typing) return;
             if (Math.hypot(event.clientX-this.pointer.startX,event.clientY-this.pointer.startY)>4) this.pointer.dragged=true;
             if (this.pointer.dragged) {
@@ -62,6 +69,14 @@ export class FirstPersonControls {
             if (!dragged) {
                 const hit=this.interact(event.clientX,event.clientY);
                 if(hit==='terminal')this.focusTerminal();
+            }
+        });
+        // Native click detail distinguishes the two explicit selection gestures.
+        on('click', event => {
+            if (!this.enabled || event.button !== 0 || !event.shiftKey || event.detail < 2 || this.selectionDragged) return;
+            event.preventDefault(); event.stopImmediatePropagation(); this.keys.clear();
+            if (this.selection?.start(event.clientX,event.clientY,event.detail === 2 ? 'word' : 'line')) {
+                this.typing = true; this.canvas.focus(); this.apply(); this.selection.end();
             }
         });
         on('keydown', event => {

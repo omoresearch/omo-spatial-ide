@@ -4,6 +4,13 @@ test('selects exact visible characters in either drag direction without mutating
  const{MonitorSelection}=api(),lines=['prefix ALPHA suffix','  BETA tail'];const s=new MonitorSelection(lines,{row:0,col:7});s.extend({row:1,col:5});assert.equal(s.text(),'ALPHA suffix\n  BETA');
  const reverse=new MonitorSelection(lines,{row:1,col:5});reverse.extend({row:0,col:7});assert.equal(reverse.text(),s.text());assert.deepEqual(lines,['prefix ALPHA suffix','  BETA tail']);
 });
+test('word selection expands paths using the Minecraft bridge token rules and stops at spaces',()=>{
+ const{MonitorSelection}=api();const s=new MonitorSelection(['run ./src/foo-bar.ts:42 next'],{row:0,col:13},'word');assert.equal(s.text(),'./src/foo-bar.ts:42');
+ const blank=new MonitorSelection(['a  b'],{row:0,col:1},'word');assert.equal(blank.text(),'');
+});
+test('whole-line selection includes leading spaces and supports reversed multi-row ranges',()=>{
+ const{MonitorSelection}=api(),s=new MonitorSelection(['alpha first','  beta tail   '],{row:1,col:7},'line');assert.equal(s.text(),'  beta tail');s.extend({row:0,col:3});assert.equal(s.text(),'alpha first\n  beta tail');assert.deepEqual(s.spans(),[{row:0,from:0,to:80},{row:1,from:0,to:80}]);
+});
 test('copies only the 80 by 22 visible viewport and trims terminal padding, not leading spaces',()=>{
  const{MonitorSelection}=api();const s=new MonitorSelection(['HIDDEN',...Array.from({length:22},(_,i)=>i===0?'  shown   ':'x'.repeat(80)+'HIDDEN')],{row:0,col:0});s.extend({row:30,col:999});const text=s.text();assert.ok(!text.includes('HIDDEN'));assert.equal(text.split('\n').length,22);assert.equal(text.split('\n')[0],'  shown');assert.equal(text.split('\n')[1].length,80);
 });

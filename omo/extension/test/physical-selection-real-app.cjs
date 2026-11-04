@@ -24,16 +24,22 @@ const{DESK_ONE,DESK_TWO}=require('./world-navigation-targets.cjs');
   fs.writeFileSync(gate,'go');await p.waitForFunction(()=>document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.terminalText.includes('OUTPUT_CHANGED')&&!document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.terminalSelection);
   await p.evaluate(()=>navigator.clipboard.writeText('NO_STALE_COPY'));await copy();assert.equal(await p.evaluate(()=>navigator.clipboard.readText()),'NO_STALE_COPY','Output invalidation must prevent stale copying');
   await select('terminal',marker);await p.keyboard.press('Escape');assert.equal(await p.$eval(CANVAS,e=>e.dataset.terminalSelection),'');
-  await walkTo(p,DESK_TWO.x,DESK_TWO.z);const second=marker+'_TWO';await command(p,'terminal-2',`printf '\\033[2J\\033[H\\033[11;1H%s\\n' '${second}'`);
+  await walkTo(p,DESK_TWO.x,DESK_TWO.z);const second=marker+'_TWO',file='./src/omo-file.ts:42',wholeLine=`${second} ${file} suffix`;await command(p,'terminal-2',`printf '\\033[2J\\033[H\\033[11;1H%s\\n' '${wholeLine}'`);
   await p.waitForFunction(second=>JSON.parse(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.stationText)['terminal-2'].some(l=>l.startsWith(second)),{},second);
   await select('terminal-2',second);await copy();assert.equal(await p.evaluate(()=>navigator.clipboard.readText()),second,'Desk two must copy its own text, not desk one');
+  const clickRow=await p.$eval(CANVAS,(e,second)=>JSON.parse(e.dataset.stationText)['terminal-2'].slice(-22).findIndex(l=>l.startsWith(second)),second),hit=await point('terminal-2',clickRow,second.length+9);
+  for(const [clickCount,expected] of [[2,file],[3,wholeLine]]){
+   await p.keyboard.down('Shift');await p.mouse.click(hit.x,hit.y,{count:clickCount});await p.keyboard.up('Shift');
+   await p.waitForFunction(expected=>document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.terminalSelection===expected,{},expected);
+   await copy();assert.equal(await p.evaluate(()=>navigator.clipboard.readText()),expected,`Native ${clickCount}-click must select and copy the correct unit from real shell output`);
+  }
   await p.evaluate(()=>navigator.clipboard.writeText('DENIED_COPY_UNCHANGED'));
   // Deny sanitized writes in this isolated test browser only. The product never grants permissions itself.
   await w.browser.defaultBrowserContext().overridePermissions(new URL(p.url()).origin,['clipboard-read','clipboard-write']);
   await copy();await p.waitForFunction(()=>document.body.innerText.includes('Clipboard copy failed'));
   assert.equal(await p.evaluate(()=>navigator.clipboard.readText()),'DENIED_COPY_UNCHANGED','Permission denial must not replace the clipboard or send a terminal fallback');
   await p.click('[data-testid="station-one-controls"]');assert.equal(await p.$eval(CANVAS,e=>e.dataset.terminalSelection),'','Switching desks clears the old selection');
-  console.log('PASS: both physical monitors select exact real shell text; visible highlight; real clipboard; explicit copy; output invalidation; Escape clears.');
-  fs.writeFileSync(path.join(ROOT,'evidence/physical-selection-real-app.json'),JSON.stringify({pass:true,providerCalls:0,realShell:true,realClipboard:true,physicalHighlightPixels:{before,after},bothDesks:true,staleCopyRefused:true,deniedCopyRefused:true,deskSwitchClears:true},null,2));
+  console.log('PASS: both physical monitors select exact real shell text; visible highlight; real clipboard; explicit copy; output invalidation; Escape clears; native word and line gestures.');
+  fs.writeFileSync(path.join(ROOT,'evidence/physical-selection-real-app.json'),JSON.stringify({pass:true,providerCalls:0,realShell:true,realClipboard:true,physicalHighlightPixels:{before,after},bothDesks:true,staleCopyRefused:true,deniedCopyRefused:true,deskSwitchClears:true,nativeWordSelection:true,nativeLineSelection:true},null,2));
  }finally{fs.writeFileSync(gate,'cleanup');if(w)await w.dispose();/* Keep the owned gate until the bounded shell loop has exited. */}
 })().catch(e=>{console.error(e);process.exitCode=1;});

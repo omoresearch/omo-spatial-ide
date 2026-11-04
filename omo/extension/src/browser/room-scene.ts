@@ -4,6 +4,7 @@ import { FirstPersonControls } from './first-person-controls';
 import { cellRuns, dominantKey, MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
 import type { WebSurfaceFrame } from '../common/web-runtime-protocol';
 import { MonitorSelection, monitorCell, visibleMonitorLines } from '../common/monitor-selection';
+import type { SelectionUnit } from '../common/monitor-selection';
 
 /** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
 export interface MonitorFrame {
@@ -95,7 +96,7 @@ export class RoomScene {
         this.buildRoom(jungle);
         this.bindControls(canvas);
         this.walker = new FirstPersonControls(canvas, this.camera, (x,y)=>this.interactAt(x,y), text=>this.options.onInput(text), text=>this.options.onMessage(text), this.options.onPaste, {
-            start: (x,y) => this.startTerminalSelection(x,y), move: (x,y) => this.extendTerminalSelection(x,y),
+            start: (x,y,unit) => this.startTerminalSelection(x,y,unit), move: (x,y) => this.extendTerminalSelection(x,y),
             end: () => this.options.onMessage('Selected visible terminal text · Ctrl+Shift+C to copy. Esc to clear.'),
             clear: () => this.clearTerminalSelection(), copy: () => this.copyTerminalSelection()
         });
@@ -391,11 +392,11 @@ export class RoomScene {
         }
         return undefined;
     }
-    private startTerminalSelection(x: number, y: number): boolean {
+    private startTerminalSelection(x: number, y: number, unit: SelectionUnit = 'char'): boolean {
         this.clearTerminalSelection(); const hit = this.terminalCellAt(x,y); if (!hit) return false;
         // Selecting text changes the active desk locally; it must not bind/revive a runtime.
         this.options.onTextSelect(hit.station);
-        this.terminalSelection = { station:hit.station,model:new MonitorSelection(this.terminalFrames[hit.station].lines,hit.cell) };
+        this.terminalSelection = { station:hit.station,model:new MonitorSelection(this.terminalFrames[hit.station].lines,hit.cell,unit) };
         this.setTerminalFrame(this.terminalFrames[hit.station],hit.station); return true;
     }
     private extendTerminalSelection(x: number, y: number): void {
