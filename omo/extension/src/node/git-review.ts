@@ -35,14 +35,15 @@ function gitEnvironment(): NodeJS.ProcessEnv {
     delete env.GIT_EXTERNAL_DIFF;
     delete env.GIT_DIFF_OPTS;
     delete env.GIT_TEXTCONV;
+    for(const key of ['GIT_DIR','GIT_COMMON_DIR','GIT_WORK_TREE','GIT_INDEX_FILE','GIT_OBJECT_DIRECTORY','GIT_ALTERNATE_OBJECT_DIRECTORIES','GIT_PREFIX','GIT_CEILING_DIRECTORIES'])delete env[key];
     env.GIT_OPTIONAL_LOCKS = '0';
     env.GIT_CONFIG_NOSYSTEM = '1';
     env.GIT_TERMINAL_PROMPT = '0';
     return env;
 }
 
-async function runGit(projectDir: string, command: readonly string[], allowedExitCodes: readonly number[] = [0]): Promise<{ stdout: Buffer; stderr: Buffer; exitCode: number }> {
-    const args = ['--no-pager', '--literal-pathspecs', '-c', 'core.fsmonitor=false', '-C', projectDir, ...command];
+async function runGitRaw(projectDir: string, command: readonly string[], allowedExitCodes: readonly number[] = [0], overrides: readonly string[] = []): Promise<{ stdout: Buffer; stderr: Buffer; exitCode: number }> {
+    const args = ['--no-pager', '--literal-pathspecs', '-c', 'core.fsmonitor=false', ...overrides, '-C', projectDir, ...command];
     try {
         const result = await execFileAsync('git', args, {
             cwd: projectDir,
@@ -70,6 +71,19 @@ function utf8(buffer: Buffer, what: string): string {
     } catch {
         throw new Error(`${what} is not valid UTF-8`);
     }
+}
+
+async function runGit(projectDir:string,command:readonly string[],allowedExitCodes:readonly number[]=[0]):Promise<{stdout:Buffer;stderr:Buffer;exitCode:number}> {
+    // status/diff can invoke clean/process filters even with --no-ext-diff and
+    // --no-textconv. Read configuration names only, then disable those programs
+    // for this one command without writing any Git configuration.
+    const config=await runGitRaw(projectDir,['config','--null','--name-only','--get-regexp','^filter\\..*\\.(clean|smudge|process|required)$'],[0,1]);
+    const overrides:string[]=[];
+    for(const key of new Set(utf8(config.stdout,'Git filter names').split('\0').filter(Boolean))){
+        if(!/^filter\..*\.(clean|smudge|process|required)$/.test(key))throw new Error('Invalid Git filter configuration name.');
+        overrides.push('-c',`${key}=${key.endsWith('.required')?'false':''}`);
+    }
+    return runGitRaw(projectDir,command,allowedExitCodes,overrides);
 }
 
 function inside(root: string, candidate: string): boolean {
@@ -180,7 +194,8 @@ export class GitReviewBackend implements GitReviewService {
         let gitRoot: string;
         try {
             const rootResult = await runGit(projectDir, ['rev-parse', '--show-toplevel']);
-            gitRoot = utf8(rootResult.stdout, 'Git repository root').trim();
+            const literalRoot=utf8(rootResult.stdout, 'Git repository root');
+            gitRoot=literalRoot.endsWith('\n')?literalRoot.slice(0,-1):literalRoot;
             if (!gitRoot || !path.isAbsolute(gitRoot) || !inside(gitRoot, projectDir)) {
                 throw new Error('Git returned an invalid repository root');
             }
@@ -204,7 +219,7 @@ export class GitReviewBackend implements GitReviewService {
         } catch (error) {
             if (!(error instanceof GitCommandError) || error.exitCode !== 128) throw error;
         }
-        const statusResult = await runGit(repository.projectDir, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--no-renames', '--', '.']);
+        const statusResult = await runGit(repository.projectDir, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all', '--no-renames', '--', '.']);
         const prefix = path.relative(repository.gitRoot, repository.projectDir).split(path.sep).join('/');
         const scopedChanges = parseStatus(statusResult.stdout).flatMap(change => {
             if (!prefix) return [change];
@@ -245,8 +260,8 @@ export class GitReviewBackend implements GitReviewService {
         }
         assertConfined(result.projectDir, relativePath);
         const command = result.head && !change.status.startsWith('??')
-            ? ['diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--binary', 'HEAD', '--', relativePath]
-            : ['diff', '--no-index', '--no-ext-diff', '--no-textconv', '--no-renames', '--binary', '--', process.platform === 'win32' ? 'NUL' : '/dev/null', relativePath];
+            ? ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--no-renames', '--binary', 'HEAD', '--', relativePath]
+            : ['diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--no-renames', '--binary', '--', process.platform === 'win32' ? 'NUL' : '/dev/null', relativePath];
         const diffResult = await runGit(result.projectDir, command, [0, 1]);
         if (diffResult.stdout.byteLength > PATCH_MAX_BYTES) {
             throw new Error('diff is too large (the returned patch limit is 256 KiB)');

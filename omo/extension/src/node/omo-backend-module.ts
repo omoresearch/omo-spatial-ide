@@ -10,6 +10,8 @@ import { WebRuntimeService } from './web-runtime-service';
 import { webConnection } from './web-connection';
 import { OMO_PRESENCE_PATH } from '../common/presence-protocol';
 import { RoomPresence } from './room-presence';
+import { OMO_GIT_REVIEW_PATH } from '../common/git-review-protocol';
+import { GitReviewBackend } from './git-review';
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
 export const OmoManagedWeb = Symbol('OmoManagedWeb');
@@ -30,6 +32,7 @@ export default new ContainerModule(bind => {
     bind(OmoRuntimeHost).toDynamicValue(() => new RuntimeHost(discoverRuntime(process.env), process.env)).inSingletonScope();
     bind(OmoManagedWeb).toDynamicValue(() => new WebRuntimeService()).inSingletonScope();
     bind(OmoRoomPresence).toDynamicValue(() => new RoomPresence()).inSingletonScope();
+    bind(ConnectionHandler).toDynamicValue(()=>new RpcConnectionHandler<object>(OMO_GIT_REVIEW_PATH,()=>new GitReviewBackend())).inSingletonScope();
     bind(ConnectionHandler).toDynamicValue(ctx => {
         const rooms=ctx.container.get<RoomPresence>(OmoRoomPresence);
         return new RpcConnectionHandler<object>(OMO_PRESENCE_PATH,proxy=>{

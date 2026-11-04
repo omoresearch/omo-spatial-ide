@@ -17,6 +17,7 @@ A local Theia application with first-person walking and real terminal output on 
 - A physical web wall backed by real managed Chrome screenshots, with screen-coordinate clicks, typing, scrolling, navigation and page mute/volume controls. Its Chrome profile is separate from personal Chrome and Minecraft. Production keeps Chrome's sandbox enabled.
 - Project-scoped last-web-address persistence. Reload does not silently open a browser; the user opens the saved address explicitly.
 - Conventional file editing through Theia/Monaco. Session controls occupy their own row and do not replace the in-world displays.
+- A physical Code screen with project-scoped Git change review. Click it (or **Code**) to read the changed-file list, explicitly select a real unified patch, refresh saved edits, and open the actual file in Theia. Returning to the world keeps a bounded patch preview on that screen. Review has no stage, commit, revert or agent-start operation; it disables Git external diff, textconv, fsmonitor and clean/process filters. See `CHANGE-REVIEW.md` for limits and snapshot semantics.
 
 See `INTEGRATION.md`, `RUNTIME.md`, `PARITY-ADVANCED.md` and `WEB-RUNTIME.md` for contracts and limits. `MINECRAFT-PARITY.md` is the source-pinned inventory, not a claim of complete parity.
 
@@ -50,6 +51,8 @@ OMO_URL=http://127.0.0.1:3190 node extension/test/terminal-link-real-app.cjs
 OMO_URL=http://127.0.0.1:3190 node extension/test/physical-selection-real-app.cjs
 OMO_URL=http://127.0.0.1:3190 node extension/test/unicode-real-app.cjs
 OMO_URL=http://127.0.0.1:3190 node extension/test/shared-room-real-app.cjs
+# Starts its own loopback app and owned temporary Git repository:
+node extension/test/git-review-real-app.cjs
 ```
 
 The application tests use owned fixture files and isolated QA browser profiles. They inspect actual shell PIDs, exported state, workspace bindings, physical-monitor output and real page effects. The web-wall test also checks rendered blue/green screen pixels against a localhost fixture; metadata alone is not acceptance. Backend tests use real tmux; agent executables in tests are clearly labelled fixtures, not fabricated provider responses. Live paid model execution is not part of these checks.
@@ -62,7 +65,7 @@ Evidence is written under ignored `evidence/`. Historical orbit/flat-terminal an
 
 - Local developer alpha with trusted-client shared visual presence. All clients still act as the same OS user. Separate default terminal bindings are not authorization: existing workspace tools can intentionally attach another workspace. Loopback binding is not a hosted multi-tenant security boundary. Do not expose this app to a network or public tunnel.
 - Authenticated multiplayer hosting, shared-room permissions, shared screen/control grants, arbitrary building/map kits, Minecraft embedding, hosted billing and universal installers are not implemented.
-- No language-plugin bundle, dedicated PR-review UI or debugger setup is claimed by this minimal Theia composition.
+- Local uncommitted Git change review is implemented; remote GitHub PR review, stage/accept/revert/merge actions, a language-plugin bundle and debugger setup are not.
 - Real Hermes/Claude/Codex provider sessions were not exercised in automated tests. Availability is not proof that the user's account is authenticated.
 - Browser speaker output is off by default. Page media controls are tested; actual host audio requires `OMO_SPATIAL_WEB_AUDIO=1` and has not been audibly verified. Camera, microphone, passkey and other native browser permission flows are not certified.
 - No automatic agent wake or auto-sleep. No paid provider calls, default-branch merge, deployment or release are implied by a feature-branch push.

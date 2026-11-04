@@ -164,3 +164,26 @@ test('disables repository external diff helpers', async () => {
   assert.match(patch.patch, /\+two/);
   assert.equal(fs.existsSync(marker), false);
 });
+test('returns plain unified text even when the repository forces coloured diffs', async () => {
+  const dir=repo();fs.writeFileSync(path.join(dir,'note.txt'),'one\n');git(dir,['add','.']);git(dir,['commit','-qm','initial']);
+  git(dir,['config','color.diff','always']);fs.writeFileSync(path.join(dir,'note.txt'),'two\n');
+  const patch=await new (load())().diff({projectUri:uri(dir),path:'note.txt'});assert.equal(patch.patch.includes('\x1b'),false);assert.match(patch.patch,/\+two/);
+});
+test('review cannot execute a repository clean filter or change its files through that helper', async () => {
+  const dir=repo();fs.writeFileSync(path.join(dir,'note.txt'),'one\n');fs.writeFileSync(path.join(dir,'.gitattributes'),'note.txt filter=review-test\n');git(dir,['add','.']);git(dir,['commit','-qm','initial']);
+  const marker=path.join(dir,'clean-ran'),helper=path.join(dir,'clean.sh');fs.writeFileSync(helper,`#!/bin/sh\nprintf touched > "${marker}"\ncat\n`);fs.chmodSync(helper,0o755);git(dir,['config','filter.review-test.clean',helper]);git(dir,['config','filter.review-test.required','true']);
+  fs.writeFileSync(path.join(dir,'note.txt'),'two\n');const patch=await new (load())().diff({projectUri:uri(dir),path:'note.txt'});assert.match(patch.patch,/\+two/);assert.equal(fs.existsSync(marker),false,'Read-only review must not execute clean filters');
+});
+test('repository paths with a literal trailing space are not repaired or trimmed', async () => {
+  const old=repo(),dir=old+' ';fs.renameSync(old,dir);repos.push(dir);fs.writeFileSync(path.join(dir,'note.txt'),'actual\n');
+  const backend=new (load())();assert.equal((await backend.list(uri(dir))).changes[0].path,'note.txt');assert.match((await backend.diff({projectUri:uri(dir),path:'note.txt'})).patch,/\+actual/);
+});
+test('inherited Git directory and index overrides cannot redirect the requested project', async () => {
+  const other=repo(),own=repo();for(const [dir,text]of[[other,'OTHER_REPO_BASE'],[own,'OWN_REPO_BASE']]){fs.writeFileSync(path.join(dir,'note.txt'),text+'\n');git(dir,['add','.']);git(dir,['commit','-qm','initial']);}
+  const head=git(own,['rev-parse','HEAD']).trim();fs.writeFileSync(path.join(own,'note.txt'),'OWN_EDIT\n');const keys=['GIT_DIR','GIT_WORK_TREE','GIT_INDEX_FILE'],saved=keys.map(key=>process.env[key]);
+  try{process.env.GIT_DIR=path.join(other,'.git');process.env.GIT_WORK_TREE=own;process.env.GIT_INDEX_FILE=path.join(other,'.git/index');const backend=new (load())();assert.equal((await backend.list(uri(own))).head,head);const patch=await backend.diff({projectUri:uri(own),path:'note.txt'});assert.match(patch.patch,/-OWN_REPO_BASE/);assert.equal(patch.patch.includes('OTHER_REPO_BASE'),false);}
+  finally{keys.forEach((key,i)=>{if(saved[i]===undefined)delete process.env[key];else process.env[key]=saved[i];});}
+});
+test('non-UTF-8 file content is refused rather than replaced with guessed characters', async () => {
+  const dir=repo();fs.writeFileSync(path.join(dir,'raw.txt'),Buffer.from([0xff,0xfe,0x0a]));await assert.rejects(()=>new (load())().diff({projectUri:uri(dir),path:'raw.txt'}),/UTF-8|binary|non-text/);
+});

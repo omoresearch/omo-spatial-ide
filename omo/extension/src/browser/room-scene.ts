@@ -7,6 +7,8 @@ import { MonitorSelection, monitorCell, monitorCellSpan, visibleMonitorCells } f
 import type { SelectionUnit } from '../common/monitor-selection';
 import type { RoomMember } from '../common/presence-protocol';
 import { PLAYER_HOME, PlayerPose } from '../common/player-state';
+import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-preview';
+export type { CodeReviewFrame } from '../common/code-review-preview';
 
 /** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
 export interface MonitorFrame {
@@ -24,6 +26,7 @@ export interface MonitorFrame {
 export type Workstation = 'terminal' | 'terminal-2' | 'code' | 'web';
 export type TerminalWorkstation = 'terminal' | 'terminal-2';
 export interface ScreenPoint { x: number; y: number }
+
 export interface RoomSceneOptions {
     theme: RoomTheme;
     camera: RoomState['camera'];
@@ -59,6 +62,7 @@ export class RoomScene {
     private screens = new Map<Workstation, THREE.Mesh>();
     private lamps = new Map<TerminalWorkstation, THREE.Mesh>();
     private webSurface?: HTMLCanvasElement;
+    private codeSurface?: {canvas:HTMLCanvasElement;texture:THREE.CanvasTexture};
     private webTexture?: THREE.CanvasTexture;
     private webEpoch = 0;
     private webSize = { width: 960, height: 600 };
@@ -191,11 +195,31 @@ export class RoomScene {
         this.desk(root, -2.65, 0.5, 'terminal', jungle);
         this.desk(root, 2.25, -0.45, 'terminal-2', jungle);
         this.webWall(root);
+        this.codeWall(root);
         this.cylinder(root, 0.7, 0.15, [0.2, 0.06, 3], jungle ? 0xb9ba91 : 0x8398a5, 0.75);
         const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.35, 0), this.material(jungle ? 0xd6e7a4 : 0x7cdae2, 0.6));
         core.position.set(0.2, 0.65, 3); root.add(core);
         const landing = new THREE.Mesh(new THREE.PlaneGeometry(130, 130), this.material(jungle ? 0x101c1a : 0x101622));
         landing.rotation.x = -Math.PI / 2; landing.position.y = -1.05; landing.receiveShadow = true; this.scene.add(landing);
+    }
+    private codeWall(parent:THREE.Object3D):void {
+        const group=new THREE.Group();group.position.set(-4.8,0,-3.9);group.userData.workstation='code';group.userData.labelHeight=2.8;parent.add(group);this.roots.push(group);
+        this.box(group,[2.12,1.22,.12],[0,1.99,-.08],0x17222e);
+        const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=576;
+        const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;this.codeSurface={canvas,texture};
+        const screen=new THREE.Mesh(new THREE.PlaneGeometry(1.98,1.08),new THREE.MeshBasicMaterial({map:texture}));screen.position.set(0,1.99,0);group.add(screen);this.screens.set('code',screen);
+        const label=document.createElement('button');label.className='omo-scene-label';label.dataset.workstation='code';label.textContent='04  Code review ↗';label.setAttribute('aria-label','Review project changes');
+        label.addEventListener('click',()=>{if(this.navigation==='walk'&&this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3()))>3.2){this.options.onMessage('Walk closer to the code screen.');return;}this.releaseTyping();this.options.onSelect('code');});
+        this.host.appendChild(label);this.labels.push(label);
+        this.setCodeReview({title:'PROJECT CHANGES',lines:['Open this screen to read real Git changes.','Patches are read only. Files stay in your editor.'],status:'No Git contents read yet'});
+    }
+    setCodeReview(frame:CodeReviewFrame):void {
+        const surface=this.codeSurface;if(!surface)return;
+        frame=codeReviewPreview(frame);
+        const ctx=surface.canvas.getContext('2d')!;ctx.fillStyle='#101c27';ctx.fillRect(0,0,1024,576);ctx.font='bold 22px monospace';ctx.fillStyle='#b9e3d5';ctx.fillText(frame.title.slice(0,75),24,32);ctx.font='17px monospace';
+        frame.lines.forEach((line,i)=>{ctx.fillStyle=line.startsWith('+')?'#91e4ac':line.startsWith('-')?'#f1a49c':'#d7e3df';ctx.fillText(line,24,70+i*21,976);});ctx.fillStyle='#8ea5aa';ctx.font='14px monospace';ctx.fillText(frame.status.slice(0,110),24,564,976);surface.texture.needsUpdate=true;
+        this.renderer.domElement.dataset.codeReviewText=frame.lines.join('\n');
+        this.renderer.domElement.dataset.codeReviewStatus=frame.status;
     }
     private desk(parent: THREE.Object3D, x: number, z: number, action: Workstation, jungle: boolean): void {
         const group = new THREE.Group(); group.position.set(x, 0, z); group.userData.workstation = action; parent.add(group); this.roots.push(group);
@@ -511,6 +535,8 @@ export class RoomScene {
                 return [id,[[-.79,.45],[.79,.45],[.79,-.45],[-.79,-.45]].map(([x,y]) => { const p=screen.localToWorld(new THREE.Vector3(x,y,0)).project(this.camera); return {x:(p.x*.5+.5)*this.host.clientWidth,y:(-p.y*.5+.5)*this.host.clientHeight}; })];
             })));
             const web = this.screens.get('web');
+            const code=this.screens.get('code');
+            if(code)this.renderer.domElement.dataset.codeReviewQuad=JSON.stringify([[-.99,.54],[.99,.54],[.99,-.54],[-.99,-.54]].map(([x,y])=>{const p=code.localToWorld(new THREE.Vector3(x,y,0)).project(this.camera);return{x:(p.x*.5+.5)*this.host.clientWidth,y:(-p.y*.5+.5)*this.host.clientHeight};}));
             if (web) this.renderer.domElement.dataset.webQuad = JSON.stringify([[-1.95,1.22],[1.95,1.22],[1.95,-1.22],[-1.95,-1.22]].map(([x,y]) => { const p = web.localToWorld(new THREE.Vector3(x,y,0)).project(this.camera); return { x: (p.x*.5+.5)*this.host.clientWidth, y: (-p.y*.5+.5)*this.host.clientHeight }; }));
             this.renderer.domElement.dataset.stationLamps = JSON.stringify(Object.fromEntries([...this.lamps].map(([id,mesh]) => [id,(mesh.material as THREE.MeshStandardMaterial).color.getHexString()])));
         }

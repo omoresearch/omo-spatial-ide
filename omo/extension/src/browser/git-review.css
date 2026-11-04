@@ -1,0 +1,21 @@
+.omo-git-review { display:flex; flex-direction:column; flex:1; min-height:0; padding:22px 28px 12px; background:#101923; color:#d7e3df; overflow:hidden; }
+.omo-git-review > header { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+.omo-git-review > header > div { margin-right:auto; }
+.omo-git-review h2 { margin:0 0 7px; font-size:22px; font-weight:500; }
+.omo-git-review p { color:#9db1ba; font-size:11px; line-height:1.6; }
+.omo-git-review button { padding:7px 10px; border:1px solid #92b9ad44; border-radius:5px; background:#1b302e; color:#d7e3df; }
+.omo-git-review button:hover:not(:disabled) { background:#2c4947; }
+.omo-git-review .omo-error { color:#f4b29f; }
+.omo-git-review-body { display:flex; flex:1; min-height:0; border:1px solid #92b9ad33; border-radius:7px; overflow:hidden; }
+.omo-git-review-body > nav { flex:0 0 280px; min-width:0; overflow:auto; padding:10px; border-right:1px solid #92b9ad33; background:#111f29; }
+.omo-git-review-body > nav button { display:flex; align-items:flex-start; gap:9px; width:100%; margin:3px 0; text-align:left; background:transparent; border-color:transparent; font-size:11px; }
+.omo-git-review-body > nav button[aria-pressed="true"] { background:#29423e; border-color:#92b9ad55; }
+.omo-git-review-body code { white-space:pre; color:#e5c28e; }
+.omo-git-review-body > nav span { overflow-wrap:anywhere; white-space:pre-wrap; }
+.omo-git-review-body > article { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; }
+.omo-git-review-file { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-bottom:1px solid #92b9ad33; }
+.omo-git-review-file strong { overflow-wrap:anywhere; font-size:12px; }
+.omo-git-review-file button { flex-shrink:0; font-size:11px; }
+.omo-git-review pre { margin:0; padding:16px; flex:1; min-height:0; overflow:auto; font:12px/1.65 'DejaVu Sans Mono',Consolas,monospace; background:#0c151e; color:#d9e8e0; white-space:pre; tab-size:4; user-select:text; }
+.omo-git-review-note { margin:9px 0 0; }
+@media(max-width:760px) { .omo-git-review { padding:15px; } .omo-git-review-body > nav { flex-basis:160px; } .omo-git-review-file { flex-wrap:wrap; } }

@@ -6,7 +6,7 @@ import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { FileDialogService } from '@theia/filesystem/lib/browser/file-dialog/file-dialog-service';
 import URI from '@theia/core/lib/common/uri';
-import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame } from './room-scene';
+import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame, CodeReviewFrame } from './room-scene';
 import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
 import { OmoRuntimeService } from '../common/runtime-protocol';
 import { RuntimeConsoleController, RuntimeConsoleState, StationBinding } from './runtime-console-controller';
@@ -19,6 +19,9 @@ import { OmoPresenceService, PresenceJoin, presenceStation } from '../common/pre
 import { PresenceController, PresenceState } from './presence-controller';
 import { PresenceStrip } from './presence-strip';
 import { PLAYER_HOME } from '../common/player-state';
+import { GitReviewService } from '../common/git-review-protocol';
+import { GitReviewController, GitReviewState } from './git-review-controller';
+import { GitReviewPanel } from './git-review-panel';
 
 export const TERMINAL_STATION_ID = 'terminal-1';
 const TERMINAL_STATIONS: TerminalWorkstation[] = ['terminal', 'terminal-2'];
@@ -70,6 +73,7 @@ export class OmoWorldWidget extends ReactWidget {
     @inject(OmoRuntimeService) protected readonly runtime!: OmoRuntimeService;
     @inject(OmoWebService) protected readonly webRuntime!: OmoWebService;
     @inject(OmoPresenceService) protected readonly presenceService!: OmoPresenceService;
+    @inject(GitReviewService) protected readonly gitReviewService!: GitReviewService;
     @inject(EditorManager) protected readonly editors!: EditorManager;
     @inject(FileService) protected readonly files!: FileService;
     @inject(FileDialogService) protected readonly dialogs!: FileDialogService;
@@ -97,6 +101,10 @@ export class OmoWorldWidget extends ReactWidget {
     private presenceState:PresenceState={phase:'solo',error:''};
     private personalRoom?:PresenceJoin;
     private tabIdentity:string=crypto.randomUUID();
+    private review?:GitReviewController;
+    private reviewState:GitReviewState={phase:'idle',loadingPatch:false,error:''};
+    private reviewOpen=false;
+    private codeReviewFrame?:CodeReviewFrame;
 
     @postConstruct()
     protected init(): void {
@@ -106,6 +114,15 @@ export class OmoWorldWidget extends ReactWidget {
         try {const saved=sessionStorage.getItem('omo.presence.tab.v1');if(saved&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(saved))this.tabIdentity=saved;sessionStorage.setItem('omo.presence.tab.v1',this.tabIdentity);}catch{/* Memory-only identity; never guesses another tab's terminals. */}
         this.presence=new PresenceController({service:this.presenceService,pose:()=>this.worldScene?.getPlayerPose()??{...PLAYER_HOME},schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:state=>this.presenceChanged(state)});
         this.toDispose.push({dispose:()=>{void this.presence?.dispose().catch(()=>undefined);}});
+        this.review=new GitReviewController(this.gitReviewService,state=>{
+            this.reviewState=state;
+            if(state.phase!=='idle'){
+                this.codeReviewFrame={title:state.patch?.path??'PROJECT CHANGES',lines:state.patch?state.patch.patch.split('\n'):state.snapshot?state.snapshot.changes.map(c=>`${c.status} ${c.path}`):[state.error||'Reading project Git status…'],status:state.loadingPatch?'Reading patch…':state.snapshot?.truncated&&!state.patch?'Git list capped at 200 files':'Read-only snapshot'};
+                this.worldScene?.setCodeReview(this.codeReviewFrame);
+            }
+            this.update();
+        });
+        this.toDispose.push({dispose:()=>this.review?.close()});
         for (const station of TERMINAL_STATIONS) this.consoles.set(station, new RuntimeConsoleController({ service: this.runtime, storage: safeStorage(),
             schedule: (fn, ms) => window.setTimeout(fn, ms), cancel: handle => window.clearTimeout(handle as number),
             onChange: state => this.consoleChanged(state, station) }));
@@ -159,6 +176,7 @@ export class OmoWorldWidget extends ReactWidget {
     private leavePresence=():void=>{this.worldScene?.releaseTyping();void this.presence?.leave().catch(error=>{this.error=String(error);this.update();});};
     private projectChanged(next: URI | undefined): void {
         if (next?.toString() === this.project?.toString()) return;
+        this.closeReview();this.codeReviewFrame=undefined;this.worldScene?.setCodeReview({title:'PROJECT CHANGES',lines:['Open review for the selected project.'],status:'No Git contents read yet'});
         this.leavePresence();this.personalRoom=undefined;
         this.project = next;
         this.readWebBinding();
@@ -257,7 +275,13 @@ export class OmoWorldWidget extends ReactWidget {
         const controller = this.consoles.get(station); await controller?.bind(binding);
         if (this.activeMode === station) { this.feedback = controller?.state.phase === 'live' ? 'Live terminal on this monitor · Type here. Esc to walk away.' : controller?.state.error || controller?.state.statusText || ''; this.update(); }
     }
-    private async openCode(): Promise<void> {
+    private async openCode():Promise<void> {
+        if(!this.project)throw new Error('Choose a project folder first.');
+        this.worldScene?.releaseTyping();this.reviewOpen=true;this.update();await this.review?.open(this.project.toString());
+    }
+    private closeReview=():void=>{this.reviewOpen=false;this.review?.close();this.update();};
+    private openReviewedFile=(uri:string):void=>{void this.runAction(async()=>{await this.editors.open(new URI(uri),{mode:'activate'});});};
+    private async openProjectFile(): Promise<void> {
         if (!this.project) throw new Error('Choose a project folder first.');
         let target = this.project.resolve('README.md');
         if (!await this.files.exists(target)) {
@@ -282,10 +306,11 @@ export class OmoWorldWidget extends ReactWidget {
         return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode}>
             <header className="omo-header">
                 <div className="omo-brand"><span className="omo-brand-mark">o<span>m</span>o</span><span className="omo-brand-caption">RESEARCH<br/>SPATIAL IDE</span></div>
-                <nav className="omo-view-switch" aria-label="Workspace views"><button className="active" aria-current="page">◈ World</button><button disabled={!this.room || this.busy} onClick={() => this.selectStation('code')}>⌘ Code</button></nav>
+                <nav className="omo-view-switch" aria-label="Workspace views"><button className={this.reviewOpen?'':'active'} aria-current={this.reviewOpen?undefined:'page'} onClick={this.closeReview}>◈ World</button><button data-testid="review-action" className={this.reviewOpen?'active':''} disabled={!this.room || this.busy} onClick={() => this.selectStation('code')}>⌘ Code</button></nav>
                 <span className="omo-local"><i/> LOCAL WORKSPACE</span>
             </header>
-            <div className={`omo-body ${this.configuring ? 'is-onboarding' : ''}`}>
+            {this.reviewOpen&&<GitReviewPanel state={this.reviewState} onSelect={path=>{void this.review?.select(path);}} onRefresh={()=>{if(this.project)void this.review?.open(this.project.toString());}} onClose={this.closeReview} onOpenFile={this.openReviewedFile} onOpenProject={()=>{void this.runAction(()=>this.openProjectFile());}}/>}
+            <div className={`omo-body ${this.configuring ? 'is-onboarding' : ''}`} style={this.reviewOpen?{display:'none'}:undefined}>
                 {this.configuring ? <section className="omo-onboarding" data-testid="omo-onboarding">
                     <span className="omo-kicker">YOUR WORK, SOMEWHERE YOU REMEMBER</span>
                     <h1>A place for<br/>your next idea.</h1>
@@ -310,7 +335,7 @@ export class OmoWorldWidget extends ReactWidget {
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink}/>}
                     </div>}
-                    <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
+                    <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>
                     {!this.configuring && <aside className="omo-tool-dock" aria-label="Project tools"><span>YOUR WORKSTATIONS</span><button disabled={this.busy} data-testid="terminal-action" onClick={() => this.selectStation('terminal')}><b>01</b><div><strong>Terminal</strong><small>A real shell. Your project folder.</small></div><span>↗</span></button><button disabled={this.busy} data-testid="code-action" onClick={() => this.selectStation('code')}><b>02</b><div><strong>Code</strong><small>Files, editing and your next change.</small></div><span>↗</span></button><p>Nothing starts unless you choose it.</p></aside>}
                     {this.configuring && <div className="omo-preview-badge"><i/> LIVE ROOM PREVIEW</div>}
