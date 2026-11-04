@@ -5,6 +5,7 @@ A local Theia application with first-person walking and real terminal output on 
 ## Implemented in this integration branch
 
 - Space-station and jungle onboarding, workspace-folder choice and per-project room preferences.
+- Local shared-room presence: explicitly join the same room code from two trusted browser clients using the same project/theme. See named 3D players move in the world, with separate default persistent terminal bindings for each participant. Join/leave never starts an agent or kills a shell. This is visual collaboration, not terminal sharing or authenticated multi-user hosting; see `SHARED-ROOMS.md`.
 - Two physical computers. Each binds to its own persistent tmux workspace and independent shell processes. Walking away, reloading the browser and restarting the backend do not deliberately kill those jobs.
 - Shell, Hermes, Claude Code and Codex tab launch paths, installed-tool discovery, existing Hermes-profile selection and explicit start/revive confirmations. CLI authentication and approval settings remain CLI-owned; no bypass flags are added.
 - Tab switching, rename and confirmed close; workspace board, rename, same-project station rebinding, profile defaults, keep-awake metadata and confirmed deletion.
@@ -48,6 +49,7 @@ OMO_URL=http://127.0.0.1:3190 node extension/test/web-wall-real-app.cjs
 OMO_URL=http://127.0.0.1:3190 node extension/test/terminal-link-real-app.cjs
 OMO_URL=http://127.0.0.1:3190 node extension/test/physical-selection-real-app.cjs
 OMO_URL=http://127.0.0.1:3190 node extension/test/unicode-real-app.cjs
+OMO_URL=http://127.0.0.1:3190 node extension/test/shared-room-real-app.cjs
 ```
 
 The application tests use owned fixture files and isolated QA browser profiles. They inspect actual shell PIDs, exported state, workspace bindings, physical-monitor output and real page effects. The web-wall test also checks rendered blue/green screen pixels against a localhost fixture; metadata alone is not acceptance. Backend tests use real tmux; agent executables in tests are clearly labelled fixtures, not fabricated provider responses. Live paid model execution is not part of these checks.
@@ -58,8 +60,8 @@ Evidence is written under ignored `evidence/`. Historical orbit/flat-terminal an
 
 ## Boundaries and unfinished work
 
-- Local, single-user developer alpha. Loopback binding is not a hosted multi-tenant security boundary.
-- Multiplayer presence, shared-room permissions, arbitrary building/map kits, Minecraft embedding, hosted billing and universal installers are not implemented.
+- Local developer alpha with trusted-client shared visual presence. All clients still act as the same OS user. Separate default terminal bindings are not authorization: existing workspace tools can intentionally attach another workspace. Loopback binding is not a hosted multi-tenant security boundary. Do not expose this app to a network or public tunnel.
+- Authenticated multiplayer hosting, shared-room permissions, shared screen/control grants, arbitrary building/map kits, Minecraft embedding, hosted billing and universal installers are not implemented.
 - No language-plugin bundle, dedicated PR-review UI or debugger setup is claimed by this minimal Theia composition.
 - Real Hermes/Claude/Codex provider sessions were not exercised in automated tests. Availability is not proof that the user's account is authenticated.
 - Browser speaker output is off by default. Page media controls are tested; actual host audio requires `OMO_SPATIAL_WEB_AUDIO=1` and has not been audibly verified. Camera, microphone, passkey and other native browser permission flows are not certified.

@@ -96,6 +96,13 @@
 .omo-root[data-configured="true"] .omo-body:not(.is-onboarding) .omo-stage-heading { position:relative; inset:auto; margin:22px 30px 14px; flex-shrink:0; }
 .omo-root[data-configured="true"] .omo-body:not(.is-onboarding) .omo-scene-wrap { position:relative; inset:auto; width:100%; flex:1; min-height:0; }
 .omo-console-dock { margin:0 30px 12px; flex:0 0 auto; z-index:2; }
+.omo-presence-bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:8px; padding:6px 0 9px; border-bottom:1px solid #ffffff15; font-size:10px; color:#adc4c5; }
+.omo-presence-bar label { display:inline-flex; align-items:center; gap:5px; }
+.omo-presence-bar input { width:130px; background:#0d1924; color:#e0ece7; border:1px solid #91b5ac44; border-radius:4px; padding:5px 7px; }
+.omo-presence-bar button { background:#29423e; color:#e0ece7; border:1px solid #91b5ac44; border-radius:4px; padding:5px 9px; }
+.omo-presence-bar small { color:#8ea5aa; }
+.omo-presence-members { display:inline-flex; gap:8px; flex-wrap:wrap; }
+.omo-presence-members > span { color:#ffd1ef; }
 .omo-console-strip .omo-bell-alert, .omo-station-switch .omo-bell-alert { color:#ffb76b; font-weight:600; }
 .omo-console-strip button.omo-bell-alert { border-color:#ff9e4a88; background:#51351d; }
 .omo-station-switch { display:flex; gap:5px; margin:0 0 7px; }

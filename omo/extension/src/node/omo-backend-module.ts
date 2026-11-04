@@ -8,9 +8,12 @@ import { RuntimeHost } from './runtime-host';
 import { OMO_WEB_PATH } from '../common/web-runtime-protocol';
 import { WebRuntimeService } from './web-runtime-service';
 import { webConnection } from './web-connection';
+import { OMO_PRESENCE_PATH } from '../common/presence-protocol';
+import { RoomPresence } from './room-presence';
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
 export const OmoManagedWeb = Symbol('OmoManagedWeb');
+const OmoRoomPresence = Symbol('OmoRoomPresence');
 
 /** Stops the runtime host with the backend. The tmux server and every tab keep running. */
 @injectable()
@@ -26,6 +29,15 @@ export class OmoRuntimeLifecycle implements BackendApplicationContribution {
 export default new ContainerModule(bind => {
     bind(OmoRuntimeHost).toDynamicValue(() => new RuntimeHost(discoverRuntime(process.env), process.env)).inSingletonScope();
     bind(OmoManagedWeb).toDynamicValue(() => new WebRuntimeService()).inSingletonScope();
+    bind(OmoRoomPresence).toDynamicValue(() => new RoomPresence()).inSingletonScope();
+    bind(ConnectionHandler).toDynamicValue(ctx => {
+        const rooms=ctx.container.get<RoomPresence>(OmoRoomPresence);
+        return new RpcConnectionHandler<object>(OMO_PRESENCE_PATH,proxy=>{
+            const connection=rooms.connection();
+            proxy.onDidCloseConnection(()=>connection.dispose());
+            return connection;
+        });
+    }).inSingletonScope();
     bind(OmoRuntimeLifecycle).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(OmoRuntimeLifecycle);
     bind(ConnectionHandler).toDynamicValue(ctx => {

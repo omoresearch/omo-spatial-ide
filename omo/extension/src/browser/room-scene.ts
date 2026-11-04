@@ -5,6 +5,8 @@ import { cellRuns, dominantKey, MONITOR_COLS, MONITOR_ROWS } from './runtime-con
 import type { WebSurfaceFrame } from '../common/web-runtime-protocol';
 import { MonitorSelection, monitorCell, monitorCellSpan, visibleMonitorCells } from '../common/monitor-selection';
 import type { SelectionUnit } from '../common/monitor-selection';
+import type { RoomMember } from '../common/presence-protocol';
+import { PLAYER_HOME, PlayerPose } from '../common/player-state';
 
 /** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
 export interface MonitorFrame {
@@ -62,6 +64,7 @@ export class RoomScene {
     private webSize = { width: 960, height: 600 };
     private pointer?: { x: number; y: number; startX: number; startY: number; dragged: boolean };
     private cleanup: Array<() => void> = [];
+    private peerAvatars = new Map<string,{root:THREE.Group;member:RoomMember}>();
     constructor(private host: HTMLElement, private options: RoomSceneOptions) {
         this.state = { ...options.camera };
         try { this.init(); } catch (error) {
@@ -104,6 +107,31 @@ export class RoomScene {
         this.setNavigation(this.options.walk ? 'walk' : 'overview');
         this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(this.host);
         this.resize(); this.positionCamera(); this.draw(); this.options.onReady();
+    }
+    getPlayerPose():PlayerPose { return {...(this.walker?.pose ?? PLAYER_HOME)}; }
+    setPeers(members:RoomMember[]):void {
+        const ids=new Set(members.map(m=>m.id));
+        for(const [id,avatar] of this.peerAvatars)if(!ids.has(id)||members.find(m=>m.id===id)?.name!==avatar.member.name){
+            this.scene.remove(avatar.root);avatar.root.traverse(node=>{
+                if(node instanceof THREE.Mesh){node.geometry.dispose();(node.material as THREE.Material).dispose();}
+                if(node instanceof THREE.Sprite){node.material.map?.dispose();node.material.dispose();}
+            });this.peerAvatars.delete(id);
+        }
+        for(const member of members){
+            let avatar=this.peerAvatars.get(member.id);
+            if(!avatar){
+                const root=new THREE.Group();
+                this.box(root,[.42,.75,.28],[0,1,0],0xff56c8);
+                this.box(root,[.35,.35,.35],[0,1.55,0],0xff56c8);
+                this.box(root,[.14,.5,.16],[-.12,.38,0],0x75438b);
+                this.box(root,[.14,.5,.16],[.12,.38,0],0x75438b);
+                const label=document.createElement('canvas');label.width=512;label.height=96;
+                const ctx=label.getContext('2d')!;ctx.fillStyle='#101622e8';ctx.fillRect(0,0,512,96);ctx.font='32px sans-serif';ctx.textAlign='center';ctx.fillStyle='#ffe3f6';ctx.fillText(member.name,256,60,490);
+                const tag=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(label),depthTest:true}));tag.position.y=2.05;tag.scale.set(1.7,.32,1);root.add(tag);
+                avatar={root,member};this.peerAvatars.set(member.id,avatar);this.scene.add(root);
+            }
+            avatar.member=member;avatar.root.position.set(member.pose.x,0,member.pose.z);avatar.root.rotation.y=member.pose.yaw;
+        }
     }
     private material(color: THREE.ColorRepresentation, metalness = 0.1): THREE.MeshStandardMaterial {
         return new THREE.MeshStandardMaterial({ color, roughness: 0.68, metalness });
@@ -459,6 +487,10 @@ export class RoomScene {
         if(this.host.clientWidth&&this.host.clientHeight){
             this.walker?.step(delta);
             this.renderer.render(this.scene,this.camera);
+            this.renderer.domElement.dataset.peerPositions=JSON.stringify(Object.fromEntries([...this.peerAvatars].map(([id,avatar])=>{
+                const p=avatar.root.localToWorld(new THREE.Vector3(0,1.55,0)).project(this.camera);
+                return [id,{name:avatar.member.name,...avatar.member.pose,screenX:(p.x*.5+.5)*this.host.clientWidth,screenY:(-p.y*.5+.5)*this.host.clientHeight,visible:p.z>=-1&&p.z<=1&&Math.abs(p.x)<1&&Math.abs(p.y)<1}];
+            })));
             const targets: Record<string, { x: number; y: number; visible: boolean }> = {};
             this.labels.forEach((label,i)=>{
                 const root = this.roots[i], action = root.userData.workstation as Workstation;
@@ -486,6 +518,7 @@ export class RoomScene {
     };
     resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();return;}this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
     dispose():void{
+        this.setPeers([]);
         this.disposed=true;this.walker?.dispose();cancelAnimationFrame(this.frame);this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}

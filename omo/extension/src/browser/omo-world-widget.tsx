@@ -15,6 +15,10 @@ import { OmoWebService, WebSurfaceFrame } from '../common/web-runtime-protocol';
 import { WebSurfaceController, WebWallState } from './web-surface-controller';
 import { WebSurfaceStrip } from './web-surface-strip';
 import { normalizeWebUrl } from '../common/web-url';
+import { OmoPresenceService, PresenceJoin, presenceStation } from '../common/presence-protocol';
+import { PresenceController, PresenceState } from './presence-controller';
+import { PresenceStrip } from './presence-strip';
+import { PLAYER_HOME } from '../common/player-state';
 
 export const TERMINAL_STATION_ID = 'terminal-1';
 const TERMINAL_STATIONS: TerminalWorkstation[] = ['terminal', 'terminal-2'];
@@ -65,6 +69,7 @@ export class OmoWorldWidget extends ReactWidget {
     @inject(WorkspaceService) protected readonly workspace!: WorkspaceService;
     @inject(OmoRuntimeService) protected readonly runtime!: OmoRuntimeService;
     @inject(OmoWebService) protected readonly webRuntime!: OmoWebService;
+    @inject(OmoPresenceService) protected readonly presenceService!: OmoPresenceService;
     @inject(EditorManager) protected readonly editors!: EditorManager;
     @inject(FileService) protected readonly files!: FileService;
     @inject(FileDialogService) protected readonly dialogs!: FileDialogService;
@@ -88,12 +93,19 @@ export class OmoWorldWidget extends ReactWidget {
     private webState: WebWallState = { phase: 'idle', error: '' };
     private savedWebUrl = '';
     private worldScene?: RoomScene;
+    private presence?: PresenceController;
+    private presenceState:PresenceState={phase:'solo',error:''};
+    private personalRoom?:PresenceJoin;
+    private tabIdentity:string=crypto.randomUUID();
 
     @postConstruct()
     protected init(): void {
         this.id = OmoWorldWidget.ID; this.title.label = 'World'; this.title.caption = 'Omo · Your spatial workspace';
         this.title.closable = false; this.title.iconClass = 'codicon codicon-globe';
         this.addClass('omo-world-widget'); this.node.tabIndex = -1;
+        try {const saved=sessionStorage.getItem('omo.presence.tab.v1');if(saved&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(saved))this.tabIdentity=saved;sessionStorage.setItem('omo.presence.tab.v1',this.tabIdentity);}catch{/* Memory-only identity; never guesses another tab's terminals. */}
+        this.presence=new PresenceController({service:this.presenceService,pose:()=>this.worldScene?.getPlayerPose()??{...PLAYER_HOME},schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:state=>this.presenceChanged(state)});
+        this.toDispose.push({dispose:()=>{void this.presence?.dispose().catch(()=>undefined);}});
         for (const station of TERMINAL_STATIONS) this.consoles.set(station, new RuntimeConsoleController({ service: this.runtime, storage: safeStorage(),
             schedule: (fn, ms) => window.setTimeout(fn, ms), cancel: handle => window.clearTimeout(handle as number),
             onChange: state => this.consoleChanged(state, station) }));
@@ -124,10 +136,30 @@ export class OmoWorldWidget extends ReactWidget {
     }
     private binding(station: TerminalWorkstation = this.activeStation): StationBinding | undefined {
         if (!this.project) return undefined;
-        return { stationId: station === 'terminal' ? TERMINAL_STATION_ID : 'terminal-2', projectUri: this.project.toString(), name: `${this.room?.projectName ?? this.draftName ?? this.project.path.base}${station === 'terminal-2' ? ' · Desk two' : ''}` };
+        const localStation=station === 'terminal' ? TERMINAL_STATION_ID : 'terminal-2';
+        return { stationId: this.personalRoom?presenceStation(this.personalRoom,localStation):localStation, projectUri: this.project.toString(), name: `${this.room?.projectName ?? this.draftName ?? this.project.path.base}${this.personalRoom?` · ${this.personalRoom.name}`:''}${station === 'terminal-2' ? ' · Desk two' : ''}` };
     }
+    private presenceChanged(state:PresenceState):void {
+        const old=this.personalRoom;
+        this.presenceState=state;
+        // Leave/connection loss removes presence, NOT the participant's current terminal bindings.
+        if(state.phase==='joined'&&state.join)this.personalRoom=state.join;
+        this.worldScene?.setPeers(state.snapshot?.members.filter(m=>m.id!==state.snapshot?.selfId)??[]);
+        if(this.personalRoom&&(old?.roomId!==this.personalRoom.roomId||old?.clientId!==this.personalRoom.clientId)){
+            this.worldScene?.releaseTyping();
+            for(const station of TERMINAL_STATIONS){const binding=this.binding(station);if(binding)void this.consoles.get(station)?.reconnect(binding);}
+        }
+        this.update();
+    }
+    private joinPresence=(roomId:string,name:string):void=>{
+        if(!this.room||!this.project)return;
+        this.worldScene?.releaseTyping();
+        void this.presence?.join({roomId,name,projectUri:this.project.toString(),theme:this.room.theme,clientId:this.tabIdentity}).catch(error=>{this.error=String(error);this.update();});
+    };
+    private leavePresence=():void=>{this.worldScene?.releaseTyping();void this.presence?.leave().catch(error=>{this.error=String(error);this.update();});};
     private projectChanged(next: URI | undefined): void {
         if (next?.toString() === this.project?.toString()) return;
+        this.leavePresence();this.personalRoom=undefined;
         this.project = next;
         this.readWebBinding();
         this.room = undefined; this.configuring = true; this.draftName = next?.path.base || 'My workspace';
@@ -242,7 +274,7 @@ export class OmoWorldWidget extends ReactWidget {
         const selected = await this.dialogs.showOpenDialog({ title: 'Choose your project folder', canSelectFiles: false, canSelectFolders: true }, root);
         if (selected) await this.workspace.open(selected);
     }); };
-    private configure = (): void => { this.draftTheme = this.room?.theme ?? 'station'; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
+    private configure = (): void => { this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
 
     protected render(): React.ReactNode {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;
@@ -274,10 +306,11 @@ export class OmoWorldWidget extends ReactWidget {
                         {!this.configuring && <button className="omo-outline" data-testid="edit-room" onClick={this.configure}>◌ Customise room</button>}
                     </div>
                     {this.room && !this.configuring && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
+                        <PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink}/>}
                     </div>}
-                    <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
+                    <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>
                     {!this.configuring && <aside className="omo-tool-dock" aria-label="Project tools"><span>YOUR WORKSTATIONS</span><button disabled={this.busy} data-testid="terminal-action" onClick={() => this.selectStation('terminal')}><b>01</b><div><strong>Terminal</strong><small>A real shell. Your project folder.</small></div><span>↗</span></button><button disabled={this.busy} data-testid="code-action" onClick={() => this.selectStation('code')}><b>02</b><div><strong>Code</strong><small>Files, editing and your next change.</small></div><span>↗</span></button><p>Nothing starts unless you choose it.</p></aside>}
                     {this.configuring && <div className="omo-preview-badge"><i/> LIVE ROOM PREVIEW</div>}
