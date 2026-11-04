@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { AgentTaskDrawer } from './agent-task-drawer';
+import type { GitReviewSnapshot } from '../common/git-review-protocol';
 import type { SessionTab } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
 import { AGENT_LABELS, PASTE_LIMIT_BYTES, RuntimeConsoleController, RuntimeConsoleState, TAB_NAME_MAX, WORKSPACE_NAME_MAX, launcherOptions } from './runtime-console-controller';
@@ -104,7 +105,7 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
 }
 
 /** Compact world overlay for the terminal station. It manages tabs; the monitor itself stays the terminal. */
-export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean; onOpenLink?: (url: string) => void; onReview?: () => void }): React.ReactElement {
+export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean; onOpenLink?: (url: string) => void; onReview?: () => Promise<GitReviewSnapshot | undefined> }): React.ReactElement {
     const { state, controller } = props;
     const ws = state.workspace;
     const [drawer, setDrawer] = React.useState(!!props.initialDrawer);

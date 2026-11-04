@@ -23,6 +23,7 @@ import { PresenceController, PresenceState } from './presence-controller';
 import { PresenceStrip } from './presence-strip';
 import { PLAYER_HOME } from '../common/player-state';
 import { GitReviewService } from '../common/git-review-protocol';
+import type { GitReviewSnapshot } from '../common/git-review-protocol';
 import { GitReviewController, GitReviewState } from './git-review-controller';
 import { GitReviewPanel } from './git-review-panel';
 
@@ -113,6 +114,7 @@ export class OmoWorldWidget extends ReactWidget {
     private review?:GitReviewController;
     private reviewState:GitReviewState={phase:'idle',loadingPatch:false,error:''};
     private reviewOpen=false;
+    private reviewRequest=0;
     private codeReviewFrame?:CodeReviewFrame;
 
     @postConstruct()
@@ -132,7 +134,7 @@ export class OmoWorldWidget extends ReactWidget {
             }
             this.update();
         });
-        this.toDispose.push({dispose:()=>this.review?.close()});
+        this.toDispose.push({dispose:()=>{this.reviewRequest++;this.reviewOpen=false;this.review?.close();}});
         for (const station of TERMINAL_STATIONS) this.consoles.set(station, new RuntimeConsoleController({ service: this.runtime, storage: safeStorage(),
             schedule: (fn, ms) => window.setTimeout(fn, ms), cancel: handle => window.clearTimeout(handle as number),
             onChange: state => this.consoleChanged(state, station) }));
@@ -288,11 +290,21 @@ export class OmoWorldWidget extends ReactWidget {
         const controller = this.consoles.get(station); await controller?.bind(binding);
         if (this.activeMode === station) { this.feedback = controller?.state.phase === 'live' ? 'Live terminal on this monitor · Type here. Esc to walk away.' : controller?.state.error || controller?.state.statusText || ''; this.update(); }
     }
-    private async openCode():Promise<void> {
-        if(!this.project)throw new Error('Choose a project folder first.');
-        this.worldScene?.releaseTyping();this.reviewOpen=true;this.update();await this.review?.open(this.project.toString());
+    private async openReviewSnapshot(): Promise<GitReviewSnapshot | undefined> {
+        const request = ++this.reviewRequest;
+        const project = this.project?.toString();
+        if (!project) throw new Error('Choose a project folder first.');
+        this.worldScene?.releaseTyping();
+        this.reviewOpen = true;
+        this.update();
+        await this.review?.open(project);
+        if (request !== this.reviewRequest || !this.reviewOpen || this.project?.toString() !== project) return undefined;
+        if (this.reviewState.phase !== 'ready' || this.reviewState.projectUri !== project || !this.reviewState.snapshot || this.reviewState.snapshot.projectUri !== project) return undefined;
+        return this.reviewState.snapshot;
     }
-    private closeReview=():void=>{this.reviewOpen=false;this.review?.close();this.update();};
+    private async openCode(): Promise<void> { await this.openReviewSnapshot(); }
+    private openTaskReview=(): Promise<GitReviewSnapshot | undefined> => this.openReviewSnapshot();
+    private closeReview=():void=>{++this.reviewRequest;this.reviewOpen=false;this.review?.close();this.update();};
     private openReviewedFile=(uri:string):void=>{void this.runAction(async()=>{await this.editors.open(new URI(uri),{mode:'activate'});});};
     private async openProjectFile(): Promise<void> {
         if (!this.project) throw new Error('Choose a project folder first.');
@@ -394,7 +406,7 @@ export class OmoWorldWidget extends ReactWidget {
                     {this.room && !this.configuring && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
                         <PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
-                        {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={()=>{void this.runAction(()=>this.openCode());}}/>}
+                        {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview}/>}
                     </div>}
                     <SceneView key={`${theme}:${layout}:${this.presetRevision}`} theme={theme} layout={layout} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>
