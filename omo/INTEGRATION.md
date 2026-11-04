@@ -59,3 +59,27 @@ The source-backed inventory in `MINECRAFT-PARITY.md` (when integrated) is the
 checklist, not an assertion that all features are already implemented. Browser
 surfaces, multiplayer, station building, maps and installer/update behavior must
 be checked against source rather than guessed from demo footage.
+
+## Integrated local checkpoint
+
+The branch now includes the persistent runtime, advanced controls, two independent physical
+computers, and a managed-Chrome wall. Backend implementations arrived as separate owned commits;
+the coordinator wires their RPC services, per-connection browser-page ownership and world input.
+Minecraft source and mutable runtime state remain separate.
+
+Independent QA found raw multiline clipboard execution, duplicate-host metadata loss and a custom
+Hermes-root launch mismatch. The integration routes clipboard text through safe paste, adds a
+data-directory process lock and pins Hermes's launch environment. A separate browser test also
+catches newline-to-Enter synthesis: page paste now uses text insertion, not submit keys.
+
+Acceptance entry points are `runtime-real-app.cjs`, `multi-station-real-app.cjs` and
+`web-wall-real-app.cjs`. The last measures real rendered screen pixels and an actual localhost HTTP
+click effect. The suite can restart only its explicitly named QA backend to prove PID persistence.
+No model calls, personal browser profile or new recordings are needed.
+
+CI retains a deliberately failing fault-probe record. Native startup and modern tmux capability are
+tested in a fresh, capability-dropped container before the remote branch is treated as verified.
+Backend output includes native addons: stop a local app before rebuilding into its output tree.
+
+This remains a local developer alpha. Multiplayer, world building/map kits, hosted operation,
+universal installation and live-provider certification are still open, not quietly marked complete.

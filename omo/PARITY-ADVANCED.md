@@ -72,9 +72,9 @@ npx --yes --package=node@22.23.4 --call 'npm run compile && node --experimental-
 
 - I did not run UI E2E. The isolated worktree resolves the borrowed `omo-world` from its parent, so
   the parent must check the drawer in the real app.
-- The paste path in `FirstPersonControls` still sends raw text through `sendInput`. Root owns that
-  file. It must call `controller.paste(text)` for paste events and `controller.wheel(n, x, y)` for the
-  wheel over the monitor.
+- Integrated frontend: `FirstPersonControls` sends clipboard events to the safe paste callback,
+  and the widget calls `controller.paste(text)`. Wheel input calls `controller.wheel`. The fallback
+  without a paste handler refuses multiline/control input instead of sending it raw.
 - There is no drag-to-select UI. `copySelection({x1,y1,x2,y2,unit})` exists, but the only UI copy
   action is "Copy screen".
 - Find highlights are passed to the bridge's `frame(find=…)`. The colour strings carry them only as

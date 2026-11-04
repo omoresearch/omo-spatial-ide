@@ -1,65 +1,59 @@
-# Omo · first usable spatial room
+# Omo · spatial IDE
 
-**Current interaction (owner correction): first-person walking, with the live terminal rendered on the physical monitor inside the world.** The orbiting room and flat-terminal launcher shown in the first video were not the intended primary interface. See `FIRST-PERSON.md` for the current checks and demo. The older `real-app.cjs` / `record-demo.cjs` scripts below document that superseded flat-panel milestone, not current acceptance.
+A local Theia application with first-person walking and real terminal output on physical monitors. Omo code lives in this additive directory; the upstream Theia source and fork history stay intact.
 
-A local browser application composed from Theia 1.74.3, with an Omo-owned extension. This directory is additive to the upstream repository. No upstream product source was edited.
+## Implemented in this integration branch
 
-## Included
+- Space-station and jungle onboarding, workspace-folder choice and per-project room preferences.
+- Two physical computers. Each binds to its own persistent tmux workspace and independent shell processes. Walking away, reloading the browser and restarting the backend do not deliberately kill those jobs.
+- Shell, Hermes, Claude Code and Codex tab launch paths, installed-tool discovery, existing Hermes-profile selection and explicit start/revive confirmations. CLI authentication and approval settings remain CLI-owned; no bypass flags are added.
+- Tab switching, rename and confirmed close; workspace board, rename, same-project station rebinding, profile defaults, keep-awake metadata and confirmed deletion.
+- Scrollback, find, clear, copy-screen and safe paste. Clipboard events use the safe paste operation, not raw terminal input. Multiline terminal paste is refused unless the actual application advertises bracketed paste. Enter remains an explicit action.
+- A physical web wall backed by real managed Chrome screenshots, with screen-coordinate clicks, typing, scrolling, navigation and page mute/volume controls. Its Chrome profile is separate from personal Chrome and Minecraft. Production keeps Chrome's sandbox enabled.
+- Project-scoped last-web-address persistence. Reload does not silently open a browser; the user opens the saved address explicitly.
+- Conventional file editing through Theia/Monaco. Session controls occupy their own row and do not replace the in-world displays.
 
-- Onboarding: original space-station and prehistoric-jungle themes, workspace name, real Theia project-folder chooser.
-- A procedural Three.js room with orbit/zoom, keyboard camera navigation, reset, and selectable workstations.
-- Terminal workstation: Theia's real terminal service, bound to the chosen project's file URI; repeated selection reuses the terminal.
-- Code workstation: opens that project's README in the real Monaco editor (or a file chooser when no README exists).
-- Per-project, versioned local browser storage for theme, name, camera and project binding. Invalid/cross-project records are rejected.
-- Workspace trust remains enabled. The app binds to loopback only.
-
-No agents, model requests, generated assets, multiplayer, arbitrary world generation, Minecraft embedding, billing, hosted services or production deployment are included. The bundled editor is a minimal Theia composition; language plugins, a PR UI and debugger configuration are not part of this milestone. A fixed room layout is used; object repositioning is not implemented.
+See `INTEGRATION.md`, `RUNTIME.md`, `PARITY-ADVANCED.md` and `WEB-RUNTIME.md` for contracts and limits. `MINECRAFT-PARITY.md` is the source-pinned inventory, not a claim of complete parity.
 
 ## Local run
 
-Use Node 22 (the native dependencies were built against Node 22.23.4) and npm 10.9.4. From this directory:
+Prerequisites: Node 22, npm, Python 3, bash and tmux. Chrome is optional for terminals but required for the web wall. Native Theia dependencies can require build tools and libsecret on Linux. See the runtime docs for explicit tool-path overrides and missing-dependency messages.
+
+Stop any app using this build output before rebuilding: Theia writes native addons into `browser-app/lib/backend/native`. Do not overwrite native build assets under a running backend.
 
 ```sh
+cd omo
 PUPPETEER_SKIP_DOWNLOAD=true ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --no-audit --no-fund
 npm run build
-THEIA_CONFIG_DIR="$PWD/.profile" npm run start --workspace=omo-browser -- "$PWD/demo-project"
+npm start -- --workspace ./demo-project --port 3190
 ```
 
-Then open `http://127.0.0.1:3190` on this machine. Trust only a folder whose files you know. Browser storage is per origin/device, not a cloud backup. This is a developer build, not a hosted or hardened multi-user service.
+Open `http://127.0.0.1:3190` locally. The launcher accepts an existing workspace directory and binds to loopback. Trust only folders whose files you know. Do not use acceptance scripts on a customer project.
 
-If using a newer npm that blocks dependency install scripts, review and approve the named native dependency scripts, or use the pinned npm version above. Do not disable Hermes security settings. Dependencies such as node-pty, keytar and drivelist require working native modules; libsecret/build tools may be needed on Linux.
+The runtime owns a distinct data directory and tmux socket. It refuses Minecraft's data directory and reserved sockets. A process lock prevents two hosts overwriting the same runtime data. A custom Hermes root is passed to Hermes launches without changing the selected profile's files.
 
-## Checks
+## Checks (no recording)
 
 ```sh
-npm test
 npm run compile
-node extension/test/real-app.cjs
-node extension/test/input-load.cjs
-node extension/test/record-demo.cjs
+npm test
+# With the actual local app running:
+OMO_URL=http://127.0.0.1:3190 node extension/test/runtime-real-app.cjs
+OMO_URL=http://127.0.0.1:3190 node extension/test/multi-station-real-app.cjs
+OMO_URL=http://127.0.0.1:3190 node extension/test/web-wall-real-app.cjs
 ```
 
-The browser checks require the running app, `/opt/google/chrome/chrome`, and the supplied demo project. They drive real Theia controls and edit an owned fixture README, restoring it afterward. They do not stub the terminal, editor, file service, server or application route. Never point this fixture writer at a customer project.
+The application tests use owned fixture files and isolated QA browser profiles. They inspect actual shell PIDs, exported state, workspace bindings, physical-monitor output and real page effects. The web-wall test also checks rendered blue/green screen pixels against a localhost fixture; metadata alone is not acceptance. Backend tests use real tmux; agent executables in tests are clearly labelled fixtures, not fabricated provider responses. Live paid model execution is not part of these checks.
 
-`real-app.cjs` verifies onboarding, both theme surfaces, human-speed input, room creation, real terminal execution in the expected directory, terminal reuse, actual editor save, editor-to-terminal roundtrip, camera persistence and a fresh-browser restoration. `input-load.cjs` adds a 5x CPU-throttled input check. `record-demo.cjs` records the actual application and asserts the demonstrated work while filming; requires ffmpeg. The recording does not prove hosted agents or deployment.
+The isolated shared-runner workflow installs locked dependencies, rebuilds the required native drive addon and uses a checksum-pinned tmux for full bracketed-paste coverage. Ubuntu's older tmux does not expose that mode flag; the product fails closed rather than assuming it is safe. Only the container test harness uses test-only sandbox exceptions; production DI does not read that test flag. Local Chrome tests exercise production sandbox defaults.
 
-## Source boundaries
+Evidence is written under ignored `evidence/`. Historical orbit/flat-terminal and recording scripts remain in Git for provenance; they are not current acceptance and no new demo is required.
 
-- `extension/src/common/room-state.ts`: versioned record validation.
-- `extension/src/browser/omo-world-widget.tsx`: onboarding and real IDE-service bridge.
-- `extension/src/browser/room-scene.ts`: disposable procedural renderer and spatial input.
-- `extension/src/browser/omo-world-contribution.ts`: normal main-area view contribution.
-- `extension/src/browser/omo-frontend-module.ts`: module registration.
-- `browser-app/package.json`: pinned Theia application composition.
+## Boundaries and unfinished work
 
-Keep the renderer and scene schema separate from upstream internals. Keep Omo data out of Theia's upstream migration numbering. Scene JSON contains scoped identities/preferences, never credentials. A future multi-user world needs explicit storage, roles and agent-control authorisation, not just editor collaboration.
-
-## Evidence from this build
-
-Real app E2E: **16 checks passed**. Domain unit suite: **2 tests passed**. The real browser demo asserts its displayed work. Three separate scratch-copy product mutations were caught: a no-op terminal action, a terminal opening the wrong project, and room saving becoming a no-op. The scratch baseline passed before mutation; no product worktree was seeded.
-
-Evidence and demo footage are local under `evidence/` (ignored). Initial test-first failure is preserved in `baseline-red.log`; `e2e-verdict.json`, `mutations.json` and `demo-timeline.json` distinguish product checks from recording metadata. A 5x CPU input stress check also passed. One earlier recording showed a transposed name; a later take includes explicit input/title assertions and has been visually checked. This intermittent observation was not reproduced by the stress check; do not claim an independently verified root-cause fix.
-
-## Review state
-
-Local milestone only. No merge, push, release, deployment or paid model calls authorised by this build. The next product milestone would bind workstations to real agent sessions and their approval/status/diff paths; it has not been implemented.
+- Local, single-user developer alpha. Loopback binding is not a hosted multi-tenant security boundary.
+- Multiplayer presence, shared-room permissions, arbitrary building/map kits, Minecraft embedding, hosted billing and universal installers are not implemented.
+- No language-plugin bundle, dedicated PR-review UI or debugger setup is claimed by this minimal Theia composition.
+- Real Hermes/Claude/Codex provider sessions were not exercised in automated tests. Availability is not proof that the user's account is authenticated.
+- Browser speaker output is off by default. Page media controls are tested; actual host audio requires `OMO_SPATIAL_WEB_AUDIO=1` and has not been audibly verified. Camera, microphone, passkey and other native browser permission flows are not certified.
+- No automatic agent wake or auto-sleep. No paid provider calls, default-branch merge, deployment or release are implied by a feature-branch push.

@@ -25,7 +25,8 @@ against a real Chrome directly.
 - **Sandbox on.** Launch flags: `--disable-dev-shm-usage --disable-sync --no-first-run
   --no-default-browser-check`, plus puppeteer's headless defaults. `--no-sandbox` is never a
   production default. The only way to add it is `extraArgs` in the constructor options, meant for a
-  container test host. The tests here do not use it.
+  container test host. Local tests keep the sandbox on. Only the explicit
+  `OMO_WEB_TEST_CONTAINER=1` test harness passes this option; production DI ignores that flag.
 - **Chrome discovery.** Order: `OMO_SPATIAL_CHROME`, then `CHROME_PATH`, then the normal installed
   locations:
   - Linux: `/opt/google/chrome/chrome`, `/usr/bin/google-chrome(-stable)`, `/usr/bin/chromium(-browser)`,
@@ -51,7 +52,8 @@ against a real Chrome directly.
 - **Input.**
   - `click` (left or right) and `scroll` need finite coordinates inside the viewport. Scroll deltas are
     clamped to ±5000.
-  - `typeText` accepts at most 64 KiB of UTF-8. Text is committed as input; newlines become Enter.
+  - `typeText` accepts at most 64 KiB of UTF-8. Text is inserted as committed input. Newlines never
+    synthesize Enter key presses or submit a form; the page's own input-element rules still apply.
   - `key` accepts only the frozen `WebKey` enum. On macOS, Control+a/c/x/z map to editing commands.
   - Input and capture are serialized per surface and each step is time-bounded (8 s by default).
 - **Navigation.**
@@ -129,19 +131,22 @@ unmuted by default, key allow-list removed. A harmless control must stay green.
 
 No model calls, real sites, personal profiles or screenshots leave the test process.
 
-## Known gap: screenshot stall after a page-initiated navigation
+## Navigation capture: fixed popup path and remaining limit
 
-A screenshot taken while a page navigates itself (`location.assign` or a folded popup) can hang in
-headless Chrome 25.1 / puppeteer-core. This was reproduced with raw puppeteer, without this service.
-`frame()` is bounded: each attempt times out after 3 s and the call rejects. It does not wedge; the
-frames come back after about 20 s. The popup test fails about 2 in 5 runs because of this, and every
-other test was stable over repeated runs. One probe pointed to a viewport re-set (resize) as the
-recovery, but it did not record whether any screenshot hung, so it does not confirm the fix. A short
-probe that waited for `load` saw no stalls in 10 rounds. Neither is implemented or tested yet.
+A screenshot taken during arbitrary page-initiated navigation can fail or stall in headless Chrome
+with puppeteer-core 25.1.0. The backend builder observed that before integration. Capture attempts
+remain bounded and errors are reported, not replaced with invented frames. Arbitrary-site
+navigation is still a known reliability limit, not certified by the localhost tests.
 
-## Not done here (parent / other workers)
+The integrated popup path no longer calls `location.assign` directly. It uses a private,
+HTTP(S)-validated navigation binding in the same per-surface queue as input and screenshots.
+Capture foregrounds the owned page first. The parent reproduced the old popup failure, then ran
+the real popup and newline-paste checks successfully in five consecutive runs after the fix.
 
-- Theia backend binding (`omo-backend-module.ts`) and adding `puppeteer-core` to `package.json`.
-- The frontend monitor, frame polling cadence, and mapping input coordinates to monitor pixels.
+## Integration and remaining limits
+
+- Theia binding, the direct production dependency, per-connection page ownership and the physical
+  monitor/input frontend are now integrated. The real-app web test checks pixels, HTTP click
+  effects, close-frame clearing and saved-address restoration.
 - Clipboard: Control+c/x run the page's copy and cut, but no clipboard content is read back. There is
   no paste API in the contract.
