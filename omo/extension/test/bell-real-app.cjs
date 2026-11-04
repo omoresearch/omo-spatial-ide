@@ -1,10 +1,11 @@
 /* Real shell BEL -> backend frame -> physical desk and explicit local acknowledge. No sound or models. */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const{openWorld,walkTo,command,CANVAS}=require('./world-test-driver.cjs');
+const{DESK_ONE}=require('./world-navigation-targets.cjs');
 (async()=>{
  const w=await openWorld('bell-attention');const p=w.page;const marker='BELL_BODY_'+Date.now();
  try{
-  await walkTo(p,-2.5,1.7);await command(p,'terminal',`sleep 1; printf '\\a'; printf '\\n${marker}\\n'`);
+  await walkTo(p,DESK_ONE.x,DESK_ONE.z);await command(p,'terminal',`sleep 1; printf '\\a'; printf '\\n${marker}\\n'`);
   await p.keyboard.press('Escape');await p.click('[data-testid="station-two-controls"]');
   await p.waitForFunction(()=>{const c=document.querySelector('canvas[data-testid="omo-world-canvas"]');return JSON.parse(c.dataset.stationBells||'{}').terminal>0&&JSON.parse(c.dataset.stationLamps||'{}').terminal==='ff9e4a';},{timeout:20000});
   const state=await p.$eval(CANVAS,c=>({bells:JSON.parse(c.dataset.stationBells),lamps:JSON.parse(c.dataset.stationLamps),text:JSON.parse(c.dataset.stationText)}));

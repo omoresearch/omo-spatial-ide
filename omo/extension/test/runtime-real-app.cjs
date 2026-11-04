@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { launch } = require('puppeteer');
+const { DESK_ONE } = require('./world-navigation-targets.cjs');
 const ROOT = path.resolve(__dirname, '../..');
 const EVIDENCE = path.join(ROOT, 'evidence');
 const PROJECT = fs.realpathSync(process.env.OMO_PROJECT || path.join(ROOT, 'demo-project'));
@@ -17,10 +18,15 @@ const proofs = ['first', 'second', 'after-refresh', 'after-restart', 'away', 'pa
 function check(name, value) { assert.ok(value, name); checks.push({ name, pass: true }); console.log('PASS:', name); }
 async function waitFile(file, timeout = 20000) { const end = Date.now() + timeout; while (!fs.existsSync(file) && Date.now() < end) await wait(100); assert.ok(fs.existsSync(file), `Actual shell must create ${path.basename(file)}`); return fs.readFileSync(file, 'utf8').trim(); }
 async function binding(page) { return page.evaluate(() => { const key = Object.keys(localStorage).find(k => k.startsWith('omo.runtime.v1:')); return key ? JSON.parse(localStorage.getItem(key)) : undefined; }); }
-async function move(page, key, predicate) { await page.focus(CANVAS); await page.keyboard.down(key); try { await page.waitForFunction(predicate, { timeout: 18000 }); } finally { await page.keyboard.up(key); } }
+async function move(page, key, predicate, ...args) {
+    await page.focus(CANVAS); await page.keyboard.down(key);
+    try { await page.waitForFunction(predicate, { timeout: 18000 }, ...args); }
+    catch (error) { const state = await page.$eval(CANVAS, c => ({ x:c.dataset.playerX,z:c.dataset.playerZ,typing:c.dataset.typing,navigation:c.dataset.navigation,focus:document.activeElement?.tagName })); error.message += `; actual walking state ${JSON.stringify(state)}`; throw error; }
+    finally { await page.keyboard.up(key); }
+}
 async function approach(page) {
-    await move(page, 'a', () => Number(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.playerX) < -2.45);
-    await move(page, 'w', () => Number(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.playerZ) < 1.72);
+    await move(page, 'a', x => Number(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.playerX) < x, DESK_ONE.x);
+    await move(page, 'w', z => Number(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.playerZ) < z, DESK_ONE.z);
 }
 async function focusMonitor(page) {
     const p = await page.$eval(CANVAS, e => { const r = e.getBoundingClientRect(); return { x: r.x + Number(e.dataset.terminalX), y: r.y + Number(e.dataset.terminalY) }; });
