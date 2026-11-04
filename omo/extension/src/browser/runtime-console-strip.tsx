@@ -29,7 +29,7 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
         try { await navigator.clipboard.writeText(text); setCopied(`Copied ${text.length} characters.`); } catch { setCopied('The browser refused clipboard access. Select the text below and copy it yourself.'); }
     };
     const agentTabs = ws.tabs.filter(t => t.kind !== 'shell');
-    const links = terminalLinks(state.lines);
+    const links = terminalLinks(state.lines,state.cells);
     return <div data-testid="runtime-manage" role="region" aria-label="Manage terminal" style={DRAWER_STYLE}>
         {props.onOpenLink && links.length > 0 && <section data-testid="terminal-links" aria-label="Links visible on this monitor">
             <span className="omo-console-label">Links on this screen · nothing opens until you click</span>

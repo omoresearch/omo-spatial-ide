@@ -61,6 +61,13 @@ RPC reply, log line or frame contains it.
 - `poll` returns `RuntimeFrame`: plain text per row, plus per-cell `foreground`/`background`
   palette keys and a `palette` of key to `#rrggbb`. `sequence` goes up only when the screen
   changes. Waits up to 250 ms for a change.
+- Frames also supply optional `cells: string[][]`. Each array item is one parser column: a full
+  glyph and its combining marks, an empty string for a wide continuation, or a space for an empty
+  column. The adapter snapshots these cells, colours, cursor and bell count under one parser lock;
+  it does not estimate character widths or change the vendored parser. `lines` joins the glyphs
+  for readable text, without continuation placeholders. The browser uses cells for geometry and
+  copying and falls back to legacy text only when metadata is absent. Invalid supplied rows fail
+  closed. Missing cells in a new legacy frame clear old cell data instead of reusing it.
 
 ## Commands
 
@@ -80,7 +87,10 @@ these are missing.
 
 - Text frames carry 16-colour palette keys (the bridge's CC palette), not full truecolor. Bold and
   underline show only as brighter colours.
-- Clipboard, links, find and scrollback from the bridge are not in the frozen contract yet.
+- Advanced copy, paste, find and scrollback are documented in `PARITY-ADVANCED.md`. Visible URL
+  actions are frontend-only; the bridge's host-browser open and clipboard access stay unexposed.
+- Parser-authoritative cell rendering is not a promise of universal font coverage, emoji shaping,
+  IME input or complete Unicode-aware find. These remain separate checks.
 - Single local user only. This is not a multi-tenant sandbox.
 - The bundled-app path to `runtime/` is resolved from `THEIA_APP_PROJECT_PATH` or the
   `omo-world` symlink. The parent integration must verify it in the real app build.

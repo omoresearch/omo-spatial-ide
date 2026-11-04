@@ -547,14 +547,32 @@ class SpatialView:
 
     def frame(self):
         pty = self.view.pty
-        f = pty.frame(find=self.find_mark)
-        texts = pty.text_lines()
-        fg = ["".join(run[2] * run[0] for run in row) for row in f["lines"]]
-        bg = ["".join(run[3] * run[0] for run in row) for row in f["lines"]]
-        lines = [line.replace(termcore.WIDE, "") for line in texts]
-        cursor = {"x": f["cursor"][0], "y": f["cursor"][1], "visible": not f["cursor_hidden"]}
-        return {"cols": f["cols"], "rows": f["rows"], "lines": lines, "foreground": fg,
-                "background": bg, "palette": PALETTE, "cursor": cursor, "bell": pty.bells, **self.modes()}
+        # Snapshot glyphs, colours and cursor under the SAME parser lock. Do not
+        # call pty.frame()/text_lines() inside it: the pinned bridge uses a plain Lock.
+        with pty.lock:
+            cols, rows = pty.cols, pty.rows
+            cells = []
+            for y in range(rows):
+                row = pty.screen.buffer.get(y, {})
+                cells.append([row[x].data if x in row else " " for x in range(cols)])
+            marks = {}
+            if self.find_mark and self.find_mark[0]:
+                spans = termcore.find_spans(pty._lines(), self.find_mark[0])
+                at = self.find_mark[1]
+                current = min(spans, key=lambda s: (abs(s[0] - at), s[1])) if spans and at is not None else None
+                for y, x1, x2 in spans:
+                    marks.setdefault(y, []).insert(0, (x1, x2, "cur" if (y, x1, x2) == current else "hit"))
+            encoded = termcore.encode_rows(pty.screen, cols, rows, marks)
+            cursor = {"x": pty.screen.cursor.x, "y": pty.screen.cursor.y,
+                      "visible": termcore.pyte.modes.DECTCEM in pty.screen.mode}
+            bell = pty.bells
+        fg = ["".join(run[2] * run[0] for run in row) for row in encoded]
+        bg = ["".join(run[3] * run[0] for run in row) for row in encoded]
+        # Empty strings are authoritative continuation cells. Preserve every
+        # code point in a leading cell, including its combining marks.
+        return {"cols": cols, "rows": rows, "lines": ["".join(row) for row in cells], "cells": cells,
+                "foreground": fg, "background": bg, "palette": PALETTE, "cursor": cursor,
+                "bell": bell, **self.modes()}
 
     def dead_reason(self):
         if not self.view.pty.alive:

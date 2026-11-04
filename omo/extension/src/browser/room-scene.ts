@@ -3,12 +3,13 @@ import type { RoomState, RoomTheme } from '../common/room-state';
 import { FirstPersonControls } from './first-person-controls';
 import { cellRuns, dominantKey, MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
 import type { WebSurfaceFrame } from '../common/web-runtime-protocol';
-import { MonitorSelection, monitorCell, visibleMonitorLines } from '../common/monitor-selection';
+import { MonitorSelection, monitorCell, monitorCellSpan, visibleMonitorCells } from '../common/monitor-selection';
 import type { SelectionUnit } from '../common/monitor-selection';
 
 /** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
 export interface MonitorFrame {
     lines: string[];
+    cells?: string[][];
     unreadBells?: number;
     foreground?: string[];
     background?: string[];
@@ -313,13 +314,13 @@ export class RoomScene {
         this.labels.forEach(label => label.classList.toggle('is-walk', mode === 'walk'));
         this.positionCamera();
     }
-    setTerminalLines(lines: string[]): void { this.setTerminalFrame({ ...this.terminalFrames.terminal, lines, foreground: undefined, background: undefined, cursor: undefined }); }
+    setTerminalLines(lines: string[]): void { this.setTerminalFrame({ ...this.terminalFrames.terminal, lines, cells: undefined, foreground: undefined, background: undefined, cursor: undefined }); }
     setTerminalFrames(frames: Record<TerminalWorkstation, MonitorFrame>): void {
         this.setTerminalFrame(frames.terminal, 'terminal'); this.setTerminalFrame(frames['terminal-2'], 'terminal-2');
     }
     setTerminalFrame(frame: MonitorFrame, station: TerminalWorkstation = 'terminal'): void {
         const previous = this.terminalFrames[station];
-        if (this.terminalSelection?.station === station && (!this.terminalSelection.model.refresh(frame.lines) || previous.title !== frame.title || previous.status !== frame.status)) this.terminalSelection = undefined;
+        if (this.terminalSelection?.station === station && (!this.terminalSelection.model.refresh(frame.lines,frame.cells) || previous.title !== frame.title || previous.status !== frame.status)) this.terminalSelection = undefined;
         this.terminalFrames[station] = frame;
         const surface = this.terminalSurfaces.get(station);
         if (!surface) return;
@@ -330,7 +331,7 @@ export class RoomScene {
         if (frame.status || frame.unreadBells) { c.fillStyle = frame.unreadBells ? '#ff9e4a' : '#7e9a9e'; c.textAlign = 'right'; c.fillText((frame.unreadBells ? `BELL (${frame.unreadBells})` : frame.status ?? '').slice(0,38),1000,29); c.textAlign = 'left'; }
         c.fillStyle = '#283e48'; c.fillRect(20,42,984,1);
         c.font = '20px monospace'; c.textBaseline = 'alphabetic';
-        const lines = visibleMonitorLines(frame.lines);
+        const rows = visibleMonitorCells(frame.lines,frame.cells), lines = rows.map(row=>row.join(''));
         if (!lines.length) {
             c.fillStyle='#c7ded4';c.fillText('Walk up and click this screen.',24,104);
             c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140);
@@ -344,18 +345,26 @@ export class RoomScene {
             lines.forEach((line,i) => {
                 const y = 70 + i*22; const text = line;
                 const fallback = { fg: frame.foreground ? '#e0e8eb' : line.includes('$') ? '#b8e6ca' : '#e0e8eb', bg: base };
-                for (const run of cellRuns(text, frame.foreground?.[offset+i], frame.background?.[offset+i], frame.palette, fallback)) {
+                const runs = cellRuns(text, frame.foreground?.[offset+i], frame.background?.[offset+i], frame.palette, fallback, frame.cells === undefined ? undefined : rows[i]);
+                // Paint all cell backgrounds BEFORE glyphs, so a continuation does not erase its leading glyph.
+                for (const run of runs) {
                     const x = 24 + run.x*cell;
-                    if (run.bg.toLowerCase() !== skip && run.bg !== base) { c.fillStyle = run.bg; c.fillRect(x, y-17, Array.from(run.text).length*cell, 22); }
-                    c.fillStyle = run.fg; c.fillText(run.text, x, y);
+                    if (run.bg.toLowerCase() !== skip && run.bg !== base) { c.fillStyle = run.bg; c.fillRect(x, y-17, (run.columns ?? Array.from(run.text).length)*cell, 22); }
+                }
+                for (const run of runs) {
+                    if (!run.text.trim()) continue;
+                    const x = 24+run.x*cell, width = (run.glyphColumns ?? Array.from(run.text).length)*cell;
+                    c.save(); c.beginPath(); c.rect(x,y-21,width,27); c.clip();
+                    c.fillStyle = run.fg; c.fillText(run.text,x,y,width); c.restore();
                 }
             });
             const cursor = frame.cursor;
             if (cursor?.visible && cursor.y - offset >= 0 && cursor.y - offset < MONITOR_ROWS && cursor.x >= 0 && cursor.x < MONITOR_COLS) {
-                const x = 24 + cursor.x*cell; const y = 70 + (cursor.y - offset)*22;
-                c.fillStyle = '#b8e6ca'; c.fillRect(x, y-17, cell, 22);
-                const ch = Array.from(lines[cursor.y - offset] ?? '')[cursor.x];
-                if (ch && ch !== ' ') { c.fillStyle = base; c.fillText(ch, x, y); }
+                const row = rows[cursor.y-offset] ?? [], span = monitorCellSpan(row,cursor.x);
+                const x = 24+span.from*cell, y = 70+(cursor.y-offset)*22, width = (span.to-span.from)*cell;
+                c.fillStyle = '#b8e6ca'; c.fillRect(x,y-17,width,22);
+                const ch = row[span.from];
+                if (ch && ch !== ' ') { c.fillStyle = base; c.fillText(ch,x,y,width); }
             }
             if (this.terminalSelection?.station === station) {
                 c.fillStyle = 'rgba(65,150,240,0.45)';
@@ -374,6 +383,7 @@ export class RoomScene {
             this.renderer.domElement.dataset.terminalMetrics = JSON.stringify(Object.fromEntries([...this.terminalSurfaces].map(([id,s]) => [id,{ cellWidth:s.cellWidth ?? 12 }])));
             if (station === 'terminal') { this.renderer.domElement.dataset.terminalText=frame.lines.join('\n');this.renderer.domElement.dataset.terminalCursor=frame.cursor?`${frame.cursor.x},${frame.cursor.y},${frame.cursor.visible}`:''; }
             this.renderer.domElement.dataset.stationText = JSON.stringify({ terminal: this.terminalFrames.terminal.lines, 'terminal-2': this.terminalFrames['terminal-2'].lines });
+            this.renderer.domElement.dataset.stationCells = JSON.stringify({ terminal:this.terminalFrames.terminal.cells,'terminal-2':this.terminalFrames['terminal-2'].cells });
             this.renderer.domElement.dataset.stationBells = JSON.stringify({ terminal: this.terminalFrames.terminal.unreadBells ?? 0, 'terminal-2': this.terminalFrames['terminal-2'].unreadBells ?? 0 });
         }
     }
@@ -396,7 +406,7 @@ export class RoomScene {
         this.clearTerminalSelection(); const hit = this.terminalCellAt(x,y); if (!hit) return false;
         // Selecting text changes the active desk locally; it must not bind/revive a runtime.
         this.options.onTextSelect(hit.station);
-        this.terminalSelection = { station:hit.station,model:new MonitorSelection(this.terminalFrames[hit.station].lines,hit.cell,unit) };
+        this.terminalSelection = { station:hit.station,model:new MonitorSelection(this.terminalFrames[hit.station].lines,hit.cell,unit,this.terminalFrames[hit.station].cells) };
         this.setTerminalFrame(this.terminalFrames[hit.station],hit.station); return true;
     }
     private extendTerminalSelection(x: number, y: number): void {

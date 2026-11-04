@@ -53,6 +53,8 @@ export interface RuntimeFrame {
     cols: number;
     rows: number;
     lines: string[];
+    /** Authoritative parser cells: full glyph/combining sequence; '' is a wide continuation. */
+    cells?: string[][];
     foreground?: string[];
     background?: string[];
     palette?: Record<string, string>;

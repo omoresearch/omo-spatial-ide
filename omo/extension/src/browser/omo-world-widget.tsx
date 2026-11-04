@@ -162,7 +162,7 @@ export class OmoWorldWidget extends ReactWidget {
         if (station === this.activeStation) this.consoleState = state;
         if (framed) {
             const tab = state.workspace?.tabs.find(t => t.id === state.activeTabId);
-            this.monitors = { ...this.monitors, [station]: { lines: state.lines, unreadBells: state.unreadBells, foreground: state.foreground, background: state.background, palette: state.palette, cursor: state.cursor,
+            this.monitors = { ...this.monitors, [station]: { lines: state.lines, cells: state.cells, unreadBells: state.unreadBells, foreground: state.foreground, background: state.background, palette: state.palette, cursor: state.cursor,
                 title: tab ? `${state.workspace?.name ?? 'OMO'} / ${tab.name}` : undefined, status: state.phase === 'live' && tab?.state === 'running' ? (tab.busy ? 'working' : 'live') : (tab && tab.state !== 'running' ? tab.state : state.statusText) } };
         }
         this.update();

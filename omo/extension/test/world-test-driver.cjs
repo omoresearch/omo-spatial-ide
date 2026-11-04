@@ -6,14 +6,14 @@ const { launch } = require('puppeteer');
 const ROOT = path.resolve(__dirname, '../..');
 const CANVAS = 'canvas[data-testid="omo-world-canvas"]';
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function openWorld(tag) {
+async function openWorld(tag, viewport = { width: 1440, height: 960 }) {
     const base = process.env.OMO_URL || 'http://127.0.0.1:3192';
     let ready = false;
     for (let i = 0; i < 200; i++) { try { if ((await fetch(base, { signal: AbortSignal.timeout(500) })).ok) { ready = true; break; } } catch { /* bounded application startup */ } await pause(100); }
     if (!ready) throw new Error('The actual local application is not HTTP-ready');
     const profile = path.join(ROOT, 'evidence', `${tag}-${crypto.randomUUID()}`);
     const browser = await launch({ executablePath: process.env.CHROME_PATH || '/opt/google/chrome/chrome', headless: true, userDataDir: profile,
-        args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], defaultViewport: { width: 1440, height: 960 } });
+        args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], defaultViewport: viewport });
     const page = await browser.newPage();
     const trust = () => page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click());
     try {

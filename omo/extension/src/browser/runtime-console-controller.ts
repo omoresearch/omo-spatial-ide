@@ -31,6 +31,7 @@ export interface RuntimeConsoleState {
     activeTabId?: string;
     profile: string;
     lines: string[];
+    cells?: RuntimeFrame['cells'];
     foreground?: string[];
     background?: string[];
     palette?: Record<string, string>;
@@ -103,10 +104,10 @@ export function dominantKey(rows: string[] | undefined): string | undefined {
     return best;
 }
 
-export interface CellRun { x: number; text: string; fg: string; bg: string }
+export interface CellRun { x: number; text: string; fg: string; bg: string; columns?: number; glyphColumns?: number }
 /** Split one monitor row into runs of equal colour. fg/bg hold one palette key per cell. */
-export function cellRuns(line: string, fg: string | undefined, bg: string | undefined, palette: Record<string, string> | undefined, defaults: { fg: string; bg: string }): CellRun[] {
-    const cells = Array.from(line);
+export function cellRuns(line: string, fg: string | undefined, bg: string | undefined, palette: Record<string, string> | undefined, defaults: { fg: string; bg: string }, grid?: readonly string[]): CellRun[] {
+    const cells = grid ? grid.slice(0,MONITOR_COLS) : Array.from(line);
     const colour = (codes: string | undefined, i: number, fallback: string): string => {
         const key = codes?.[i];
         const value = key !== undefined ? palette?.[key] : undefined;
@@ -116,6 +117,11 @@ export function cellRuns(line: string, fg: string | undefined, bg: string | unde
     const runs: CellRun[] = [];
     cells.forEach((ch, i) => {
         const f = colour(fg, i, defaults.fg); const b = colour(bg, i, defaults.bg);
+        if (grid) {
+            let glyphColumns = 1;
+            while (i+glyphColumns < cells.length && cells[i+glyphColumns] === '') glyphColumns++;
+            runs.push({x:i,text:ch,fg:f,bg:b,columns:1,glyphColumns}); return;
+        }
         const last = runs[runs.length - 1];
         if (last && last.fg === f && last.bg === b) last.text += ch;
         else runs.push({ x: i, text: ch, fg: f, bg: b });
@@ -245,7 +251,7 @@ export class RuntimeConsoleController {
         this.releaseView();
         const gen = this.viewGen;
         const workspace = this.current.workspace; const tab = this.activeTab();
-        this.set({ lines: [], foreground: undefined, background: undefined, cursor: undefined, sequence: 0, history: undefined, scrollOffset: undefined, bell: undefined, bracketedPaste: undefined, find: undefined });
+        this.set({ lines: [], cells: undefined, foreground: undefined, background: undefined, cursor: undefined, sequence: 0, history: undefined, scrollOffset: undefined, bell: undefined, bracketedPaste: undefined, find: undefined });
         if (!workspace || !tab) { this.set({ phase: 'idle', statusText: 'This workspace has no tabs. Start a shell from the console strip.' }); return; }
         if (tab.state === 'interrupted' || tab.state === 'exited') { this.set({ phase: 'interrupted', statusText: describeTab(tab) }); return; }
         this.set({ phase: 'attaching', statusText: `Connecting the monitor to ${tab.name}…` });
@@ -297,7 +303,7 @@ export class RuntimeConsoleController {
                 patch.unreadBells = Math.min(Number.MAX_SAFE_INTEGER, this.current.unreadBells + delta);
                 patch.bell = frame.bell;
             }
-            Object.assign(patch, { sequence: frame.sequence, lines: frame.lines, foreground: frame.foreground, background: frame.background, cursor: frame.cursor, palette: frame.palette ?? this.current.palette });
+            Object.assign(patch, { sequence: frame.sequence, lines: frame.lines, cells: frame.cells, foreground: frame.foreground, background: frame.background, cursor: frame.cursor, palette: frame.palette ?? this.current.palette });
             for (const key of ['history', 'scrollOffset', 'bracketedPaste'] as const) if (frame[key] !== undefined) Object.assign(patch, { [key]: frame[key] });
         }
         this.set(patch);

@@ -11,6 +11,19 @@ test('word selection expands paths using the Minecraft bridge token rules and st
 test('whole-line selection includes leading spaces and supports reversed multi-row ranges',()=>{
  const{MonitorSelection}=api(),s=new MonitorSelection(['alpha first','  beta tail   '],{row:1,col:7},'line');assert.equal(s.text(),'  beta tail');s.extend({row:0,col:3});assert.equal(s.text(),'alpha first\n  beta tail');assert.deepEqual(s.spans(),[{row:0,from:0,to:80},{row:1,from:0,to:80}]);
 });
+test('authoritative cells keep wide halves and combining glyphs aligned when selecting and copying',()=>{
+ const{MonitorSelection}=api(),row=['A','界','','B','q\u0301','Z'];const lines=['A界Bq\u0301Z'];
+ const half=new MonitorSelection(lines,{row:0,col:2},'char',[row]);assert.equal(half.text(),'界');assert.deepEqual(half.spans(),[{row:0,from:1,to:3}]);
+ const after=new MonitorSelection(lines,{row:0,col:3},'char',[row]);assert.equal(after.text(),'B');
+ const accent=new MonitorSelection(lines,{row:0,col:4},'char',[row]);assert.equal(accent.text(),'q\u0301');assert.deepEqual(accent.spans(),[{row:0,from:4,to:5}]);
+ assert.equal(accent.refresh(lines,[['A','界','B','q\u0301','Z']]),false,'Same plain text with changed columns must invalidate selection');
+});
+test('word expansion does not include half of an adjacent wide non-word glyph',()=>{
+ const{MonitorSelection}=api(),s=new MonitorSelection(['😀word'],{row:0,col:4},'word',[['😀','','w','o','r','d']]);assert.equal(s.text(),'word');assert.deepEqual(s.spans(),[{row:0,from:2,to:6}]);
+});
+test('provided malformed cell metadata fails closed while a missing matrix keeps legacy text',()=>{
+ const{visibleMonitorCells}=api();assert.deepEqual(visibleMonitorCells(['safe']),[['s','a','f','e']]);assert.deepEqual(visibleMonitorCells(['safe'],[null]),[[]]);assert.deepEqual(visibleMonitorCells(['safe'],null),[[]]);
+});
 test('copies only the 80 by 22 visible viewport and trims terminal padding, not leading spaces',()=>{
  const{MonitorSelection}=api();const s=new MonitorSelection(['HIDDEN',...Array.from({length:22},(_,i)=>i===0?'  shown   ':'x'.repeat(80)+'HIDDEN')],{row:0,col:0});s.extend({row:30,col:999});const text=s.text();assert.ok(!text.includes('HIDDEN'));assert.equal(text.split('\n').length,22);assert.equal(text.split('\n')[0],'  shown');assert.equal(text.split('\n')[1].length,80);
 });
