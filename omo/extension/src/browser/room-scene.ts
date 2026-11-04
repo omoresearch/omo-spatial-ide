@@ -7,6 +7,7 @@ import type { WebSurfaceFrame } from '../common/web-runtime-protocol';
 /** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
 export interface MonitorFrame {
     lines: string[];
+    unreadBells?: number;
     foreground?: string[];
     background?: string[];
     palette?: Record<string, string>;
@@ -316,7 +317,7 @@ export class RoomScene {
         const base = '#091119';
         c.fillStyle = base; c.fillRect(0,0,1024,576);
         c.fillStyle = '#87cdb4'; c.font = '17px monospace'; c.fillText((frame.title ?? 'OMO / LIVE PROJECT TERMINAL').slice(0,52),24,29);
-        if (frame.status) { c.fillStyle = '#7e9a9e'; c.textAlign = 'right'; c.fillText(frame.status.slice(0,38),1000,29); c.textAlign = 'left'; }
+        if (frame.status || frame.unreadBells) { c.fillStyle = frame.unreadBells ? '#ff9e4a' : '#7e9a9e'; c.textAlign = 'right'; c.fillText((frame.unreadBells ? `BELL (${frame.unreadBells})` : frame.status ?? '').slice(0,38),1000,29); c.textAlign = 'left'; }
         c.fillStyle = '#283e48'; c.fillRect(20,42,984,1);
         c.font = '20px monospace'; c.textBaseline = 'alphabetic';
         const lines = frame.lines.slice(-MONITOR_ROWS);
@@ -349,12 +350,13 @@ export class RoomScene {
         surface.texture.needsUpdate = true;
         const lamp = this.lamps.get(station);
         if (lamp) {
-            const color = /interrupted|exited|error/i.test(frame.status ?? '') ? 0xd26464 : /working/i.test(frame.status ?? '') ? 0xe8bd60 : /live|running/i.test(frame.status ?? '') ? 0x87cdb4 : 0x6d7c86;
+            const color = /interrupted|exited|error/i.test(frame.status ?? '') ? 0xd26464 : frame.unreadBells ? 0xff9e4a : /working/i.test(frame.status ?? '') ? 0xe8bd60 : /live|running/i.test(frame.status ?? '') ? 0x87cdb4 : 0x6d7c86;
             const material = lamp.material as THREE.MeshStandardMaterial; material.color.setHex(color); material.emissive.setHex(color);
         }
         if(this.renderer){
             if (station === 'terminal') { this.renderer.domElement.dataset.terminalText=frame.lines.join('\n');this.renderer.domElement.dataset.terminalCursor=frame.cursor?`${frame.cursor.x},${frame.cursor.y},${frame.cursor.visible}`:''; }
             this.renderer.domElement.dataset.stationText = JSON.stringify({ terminal: this.terminalFrames.terminal.lines, 'terminal-2': this.terminalFrames['terminal-2'].lines });
+            this.renderer.domElement.dataset.stationBells = JSON.stringify({ terminal: this.terminalFrames.terminal.unreadBells ?? 0, 'terminal-2': this.terminalFrames['terminal-2'].unreadBells ?? 0 });
         }
     }
     /** Pointer moved to an overlay control: stop typing into the monitor so keys go to that control. */

@@ -96,6 +96,8 @@
 .omo-root[data-configured="true"] .omo-body:not(.is-onboarding) .omo-stage-heading { position:relative; inset:auto; margin:22px 30px 14px; flex-shrink:0; }
 .omo-root[data-configured="true"] .omo-body:not(.is-onboarding) .omo-scene-wrap { position:relative; inset:auto; width:100%; flex:1; min-height:0; }
 .omo-console-dock { margin:0 30px 12px; flex:0 0 auto; z-index:2; }
+.omo-console-strip .omo-bell-alert, .omo-station-switch .omo-bell-alert { color:#ffb76b; font-weight:600; }
+.omo-console-strip button.omo-bell-alert { border-color:#ff9e4a88; background:#51351d; }
 .omo-station-switch { display:flex; gap:5px; margin:0 0 7px; }
 .omo-station-switch button { padding:5px 10px; color:#a9c2c4; background:#14222d; border:1px solid #91b5ac33; border-radius:5px; font-size:10px; cursor:pointer; }
 .omo-station-switch button[aria-pressed="true"] { color:#d6e6d9; background:#254038; border-color:#87cdb477; }

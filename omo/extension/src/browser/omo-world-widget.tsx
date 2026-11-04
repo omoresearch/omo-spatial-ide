@@ -155,12 +155,12 @@ export class OmoWorldWidget extends ReactWidget {
     }
     private consoleChanged(state: RuntimeConsoleState, station: TerminalWorkstation): void {
         const old = this.consoleStates[station];
-        const framed = state.lines !== old.lines || state.cursor !== old.cursor || state.statusText !== old.statusText || state.workspace !== old.workspace || state.activeTabId !== old.activeTabId;
+        const framed = state.lines !== old.lines || state.cursor !== old.cursor || state.statusText !== old.statusText || state.workspace !== old.workspace || state.activeTabId !== old.activeTabId || state.unreadBells !== old.unreadBells;
         this.consoleStates[station] = state;
         if (station === this.activeStation) this.consoleState = state;
         if (framed) {
             const tab = state.workspace?.tabs.find(t => t.id === state.activeTabId);
-            this.monitors = { ...this.monitors, [station]: { lines: state.lines, foreground: state.foreground, background: state.background, palette: state.palette, cursor: state.cursor,
+            this.monitors = { ...this.monitors, [station]: { lines: state.lines, unreadBells: state.unreadBells, foreground: state.foreground, background: state.background, palette: state.palette, cursor: state.cursor,
                 title: tab ? `${state.workspace?.name ?? 'OMO'} / ${tab.name}` : undefined, status: state.phase === 'live' && tab?.state === 'running' ? (tab.busy ? 'working' : 'live') : (tab && tab.state !== 'running' ? tab.state : state.statusText) } };
         }
         this.update();
@@ -264,7 +264,7 @@ export class OmoWorldWidget extends ReactWidget {
                         {!this.configuring && <button className="omo-outline" data-testid="edit-room" onClick={this.configure}>◌ Customise room</button>}
                     </div>
                     {this.room && !this.configuring && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
-                        <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
+                        <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console}/>}
                     </div>}
                     <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>

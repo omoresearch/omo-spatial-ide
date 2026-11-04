@@ -108,6 +108,7 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
             <span className={`omo-console-dot is-${state.phase}`} aria-hidden="true" />
             <span className="omo-console-status" role="status" data-testid="runtime-status">{state.statusText}</span>
             {ws && <span className="omo-console-ws" title={ws.projectUri}>{ws.name}</span>}
+            {state.unreadBells > 0 && <button data-testid="runtime-bell-ack" className="omo-bell-alert" onClick={() => controller?.acknowledgeBells()} title="Clear this desk's visual bell signal only; no command is sent">Acknowledge bell ({state.unreadBells})</button>}
         </div>
         {ws && <div className="omo-console-tabs" role="tablist" aria-label="Workspace tabs">
             {ws.tabs.map(tab => <span key={tab.id} className={`omo-console-tab kind-${tab.kind} state-${tab.state} ${tab.id === state.activeTabId ? 'active' : ''}`}>

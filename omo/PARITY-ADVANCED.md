@@ -80,7 +80,9 @@ npx --yes --package=node@22.23.4 --call 'npm run compile && node --experimental-
 - Find highlights are passed to the bridge's `frame(find=…)`. The colour strings carry them only as
   palette keys, and no test checks the highlight colours. The scroll position and the "i of n"
   count are tested.
-- `bell` is only a count in the frame. No UI shows it and no sound plays.
+- Bell frames now feed a desk-local unread count, a physical orange lamp/header and a desk-selector
+  badge. Acknowledge clears only that desk's visual signal; no command is sent and no sound plays.
+  Counts cover attached views and reset on a fresh page/project, not a durable notification inbox.
 - Codex has no real resume. It starts fresh and the UI says so.
 - Link opening (bridge `open`) is not ported. It would open a browser on the host.
 - Auto-sleep and automatic wake are deliberately not enabled.

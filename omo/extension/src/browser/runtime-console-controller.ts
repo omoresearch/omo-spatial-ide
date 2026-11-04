@@ -42,6 +42,8 @@ export interface RuntimeConsoleState {
     history?: number;
     scrollOffset?: number;
     bell?: number;
+    /** Bells actually received by this desk's attached views, not an inferred task state. */
+    unreadBells: number;
     bracketedPaste?: boolean;
     /** Workspace board (read-only list from live metadata), loaded on request. */
     board?: WorkspaceSummary[];
@@ -143,7 +145,7 @@ export class RuntimeConsoleController {
     constructor(options: RuntimeConsoleOptions) { this.options = options; this.service = options.service; }
 
     static initial(): RuntimeConsoleState {
-        return { phase: 'idle', statusText: 'Walk up and click this screen.', notice: '', error: '', profile: '', lines: [], sequence: 0, acting: false };
+        return { phase: 'idle', statusText: 'Walk up and click this screen.', notice: '', error: '', profile: '', lines: [], sequence: 0, acting: false, unreadBells: 0 };
     }
     get state(): RuntimeConsoleState { return this.current; }
     get launchers(): LauncherOption[] { return launcherOptions(this.current.host); }
@@ -289,12 +291,21 @@ export class RuntimeConsoleController {
             : { phase: 'live', error: '', statusText: tab ? describeTab(tab) : 'Live' };
         const frame = result.frame;
         if (frame && frame.sequence > this.current.sequence) {
+            if (Number.isSafeInteger(frame.bell) && frame.bell! >= 0) {
+                const before = this.current.bell ?? 0;
+                const delta = frame.bell! >= before ? frame.bell! - before : frame.bell!;
+                patch.unreadBells = Math.min(Number.MAX_SAFE_INTEGER, this.current.unreadBells + delta);
+                patch.bell = frame.bell;
+            }
             Object.assign(patch, { sequence: frame.sequence, lines: frame.lines, foreground: frame.foreground, background: frame.background, cursor: frame.cursor, palette: frame.palette ?? this.current.palette });
-            for (const key of ['history', 'scrollOffset', 'bell', 'bracketedPaste'] as const) if (frame[key] !== undefined) Object.assign(patch, { [key]: frame[key] });
+            for (const key of ['history', 'scrollOffset', 'bracketedPaste'] as const) if (frame[key] !== undefined) Object.assign(patch, { [key]: frame[key] });
         }
         this.set(patch);
         this.later(() => void this.pollOnce(epoch, gen), this.options.pollMs ?? POLL_MS);
     }
+
+    /** Acknowledge this desk's signal only. Never sends a key or starts/resumes an agent. */
+    acknowledgeBells(): void { this.set({ unreadBells: 0 }); }
 
     async sendInput(data: string): Promise<void> {
         if (this.disposed || !data) return;
