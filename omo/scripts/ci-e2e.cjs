@@ -46,4 +46,9 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
         if (/^omo-spatial-ci-[a-f0-9]{12}$/.test(socket) && locations.tmux) spawnSync(locations.tmux, ['-L', socket, 'kill-server'], { stdio: 'ignore', timeout: 5000 });
         fs.rmSync(runtimeData, { recursive: true, force: true });
     }
-})().catch(error => { console.error(error.message); process.exitCode = 1; });
+})().catch(error => {
+    console.error(error.message);
+    const file = path.join(evidence, 'ci-real-app-server.log');
+    if (fs.existsSync(file)) console.error('Real app server diagnostics:\n' + fs.readFileSync(file, 'utf8').split('\n').slice(-60).join('\n'));
+    process.exitCode = 1;
+});

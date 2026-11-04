@@ -40,6 +40,8 @@ jobs:
           tmux -V
       - name: Install locked compile/test dependencies (no lifecycle hooks)
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build the native drive-enumeration addon required at app startup
+        run: npm rebuild drivelist --foreground-scripts
       - name: Type-check and test Omo code and local runtime
         run: |
           npm run compile
