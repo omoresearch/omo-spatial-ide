@@ -1,16 +1,26 @@
 import * as THREE from 'three';
 import { advancePlayer, PLAYER_HOME, PlayerPose } from '../common/player-state';
 
+export interface SelectionGestures {
+    start(x: number, y: number): boolean;
+    move(x: number, y: number): void;
+    end(): void;
+    clear(): void;
+    copy(): void;
+}
+
 export class FirstPersonControls {
     enabled = false;
     typing = false;
     pose: PlayerPose = { ...PLAYER_HOME };
     private keys = new Set<string>();
+    private selecting = false;
     private pointer?: { x: number; y: number; startX: number; startY: number; dragged: boolean };
     private listeners: Array<() => void> = [];
     constructor(private canvas: HTMLCanvasElement, private camera: THREE.PerspectiveCamera,
         private interact: (x: number, y: number) => 'terminal' | 'code' | undefined,
-        private input: (text: string) => void, private message: (text: string) => void, private pasteText?: (text: string) => void) {
+        private input: (text: string) => void, private message: (text: string) => void, private pasteText?: (text: string) => void,
+        private selection?: SelectionGestures) {
         const on = <K extends keyof HTMLElementEventMap>(name: K, fn: (event: HTMLElementEventMap[K]) => void): void => {
             const globalInput = name === 'keydown' || name === 'keyup' || name === 'paste';
             const target: EventTarget = globalInput ? window : canvas;
@@ -24,11 +34,19 @@ export class FirstPersonControls {
         };
         on('pointerdown', event => {
             if (!this.enabled || event.button !== 0) return; event.stopImmediatePropagation(); canvas.focus();
+            if (event.shiftKey) {
+                event.preventDefault();
+                this.pointer = undefined; this.keys.clear(); this.selecting = this.selection?.start(event.clientX, event.clientY) ?? false;
+                if (this.selecting) { this.typing = true; this.apply(); canvas.setPointerCapture(event.pointerId); }
+                return;
+            }
+            this.selection?.clear();
             this.pointer = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, dragged: false };
             canvas.setPointerCapture(event.pointerId);
         });
         on('pointermove', event => {
             if (!this.enabled) return; event.stopImmediatePropagation();
+            if (this.selecting) { this.selection?.move(event.clientX, event.clientY); return; }
             if (!this.pointer || this.typing) return;
             if (Math.hypot(event.clientX-this.pointer.startX,event.clientY-this.pointer.startY)>4) this.pointer.dragged=true;
             if (this.pointer.dragged) {
@@ -39,6 +57,7 @@ export class FirstPersonControls {
         });
         on('pointerup', event => {
             if (!this.enabled) return; event.stopImmediatePropagation();
+            if (this.selecting) { this.selecting = false; this.selection?.end(); return; }
             if (!this.pointer) return; const dragged=this.pointer.dragged;this.pointer=undefined;
             if (!dragged) {
                 const hit=this.interact(event.clientX,event.clientY);
@@ -48,10 +67,15 @@ export class FirstPersonControls {
         on('keydown', event => {
             if (!this.enabled) return;
             event.stopImmediatePropagation();
-            if(event.key==='Escape'){event.preventDefault();this.typing=false;this.keys.clear();this.message('Walking · WASD to move. Drag to look. Click a monitor to use it.');return;}
+            if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'c') {
+                event.preventDefault(); this.selection?.copy(); return;
+            }
+            if(event.key==='Escape'){event.preventDefault();this.selection?.clear();this.typing=false;this.keys.clear();this.message('Walking · WASD to move. Drag to look. Click a monitor to use it.');return;}
+            if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return;
             if(this.typing){
                 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') return;
                 event.preventDefault();
+                this.selection?.clear();
                 const special:Record<string,string>={Enter:'\r',Backspace:'\x7f',Tab:'\t',ArrowUp:'\x1b[A',ArrowDown:'\x1b[B',ArrowRight:'\x1b[C',ArrowLeft:'\x1b[D',Home:'\x1b[H',End:'\x1b[F',Delete:'\x1b[3~'};
                 if(event.ctrlKey&&event.key.length===1){const c=event.key.toLowerCase().charCodeAt(0);if(c>=97&&c<=122)this.input(String.fromCharCode(c-96));}
                 else if(special[event.key])this.input(special[event.key]);
@@ -73,13 +97,14 @@ export class FirstPersonControls {
             if (new TextEncoder().encode(text).length > 262144 || /[\u0000-\u001f\u007f]/.test(text)) { this.message('Paste one line at a time, without control characters (maximum 256 KiB). Press Enter yourself to run it.'); return; }
             this.input(text);
         }});
-        const release=()=>{this.keys.clear();this.pointer=undefined;};
+        const release=()=>{this.keys.clear();this.pointer=undefined;this.selecting=false;this.selection?.clear();};
+        on('pointercancel', release);
         window.addEventListener('blur',release);canvas.addEventListener('blur',release);
         this.listeners.push(()=>{window.removeEventListener('blur',release);canvas.removeEventListener('blur',release);});
     }
-    releaseTyping():void{if(!this.typing)return;this.typing=false;this.keys.clear();this.apply();}
+    releaseTyping():void{this.selecting=false;this.selection?.clear();if(!this.typing)return;this.typing=false;this.keys.clear();this.apply();}
     focusTerminal():void {this.typing=true;this.keys.clear();this.canvas.focus();this.apply();this.message('Typing on the in-world monitor · Esc to walk away.');}
-    setEnabled(enabled:boolean):void{this.enabled=enabled;this.keys.clear();this.typing=false;if(enabled)this.apply();}
+    setEnabled(enabled:boolean):void{this.enabled=enabled;this.keys.clear();this.typing=false;this.selecting=false;this.selection?.clear();if(enabled)this.apply();}
     step(seconds:number):void{
         if(!this.enabled)return;
         if(!this.typing)this.pose=advancePlayer(this.pose,{forward:Number(this.keys.has('w'))-Number(this.keys.has('s')),right:Number(this.keys.has('d'))-Number(this.keys.has('a'))},seconds);
@@ -91,6 +116,6 @@ export class FirstPersonControls {
         this.canvas.dataset.playerX=this.pose.x.toFixed(3);this.canvas.dataset.playerZ=this.pose.z.toFixed(3);
         this.canvas.dataset.eyeY='1.75';this.canvas.dataset.typing=String(this.typing);
     }
-    reset():void{this.pose={...PLAYER_HOME};this.typing=false;this.keys.clear();this.apply();}
+    reset():void{this.selection?.clear();this.selecting=false;this.pose={...PLAYER_HOME};this.typing=false;this.keys.clear();this.apply();}
     dispose():void{this.listeners.forEach(dispose=>dispose());this.keys.clear();}
 }

@@ -75,8 +75,13 @@ npx --yes --package=node@22.23.4 --call 'npm run compile && node --experimental-
 - Integrated frontend: `FirstPersonControls` sends clipboard events to the safe paste callback,
   and the widget calls `controller.paste(text)`. Wheel input calls `controller.wheel`. The fallback
   without a paste handler refuses multiline/control input instead of sending it raw.
-- There is no drag-to-select UI. `copySelection({x1,y1,x2,y2,unit})` exists, but the only UI copy
-  action is "Copy screen".
+- The integrated physical screens now support Shift+drag selection and Ctrl/Meta+Shift+C copy.
+  This uses a local snapshot of the visible 80 × 22 grid, not the host copy op. The selection
+  highlight is part of the actual monitor texture; output/context changes and focus loss clear it.
+  Selection routes to a local desk switch, not the runtime-open action. Ctrl+C still interrupts.
+  The real-app test checks both desks, actual highlight pixels, exact clipboard contents,
+  denied-write handling and stale-selection refusal. Word/line gestures, cross-history ranges,
+  soft-wrap reconstruction and full wide/combining Unicode cell mapping remain unfinished.
 - Find highlights are passed to the bridge's `frame(find=…)`. The colour strings carry them only as
   palette keys, and no test checks the highlight colours. The scroll position and the "i of n"
   count are tested.

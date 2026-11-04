@@ -25,7 +25,7 @@ const THEMES = {
     jungle: { title: 'Prehistoric jungle', eyebrow: 'EXPEDITION / 02', description: 'A green retreat. Room to think, space to build.', symbol: '✳' }
 };
 
-function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSelect: (station: Workstation, point?: ScreenPoint) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrames: Record<TerminalWorkstation, MonitorFrame>; webFrame?: WebSurfaceFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onPaste: (text: string) => void; onScroll?: (delta: number) => void; onMessage: (text: string) => void }): React.ReactElement {
+function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSelect: (station: Workstation, point?: ScreenPoint) => void; onTextSelect: (station: TerminalWorkstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrames: Record<TerminalWorkstation, MonitorFrame>; webFrame?: WebSurfaceFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onPaste: (text: string) => void; onScroll?: (delta: number) => void; onMessage: (text: string) => void }): React.ReactElement {
     const host = React.useRef<HTMLDivElement>(null);
     const instance = React.useRef<RoomScene>();
     const callbacks = React.useRef(props); callbacks.current = props;
@@ -42,6 +42,7 @@ function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSel
         const scene = new RoomScene(host.current, { theme: props.theme, camera: props.camera, walk: mode==='walk',
             onInput: text=>callbacks.current.onInput(text),onPaste:text=>callbacks.current.onPaste(text),onScroll:delta=>callbacks.current.onScroll?.(delta),onMessage:text=>callbacks.current.onMessage(text),
             onSelect: (action,point) => callbacks.current.onSelect(action,point), onCameraChange: camera => callbacks.current.onCamera(camera),
+            onTextSelect: station => callbacks.current.onTextSelect(station),
             onReady: () => setReady(true), onError: message => setError(message) });
         instance.current = scene;scene.setTerminalFrames(callbacks.current.terminalFrames);if(callbacks.current.webFrame)scene.setWebFrame(callbacks.current.webFrame);callbacks.current.onInstance?.(scene);
         return () => { scene.dispose(); instance.current = undefined; callbacks.current.onInstance?.(undefined); };
@@ -52,7 +53,7 @@ function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSel
         {mode==='walk'&&<div className="omo-crosshair" aria-hidden="true">+</div>}
         {props.walk&&<div className="omo-navigation-switch"><button data-testid="walk-mode" aria-pressed={mode==='walk'} onClick={()=>setMode('walk')}>First person</button><button data-testid="overview-mode" aria-pressed={mode==='overview'} onClick={()=>setMode('overview')}>Overview</button></div>}
 
-        <div className="omo-scene-controls"><span>{mode==='walk'?'WASD to walk · Drag to look · Click a screen · Esc to leave it':'Drag to orbit · Scroll to zoom'}</span><button aria-label="Reset room camera" onClick={() => instance.current?.resetCamera()}>↺ Reset view</button></div>
+        <div className="omo-scene-controls"><span>{mode==='walk'?'WASD to walk · Drag to look · Shift+drag screen text · Ctrl+Shift+C to copy · Esc to leave':'Drag to orbit · Scroll to zoom'}</span><button aria-label="Reset room camera" onClick={() => instance.current?.resetCamera()}>↺ Reset view</button></div>
     </div>;
 }
 
@@ -276,7 +277,7 @@ export class OmoWorldWidget extends ReactWidget {
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink}/>}
                     </div>}
-                    <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
+                    <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>
                     {!this.configuring && <aside className="omo-tool-dock" aria-label="Project tools"><span>YOUR WORKSTATIONS</span><button disabled={this.busy} data-testid="terminal-action" onClick={() => this.selectStation('terminal')}><b>01</b><div><strong>Terminal</strong><small>A real shell. Your project folder.</small></div><span>↗</span></button><button disabled={this.busy} data-testid="code-action" onClick={() => this.selectStation('code')}><b>02</b><div><strong>Code</strong><small>Files, editing and your next change.</small></div><span>↗</span></button><p>Nothing starts unless you choose it.</p></aside>}
                     {this.configuring && <div className="omo-preview-badge"><i/> LIVE ROOM PREVIEW</div>}

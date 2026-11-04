@@ -1,0 +1,15 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+function api(){const file=path.resolve(__dirname,'../lib/common/monitor-selection.js');assert.ok(fs.existsSync(file),'Visible physical-monitor selection is not implemented');return require(file);}
+test('selects exact visible characters in either drag direction without mutating a frame',()=>{
+ const{MonitorSelection}=api(),lines=['prefix ALPHA suffix','  BETA tail'];const s=new MonitorSelection(lines,{row:0,col:7});s.extend({row:1,col:5});assert.equal(s.text(),'ALPHA suffix\n  BETA');
+ const reverse=new MonitorSelection(lines,{row:1,col:5});reverse.extend({row:0,col:7});assert.equal(reverse.text(),s.text());assert.deepEqual(lines,['prefix ALPHA suffix','  BETA tail']);
+});
+test('copies only the 80 by 22 visible viewport and trims terminal padding, not leading spaces',()=>{
+ const{MonitorSelection}=api();const s=new MonitorSelection(['HIDDEN',...Array.from({length:22},(_,i)=>i===0?'  shown   ':'x'.repeat(80)+'HIDDEN')],{row:0,col:0});s.extend({row:30,col:999});const text=s.text();assert.ok(!text.includes('HIDDEN'));assert.equal(text.split('\n').length,22);assert.equal(text.split('\n')[0],'  shown');assert.equal(text.split('\n')[1].length,80);
+});
+test('new visible output invalidates a selection instead of copying stale text',()=>{
+ const{MonitorSelection}=api(),s=new MonitorSelection(['ALPHA'],{row:0,col:0});s.extend({row:0,col:4});assert.equal(s.refresh(['ALPHA']),true);assert.equal(s.text(),'ALPHA');assert.equal(s.refresh(['BETA']),false);assert.equal(s.text(),'');assert.deepEqual(s.spans(),[]);
+});
+test('cell picking respects physical screen UV, text margins and measured glyph width',()=>{
+ const{monitorCell}=api();assert.deepEqual(monitorCell((24+3.5*12)/1024,1-(53+2.5*22)/576,12),{row:2,col:3});assert.equal(monitorCell(.001,.99,12),undefined);assert.equal(monitorCell(NaN,.5,12),undefined);assert.deepEqual(monitorCell(.999,.001,12,true),{row:21,col:79});
+});

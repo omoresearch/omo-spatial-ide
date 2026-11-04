@@ -3,6 +3,7 @@ import type { RoomState, RoomTheme } from '../common/room-state';
 import { FirstPersonControls } from './first-person-controls';
 import { cellRuns, dominantKey, MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
 import type { WebSurfaceFrame } from '../common/web-runtime-protocol';
+import { MonitorSelection, monitorCell, visibleMonitorLines } from '../common/monitor-selection';
 
 /** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
 export interface MonitorFrame {
@@ -23,6 +24,7 @@ export interface RoomSceneOptions {
     theme: RoomTheme;
     camera: RoomState['camera'];
     onSelect: (station: Workstation, point?: ScreenPoint) => void;
+    onTextSelect: (station: TerminalWorkstation) => void;
     onCameraChange: (camera: RoomState['camera']) => void;
     onReady: () => void;
     walk?: boolean;
@@ -47,7 +49,8 @@ export class RoomScene {
     private walker?: FirstPersonControls;
     private navigation: 'walk' | 'overview' = 'overview';
     private lastFrame = performance.now();
-    private terminalSurfaces = new Map<TerminalWorkstation, { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture }>();
+    private terminalSurfaces = new Map<TerminalWorkstation, { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; cellWidth?: number }>();
+    private terminalSelection?: { station: TerminalWorkstation; model: MonitorSelection };
     private terminalFrames: Record<TerminalWorkstation, MonitorFrame> = { terminal: { lines: [] }, 'terminal-2': { lines: [] } };
     private screens = new Map<Workstation, THREE.Mesh>();
     private lamps = new Map<TerminalWorkstation, THREE.Mesh>();
@@ -91,7 +94,11 @@ export class RoomScene {
         accent.position.set(0, 4, -2); this.scene.add(accent);
         this.buildRoom(jungle);
         this.bindControls(canvas);
-        this.walker = new FirstPersonControls(canvas, this.camera, (x,y)=>this.interactAt(x,y), text=>this.options.onInput(text), text=>this.options.onMessage(text), this.options.onPaste);
+        this.walker = new FirstPersonControls(canvas, this.camera, (x,y)=>this.interactAt(x,y), text=>this.options.onInput(text), text=>this.options.onMessage(text), this.options.onPaste, {
+            start: (x,y) => this.startTerminalSelection(x,y), move: (x,y) => this.extendTerminalSelection(x,y),
+            end: () => this.options.onMessage('Selected visible terminal text · Ctrl+Shift+C to copy. Esc to clear.'),
+            clear: () => this.clearTerminalSelection(), copy: () => this.copyTerminalSelection()
+        });
         this.setNavigation(this.options.walk ? 'walk' : 'overview');
         this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(this.host);
         this.resize(); this.positionCamera(); this.draw(); this.options.onReady();
@@ -310,6 +317,8 @@ export class RoomScene {
         this.setTerminalFrame(frames.terminal, 'terminal'); this.setTerminalFrame(frames['terminal-2'], 'terminal-2');
     }
     setTerminalFrame(frame: MonitorFrame, station: TerminalWorkstation = 'terminal'): void {
+        const previous = this.terminalFrames[station];
+        if (this.terminalSelection?.station === station && (!this.terminalSelection.model.refresh(frame.lines) || previous.title !== frame.title || previous.status !== frame.status)) this.terminalSelection = undefined;
         this.terminalFrames[station] = frame;
         const surface = this.terminalSurfaces.get(station);
         if (!surface) return;
@@ -320,18 +329,19 @@ export class RoomScene {
         if (frame.status || frame.unreadBells) { c.fillStyle = frame.unreadBells ? '#ff9e4a' : '#7e9a9e'; c.textAlign = 'right'; c.fillText((frame.unreadBells ? `BELL (${frame.unreadBells})` : frame.status ?? '').slice(0,38),1000,29); c.textAlign = 'left'; }
         c.fillStyle = '#283e48'; c.fillRect(20,42,984,1);
         c.font = '20px monospace'; c.textBaseline = 'alphabetic';
-        const lines = frame.lines.slice(-MONITOR_ROWS);
+        const lines = visibleMonitorLines(frame.lines);
         if (!lines.length) {
             c.fillStyle='#c7ded4';c.fillText('Walk up and click this screen.',24,104);
             c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140);
         } else {
             const offset = frame.lines.length - lines.length;
             const cell = Math.min(12.3, c.measureText('M').width || 12);
+            surface.cellWidth = cell;
             // The frame's most common background is the terminal's own background; the monitor keeps its accepted base colour for it.
             const plainBg = frame.background ? frame.palette?.[dominantKey(frame.background) ?? ''] : undefined;
             const skip = plainBg ? (plainBg.startsWith('#') ? plainBg : `#${plainBg}`).toLowerCase() : base;
             lines.forEach((line,i) => {
-                const y = 70 + i*22; const text = line.slice(0,MONITOR_COLS);
+                const y = 70 + i*22; const text = line;
                 const fallback = { fg: frame.foreground ? '#e0e8eb' : line.includes('$') ? '#b8e6ca' : '#e0e8eb', bg: base };
                 for (const run of cellRuns(text, frame.foreground?.[offset+i], frame.background?.[offset+i], frame.palette, fallback)) {
                     const x = 24 + run.x*cell;
@@ -346,6 +356,10 @@ export class RoomScene {
                 const ch = Array.from(lines[cursor.y - offset] ?? '')[cursor.x];
                 if (ch && ch !== ' ') { c.fillStyle = base; c.fillText(ch, x, y); }
             }
+            if (this.terminalSelection?.station === station) {
+                c.fillStyle = 'rgba(65,150,240,0.45)';
+                for (const span of this.terminalSelection.model.spans()) c.fillRect(24 + span.from*cell, 53 + span.row*22, (span.to-span.from)*cell, 22);
+            }
         }
         surface.texture.needsUpdate = true;
         const lamp = this.lamps.get(station);
@@ -354,13 +368,54 @@ export class RoomScene {
             const material = lamp.material as THREE.MeshStandardMaterial; material.color.setHex(color); material.emissive.setHex(color);
         }
         if(this.renderer){
+            this.renderer.domElement.dataset.terminalSelection = this.terminalSelection?.model.text() ?? '';
+            this.renderer.domElement.dataset.terminalSelectionStation = this.terminalSelection?.station ?? '';
+            this.renderer.domElement.dataset.terminalMetrics = JSON.stringify(Object.fromEntries([...this.terminalSurfaces].map(([id,s]) => [id,{ cellWidth:s.cellWidth ?? 12 }])));
             if (station === 'terminal') { this.renderer.domElement.dataset.terminalText=frame.lines.join('\n');this.renderer.domElement.dataset.terminalCursor=frame.cursor?`${frame.cursor.x},${frame.cursor.y},${frame.cursor.visible}`:''; }
             this.renderer.domElement.dataset.stationText = JSON.stringify({ terminal: this.terminalFrames.terminal.lines, 'terminal-2': this.terminalFrames['terminal-2'].lines });
             this.renderer.domElement.dataset.stationBells = JSON.stringify({ terminal: this.terminalFrames.terminal.unreadBells ?? 0, 'terminal-2': this.terminalFrames['terminal-2'].unreadBells ?? 0 });
         }
     }
     /** Pointer moved to an overlay control: stop typing into the monitor so keys go to that control. */
-    releaseTyping(): void { this.walker?.releaseTyping(); }
+    releaseTyping(): void { this.clearTerminalSelection(); this.walker?.releaseTyping(); }
+    private terminalCellAt(x: number, y: number, clamp = false): { station: TerminalWorkstation; cell: {row:number;col:number} } | undefined {
+        const rect = this.renderer.domElement.getBoundingClientRect(), ray = new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1), this.camera);
+        // Only the frontmost actual screen counts. Never select through another object or workstation.
+        const hit = ray.intersectObjects(this.roots,true)[0]; if (!hit?.uv) return undefined;
+        for (const station of ['terminal','terminal-2'] as const) {
+            const screen = this.screens.get(station);
+            if (!screen || hit.object !== screen || this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3())) > 3.2) continue;
+            const point = monitorCell(hit.uv.x, hit.uv.y, this.terminalSurfaces.get(station)?.cellWidth ?? 12, clamp);
+            if (point) return {station,cell:point};
+        }
+        return undefined;
+    }
+    private startTerminalSelection(x: number, y: number): boolean {
+        this.clearTerminalSelection(); const hit = this.terminalCellAt(x,y); if (!hit) return false;
+        // Selecting text changes the active desk locally; it must not bind/revive a runtime.
+        this.options.onTextSelect(hit.station);
+        this.terminalSelection = { station:hit.station,model:new MonitorSelection(this.terminalFrames[hit.station].lines,hit.cell) };
+        this.setTerminalFrame(this.terminalFrames[hit.station],hit.station); return true;
+    }
+    private extendTerminalSelection(x: number, y: number): void {
+        const selected = this.terminalSelection, hit = this.terminalCellAt(x,y,true);
+        if (!selected || hit?.station !== selected.station) return;
+        selected.model.extend(hit.cell); this.setTerminalFrame(this.terminalFrames[selected.station],selected.station);
+    }
+    private clearTerminalSelection(): void {
+        const selected = this.terminalSelection; if (!selected) return;
+        this.terminalSelection = undefined; this.setTerminalFrame(this.terminalFrames[selected.station],selected.station);
+    }
+    private copyTerminalSelection(): void {
+        const text = this.terminalSelection?.model.text();
+        if (!text) { this.options.onMessage('Shift+drag on a terminal screen to select text first.'); return; }
+        // Explicit user gesture only. No clipboard reads, terminal input or permission bypass fallback.
+        if (!navigator.clipboard?.writeText) { this.options.onMessage('Clipboard unavailable. Use a secure browser context. Nothing was sent to the terminal.'); return; }
+        void navigator.clipboard.writeText(text).then(() => { if (!this.disposed) this.options.onMessage('Selected terminal text copied.'); }, () => {
+            if (!this.disposed) this.options.onMessage('Clipboard copy failed. Check browser permissions. Nothing was sent to the terminal.');
+        });
+    }
     private interactAt(x: number, y: number): 'terminal' | 'code' | undefined {
         const rect=this.renderer.domElement.getBoundingClientRect();
         const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1),this.camera);
@@ -408,6 +463,10 @@ export class RoomScene {
                 }
             });
             this.renderer.domElement.dataset.stationTargets = JSON.stringify(targets);
+            this.renderer.domElement.dataset.terminalQuads = JSON.stringify(Object.fromEntries((['terminal','terminal-2'] as const).map(id => {
+                const screen = this.screens.get(id)!;
+                return [id,[[-.79,.45],[.79,.45],[.79,-.45],[-.79,-.45]].map(([x,y]) => { const p=screen.localToWorld(new THREE.Vector3(x,y,0)).project(this.camera); return {x:(p.x*.5+.5)*this.host.clientWidth,y:(-p.y*.5+.5)*this.host.clientHeight}; })];
+            })));
             const web = this.screens.get('web');
             if (web) this.renderer.domElement.dataset.webQuad = JSON.stringify([[-1.95,1.22],[1.95,1.22],[1.95,-1.22],[-1.95,-1.22]].map(([x,y]) => { const p = web.localToWorld(new THREE.Vector3(x,y,0)).project(this.camera); return { x: (p.x*.5+.5)*this.host.clientWidth, y: (-p.y*.5+.5)*this.host.clientHeight }; }));
             this.renderer.domElement.dataset.stationLamps = JSON.stringify(Object.fromEntries([...this.lamps].map(([id,mesh]) => [id,(mesh.material as THREE.MeshStandardMaterial).color.getHexString()])));
