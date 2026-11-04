@@ -67,14 +67,57 @@ def _require_env():
     if not tmux or not os.access(tmux, os.X_OK):
         raise SystemExit("omo-spatial-host: OMO_TMUX must name an executable tmux")
     os.makedirs(data, mode=0o700, exist_ok=True)
+    return data
 
 
-_require_env()
+def _lock_data_dir(data):
+    """One host per data directory. The bridge loads workspaces.json once at import and
+    every save rewrites the whole file from memory, so a second host on the same
+    directory would erase the first one's workspaces and station bindings. Take an
+    exclusive lock BEFORE the bridge is imported and refuse to start without it. The
+    kernel drops the lock when this process exits or is killed; the fd is not inherited
+    by tmux or any shell (Python fds are non-inheritable)."""
+    import fcntl
+    path = os.path.join(data, "spatial-host.lock")
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        try:
+            owner = os.pread(fd, 32, 0).decode("ascii", "replace").strip()
+        except OSError:
+            owner = ""
+        os.close(fd)
+        who = f" (pid {owner})" if owner.isdigit() else ""
+        raise SystemExit(f"omo-spatial-host: another Omo spatial runtime host{who} is using this data "
+                         f"directory ({data}); refusing to start so its workspaces are not overwritten")
+    os.ftruncate(fd, 0)
+    os.pwrite(fd, str(os.getpid()).encode(), 0)
+    return fd
+
+
+_DATA_LOCK = _lock_data_dir(_require_env())     # held for the life of the process
 sys.path.insert(0, BRIDGE_DIR)
 import omobridge as ob  # noqa: E402  (env must be set first: the bridge reads it at import)
 import termcore  # noqa: E402
 
 FAULT_NOOP_INPUT = os.environ.get("OMO_SPATIAL_FAULT") == "noop-input"   # test-only seeded fault
+# A pinned Hermes root (OMO_HERMES_ROOT) is where profiles are validated, so the Hermes
+# a tab launches must use it too: real Hermes resolves `-p <name>` under $HERMES_HOME
+# (else ~/.hermes). Only Hermes tabs get it; every other tab gets it EMPTY, because a
+# session's -e environment is inherited by later windows (see the bridge's tab_env).
+HERMES_ROOT_PIN = os.path.abspath(ob.HERMES_ROOT) if os.environ.get("OMO_HERMES_ROOT") else ""
+_bridge_tab_env = ob.tab_env
+
+
+def _tab_env(ws, tab, autorun=True):
+    env = _bridge_tab_env(ws, tab, autorun)
+    if HERMES_ROOT_PIN:
+        env += ["-e", "HERMES_HOME=" + (HERMES_ROOT_PIN if tab.get("kind") == "hermes" else "")]
+    return env
+
+
+ob.tab_env = _tab_env      # the bridge's _open_window_locked looks tab_env up at call time
 STATIONS_FILE = os.path.join(ob.DATA_DIR, "spatial-stations.json")
 ID_RE = re.compile(r"^[0-9a-f]{12}$")
 STATION_RE = re.compile(r"^[\x21-\x7e]{1,128}$")
