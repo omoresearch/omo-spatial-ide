@@ -28,3 +28,7 @@ test('Ctrl+V leaves native paste handling available instead of injecting Control
         r.canvas.dispatchEvent(event); assert.equal(event.defaultPrevented, false); assert.deepEqual(r.input, []);
     } finally { r.cleanup(); }
 });
+
+test('physical-screen focus state is published immediately, not one animation frame late', () => {
+ const r = rig(); try { assert.equal(r.canvas.dataset.typing, 'true'); } finally { r.cleanup(); }
+});

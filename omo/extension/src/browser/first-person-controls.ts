@@ -69,7 +69,7 @@ export class FirstPersonControls {
         this.listeners.push(()=>{window.removeEventListener('blur',release);canvas.removeEventListener('blur',release);});
     }
     releaseTyping():void{if(!this.typing)return;this.typing=false;this.keys.clear();this.apply();}
-    focusTerminal():void {this.typing=true;this.keys.clear();this.canvas.focus();this.message('Typing on the in-world monitor · Esc to walk away.');}
+    focusTerminal():void {this.typing=true;this.keys.clear();this.canvas.focus();this.apply();this.message('Typing on the in-world monitor · Esc to walk away.');}
     setEnabled(enabled:boolean):void{this.enabled=enabled;this.keys.clear();this.typing=false;if(enabled)this.apply();}
     step(seconds:number):void{
         if(!this.enabled)return;
