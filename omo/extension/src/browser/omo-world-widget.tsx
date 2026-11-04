@@ -26,6 +26,10 @@ import { GitReviewService } from '../common/git-review-protocol';
 import type { GitReviewSnapshot } from '../common/git-review-protocol';
 import { GitReviewController, GitReviewState } from './git-review-controller';
 import { GitReviewPanel } from './git-review-panel';
+import { TaskOverviewPanel } from './task-overview-panel';
+import { TaskWorkspaceService } from '../common/task-workspace-protocol';
+import { TaskWorkspacePanel } from './task-workspace-panel';
+import { scopeTaskWorkspaceService } from './task-workspace-controller';
 
 export const TERMINAL_STATION_ID = 'terminal-1';
 const TERMINAL_STATIONS: TerminalWorkstation[] = ['terminal', 'terminal-2'];
@@ -78,6 +82,7 @@ export class OmoWorldWidget extends ReactWidget {
     @inject(OmoWebService) protected readonly webRuntime!: OmoWebService;
     @inject(OmoPresenceService) protected readonly presenceService!: OmoPresenceService;
     @inject(GitReviewService) protected readonly gitReviewService!: GitReviewService;
+    @inject(TaskWorkspaceService) protected readonly taskWorkspaceService!: TaskWorkspaceService;
     @inject(EditorManager) protected readonly editors!: EditorManager;
     @inject(FileService) protected readonly files!: FileService;
     @inject(FileDialogService) protected readonly dialogs!: FileDialogService;
@@ -114,11 +119,15 @@ export class OmoWorldWidget extends ReactWidget {
     private review?:GitReviewController;
     private reviewState:GitReviewState={phase:'idle',loadingPatch:false,error:''};
     private reviewOpen=false;
+    private taskOverviewOpen=false;
+    private taskWorkspacesOpen=false;
+    private taskWorkspaceUiService!:TaskWorkspaceService;
     private reviewRequest=0;
     private codeReviewFrame?:CodeReviewFrame;
 
     @postConstruct()
     protected init(): void {
+        this.taskWorkspaceUiService=scopeTaskWorkspaceService(this.taskWorkspaceService,uri=>this.taskWorkspacesOpen&&this.project?.toString()===uri);
         this.id = OmoWorldWidget.ID; this.title.label = 'World'; this.title.caption = 'Omo · Your spatial workspace';
         this.title.closable = false; this.title.iconClass = 'codicon codicon-globe';
         this.addClass('omo-world-widget'); this.node.tabIndex = -1;
@@ -134,7 +143,7 @@ export class OmoWorldWidget extends ReactWidget {
             }
             this.update();
         });
-        this.toDispose.push({dispose:()=>{this.reviewRequest++;this.reviewOpen=false;this.review?.close();}});
+        this.toDispose.push({dispose:()=>{this.reviewRequest++;this.reviewOpen=false;this.taskOverviewOpen=false;this.taskWorkspacesOpen=false;this.review?.close();}});
         for (const station of TERMINAL_STATIONS) this.consoles.set(station, new RuntimeConsoleController({ service: this.runtime, storage: safeStorage(),
             schedule: (fn, ms) => window.setTimeout(fn, ms), cancel: handle => window.clearTimeout(handle as number),
             onChange: state => this.consoleChanged(state, station) }));
@@ -189,6 +198,8 @@ export class OmoWorldWidget extends ReactWidget {
     private projectChanged(next: URI | undefined): void {
         if (next?.toString() === this.project?.toString()) return;
         this.invalidatePresetRead(); this.draftCamera = undefined; this.presetStatus = '';
+        this.taskOverviewOpen=false;
+        this.taskWorkspacesOpen=false;
         this.closeReview();this.codeReviewFrame=undefined;this.worldScene?.setCodeReview({title:'PROJECT CHANGES',lines:['Open review for the selected project.'],status:'No Git contents read yet'});
         this.leavePresence();this.personalRoom=undefined;
         this.project = next;
@@ -294,6 +305,8 @@ export class OmoWorldWidget extends ReactWidget {
         const request = ++this.reviewRequest;
         const project = this.project?.toString();
         if (!project) throw new Error('Choose a project folder first.');
+        this.taskOverviewOpen=false;
+        this.taskWorkspacesOpen=false;
         this.worldScene?.releaseTyping();
         this.reviewOpen = true;
         this.update();
@@ -304,6 +317,27 @@ export class OmoWorldWidget extends ReactWidget {
     }
     private async openCode(): Promise<void> { await this.openReviewSnapshot(); }
     private openTaskReview=(): Promise<GitReviewSnapshot | undefined> => this.openReviewSnapshot();
+    private openTaskOverview=():void=>{
+        if(!this.project||!this.room)return;
+        this.worldScene?.releaseTyping();
+        ++this.reviewRequest;this.reviewOpen=false;this.review?.close();
+        this.taskWorkspacesOpen=false;
+        this.taskOverviewOpen=true;this.update();
+    };
+    private closeTaskOverview=():void=>{this.taskOverviewOpen=false;this.update();};
+    private openTaskWorkspaces=():void=>{
+        if(!this.project||!this.room)return;
+        this.worldScene?.releaseTyping();
+        ++this.reviewRequest;this.reviewOpen=false;this.review?.close();
+        this.taskOverviewOpen=false;this.taskWorkspacesOpen=true;this.update();
+    };
+    private closeTaskWorkspaces=():void=>{this.taskWorkspacesOpen=false;this.update();};
+    private openTaskProject=async(uri:string,expectedSourceUri:string|undefined):Promise<void>=>{
+        if(!expectedSourceUri||!this.taskWorkspacesOpen||this.project?.toString()!==expectedSourceUri)return;
+        this.closeWorkspacePanels();
+        this.workspace.open(new URI(uri),{preserveWindow:true});
+    };
+    private closeWorkspacePanels=():void=>{++this.reviewRequest;this.reviewOpen=false;this.taskOverviewOpen=false;this.taskWorkspacesOpen=false;this.review?.close();this.update();};
     private closeReview=():void=>{++this.reviewRequest;this.reviewOpen=false;this.review?.close();this.update();};
     private openReviewedFile=(uri:string):void=>{void this.runAction(async()=>{await this.editors.open(new URI(uri),{mode:'activate'});});};
     private async openProjectFile(): Promise<void> {
@@ -366,14 +400,17 @@ export class OmoWorldWidget extends ReactWidget {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;
         const theme = this.configuring ? this.draftTheme : this.room!.theme;
         const layout = this.configuring ? this.draftLayout : this.room?.layout ?? 'classic';
-        return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode}>
+        const taskSourceUri=this.project?.toString();
+        return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-project-uri={this.project?.toString()||''} data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode}>
             <header className="omo-header">
                 <div className="omo-brand"><span className="omo-brand-mark">o<span>m</span>o</span><span className="omo-brand-caption">RESEARCH<br/>SPATIAL IDE</span></div>
-                <nav className="omo-view-switch" aria-label="Workspace views"><button className={this.reviewOpen?'':'active'} aria-current={this.reviewOpen?undefined:'page'} onClick={this.closeReview}>◈ World</button><button data-testid="review-action" className={this.reviewOpen?'active':''} disabled={!this.room || this.busy} onClick={() => this.selectStation('code')}>⌘ Code</button></nav>
+                <nav className="omo-view-switch" aria-label="Workspace views"><button className={!this.reviewOpen&&!this.taskOverviewOpen&&!this.taskWorkspacesOpen?'active':''} aria-current={!this.reviewOpen&&!this.taskOverviewOpen&&!this.taskWorkspacesOpen?'page':undefined} onClick={this.closeWorkspacePanels}>◈ World</button><button type="button" data-testid="task-overview-toggle" className={this.taskOverviewOpen?'active':''} aria-expanded={this.taskOverviewOpen} disabled={!this.room || !this.project || this.busy} onClick={() => this.taskOverviewOpen ? this.closeTaskOverview() : this.openTaskOverview()}>▤ Task overview</button><button type="button" data-testid="task-workspace-toggle" className={this.taskWorkspacesOpen?'active':''} aria-expanded={this.taskWorkspacesOpen} disabled={!this.room || !this.project || this.busy} onClick={() => this.taskWorkspacesOpen ? this.closeTaskWorkspaces() : this.openTaskWorkspaces()}>⑂ Task workspaces</button><button data-testid="review-action" className={this.reviewOpen?'active':''} disabled={!this.room || this.busy} onClick={() => this.selectStation('code')}>⌘ Code</button></nav>
                 <span className="omo-local"><i/> LOCAL WORKSPACE</span>
             </header>
             {this.reviewOpen&&<GitReviewPanel state={this.reviewState} onSelect={path=>{void this.review?.select(path);}} onRefresh={()=>{if(this.project)void this.review?.open(this.project.toString());}} onClose={this.closeReview} onOpenFile={this.openReviewedFile} onOpenProject={()=>{void this.runAction(()=>this.openProjectFile());}}/>}
-            <div className={`omo-body ${this.configuring ? 'is-onboarding' : ''}`} style={this.reviewOpen?{display:'none'}:undefined}>
+            {this.taskOverviewOpen&&this.project&&this.room&&<div className="omo-task-overview-view"><TaskOverviewPanel projectUri={this.project.toString()} onClose={this.closeTaskOverview}/></div>}
+            {this.taskWorkspacesOpen&&this.project&&this.room&&<div className="omo-task-overview-view"><TaskWorkspacePanel projectUri={this.project.toString()} service={this.taskWorkspaceUiService} onClose={this.closeTaskWorkspaces} onOpen={uri=>this.openTaskProject(uri,taskSourceUri)}/></div>}
+            <div className={`omo-body ${this.configuring ? 'is-onboarding' : ''}`} style={this.reviewOpen||this.taskOverviewOpen||this.taskWorkspacesOpen?{display:'none'}:undefined}>
                 {this.configuring ? <section className="omo-onboarding" data-testid="omo-onboarding">
                     <span className="omo-kicker">YOUR WORK, SOMEWHERE YOU REMEMBER</span>
                     <h1>A place for<br/>your next idea.</h1>

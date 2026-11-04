@@ -1,6 +1,21 @@
-# Real Claude Code validation
+# Real agent validation
 
-## Verified scope
+## Recorded Hermes and Claude follow-up
+
+At application commit `f5bfec010bf436e1488a16752cf3cd072a0237bd`, an operator explicitly approved one small task each for the real Hermes, Claude Code and Codex CLIs. Codex reported that its existing login token could not be refreshed. The operator then said to skip Codex. No login renewal or task retry was attempted, and its source file remained at the failing baseline. Codex execution is **not** verified.
+
+The two completed tasks used the same owned disposable Git project, separate agent tabs and separate source/test files:
+
+- Real Claude Code `2.1.318`: fixed only `claude-add.js`, with normal per-edit and exact test-command approvals. Three independent tests passed.
+- Real Hermes: used a newly created isolated profile, existing CLI-managed OpenAI Codex authentication and `gpt-6.1-sol`. Its terminal-only toolset, eight-turn limit and run budget stayed in effect. Fixed only `hermes-add.js`; three independent tests passed. No existing fleet profile was launched.
+
+Each task was prepared in the real app's composer, then submitted through the physical terminal. Actual same-project patches were opened in Git review. Accepted remained an explicit review note, not Git promotion. The only changed tracked files were the two named implementations; tests, source HEAD and index stayed unchanged. A fresh combined Node run in the in-world shell also passed all six tests. No credentials were entered or printed, and no permission bypass, purchase, deploy or CI provider call was added.
+
+Local ignored evidence under `evidence/all-agent-demo/` includes real failing baselines, independent green logs, actual patches and a runnable `project/` archive. The private session/control JSON is not a shareable report. `omo-hermes-claude-demo.mp4` is a readable post-task walkthrough of the still-running actual sessions, their actual patches and fresh shell tests; it does not spend or pretend to perform another model task. Raw execution capture is retained locally. This small validation does not certify arbitrary tasks, concurrent file ownership, universal installation or full Minecraft parity.
+
+## Earlier real Claude-only validation
+
+### Verified scope
 
 One explicitly approved real Claude Code task was exercised through the actual first-person Omo application at `3a4fd61db97367847c6f1181425fa43d6cfd6cdb`. This was not a fixture-agent response. Running CLI version: `2.1.303`.
 
@@ -34,4 +49,4 @@ Local ignored evidence, not embedded private account/session data:
 - This validates one small real Claude task, not real Hermes or Codex inference, arbitrary long tasks, all authentication states, cost accounting, concurrency, or full Minecraft parity. Local login-status reports are not provider-execution proof for the other CLIs.
 - Accepted remains a user review note, not automatic completion detection, Git staging, code promotion or a deployment approval.
 - The real run exposed a physical-screen interaction issue: a distant Web-wall HTML label could intercept the terminal centre click at some close-range views. That validation completed by clicking an unobstructed point on the same physical monitor and closing the composer before terminal input. The follow-up fix now applies the existing 3.2-unit walk-reach policy to every workstation label, using its actual screen mesh; overview labels stay discoverable. `workstation-label-real-app.cjs` proves the normal terminal-centre click, nearby terminal/Web access and overview behaviour without further real-agent calls.
-- No demo recording was made. Real-agent checks are approval-gated and are not added to automated CI.
+- No demo recording was made for that earlier Claude-only task. The recorded two-agent follow-up is documented above. Real-agent checks remain approval-gated and are not added to automated CI.

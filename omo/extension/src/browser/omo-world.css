@@ -144,3 +144,10 @@
 .omo-console-confirm p { margin:0; flex-basis:100%; color:#e8e1d5; line-height:1.5; }
 .omo-console-confirm .omo-console-go { background:#3b595a; color:#edf5ed; }
 @media(max-width:760px) { .omo-console-host { left:15px; top:96px; max-width:calc(100% - 30px); } .omo-console-status { max-width:200px; } }
+.omo-task-overview-view { flex:1; min-height:0; overflow:auto; padding:28px 30px; background:#101622; }
+.omo-task-overview-view > section { margin:0 auto; color:#dfe9e5; background:#17232c; border:1px solid #ffffff1c; border-radius:8px; box-shadow:0 10px 28px #0004; }
+.omo-task-overview-view button { color:#e1ece7; background:#22383a; border:1px solid #ffffff22; border-radius:5px; padding:7px 10px; }
+.omo-task-overview-view button:hover:not(:disabled) { background:#2d4c4a; }
+.omo-task-overview-view h2, .omo-task-overview-view h3, .omo-task-overview-view h4 { color:#edf5ed; }
+.omo-task-overview-view p, .omo-task-overview-view small, .omo-task-overview-view dt { color:#a8bdba; }
+.omo-task-overview-view pre { user-select:text; color:#dfe9e5; background:#0d1721; border:1px solid #ffffff12; border-radius:5px; padding:9px; }
