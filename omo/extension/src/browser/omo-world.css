@@ -36,6 +36,11 @@
 .omo-field { color:#9eafb6; font-size:10px; display:block; margin:12px 0; }
 .omo-field input, .omo-field select { display:block; margin-top:7px; background:#0c141d; color:#e0e7e6; border:1px solid #ffffff17; border-radius:6px; padding:10px 11px; width:100%; font-size:12px; }
 .omo-field small { display:block; margin-top:6px; line-height:1.4; color:#91a7ad; }
+.omo-preset-controls { margin-top:15px; padding:10px; border:1px solid #ffffff20; border-radius:6px; color:#a8bbb9; font-size:10px; }
+.omo-preset-controls legend { padding:0 5px; color:#c6ded4; }
+.omo-preset-controls p, .omo-preset-controls [role=status] { font-size:10px; line-height:1.5; margin:9px 0 0; }
+.omo-preset-controls button { background:#253d3e; color:#daeee4; border:1px solid #ffffff20; border-radius:4px; padding:7px 9px; cursor:pointer; }
+.omo-preset-controls input[type=file] { padding:7px; font-size:10px; }
 .omo-folder { margin-top:7px; display:flex; align-items:center; border:1px solid #ffffff17; border-radius:6px; background:#0c141d; padding:5px 5px 5px 11px; min-width:0; gap:8px; }
 .omo-folder > span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font:10px monospace; direction:rtl; text-align:left; }
 .omo-folder button { margin-left:auto; padding:6px 8px; border-radius:4px; background:#25333d; color:#d2dedc; border:0; font-size:10px; }

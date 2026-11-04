@@ -32,7 +32,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
             await pause(200);
         }
         if (!ready) throw new Error('Real Theia server did not become ready; see evidence/ci-real-app-server.log');
-        for (const name of ['runtime-real-app.cjs', 'bell-real-app.cjs', 'physical-selection-real-app.cjs', 'unicode-real-app.cjs', 'git-review-real-app.cjs', 'agent-task-real-app.cjs', 'room-layout-real-app.cjs', 'shared-room-real-app.cjs']) {
+        for (const name of ['runtime-real-app.cjs', 'bell-real-app.cjs', 'physical-selection-real-app.cjs', 'unicode-real-app.cjs', 'git-review-real-app.cjs', 'agent-task-real-app.cjs', 'room-layout-real-app.cjs', 'room-preset-real-app.cjs', 'shared-room-real-app.cjs']) {
             const child = spawn(process.execPath, [path.join(ROOT, 'extension/test', name)], { cwd: ROOT, env, shell: false, stdio: 'inherit' });
             const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', value => resolve(value)); });
             if (code !== 0) throw new Error(`Real app ${name} failed with exit ${code}`);

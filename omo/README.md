@@ -5,6 +5,7 @@ A local Theia application with first-person walking and real terminal output on 
 ## Implemented in this integration branch
 
 - Space-station and jungle onboarding, workspace-folder choice and per-project room preferences.
+- **Portable room appearance presets**: Customise room → Export saved room downloads `omo-room-preset.json` with only theme, layout and overview camera. Import JSON previews it before an explicit Save; Cancel keeps the current room. Names, project paths, terminals, profiles, room identities, web URLs and task text are not included or accepted. The destination keeps its own project/name and running shells. See `ROOM-PRESETS.md`.
 - **Classic / Wide aisle** physical room layouts, with live setup preview, save/cancel and project-scoped local persistence. The real desks, screens and movement collision boxes use the same layout data. Changing layouts resets the view to safe spawn but does not replace terminal bindings or stop/restart their processes. Existing saved rooms without a layout stay Classic. Shared-room participants must choose the same layout; see `ROOM-LAYOUTS.md`.
 - Local shared-room presence: explicitly join the same room code from two trusted browser clients using the same project/theme/layout. See named 3D players move in the world, with separate default persistent terminal bindings for each participant. Join/leave never starts an agent or kills a shell. This is visual collaboration, not terminal sharing or authenticated multi-user hosting; see `SHARED-ROOMS.md`.
 - Two physical computers. Each binds to its own persistent tmux workspace and independent shell processes. Walking away, reloading the browser and restarting the backend do not deliberately kill those jobs.
@@ -61,6 +62,8 @@ node extension/test/git-review-real-app.cjs
 node extension/test/agent-task-real-app.cjs
 # Starts an owned app/project for physical layout, shell continuity and two-client layout gates:
 node extension/test/room-layout-real-app.cjs
+# Starts two owned app/project/browser fixtures for actual appearance download/import:
+node extension/test/room-preset-real-app.cjs
 ```
 
 The application tests use owned fixture files and isolated QA browser profiles. They inspect actual shell PIDs, exported state, workspace bindings, physical-monitor output and real page effects. The web-wall test also checks rendered blue/green screen pixels against a localhost fixture; metadata alone is not acceptance. Backend tests use real tmux; agent executables in tests are clearly labelled fixtures, not fabricated provider responses. Live paid model execution is not part of these checks.

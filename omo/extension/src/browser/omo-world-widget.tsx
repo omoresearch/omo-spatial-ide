@@ -8,6 +8,7 @@ import { FileDialogService } from '@theia/filesystem/lib/browser/file-dialog/fil
 import URI from '@theia/core/lib/common/uri';
 import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame, CodeReviewFrame } from './room-scene';
 import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
+import { exportRoomPreset, parseRoomPreset, ROOM_PRESET_FILENAME, ROOM_PRESET_MAX_BYTES } from '../common/room-preset';
 import { ROOM_LAYOUTS } from '../common/player-state';
 import type { RoomLayoutId } from '../common/player-state';
 import { OmoRuntimeService } from '../common/runtime-protocol';
@@ -84,6 +85,11 @@ export class OmoWorldWidget extends ReactWidget {
     private draftTheme: RoomTheme = 'station';
     private draftLayout: RoomLayoutId = 'classic';
     private draftName = '';
+    private draftCamera?: RoomState['camera'];
+    private presetRevision = 0;
+    private presetReadEpoch = 0;
+    private presetLoading = false;
+    private presetStatus = '';
     private configuring = true;
     private error = '';
     private feedback = '';
@@ -114,6 +120,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.id = OmoWorldWidget.ID; this.title.label = 'World'; this.title.caption = 'Omo · Your spatial workspace';
         this.title.closable = false; this.title.iconClass = 'codicon codicon-globe';
         this.addClass('omo-world-widget'); this.node.tabIndex = -1;
+        this.toDispose.push({ dispose: () => this.invalidatePresetRead() });
         try {const saved=sessionStorage.getItem('omo.presence.tab.v1');if(saved&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(saved))this.tabIdentity=saved;sessionStorage.setItem('omo.presence.tab.v1',this.tabIdentity);}catch{/* Memory-only identity; never guesses another tab's terminals. */}
         this.presence=new PresenceController({service:this.presenceService,pose:()=>this.worldScene?.getPlayerPose()??{...PLAYER_HOME},schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:state=>this.presenceChanged(state)});
         this.toDispose.push({dispose:()=>{void this.presence?.dispose().catch(()=>undefined);}});
@@ -179,6 +186,7 @@ export class OmoWorldWidget extends ReactWidget {
     private leavePresence=():void=>{this.worldScene?.releaseTyping();void this.presence?.leave().catch(error=>{this.error=String(error);this.update();});};
     private projectChanged(next: URI | undefined): void {
         if (next?.toString() === this.project?.toString()) return;
+        this.invalidatePresetRead(); this.draftCamera = undefined; this.presetStatus = '';
         this.closeReview();this.codeReviewFrame=undefined;this.worldScene?.setCodeReview({title:'PROJECT CHANGES',lines:['Open review for the selected project.'],status:'No Git contents read yet'});
         this.leavePresence();this.personalRoom=undefined;
         this.project = next;
@@ -225,14 +233,16 @@ export class OmoWorldWidget extends ReactWidget {
         catch { this.error = 'Your room could not be saved. Check browser storage before continuing.'; this.update(); return false; }
     }
     private createRoom = (): void => {
-        if (!this.project || !this.draftName.trim()) return;
+        if (!this.project || !this.draftName.trim() || this.presetLoading) return;
+        this.invalidatePresetRead();
         const next: RoomState = { version: 1, theme: this.draftTheme, layout: this.draftLayout, projectUri: this.project.toString(),
-            projectName: this.draftName.trim().slice(0, 120), camera: this.room?.camera ?? { ...CAMERA } };
+            projectName: this.draftName.trim().slice(0, 120), camera: { ...(this.draftCamera ?? this.room?.camera ?? CAMERA) } };
         if (!this.save(next)) return;
         this.room = next; this.configuring = false; this.feedback = 'Room saved on this device.'; this.update();
     };
     private cameraChanged = (camera: RoomState['camera']): void => {
-        if (!this.room || this.configuring) return;
+        if (this.configuring) { this.draftCamera = { ...camera }; return; }
+        if (!this.room) return;
         const next = { ...this.room, camera };
         if (this.save(next)) this.room = next;
     };
@@ -301,7 +311,44 @@ export class OmoWorldWidget extends ReactWidget {
         const selected = await this.dialogs.showOpenDialog({ title: 'Choose your project folder', canSelectFiles: false, canSelectFolders: true }, root);
         if (selected) await this.workspace.open(selected);
     }); };
-    private configure = (): void => { this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
+    private invalidatePresetRead(): void { this.presetReadEpoch++; this.presetLoading = false; }
+    private importPreset = async (file: File): Promise<void> => {
+        if (!this.project || !this.configuring) return;
+        const epoch = ++this.presetReadEpoch;
+        const project = this.project.toString();
+        const ownsPreview = (): boolean => epoch === this.presetReadEpoch && this.configuring && project === this.project?.toString();
+        this.presetLoading = true; this.presetStatus = ''; this.error = '';
+        if (file.size > ROOM_PRESET_MAX_BYTES) {
+            this.presetLoading = false; this.error = 'Room preset files must be at most 8 KiB (8192 bytes).'; this.update(); return;
+        }
+        this.update();
+        let raw: string;
+        try { raw = await file.text(); }
+        catch {
+            if (ownsPreview()) { this.presetLoading = false; this.error = 'The room preset file could not be read.'; this.update(); }
+            return;
+        }
+        if (!ownsPreview()) return;
+        try {
+            const preset = parseRoomPreset(raw);
+            this.draftTheme = preset.theme; this.draftLayout = preset.layout; this.draftCamera = { ...preset.camera };
+            this.presetRevision++; this.presetStatus = 'Appearance loaded into preview. Save room to apply it to this project.';
+        } catch { this.error = 'That file is not a valid Omo appearance preset (8 KiB maximum).'; }
+        this.presetLoading = false; this.update();
+    };
+    private exportPreset = (): void => {
+        if (!this.room) return;
+        try {
+            const contents = exportRoomPreset(this.room);
+            const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }));
+            const link = document.createElement('a'); link.href = url; link.download = ROOM_PRESET_FILENAME;
+            document.body.appendChild(link);
+            try { link.click(); } finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 60000); }
+            this.error = ''; this.presetStatus = 'Saved appearance exported. Project paths, names and running sessions are not included.'; this.update();
+        } catch { this.error = 'Those saved appearance settings could not be exported.'; this.update(); }
+    };
+    private cancelConfiguration = (): void => { this.invalidatePresetRead(); this.presetRevision++; this.presetStatus = ''; this.error = ''; this.configuring = false; this.update(); };
+    private configure = (): void => { this.invalidatePresetRead(); this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
 
     protected render(): React.ReactNode {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;
@@ -320,17 +367,24 @@ export class OmoWorldWidget extends ReactWidget {
                     <h1>A place for<br/>your next idea.</h1>
                     <p className="omo-intro">Make this workspace feel like you.<br/>Your code and tools are already at home.</p>
                     <div className="omo-step-title"><span>01</span> Choose your world</div>
-                    <div className="omo-theme-list">{(Object.keys(THEMES) as RoomTheme[]).map(key => <button key={key} data-testid={`theme-${key}`} className={`omo-theme-card ${theme === key ? 'selected' : ''}`} aria-pressed={theme === key} onClick={() => { this.draftTheme = key; this.update(); }}>
+                    <div className="omo-theme-list">{(Object.keys(THEMES) as RoomTheme[]).map(key => <button key={key} data-testid={`theme-${key}`} className={`omo-theme-card ${theme === key ? 'selected' : ''}`} aria-pressed={theme === key} disabled={this.presetLoading || this.busy} onClick={() => { this.draftTheme = key; this.update(); }}>
                         <span className="omo-theme-symbol">{THEMES[key].symbol}</span><span><strong>{THEMES[key].title}</strong><small>{THEMES[key].eyebrow}</small></span><span className="omo-radio"/>
                     </button>)}</div>
                     <div className="omo-step-title"><span>02</span> Make it yours</div>
-                    <label className="omo-field">Room layout<select data-testid="room-layout" aria-label="Room layout" value={layout} onChange={event => { this.draftLayout = event.target.value as RoomLayoutId; this.update(); }}>
+                    <label className="omo-field">Room layout<select data-testid="room-layout" aria-label="Room layout" value={layout} disabled={this.presetLoading || this.busy} onChange={event => { this.draftLayout = event.target.value as RoomLayoutId; this.update(); }}>
                         {(Object.keys(ROOM_LAYOUTS) as RoomLayoutId[]).map(key => <option key={key} value={key}>{ROOM_LAYOUTS[key].label}</option>)}
                     </select><small>{ROOM_LAYOUTS[layout].description}</small></label>
                     <label className="omo-field">Workspace name<input data-testid="room-name" maxLength={120} defaultValue={this.draftName} onChange={event => { this.draftName = event.target.value; this.update(); }} placeholder="My next big thing" /></label>
                     <div className="omo-field">Project folder<div className="omo-folder"><span title={this.project?.path.toString()}>{this.project?.path.toString() ?? 'No folder selected'}</span><button onClick={this.chooseProject} disabled={this.busy}>Browse</button></div></div>
-                    <button className="omo-primary" data-testid="create-room" disabled={!this.project || !this.draftName.trim() || this.busy} onClick={this.createRoom}>{this.room ? 'Save room' : 'Create my room'} <span>↗</span></button>
-                    {this.room && <button className="omo-cancel" data-testid="cancel-room" onClick={() => { this.configuring = false; this.update(); }}>Back to my room</button>}
+                    <fieldset className="omo-preset-controls" aria-label="Portable room appearance">
+                        <legend>Room appearance preset</legend>
+                        <label className="omo-field">Import JSON (maximum 8 KiB)<input type="file" accept=".json,application/json" data-testid="room-preset-import" aria-label="Import room appearance preset" disabled={this.presetLoading || this.busy} onChange={event => { const input = event.currentTarget; const file = input.files?.[0]; input.value = ''; if (file) void this.importPreset(file); }}/></label>
+                        <button type="button" data-testid="room-preset-export" disabled={!this.room || this.presetLoading || this.busy} onClick={this.exportPreset}>Export saved room</button>
+                        <p>Appearance only. No project names, paths, sessions or agent settings. Import previews first; Save room applies it.</p>
+                        <span role="status" data-testid="room-preset-status">{this.presetLoading ? 'Reading appearance preset…' : this.presetStatus}</span>
+                    </fieldset>
+                    <button className="omo-primary" data-testid="create-room" disabled={!this.project || !this.draftName.trim() || this.busy || this.presetLoading} onClick={this.createRoom}>{this.room ? 'Save room' : 'Create my room'} <span>↗</span></button>
+                    {this.room && <button className="omo-cancel" data-testid="cancel-room" onClick={this.cancelConfiguration}>Back to my room</button>}
                     <p className="omo-privacy">Saved on this device. No account. No model calls.</p>
                 </section> : null}
                 <section className="omo-stage" aria-label="Spatial workspace">
@@ -342,7 +396,7 @@ export class OmoWorldWidget extends ReactWidget {
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={()=>{void this.runAction(()=>this.openCode());}}/>}
                     </div>}
-                    <SceneView key={`${theme}:${layout}`} theme={theme} layout={layout} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
+                    <SceneView key={`${theme}:${layout}:${this.presetRevision}`} theme={theme} layout={layout} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>
                     {!this.configuring && <aside className="omo-tool-dock" aria-label="Project tools"><span>YOUR WORKSTATIONS</span><button disabled={this.busy} data-testid="terminal-action" onClick={() => this.selectStation('terminal')}><b>01</b><div><strong>Terminal</strong><small>A real shell. Your project folder.</small></div><span>↗</span></button><button disabled={this.busy} data-testid="code-action" onClick={() => this.selectStation('code')}><b>02</b><div><strong>Code</strong><small>Files, editing and your next change.</small></div><span>↗</span></button><p>Nothing starts unless you choose it.</p></aside>}
                     {this.configuring && <div className="omo-preview-badge"><i/> LIVE ROOM PREVIEW</div>}
