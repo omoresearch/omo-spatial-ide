@@ -95,11 +95,15 @@ for line in sys.stdin:
             if (position === 0) {
                 const parked = path.join(fixture.owned, 'parked-git'); fs.renameSync(path.join(fixture.project, '.git'), parked);
                 try {
+                    // CI can nest this fixture inside the source checkout. A missing
+                    // .git then discovers that parent; an invalid owned pointer stops
+                    // traversal and guarantees a real Git failure in both locations.
+                    fs.writeFileSync(path.join(fixture.project, '.git'), `gitdir: ${path.join(fixture.owned, 'nonexistent-git-directory')}\n`);
                     await p.click('[data-testid="task-run-review"]'); await p.waitForSelector('[data-testid="git-review-panel"][data-phase="error"]');
                     await p.click('[data-testid="git-review-close"]'); await phase('submitted');
                     assert.equal(await enabled('task-run-accept'), false);
                     check('A real failed project review cannot unlock a task decision');
-                } finally { fs.renameSync(parked, path.join(fixture.project, '.git')); }
+                } finally { fs.rmSync(path.join(fixture.project, '.git'), { force: true }); fs.renameSync(parked, path.join(fixture.project, '.git')); }
             }
             await p.click('[data-testid="task-run-review"]'); await p.waitForSelector('[data-testid="git-review-panel"][data-phase="ready"]');
             await p.click('[data-review-path="fixture-task-result.txt"]');
