@@ -8,6 +8,8 @@ import { FileDialogService } from '@theia/filesystem/lib/browser/file-dialog/fil
 import URI from '@theia/core/lib/common/uri';
 import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame, CodeReviewFrame } from './room-scene';
 import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
+import { ROOM_LAYOUTS } from '../common/player-state';
+import type { RoomLayoutId } from '../common/player-state';
 import { OmoRuntimeService } from '../common/runtime-protocol';
 import { RuntimeConsoleController, RuntimeConsoleState, StationBinding } from './runtime-console-controller';
 import { RuntimeConsoleStrip } from './runtime-console-strip';
@@ -32,7 +34,7 @@ const THEMES = {
     jungle: { title: 'Prehistoric jungle', eyebrow: 'EXPEDITION / 02', description: 'A green retreat. Room to think, space to build.', symbol: '✳' }
 };
 
-function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSelect: (station: Workstation, point?: ScreenPoint) => void; onTextSelect: (station: TerminalWorkstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrames: Record<TerminalWorkstation, MonitorFrame>; webFrame?: WebSurfaceFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onPaste: (text: string) => void; onScroll?: (delta: number) => void; onMessage: (text: string) => void }): React.ReactElement {
+function SceneView(props: { theme: RoomTheme; layout: RoomLayoutId; camera: RoomState['camera']; onSelect: (station: Workstation, point?: ScreenPoint) => void; onTextSelect: (station: TerminalWorkstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrames: Record<TerminalWorkstation, MonitorFrame>; webFrame?: WebSurfaceFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onPaste: (text: string) => void; onScroll?: (delta: number) => void; onMessage: (text: string) => void }): React.ReactElement {
     const host = React.useRef<HTMLDivElement>(null);
     const instance = React.useRef<RoomScene>();
     const callbacks = React.useRef(props); callbacks.current = props;
@@ -46,14 +48,14 @@ function SceneView(props: { theme: RoomTheme; camera: RoomState['camera']; onSel
     React.useEffect(() => {
         if (!host.current) return;
         setError(''); setReady(false);
-        const scene = new RoomScene(host.current, { theme: props.theme, camera: props.camera, walk: mode==='walk',
+        const scene = new RoomScene(host.current, { theme: props.theme, layout: props.layout, camera: props.camera, walk: mode==='walk',
             onInput: text=>callbacks.current.onInput(text),onPaste:text=>callbacks.current.onPaste(text),onScroll:delta=>callbacks.current.onScroll?.(delta),onMessage:text=>callbacks.current.onMessage(text),
             onSelect: (action,point) => callbacks.current.onSelect(action,point), onCameraChange: camera => callbacks.current.onCamera(camera),
             onTextSelect: station => callbacks.current.onTextSelect(station),
             onReady: () => setReady(true), onError: message => setError(message) });
         instance.current = scene;scene.setTerminalFrames(callbacks.current.terminalFrames);if(callbacks.current.webFrame)scene.setWebFrame(callbacks.current.webFrame);callbacks.current.onInstance?.(scene);
         return () => { scene.dispose(); instance.current = undefined; callbacks.current.onInstance?.(undefined); };
-    }, [props.theme]);
+    }, [props.theme, props.layout]);
     return <div className={`omo-scene-wrap ${mode==='walk'?'omo-walking':''}`} data-theme={props.theme} data-navigation={mode}>
         <div ref={host} className="omo-scene" data-testid="omo-scene" data-ready={ready ? 'true' : 'false'} />
         {error && <div className="omo-render-error" role="alert"><strong>3D rendering could not start.</strong><p>{error}</p><p>The project terminal and editor are still available from the toolbar.</p></div>}
@@ -80,6 +82,7 @@ export class OmoWorldWidget extends ReactWidget {
     private project?: URI;
     private room?: RoomState;
     private draftTheme: RoomTheme = 'station';
+    private draftLayout: RoomLayoutId = 'classic';
     private draftName = '';
     private configuring = true;
     private error = '';
@@ -144,7 +147,7 @@ export class OmoWorldWidget extends ReactWidget {
                 const raw = localStorage.getItem(this.storageKey());
                 this.room = parseRoomState(raw, this.project.toString());
                 if (raw && !this.room) this.feedback = 'Saved room settings could not be read. Choose a theme to recreate this project’s room.';
-                if (this.room) { this.draftTheme = this.room.theme; this.draftName = this.room.projectName; this.configuring = false; }
+                if (this.room) { this.draftTheme = this.room.theme; this.draftLayout = this.room.layout ?? 'classic'; this.draftName = this.room.projectName; this.configuring = false; }
             } catch { this.error = 'Browser storage is unavailable. Allow local storage to save your room.'; }
         }
         this.initialized = true; this.update();
@@ -171,7 +174,7 @@ export class OmoWorldWidget extends ReactWidget {
     private joinPresence=(roomId:string,name:string):void=>{
         if(!this.room||!this.project)return;
         this.worldScene?.releaseTyping();
-        void this.presence?.join({roomId,name,projectUri:this.project.toString(),theme:this.room.theme,clientId:this.tabIdentity}).catch(error=>{this.error=String(error);this.update();});
+        void this.presence?.join({roomId,name,projectUri:this.project.toString(),theme:this.room.theme,layout:this.room.layout??'classic',clientId:this.tabIdentity}).catch(error=>{this.error=String(error);this.update();});
     };
     private leavePresence=():void=>{this.worldScene?.releaseTyping();void this.presence?.leave().catch(error=>{this.error=String(error);this.update();});};
     private projectChanged(next: URI | undefined): void {
@@ -180,11 +183,11 @@ export class OmoWorldWidget extends ReactWidget {
         this.leavePresence();this.personalRoom=undefined;
         this.project = next;
         this.readWebBinding();
-        this.room = undefined; this.configuring = true; this.draftName = next?.path.base || 'My workspace';
+        this.room = undefined; this.configuring = true; this.draftLayout = 'classic'; this.draftName = next?.path.base || 'My workspace';
         if (next) {
             try {
                 this.room = parseRoomState(localStorage.getItem(this.storageKey()), next.toString());
-                if (this.room) { this.draftTheme = this.room.theme; this.draftName = this.room.projectName; this.configuring = false; }
+                if (this.room) { this.draftTheme = this.room.theme; this.draftLayout = this.room.layout ?? 'classic'; this.draftName = this.room.projectName; this.configuring = false; }
             } catch { /* storage errors were reported at start-up */ }
         }
         void this.web?.close();
@@ -223,7 +226,7 @@ export class OmoWorldWidget extends ReactWidget {
     }
     private createRoom = (): void => {
         if (!this.project || !this.draftName.trim()) return;
-        const next: RoomState = { version: 1, theme: this.draftTheme, projectUri: this.project.toString(),
+        const next: RoomState = { version: 1, theme: this.draftTheme, layout: this.draftLayout, projectUri: this.project.toString(),
             projectName: this.draftName.trim().slice(0, 120), camera: this.room?.camera ?? { ...CAMERA } };
         if (!this.save(next)) return;
         this.room = next; this.configuring = false; this.feedback = 'Room saved on this device.'; this.update();
@@ -298,11 +301,12 @@ export class OmoWorldWidget extends ReactWidget {
         const selected = await this.dialogs.showOpenDialog({ title: 'Choose your project folder', canSelectFiles: false, canSelectFolders: true }, root);
         if (selected) await this.workspace.open(selected);
     }); };
-    private configure = (): void => { this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
+    private configure = (): void => { this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
 
     protected render(): React.ReactNode {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;
         const theme = this.configuring ? this.draftTheme : this.room!.theme;
+        const layout = this.configuring ? this.draftLayout : this.room?.layout ?? 'classic';
         return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode}>
             <header className="omo-header">
                 <div className="omo-brand"><span className="omo-brand-mark">o<span>m</span>o</span><span className="omo-brand-caption">RESEARCH<br/>SPATIAL IDE</span></div>
@@ -320,10 +324,13 @@ export class OmoWorldWidget extends ReactWidget {
                         <span className="omo-theme-symbol">{THEMES[key].symbol}</span><span><strong>{THEMES[key].title}</strong><small>{THEMES[key].eyebrow}</small></span><span className="omo-radio"/>
                     </button>)}</div>
                     <div className="omo-step-title"><span>02</span> Make it yours</div>
+                    <label className="omo-field">Room layout<select data-testid="room-layout" aria-label="Room layout" value={layout} onChange={event => { this.draftLayout = event.target.value as RoomLayoutId; this.update(); }}>
+                        {(Object.keys(ROOM_LAYOUTS) as RoomLayoutId[]).map(key => <option key={key} value={key}>{ROOM_LAYOUTS[key].label}</option>)}
+                    </select><small>{ROOM_LAYOUTS[layout].description}</small></label>
                     <label className="omo-field">Workspace name<input data-testid="room-name" maxLength={120} defaultValue={this.draftName} onChange={event => { this.draftName = event.target.value; this.update(); }} placeholder="My next big thing" /></label>
                     <div className="omo-field">Project folder<div className="omo-folder"><span title={this.project?.path.toString()}>{this.project?.path.toString() ?? 'No folder selected'}</span><button onClick={this.chooseProject} disabled={this.busy}>Browse</button></div></div>
                     <button className="omo-primary" data-testid="create-room" disabled={!this.project || !this.draftName.trim() || this.busy} onClick={this.createRoom}>{this.room ? 'Save room' : 'Create my room'} <span>↗</span></button>
-                    {this.room && <button className="omo-cancel" onClick={() => { this.configuring = false; this.update(); }}>Back to my room</button>}
+                    {this.room && <button className="omo-cancel" data-testid="cancel-room" onClick={() => { this.configuring = false; this.update(); }}>Back to my room</button>}
                     <p className="omo-privacy">Saved on this device. No account. No model calls.</p>
                 </section> : null}
                 <section className="omo-stage" aria-label="Spatial workspace">
@@ -335,7 +342,7 @@ export class OmoWorldWidget extends ReactWidget {
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={()=>{void this.runAction(()=>this.openCode());}}/>}
                     </div>}
-                    <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
+                    <SceneView key={`${theme}:${layout}`} theme={theme} layout={layout} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>
                     {!this.configuring && <aside className="omo-tool-dock" aria-label="Project tools"><span>YOUR WORKSTATIONS</span><button disabled={this.busy} data-testid="terminal-action" onClick={() => this.selectStation('terminal')}><b>01</b><div><strong>Terminal</strong><small>A real shell. Your project folder.</small></div><span>↗</span></button><button disabled={this.busy} data-testid="code-action" onClick={() => this.selectStation('code')}><b>02</b><div><strong>Code</strong><small>Files, editing and your next change.</small></div><span>↗</span></button><p>Nothing starts unless you choose it.</p></aside>}
                     {this.configuring && <div className="omo-preview-badge"><i/> LIVE ROOM PREVIEW</div>}

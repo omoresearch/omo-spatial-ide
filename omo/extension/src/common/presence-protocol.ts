@@ -1,15 +1,18 @@
 import type { RoomTheme } from './room-state';
-import type { PlayerPose } from './player-state';
+import type { PlayerPose, RoomLayoutId } from './player-state';
 export const OMO_PRESENCE_PATH = '/services/omo-presence';
 export const OmoPresenceService = Symbol('OmoPresenceService');
-export interface PresenceJoin { roomId: string; name: string; clientId: string; projectUri: string; theme: RoomTheme }
+export interface PresenceJoin { roomId: string; name: string; clientId: string; projectUri: string; theme: RoomTheme; layout?: RoomLayoutId }
 export interface RoomMember { id: string; name: string; pose: PlayerPose }
-export interface RoomSnapshot { roomId: string; theme: RoomTheme; selfId: string; members: RoomMember[] }
+export interface RoomSnapshot { roomId: string; theme: RoomTheme; selfId: string; members: RoomMember[]; layout?: RoomLayoutId }
 /** Local trusted clients only. No terminal contents or remote-control messages. */
 export interface OmoPresenceService {
     join(input: PresenceJoin): Promise<RoomSnapshot>;
     update(pose: PlayerPose): Promise<RoomSnapshot>;
     leave(): Promise<void>;
+}
+export function presenceLayout(input: Pick<PresenceJoin, 'layout'>): RoomLayoutId {
+    return input.layout ?? 'classic';
 }
 export function presenceJoin(input: PresenceJoin): PresenceJoin {
     if (!input || typeof input.roomId !== 'string' || !/^[a-z0-9][a-z0-9-]{2,31}$/.test(input.roomId)) throw new Error('Room code must be 3–32 lowercase letters, numbers or hyphens.');
@@ -17,7 +20,10 @@ export function presenceJoin(input: PresenceJoin): PresenceJoin {
     if (typeof input.clientId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(input.clientId)) throw new Error('Invalid tab identity.');
     if (typeof input.projectUri !== 'string' || input.projectUri.length > 4096 || !input.projectUri.startsWith('file:///') || /[\u0000-\u001f]/u.test(input.projectUri)) throw new Error('Choose a local project.');
     if (input.theme !== 'station' && input.theme !== 'jungle') throw new Error('Invalid room theme.');
-    return { roomId: input.roomId, name: input.name.trim(), clientId: input.clientId, projectUri: input.projectUri, theme: input.theme };
+    if (input.layout !== undefined && input.layout !== 'classic' && input.layout !== 'wide') throw new Error('Invalid room layout.');
+    const normalized: PresenceJoin = { roomId: input.roomId, name: input.name.trim(), clientId: input.clientId, projectUri: input.projectUri, theme: input.theme };
+    if (input.layout === 'wide') normalized.layout = 'wide';
+    return normalized;
 }
 export function presencePose(pose: PlayerPose): PlayerPose {
     if (!pose || ![pose.x,pose.z,pose.yaw,pose.pitch].every(n=>typeof n==='number' && Number.isFinite(n)) || Math.abs(pose.x)>5.5 || pose.z< -3.8 || pose.z>4.45 || Math.abs(pose.yaw)>Math.PI || Math.abs(pose.pitch)>1.2) throw new Error('Invalid room position.');

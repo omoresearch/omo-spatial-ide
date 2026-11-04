@@ -6,7 +6,8 @@ import type { WebSurfaceFrame } from '../common/web-runtime-protocol';
 import { MonitorSelection, monitorCell, monitorCellSpan, visibleMonitorCells } from '../common/monitor-selection';
 import type { SelectionUnit } from '../common/monitor-selection';
 import type { RoomMember } from '../common/presence-protocol';
-import { PLAYER_HOME, PlayerPose } from '../common/player-state';
+import { PLAYER_HOME, PlayerPose, ROOM_LAYOUTS } from '../common/player-state';
+import type { RoomLayoutId } from '../common/player-state';
 import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-preview';
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
@@ -29,6 +30,7 @@ export interface ScreenPoint { x: number; y: number }
 
 export interface RoomSceneOptions {
     theme: RoomTheme;
+    layout?: RoomLayoutId;
     camera: RoomState['camera'];
     onSelect: (station: Workstation, point?: ScreenPoint) => void;
     onTextSelect: (station: TerminalWorkstation) => void;
@@ -102,12 +104,17 @@ export class RoomScene {
         const accent = new THREE.PointLight(jungle ? 0xc3ff9b : 0x70c9ff, 25, 18);
         accent.position.set(0, 4, -2); this.scene.add(accent);
         this.buildRoom(jungle);
+        canvas.dataset.roomLayout = this.options.layout ?? 'classic';
+        canvas.dataset.deskPositions = JSON.stringify(Object.fromEntries(this.roots.filter(root => root.userData.workstation === 'terminal' || root.userData.workstation === 'terminal-2').map(root => {
+            const point = root.getWorldPosition(new THREE.Vector3());
+            return [root.userData.workstation, { x: point.x, z: point.z }];
+        })));
         this.bindControls(canvas);
         this.walker = new FirstPersonControls(canvas, this.camera, (x,y)=>this.interactAt(x,y), text=>this.options.onInput(text), text=>this.options.onMessage(text), this.options.onPaste, {
             start: (x,y,unit) => this.startTerminalSelection(x,y,unit), move: (x,y) => this.extendTerminalSelection(x,y),
             end: () => this.options.onMessage('Selected visible terminal text · Ctrl+Shift+C to copy. Esc to clear.'),
             clear: () => this.clearTerminalSelection(), copy: () => this.copyTerminalSelection()
-        });
+        }, this.options.layout ?? 'classic');
         this.setNavigation(this.options.walk ? 'walk' : 'overview');
         this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(this.host);
         this.resize(); this.positionCamera(); this.draw(); this.options.onReady();
@@ -192,8 +199,9 @@ export class RoomScene {
             this.box(root, [2.5, 0.5, 1], [-3.5, 0.25, -3.5], 0xa39c8c);
             this.box(root, [2.5, 0.65, 0.3], [-3.5, 0.65, -3.85], 0xa39c8c);
         }
-        this.desk(root, -2.65, 0.5, 'terminal', jungle);
-        this.desk(root, 2.25, -0.45, 'terminal-2', jungle);
+        const desks = ROOM_LAYOUTS[this.options.layout ?? 'classic'].desks;
+        this.desk(root, desks.terminal.x, desks.terminal.z, 'terminal', jungle);
+        this.desk(root, desks['terminal-2'].x, desks['terminal-2'].z, 'terminal-2', jungle);
         this.webWall(root);
         this.codeWall(root);
         this.cylinder(root, 0.7, 0.15, [0.2, 0.06, 3], jungle ? 0xb9ba91 : 0x8398a5, 0.75);

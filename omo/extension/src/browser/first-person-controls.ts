@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { advancePlayer, PLAYER_HOME, PlayerPose } from '../common/player-state';
+import type { RoomLayoutId } from '../common/player-state';
 import type { SelectionUnit } from '../common/monitor-selection';
 
 export interface SelectionGestures {
@@ -23,7 +24,7 @@ export class FirstPersonControls {
     constructor(private canvas: HTMLCanvasElement, private camera: THREE.PerspectiveCamera,
         private interact: (x: number, y: number) => 'terminal' | 'code' | undefined,
         private input: (text: string) => void, private message: (text: string) => void, private pasteText?: (text: string) => void,
-        private selection?: SelectionGestures) {
+        private selection?: SelectionGestures, private layout: RoomLayoutId = 'classic') {
         const on = <K extends keyof HTMLElementEventMap>(name: K, fn: (event: HTMLElementEventMap[K]) => void): void => {
             const globalInput = name === 'keydown' || name === 'keyup' || name === 'paste';
             const target: EventTarget = globalInput ? window : canvas;
@@ -122,7 +123,7 @@ export class FirstPersonControls {
     setEnabled(enabled:boolean):void{this.enabled=enabled;this.keys.clear();this.typing=false;this.selecting=false;this.selection?.clear();if(enabled)this.apply();}
     step(seconds:number):void{
         if(!this.enabled)return;
-        if(!this.typing)this.pose=advancePlayer(this.pose,{forward:Number(this.keys.has('w'))-Number(this.keys.has('s')),right:Number(this.keys.has('d'))-Number(this.keys.has('a'))},seconds);
+        if(!this.typing)this.pose=advancePlayer(this.pose,{forward:Number(this.keys.has('w'))-Number(this.keys.has('s')),right:Number(this.keys.has('d'))-Number(this.keys.has('a'))},seconds,this.layout);
         this.apply();
     }
     private apply():void{

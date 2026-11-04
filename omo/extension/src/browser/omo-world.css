@@ -34,7 +34,8 @@
 .omo-radio { width:13px; height:13px; margin-left:auto; border-radius:50%; border:1px solid #68808b; flex-shrink:0; }
 .selected .omo-radio { border-color:#b6dbcb; background:#b6dbcb; box-shadow:inset 0 0 0 3px #223b3a; }
 .omo-field { color:#9eafb6; font-size:10px; display:block; margin:12px 0; }
-.omo-field input { display:block; margin-top:7px; background:#0c141d; color:#e0e7e6; border:1px solid #ffffff17; border-radius:6px; padding:10px 11px; width:100%; font-size:12px; }
+.omo-field input, .omo-field select { display:block; margin-top:7px; background:#0c141d; color:#e0e7e6; border:1px solid #ffffff17; border-radius:6px; padding:10px 11px; width:100%; font-size:12px; }
+.omo-field small { display:block; margin-top:6px; line-height:1.4; color:#91a7ad; }
 .omo-folder { margin-top:7px; display:flex; align-items:center; border:1px solid #ffffff17; border-radius:6px; background:#0c141d; padding:5px 5px 5px 11px; min-width:0; gap:8px; }
 .omo-folder > span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font:10px monospace; direction:rtl; text-align:left; }
 .omo-folder button { margin-left:auto; padding:6px 8px; border-radius:4px; background:#25333d; color:#d2dedc; border:0; font-size:10px; }

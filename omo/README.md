@@ -5,7 +5,8 @@ A local Theia application with first-person walking and real terminal output on 
 ## Implemented in this integration branch
 
 - Space-station and jungle onboarding, workspace-folder choice and per-project room preferences.
-- Local shared-room presence: explicitly join the same room code from two trusted browser clients using the same project/theme. See named 3D players move in the world, with separate default persistent terminal bindings for each participant. Join/leave never starts an agent or kills a shell. This is visual collaboration, not terminal sharing or authenticated multi-user hosting; see `SHARED-ROOMS.md`.
+- **Classic / Wide aisle** physical room layouts, with live setup preview, save/cancel and project-scoped local persistence. The real desks, screens and movement collision boxes use the same layout data. Changing layouts resets the view to safe spawn but does not replace terminal bindings or stop/restart their processes. Existing saved rooms without a layout stay Classic. Shared-room participants must choose the same layout; see `ROOM-LAYOUTS.md`.
+- Local shared-room presence: explicitly join the same room code from two trusted browser clients using the same project/theme/layout. See named 3D players move in the world, with separate default persistent terminal bindings for each participant. Join/leave never starts an agent or kills a shell. This is visual collaboration, not terminal sharing or authenticated multi-user hosting; see `SHARED-ROOMS.md`.
 - Two physical computers. Each binds to its own persistent tmux workspace and independent shell processes. Walking away, reloading the browser and restarting the backend do not deliberately kill those jobs.
 - Shell, Hermes, Claude Code and Codex tab launch paths, installed-tool discovery, existing Hermes-profile selection and explicit start/revive confirmations. CLI authentication and approval settings remain CLI-owned; no bypass flags are added.
 - **Task → Paste draft (no Enter)** prepares text for the selected live non-shell tab. Drafts are separate by project, desk, workspace and tab, and stay in this browser tab's session storage across reload (not shared task storage). Text remains after pasting; inspect the actual screen and press Enter there yourself. An agent-labelled tab can still be at a shell, login or permission prompt. **Review project changes** opens the existing read-only Git review; it does not submit input or infer completion. No automatic agent launch or paid task submission is added. See `AGENT-TASKS.md`.
@@ -56,6 +57,8 @@ OMO_URL=http://127.0.0.1:3190 node extension/test/shared-room-real-app.cjs
 node extension/test/git-review-real-app.cjs
 # Starts an owned app/project with fixture-only Hermes/Claude/Codex executables:
 node extension/test/agent-task-real-app.cjs
+# Starts an owned app/project for physical layout, shell continuity and two-client layout gates:
+node extension/test/room-layout-real-app.cjs
 ```
 
 The application tests use owned fixture files and isolated QA browser profiles. They inspect actual shell PIDs, exported state, workspace bindings, physical-monitor output and real page effects. The web-wall test also checks rendered blue/green screen pixels against a localhost fixture; metadata alone is not acceptance. Backend tests use real tmux; agent executables in tests are clearly labelled fixtures, not fabricated provider responses. Live paid model execution is not part of these checks.
