@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "start": "node scripts/start.cjs",
+    "doctor": "node scripts/doctor.cjs",
     "test:e2e": "node extension/test/runtime-real-app.cjs",
     "test:ci-e2e": "node scripts/ci-e2e.cjs",
     "compile": "tsc -p extension",
