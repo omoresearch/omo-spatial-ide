@@ -16,7 +16,8 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     const runtimeData = path.join(evidence, `ci-runtime-${run}`);
     const log = fs.openSync(path.join(evidence, 'ci-real-app-server.log'), 'a');
     const env = { ...process.env, THEIA_CONFIG_DIR: path.join(evidence, 'ci-theia-profile'),
-        OMO_SPATIAL_DATA: runtimeData, OMO_SPATIAL_TMUX_SOCKET: socket, OMO_URL: `http://127.0.0.1:${port}` };
+        OMO_SPATIAL_DATA: runtimeData, OMO_SPATIAL_TMUX: process.env.OMO_SPATIAL_TEST_TMUX || process.env.OMO_SPATIAL_TMUX,
+        OMO_SPATIAL_TMUX_SOCKET: socket, OMO_URL: `http://127.0.0.1:${port}` };
     const server = spawn(process.execPath, [path.join(ROOT, 'scripts/start.cjs'), '--port', port], {
         cwd: ROOT, env, detached: true, shell: false, stdio: ['ignore', log, log]
     });

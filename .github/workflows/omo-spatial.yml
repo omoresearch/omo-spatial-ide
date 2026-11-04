@@ -40,9 +40,13 @@ jobs:
           tmux -V
       - name: Install locked compile/test dependencies (no lifecycle hooks)
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Fetch checksum-pinned modern tmux for full paste-mode coverage
+        run: node scripts/ci-tmux.cjs "$RUNNER_TEMP/omo-tmux"
       - name: Build the native drive-enumeration addon required at app startup
         run: npm rebuild drivelist --foreground-scripts
       - name: Type-check and test Omo code and local runtime
+        env:
+          OMO_WEB_TEST_CONTAINER: '1'
         run: |
           npm run compile
           npm test
