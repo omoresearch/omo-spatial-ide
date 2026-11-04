@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { SessionTab } from '../common/runtime-protocol';
+import { terminalLinks } from '../common/terminal-links';
 import { AGENT_LABELS, PASTE_LIMIT_BYTES, RuntimeConsoleController, RuntimeConsoleState, TAB_NAME_MAX, WORKSPACE_NAME_MAX, launcherOptions } from './runtime-console-controller';
 
 const STATE_LABEL: Record<SessionTab['state'], string> = { running: 'running', exited: 'exited', interrupted: 'interrupted', sleeping: 'asleep', unknown: 'unknown' };
@@ -12,7 +13,7 @@ const FIELD_STYLE: React.CSSProperties = { background: '#17232c', color: '#cfded
  * Copy hands text to the browser only on an explicit click (navigator clipboard WRITE). Paste takes
  * text the user typed or dropped into the box; this file never reads a device clipboard.
  */
-function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; locked: boolean }): React.ReactElement {
+function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; locked: boolean; onOpenLink?: (url: string) => void }): React.ReactElement {
     const { state, controller, locked } = props;
     const ws = state.workspace!;
     const [query, setQuery] = React.useState(state.find?.query ?? '');
@@ -28,7 +29,15 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
         try { await navigator.clipboard.writeText(text); setCopied(`Copied ${text.length} characters.`); } catch { setCopied('The browser refused clipboard access. Select the text below and copy it yourself.'); }
     };
     const agentTabs = ws.tabs.filter(t => t.kind !== 'shell');
+    const links = terminalLinks(state.lines);
     return <div data-testid="runtime-manage" role="region" aria-label="Manage terminal" style={DRAWER_STYLE}>
+        {props.onOpenLink && links.length > 0 && <section data-testid="terminal-links" aria-label="Links visible on this monitor">
+            <span className="omo-console-label">Links on this screen · nothing opens until you click</span>
+            {links.map(link => <div key={link.url} className="omo-console-row">
+                <code style={{ overflowWrap: 'anywhere', flex: '1 1 180px' }}>{link.url}</code>
+                <button type="button" data-testid="terminal-link" data-destination={link.url} disabled={locked} title={link.url} onClick={() => props.onOpenLink?.(link.url)}>Open in web wall</button>
+            </div>)}
+        </section>}
         <form className="omo-console-row" onSubmit={e => { e.preventDefault(); void controller?.find(query, 0); }}>
             <span className="omo-console-label">Find</span>
             <input data-testid="runtime-find-input" aria-label="Find in history" style={FIELD_STYLE} maxLength={200} value={query} onChange={e => setQuery(e.target.value)} />
@@ -94,7 +103,7 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
 }
 
 /** Compact world overlay for the terminal station. It manages tabs; the monitor itself stays the terminal. */
-export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean }): React.ReactElement {
+export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean; onOpenLink?: (url: string) => void }): React.ReactElement {
     const { state, controller } = props;
     const ws = state.workspace;
     const [drawer, setDrawer] = React.useState(!!props.initialDrawer);
@@ -139,7 +148,7 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
                 </select></label>}
             <button data-testid="runtime-manage-toggle" aria-expanded={drawer} onClick={() => setDrawer(!drawer)} title="Find, scrollback, copy, paste and workspaces">{drawer ? 'Manage ▴' : 'Manage ▾'}</button>
         </div>}
-        {ws && drawer && <ManageDrawer state={state} controller={controller} locked={locked} />}
+        {ws && drawer && <ManageDrawer state={state} controller={controller} locked={locked} onOpenLink={props.onOpenLink} />}
         {ws && hint && <div className="omo-console-hint" data-testid="runtime-install-hint">Not installed — {hint}</div>}
         {state.pending && <div className="omo-console-confirm" role="alertdialog" aria-label="Confirm" data-testid="runtime-confirm">
             <p>{state.pending.message}</p>

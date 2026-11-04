@@ -14,6 +14,7 @@ import { RuntimeConsoleStrip } from './runtime-console-strip';
 import { OmoWebService, WebSurfaceFrame } from '../common/web-runtime-protocol';
 import { WebSurfaceController, WebWallState } from './web-surface-controller';
 import { WebSurfaceStrip } from './web-surface-strip';
+import { normalizeWebUrl } from '../common/web-url';
 
 export const TERMINAL_STATION_ID = 'terminal-1';
 const TERMINAL_STATIONS: TerminalWorkstation[] = ['terminal', 'terminal-2'];
@@ -206,6 +207,14 @@ export class OmoWorldWidget extends ReactWidget {
         finally { this.busy = false; this.update(); }
     }
     private terminalInput = (text: string): void => { if (this.activeMode === 'web') void this.web?.sendInput(text); else void this.console?.sendInput(text); };
+    private openTerminalLink = (url: string): void => {
+        try {
+            const destination = normalizeWebUrl(url);
+            if (!this.web) throw new Error('The web wall is not ready.');
+            this.chooseStation('web');
+            void this.web.open(destination);
+        } catch (error) { this.error = String(error); this.update(); }
+    };
     private pasteInput = (text: string): void => { if (this.activeMode === 'web') void this.web?.paste(text); else void this.console?.paste(text); };
     private worldScroll = (deltaY: number): void => { if (this.activeMode === 'web') void this.web?.scroll(deltaY); else void this.console?.wheel(-Math.sign(deltaY) * 3); };
     /** Click on the physical monitor: open (or reconnect) this room's persistent workspace on the runtime. */
@@ -265,7 +274,7 @@ export class OmoWorldWidget extends ReactWidget {
                     </div>
                     {this.room && !this.configuring && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
-                        {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console}/>}
+                        {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink}/>}
                     </div>}
                     <SceneView key={theme} theme={theme} camera={this.room?.camera ?? CAMERA} onSelect={this.selectStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>

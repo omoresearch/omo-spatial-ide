@@ -84,7 +84,10 @@ npx --yes --package=node@22.23.4 --call 'npm run compile && node --experimental-
   badge. Acknowledge clears only that desk's visual signal; no command is sent and no sound plays.
   Counts cover attached views and reset on a fresh page/project, not a durable notification inbox.
 - Codex has no real resume. It starts fresh and the UI says so.
-- Link opening (bridge `open`) is not ported. It would open a browser on the host.
+- The bridge's host-browser `open` remains unexposed. A safer standalone equivalent now lists
+  complete visible HTTP(S) addresses in Manage and opens the chosen destination in the managed
+  web wall, after explicit user click only. It rejects credential-bearing/clipped addresses and
+  does not reconstruct wrapped or OSC hyperlinks.
 - Auto-sleep and automatic wake are deliberately not enabled.
 - Delete is refused while any tab is busy, unless the user confirms a second time. The shell or
   agent processes in the deleted workspace end with it. This is the bridge's own behaviour.
