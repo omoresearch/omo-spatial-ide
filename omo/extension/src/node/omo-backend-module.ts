@@ -5,21 +5,27 @@ import { OMO_RUNTIME_PATH, OmoRuntimeService } from '../common/runtime-protocol'
 import { OmoRuntimeServiceImpl } from './omo-runtime-service';
 import { discoverRuntime } from './runtime-discovery';
 import { RuntimeHost } from './runtime-host';
+import { OMO_WEB_PATH } from '../common/web-runtime-protocol';
+import { WebRuntimeService } from './web-runtime-service';
+import { webConnection } from './web-connection';
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
+export const OmoManagedWeb = Symbol('OmoManagedWeb');
 
 /** Stops the runtime host with the backend. The tmux server and every tab keep running. */
 @injectable()
 export class OmoRuntimeLifecycle implements BackendApplicationContribution {
     @inject(OmoRuntimeHost) protected readonly host!: RuntimeHost;
+    @inject(OmoManagedWeb) protected readonly web!: WebRuntimeService;
 
-    onStop(): void {
-        void this.host.stop();
+    async onStop(): Promise<void> {
+        try { await this.web.closeAll(); } finally { await this.host.stop(); }
     }
 }
 
 export default new ContainerModule(bind => {
     bind(OmoRuntimeHost).toDynamicValue(() => new RuntimeHost(discoverRuntime(process.env), process.env)).inSingletonScope();
+    bind(OmoManagedWeb).toDynamicValue(() => new WebRuntimeService()).inSingletonScope();
     bind(OmoRuntimeLifecycle).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(OmoRuntimeLifecycle);
     bind(ConnectionHandler).toDynamicValue(ctx => {
@@ -30,6 +36,14 @@ export default new ContainerModule(bind => {
             const service: OmoRuntimeService = new OmoRuntimeServiceImpl(host);
             proxy.onDidCloseConnection(() => (service as OmoRuntimeServiceImpl).dispose());
             return service;
+        });
+    }).inSingletonScope();
+    bind(ConnectionHandler).toDynamicValue(ctx => {
+        const web = ctx.container.get<WebRuntimeService>(OmoManagedWeb);
+        return new RpcConnectionHandler<object>(OMO_WEB_PATH, proxy => {
+            const connection = webConnection(web);
+            proxy.onDidCloseConnection(() => { void connection.dispose().catch(() => undefined); });
+            return connection.service;
         });
     }).inSingletonScope();
 });

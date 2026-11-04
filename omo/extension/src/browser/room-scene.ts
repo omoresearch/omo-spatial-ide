@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { RoomState, RoomTheme } from '../common/room-state';
 import { FirstPersonControls } from './first-person-controls';
 import { cellRuns, dominantKey, MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
+import type { WebSurfaceFrame } from '../common/web-runtime-protocol';
 
 /** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
 export interface MonitorFrame {
@@ -14,15 +15,19 @@ export interface MonitorFrame {
     status?: string;
 }
 
-export type Workstation = 'terminal' | 'code';
+export type Workstation = 'terminal' | 'terminal-2' | 'code' | 'web';
+export type TerminalWorkstation = 'terminal' | 'terminal-2';
+export interface ScreenPoint { x: number; y: number }
 export interface RoomSceneOptions {
     theme: RoomTheme;
     camera: RoomState['camera'];
-    onSelect: (station: Workstation) => void;
+    onSelect: (station: Workstation, point?: ScreenPoint) => void;
     onCameraChange: (camera: RoomState['camera']) => void;
     onReady: () => void;
     walk?: boolean;
     onInput: (text: string) => void;
+    onPaste?: (text: string) => void;
+    onScroll?: (deltaY: number) => void;
     onMessage: (text: string) => void;
     onError: (message: string) => void;
 }
@@ -41,9 +46,14 @@ export class RoomScene {
     private walker?: FirstPersonControls;
     private navigation: 'walk' | 'overview' = 'overview';
     private lastFrame = performance.now();
-    private terminalSurface?: HTMLCanvasElement;
-    private terminalTexture?: THREE.CanvasTexture;
-    private terminalFrame: MonitorFrame = { lines: [] };
+    private terminalSurfaces = new Map<TerminalWorkstation, { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture }>();
+    private terminalFrames: Record<TerminalWorkstation, MonitorFrame> = { terminal: { lines: [] }, 'terminal-2': { lines: [] } };
+    private screens = new Map<Workstation, THREE.Mesh>();
+    private lamps = new Map<TerminalWorkstation, THREE.Mesh>();
+    private webSurface?: HTMLCanvasElement;
+    private webTexture?: THREE.CanvasTexture;
+    private webEpoch = 0;
+    private webSize = { width: 960, height: 600 };
     private pointer?: { x: number; y: number; startX: number; startY: number; dragged: boolean };
     private cleanup: Array<() => void> = [];
     constructor(private host: HTMLElement, private options: RoomSceneOptions) {
@@ -80,7 +90,7 @@ export class RoomScene {
         accent.position.set(0, 4, -2); this.scene.add(accent);
         this.buildRoom(jungle);
         this.bindControls(canvas);
-        this.walker = new FirstPersonControls(canvas, this.camera, (x,y)=>this.interactAt(x,y), text=>this.options.onInput(text), text=>this.options.onMessage(text));
+        this.walker = new FirstPersonControls(canvas, this.camera, (x,y)=>this.interactAt(x,y), text=>this.options.onInput(text), text=>this.options.onMessage(text), this.options.onPaste);
         this.setNavigation(this.options.walk ? 'walk' : 'overview');
         this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(this.host);
         this.resize(); this.positionCamera(); this.draw(); this.options.onReady();
@@ -141,7 +151,8 @@ export class RoomScene {
             this.box(root, [2.5, 0.65, 0.3], [-3.5, 0.65, -3.85], 0xa39c8c);
         }
         this.desk(root, -2.65, 0.5, 'terminal', jungle);
-        this.desk(root, 2.25, -0.45, 'code', jungle);
+        this.desk(root, 2.25, -0.45, 'terminal-2', jungle);
+        this.webWall(root);
         this.cylinder(root, 0.7, 0.15, [0.2, 0.06, 3], jungle ? 0xb9ba91 : 0x8398a5, 0.75);
         const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.35, 0), this.material(jungle ? 0xd6e7a4 : 0x7cdae2, 0.6));
         core.position.set(0.2, 0.65, 3); root.add(core);
@@ -158,28 +169,31 @@ export class RoomScene {
         const texture = this.screenTexture(action);
         const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.58, 0.9), new THREE.MeshBasicMaterial({map:texture}));
         screen.position.set(0, 1.99, -0.296); group.add(screen);
+        this.screens.set(action, screen);
         this.box(group, [0.9, 0.045, 0.3], [-0.15, 1.26, 0.28], 0x344353);
         for(let i=0;i<3;i++) this.box(group,[0.72,0.008,0.012],[-0.15,1.285,0.2+i*0.075],0x71808c);
         this.cylinder(group, 0.11, 0.25, [1.15, 1.32, 0.3], jungle ? 0xd3d3a8 : 0xc9a478);
-        this.glow(group, [0.3, 0.025, 0.025], [-0.6, 1.42, -0.265], action === 'terminal' ? 0x9adbc6 : 0x9ebce9);
+        const lamp = this.glow(group, [0.3, 0.025, 0.025], [-0.6, 1.42, -0.265], 0x6d7c86);
+        if (action === 'terminal' || action === 'terminal-2') this.lamps.set(action, lamp);
         // Chair and footrest. These are navigation landmarks, not pretend agents.
         this.cylinder(group, 0.15, 0.5, [0, 0.3, 1.35], 0x374656);
         this.box(group, [0.9, 0.16, 0.85], [0, 0.62, 1.35], jungle ? 0x758968 : 0x648697);
         this.box(group, [0.9, 0.85, 0.14], [0, 1.03, 1.72], jungle ? 0x758968 : 0x648697);
         const label = document.createElement('button'); label.className = 'omo-scene-label'; label.dataset.workstation = action;
-        label.textContent = action === 'terminal' ? '01  Terminal ↗' : '02  Code ↗';
-        label.setAttribute('aria-label', action === 'terminal' ? 'Open project terminal' : 'Open project code');
+        label.textContent = action === 'terminal' ? '01  Desk one ↗' : '02  Desk two ↗';
+        label.setAttribute('aria-label', action === 'terminal' ? 'Open project terminal' : 'Open second project terminal');
         label.addEventListener('click', () => {
-            if(this.navigation==='walk'&&action==='terminal'){const distance=this.camera.position.distanceTo(new THREE.Vector3(-2.65,1.99,0.204));if(distance>3.2){this.options.onMessage('Walk closer to the terminal monitor.');return;}this.walker?.focusTerminal();}
+            if(this.navigation==='walk'){const center = screen.getWorldPosition(new THREE.Vector3());if(this.camera.position.distanceTo(center)>3.2){this.options.onMessage('Walk closer to the terminal monitor.');return;}this.walker?.focusTerminal();}
             this.options.onSelect(action);
         });
         this.host.appendChild(label); this.labels.push(label);
     }
     private screenTexture(action: Workstation): THREE.CanvasTexture {
-        if(action==='terminal'){
-            this.terminalSurface=document.createElement('canvas');this.terminalSurface.width=1024;this.terminalSurface.height=576;
-            this.terminalTexture=new THREE.CanvasTexture(this.terminalSurface);this.terminalTexture.colorSpace=THREE.SRGBColorSpace;
-            this.setTerminalFrame(this.terminalFrame);return this.terminalTexture;
+        if(action==='terminal' || action==='terminal-2'){
+            const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=576;
+            const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+            this.terminalSurfaces.set(action, { canvas, texture });
+            this.setTerminalFrame(this.terminalFrames[action], action);return texture;
         }
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
         const c = canvas.getContext('2d')!;
@@ -191,6 +205,51 @@ export class RoomScene {
         lines.forEach((line,i)=>c.fillText(line,36,115+i*43));
         c.fillStyle='#526c7c'; c.font='16px monospace'; c.fillText('OMO / WORKSTATION',36,330);
         const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture;
+    }
+    private webWall(parent: THREE.Object3D): void {
+        const group = new THREE.Group(); group.position.set(0, 0, -4.12); group.userData.workstation = 'web'; group.userData.labelHeight = 3.43;
+        parent.add(group); this.roots.push(group);
+        this.box(group, [4.12, 2.6, .14], [0, 1.9, 0], 0x17222e);
+        this.webSurface = document.createElement('canvas'); this.webSurface.width = 960; this.webSurface.height = 600;
+        this.webTexture = new THREE.CanvasTexture(this.webSurface); this.webTexture.colorSpace = THREE.SRGBColorSpace;
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.9, 2.44), new THREE.MeshBasicMaterial({ map: this.webTexture, toneMapped: false }));
+        screen.position.set(0, 1.9, .08); group.add(screen); this.screens.set('web', screen);
+        this.setWebPlaceholder('Click the web wall, then open an address.');
+        const label = document.createElement('button'); label.className = 'omo-scene-label'; label.dataset.workstation = 'web'; label.textContent = '03  Web wall ↗';
+        label.setAttribute('aria-label', 'Use physical web wall');
+        label.addEventListener('click', () => {
+            if (this.navigation === 'walk' && this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3())) > 3.2) { this.options.onMessage('Walk closer to the web wall.'); return; }
+            this.options.onSelect('web'); this.walker?.focusTerminal();
+        });
+        this.host.appendChild(label); this.labels.push(label);
+    }
+    setWebPlaceholder(message: string): void {
+        this.webEpoch++;
+        if (!this.webSurface || !this.webTexture) return;
+        const c = this.webSurface.getContext('2d')!;
+        c.fillStyle = '#091119'; c.fillRect(0, 0, this.webSurface.width, this.webSurface.height);
+        c.fillStyle = '#87cdb4'; c.font = '30px monospace'; c.fillText('OMO / WEB WALL', 40, 75);
+        c.fillStyle = '#c7ded4'; c.font = '24px monospace'; c.fillText(message.slice(0, 62), 40, 140);
+        this.webTexture.needsUpdate = true;
+    }
+    setWebFrame(frame: WebSurfaceFrame): void {
+        const epoch = ++this.webEpoch;
+        this.webSize = { width: frame.surface.width, height: frame.surface.height };
+        const image = new Image();
+        image.onload = () => {
+            if (this.disposed || epoch !== this.webEpoch || !this.webSurface || !this.webTexture) return;
+            const c = this.webSurface.getContext('2d')!;
+            c.drawImage(image, 0, 0, this.webSurface.width, this.webSurface.height);
+            this.webTexture.needsUpdate = true;
+            this.renderer.domElement.dataset.webFrameSequence = String(frame.sequence);
+        };
+        image.onerror = () => { if (epoch === this.webEpoch) this.options.onMessage('The browser frame could not be decoded.'); };
+        image.src = `data:${frame.mime};base64,${frame.data}`;
+    }
+    clearWebFrame(): void {
+        ++this.webEpoch;
+        this.setWebPlaceholder('Open a page above to use this wall.');
+        delete this.renderer.domElement.dataset.webFrameSequence;
     }
     private plant(parent: THREE.Object3D, x: number, z: number): void {
         this.cylinder(parent, 0.35, 0.5, [x, 0.25, z], 0xd1c7af, 0.25);
@@ -227,7 +286,7 @@ export class RoomScene {
             const ray=new THREE.Raycaster();ray.setFromCamera(p,this.camera);const hits=ray.intersectObjects(this.roots,true);
             for(const hit of hits){let node:THREE.Object3D|null=hit.object;while(node&&!node.userData.workstation)node=node.parent;if(node?.userData.workstation){this.options.onSelect(node.userData.workstation);break;}}
         };
-        const wheel=(event:WheelEvent)=>{event.preventDefault();this.state.distance=Math.max(10,Math.min(30,this.state.distance+event.deltaY*0.01));this.positionCamera();this.options.onCameraChange({...this.state});};
+        const wheel=(event:WheelEvent)=>{event.preventDefault();if(this.navigation==='walk'){if(this.walker?.typing)this.options.onScroll?.(event.deltaY);return;}this.state.distance=Math.max(10,Math.min(30,this.state.distance+event.deltaY*0.01));this.positionCamera();this.options.onCameraChange({...this.state});};
         const key=(event:KeyboardEvent)=>{
             if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','-'].includes(event.key))return;event.preventDefault();
             if(event.key==='ArrowLeft')this.state.azimuth-=0.12;if(event.key==='ArrowRight')this.state.azimuth+=0.12;
@@ -245,11 +304,15 @@ export class RoomScene {
         this.labels.forEach(label => label.classList.toggle('is-walk', mode === 'walk'));
         this.positionCamera();
     }
-    setTerminalLines(lines: string[]): void { this.setTerminalFrame({ ...this.terminalFrame, lines, foreground: undefined, background: undefined, cursor: undefined }); }
-    setTerminalFrame(frame: MonitorFrame): void {
-        this.terminalFrame = frame;
-        if (!this.terminalSurface || !this.terminalTexture) return;
-        const c = this.terminalSurface.getContext('2d')!;
+    setTerminalLines(lines: string[]): void { this.setTerminalFrame({ ...this.terminalFrames.terminal, lines, foreground: undefined, background: undefined, cursor: undefined }); }
+    setTerminalFrames(frames: Record<TerminalWorkstation, MonitorFrame>): void {
+        this.setTerminalFrame(frames.terminal, 'terminal'); this.setTerminalFrame(frames['terminal-2'], 'terminal-2');
+    }
+    setTerminalFrame(frame: MonitorFrame, station: TerminalWorkstation = 'terminal'): void {
+        this.terminalFrames[station] = frame;
+        const surface = this.terminalSurfaces.get(station);
+        if (!surface) return;
+        const c = surface.canvas.getContext('2d')!;
         const base = '#091119';
         c.fillStyle = base; c.fillRect(0,0,1024,576);
         c.fillStyle = '#87cdb4'; c.font = '17px monospace'; c.fillText((frame.title ?? 'OMO / LIVE PROJECT TERMINAL').slice(0,52),24,29);
@@ -283,21 +346,31 @@ export class RoomScene {
                 if (ch && ch !== ' ') { c.fillStyle = base; c.fillText(ch, x, y); }
             }
         }
-        this.terminalTexture.needsUpdate = true;
-        if(this.renderer){this.renderer.domElement.dataset.terminalText=frame.lines.join('\n');this.renderer.domElement.dataset.terminalCursor=frame.cursor?`${frame.cursor.x},${frame.cursor.y},${frame.cursor.visible}`:'';}
+        surface.texture.needsUpdate = true;
+        const lamp = this.lamps.get(station);
+        if (lamp) {
+            const color = /interrupted|exited|error/i.test(frame.status ?? '') ? 0xd26464 : /working/i.test(frame.status ?? '') ? 0xe8bd60 : /live|running/i.test(frame.status ?? '') ? 0x87cdb4 : 0x6d7c86;
+            const material = lamp.material as THREE.MeshStandardMaterial; material.color.setHex(color); material.emissive.setHex(color);
+        }
+        if(this.renderer){
+            if (station === 'terminal') { this.renderer.domElement.dataset.terminalText=frame.lines.join('\n');this.renderer.domElement.dataset.terminalCursor=frame.cursor?`${frame.cursor.x},${frame.cursor.y},${frame.cursor.visible}`:''; }
+            this.renderer.domElement.dataset.stationText = JSON.stringify({ terminal: this.terminalFrames.terminal.lines, 'terminal-2': this.terminalFrames['terminal-2'].lines });
+        }
     }
     /** Pointer moved to an overlay control: stop typing into the monitor so keys go to that control. */
     releaseTyping(): void { this.walker?.releaseTyping(); }
-    private interactAt(x: number, y: number): Workstation | undefined {
+    private interactAt(x: number, y: number): 'terminal' | 'code' | undefined {
         const rect=this.renderer.domElement.getBoundingClientRect();
         const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1),this.camera);
         for(const hit of ray.intersectObjects(this.roots,true)){
             let node:THREE.Object3D|null=hit.object;while(node&&!node.userData.workstation)node=node.parent;
             const action=node?.userData.workstation as Workstation|undefined;
             if(!action)continue;
-            const center=action==='terminal'?new THREE.Vector3(-2.65,1.99,0.204):new THREE.Vector3(2.25,1.99,-0.746);
+            const screen = this.screens.get(action); if (!screen) continue;
+            const center = screen.getWorldPosition(new THREE.Vector3());
             if(this.camera.position.distanceTo(center)>3.2){this.options.onMessage('Walk closer to the workstation.');return;}
-            this.options.onSelect(action);return action;
+            const point = action === 'web' && hit.object === screen && hit.uv ? { x: Math.min(this.webSize.width-1, Math.max(0, hit.uv.x*this.webSize.width)), y: Math.min(this.webSize.height-1, Math.max(0, (1-hit.uv.y)*this.webSize.height)) } : undefined;
+            this.options.onSelect(action, point);return action === 'code' ? 'code' : 'terminal';
         }
         return undefined;
     }
@@ -318,12 +391,24 @@ export class RoomScene {
         if(this.host.clientWidth&&this.host.clientHeight){
             this.walker?.step(delta);
             this.renderer.render(this.scene,this.camera);
+            const targets: Record<string, { x: number; y: number; visible: boolean }> = {};
             this.labels.forEach((label,i)=>{
-                const p=new THREE.Vector3().copy(this.roots[i].position).add(new THREE.Vector3(0,this.navigation==='walk'?2.55:2.9,-0.3)).project(this.camera);
+                const root = this.roots[i], action = root.userData.workstation as Workstation;
+                const p=new THREE.Vector3().copy(root.position).add(new THREE.Vector3(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3)).project(this.camera);
                 label.style.left=`${(p.x*0.5+0.5)*this.host.clientWidth}px`;label.style.top=`${(-p.y*0.5+0.5)*this.host.clientHeight}px`;
                 label.style.visibility=p.z>1||p.z< -1?'hidden':'visible';
-                if(i===0){const screen=new THREE.Vector3(-2.65,1.99,0.204).project(this.camera);this.renderer.domElement.dataset.terminalX=String((screen.x*.5+.5)*this.host.clientWidth);this.renderer.domElement.dataset.terminalY=String((-screen.y*.5+.5)*this.host.clientHeight);}
+                const mesh = this.screens.get(action);
+                if (mesh) {
+                    const projected = mesh.getWorldPosition(new THREE.Vector3()).project(this.camera);
+                    const point = { x: (projected.x*.5+.5)*this.host.clientWidth, y: (-projected.y*.5+.5)*this.host.clientHeight, visible: projected.z >= -1 && projected.z <= 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 };
+                    targets[action] = point;
+                    if (action === 'terminal') { this.renderer.domElement.dataset.terminalX = String(point.x); this.renderer.domElement.dataset.terminalY = String(point.y); }
+                }
             });
+            this.renderer.domElement.dataset.stationTargets = JSON.stringify(targets);
+            const web = this.screens.get('web');
+            if (web) this.renderer.domElement.dataset.webQuad = JSON.stringify([[-1.95,1.22],[1.95,1.22],[1.95,-1.22],[-1.95,-1.22]].map(([x,y]) => { const p = web.localToWorld(new THREE.Vector3(x,y,0)).project(this.camera); return { x: (p.x*.5+.5)*this.host.clientWidth, y: (-p.y*.5+.5)*this.host.clientHeight }; }));
+            this.renderer.domElement.dataset.stationLamps = JSON.stringify(Object.fromEntries([...this.lamps].map(([id,mesh]) => [id,(mesh.material as THREE.MeshStandardMaterial).color.getHexString()])));
         }
         this.frame=requestAnimationFrame(this.draw);
     };

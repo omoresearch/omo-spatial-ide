@@ -15,6 +15,7 @@
     "@theia/filesystem": "1.74.3",
     "@theia/workspace": "1.74.3",
     "@theia/terminal": "1.74.3",
+    "puppeteer-core": "25.1.0",
     "three": "0.180.0"
   }
 }

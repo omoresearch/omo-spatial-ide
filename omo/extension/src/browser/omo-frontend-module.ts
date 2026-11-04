@@ -4,12 +4,14 @@ import { bindViewContribution } from '@theia/core/lib/browser/shell/view-contrib
 import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
 import { ServiceConnectionProvider } from '@theia/core/lib/browser/messaging/service-connection-provider';
 import { OmoRuntimeService, OMO_RUNTIME_PATH } from '../common/runtime-protocol';
+import { OmoWebService, OMO_WEB_PATH } from '../common/web-runtime-protocol';
 import { OmoWorldWidget } from './omo-world-widget';
 import { OmoWorldContribution } from './omo-world-contribution';
 import '../../src/browser/omo-world.css';
 
 export default new ContainerModule(bind => {
     bind(OmoRuntimeService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<OmoRuntimeService>(ctx.container, OMO_RUNTIME_PATH)).inSingletonScope();
+    bind(OmoWebService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<OmoWebService>(ctx.container, OMO_WEB_PATH)).inSingletonScope();
     bind(OmoWorldWidget).toSelf();
     bind(WidgetFactory).toDynamicValue(context => ({ id: OmoWorldWidget.ID,
         createWidget: () => context.container.get(OmoWorldWidget) })).inSingletonScope();

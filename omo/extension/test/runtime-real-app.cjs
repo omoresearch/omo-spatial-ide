@@ -13,7 +13,7 @@ const PRIMARY_NAME = `Primary ${RUN}`;
 const CANVAS = 'canvas[data-testid="omo-world-canvas"]';
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const checks = [];
-const proofs = ['first', 'second', 'after-refresh', 'after-restart', 'away'].map(s => path.join(PROJECT, `.omo-runtime-${RUN}-${s}`));
+const proofs = ['first', 'second', 'after-refresh', 'after-restart', 'away', 'paste-good', 'paste-bad'].map(s => path.join(PROJECT, `.omo-runtime-${RUN}-${s}`));
 function check(name, value) { assert.ok(value, name); checks.push({ name, pass: true }); console.log('PASS:', name); }
 async function waitFile(file, timeout = 20000) { const end = Date.now() + timeout; while (!fs.existsSync(file) && Date.now() < end) await wait(100); assert.ok(fs.existsSync(file), `Actual shell must create ${path.basename(file)}`); return fs.readFileSync(file, 'utf8').trim(); }
 async function binding(page) { return page.evaluate(() => { const key = Object.keys(localStorage).find(k => k.startsWith('omo.runtime.v1:')); return key ? JSON.parse(localStorage.getItem(key)) : undefined; }); }
@@ -87,6 +87,19 @@ async function trustAuthoredProject(page) {
         check('In-world typing executes in the actual chosen project and records a real shell PID', !!match && match[2] === token && match[3] === PROJECT);
         await visibleLine(page, token);
         check('Actual command output, not an echoed command substring, reaches the physical monitor', true);
+        await focusMonitor(page);
+        const paste = text => page.$eval(CANVAS, (canvas, text) => { const clipboard = new DataTransfer(); clipboard.setData('text/plain', text); canvas.dispatchEvent(new ClipboardEvent('paste', { clipboardData: clipboard, bubbles: true, cancelable: true })); }, text);
+        await paste(`touch ${path.basename(proofs[6])}\necho UNEXPECTED_PASTE_EXECUTION`);
+        await wait(300);
+        check('A real browser multiline clipboard event cannot execute a hidden shell command', !fs.existsSync(proofs[6]));
+        // A bracketed paste may remain in the shell's edit buffer. Cancel it before the independent positive control.
+        await page.keyboard.down('Control'); await page.keyboard.press('c'); await page.keyboard.up('Control'); await wait(150);
+        await paste(`printf SAFE_PASTE > ${path.basename(proofs[5])}`); await wait(300);
+        check('Single-line clipboard text waits for the operator to press Enter', !fs.existsSync(proofs[5]));
+        await page.keyboard.press('Enter');
+        const pastedContents = await waitFile(proofs[5]);
+        assert.equal(pastedContents, 'SAFE_PASTE', 'Actual pasted file contents must match');
+        check('The same actual pasted line executes only after explicit Enter', true);
         await page.click(`[data-testid="runtime-rename-${firstBinding.tabId}"]`);
         await page.click('[data-testid="runtime-rename-name"]');
         await page.keyboard.down('Control'); await page.keyboard.press('a'); await page.keyboard.up('Control');

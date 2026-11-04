@@ -10,9 +10,17 @@ export class FirstPersonControls {
     private listeners: Array<() => void> = [];
     constructor(private canvas: HTMLCanvasElement, private camera: THREE.PerspectiveCamera,
         private interact: (x: number, y: number) => 'terminal' | 'code' | undefined,
-        private input: (text: string) => void, private message: (text: string) => void) {
+        private input: (text: string) => void, private message: (text: string) => void, private pasteText?: (text: string) => void) {
         const on = <K extends keyof HTMLElementEventMap>(name: K, fn: (event: HTMLElementEventMap[K]) => void): void => {
-            canvas.addEventListener(name, fn, true); this.listeners.push(() => canvas.removeEventListener(name, fn, true));
+            const globalInput = name === 'keydown' || name === 'keyup' || name === 'paste';
+            const target: EventTarget = globalInput ? window : canvas;
+            const listener = (event: Event): void => {
+                if (globalInput && event.target !== canvas && !(typeof document !== 'undefined' && document.activeElement === canvas)) return;
+                fn(event as HTMLElementEventMap[K]);
+            };
+            // Theia handles document-capture shortcuts. Own only this canvas, but intercept
+            // its input at window capture so Ctrl+C reaches the terminal before IDE Copy.
+            target.addEventListener(name, listener, true); this.listeners.push(() => target.removeEventListener(name, listener, true));
         };
         on('pointerdown', event => {
             if (!this.enabled || event.button !== 0) return; event.stopImmediatePropagation(); canvas.focus();
@@ -61,6 +69,7 @@ export class FirstPersonControls {
         on('paste',event=>{if(this.enabled&&this.typing){
             event.preventDefault();event.stopImmediatePropagation();const text=event.clipboardData?.getData('text/plain');
             if (!text) return;
+            if (this.pasteText) { this.pasteText(text); return; }
             if (new TextEncoder().encode(text).length > 262144 || /[\u0000-\u001f\u007f]/.test(text)) { this.message('Paste one line at a time, without control characters (maximum 256 KiB). Press Enter yourself to run it.'); return; }
             this.input(text);
         }});
