@@ -42,6 +42,7 @@ export class FirstPersonControls {
             event.stopImmediatePropagation();
             if(event.key==='Escape'){event.preventDefault();this.typing=false;this.keys.clear();this.message('Walking · WASD to move. Drag to look. Click a monitor to use it.');return;}
             if(this.typing){
+                if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') return;
                 event.preventDefault();
                 const special:Record<string,string>={Enter:'\r',Backspace:'\x7f',Tab:'\t',ArrowUp:'\x1b[A',ArrowDown:'\x1b[B',ArrowRight:'\x1b[C',ArrowLeft:'\x1b[D',Home:'\x1b[H',End:'\x1b[F',Delete:'\x1b[3~'};
                 if(event.ctrlKey&&event.key.length===1){const c=event.key.toLowerCase().charCodeAt(0);if(c>=97&&c<=122)this.input(String.fromCharCode(c-96));}
@@ -57,7 +58,12 @@ export class FirstPersonControls {
             if(event.key==='ArrowDown'){event.preventDefault();this.pose.pitch=Math.max(-1.2,this.pose.pitch-0.05);}
         });
         on('keyup',event=>{if(this.enabled)event.stopImmediatePropagation();this.keys.delete(event.key.toLowerCase());});
-        on('paste',event=>{if(this.enabled&&this.typing){event.preventDefault();event.stopImmediatePropagation();const text=event.clipboardData?.getData('text/plain');if(text)this.input(text);}});
+        on('paste',event=>{if(this.enabled&&this.typing){
+            event.preventDefault();event.stopImmediatePropagation();const text=event.clipboardData?.getData('text/plain');
+            if (!text) return;
+            if (new TextEncoder().encode(text).length > 262144 || /[\u0000-\u001f\u007f]/.test(text)) { this.message('Paste one line at a time, without control characters (maximum 256 KiB). Press Enter yourself to run it.'); return; }
+            this.input(text);
+        }});
         const release=()=>{this.keys.clear();this.pointer=undefined;};
         window.addEventListener('blur',release);canvas.addEventListener('blur',release);
         this.listeners.push(()=>{window.removeEventListener('blur',release);canvas.removeEventListener('blur',release);});
