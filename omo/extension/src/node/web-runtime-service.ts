@@ -2,9 +2,12 @@
  * Omo's managed-Chrome backend for in-world web surfaces.
  *
  * One headless Chrome with Omo's OWN profile (OMO_SPATIAL_DATA/browser-profile), never the user's
- * personal Chrome profile, cookies or accounts. Chrome's sandbox stays on. Up to four surface pages;
- * each is driven only through the frozen OmoWebService calls (screenshots, click, text, an allow-listed
- * key set, scroll, audio policy). There is deliberately no generic CDP or script-evaluation API.
+ * personal Chrome profile, cookies or accounts. Chrome's sandbox stays on. Up to four surfaces, each
+ * with up to six page tabs (links that open a new window add a tab to the same surface); at most twelve
+ * pages are live at once, so the least recently used hidden tab is put to sleep (page closed, address
+ * kept). Each surface is driven only through the OmoWebService calls (screenshots, click, text, an
+ * allow-listed key set, scroll, audio policy, tab list/select/close). There is deliberately no generic
+ * CDP or script-evaluation API.
  *
  * Pure Node + puppeteer-core, no Theia imports, so it can be tested against a real Chrome directly.
  */
@@ -13,10 +16,19 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { Browser, Page, Target } from 'puppeteer-core';
-import { OmoWebService, WebKey, WebRuntimeStatus, WebSurface, WebSurfaceFrame } from '../common/web-runtime-protocol';
+import { OmoWebService, WebKey, WebRuntimeStatus, WebSurface, WebSurfaceFrame, WebTab } from '../common/web-runtime-protocol';
 import { isAllowedWebUrl, normalizeWebUrl } from '../common/web-url';
 
 export const MAX_SURFACES = 4;
+/** Page tabs per surface; beyond this a new-tab link opens in the current tab. */
+export const MAX_TABS = 6;
+/** Live Chrome pages across all surfaces; past this the least recently used hidden tab sleeps. */
+export const MAX_LIVE_PAGES = 12;
+/** A page may ask for at most this many new tabs per window (popup storms are ignored). */
+const TAB_REQUESTS_PER_WINDOW = 3;
+const TAB_REQUEST_WINDOW_MS = 2000;
+/** How often frame() re-reads hidden tabs' titles for the tab strip. */
+const BACKGROUND_META_MS = 2000;
 export const DEFAULT_WIDTH = 960;
 export const DEFAULT_HEIGHT = 600;
 export const MIN_WIDTH = 320;
@@ -28,6 +40,10 @@ export const MAX_SCROLL_DELTA = 5000;
 export const ALLOWED_KEYS: readonly WebKey[] = ['Enter', 'Backspace', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home',
     'End', 'Delete', 'PageUp', 'PageDown', 'Escape', 'Control+a', 'Control+c', 'Control+x', 'Control+z'];
 const ID_RE = /^web-[a-f0-9]{12}$/;
+const TAB_ID_RE = /^tab-[a-f0-9]{12}$/;
+function newTabId(): string {
+    return `tab-${crypto.randomBytes(6).toString('hex')}`;
+}
 const INSTALL_HINT = 'Install Google Chrome or Chromium, or point OMO_SPATIAL_CHROME (or CHROME_PATH) at a Chrome executable. Omo never installs a browser itself.';
 
 /** Options for tests and embedding. The parent binds `new WebRuntimeService()`, which reads process env. */
@@ -293,9 +309,13 @@ function audioPolicyScript(muted: boolean, volume: number): void {
     }
 }
 
+
 /**
- * Runs in every document of a surface: window.open and target=_blank links open in the surface itself
- * instead of a separate (invisible) tab. Anything that still opens a popup is folded by the service.
+ * Runs in every document of a surface tab. window.open and target=_blank links ask the service for a
+ * new tab of the same surface (the service re-checks the address); same-window targets stay as they
+ * are. A link whose own click handler cancelled it does nothing. Anything that still opens a real
+ * popup (a frame without the binding, a page that stops the event) is closed by the service and
+ * re-opened as a tab, so no hidden window survives.
  */
 function popupPolicyScript(): void {
     const key = Symbol.for('omo.webRuntime.popupPolicy');
@@ -304,32 +324,59 @@ function popupPolicyScript(): void {
         return;
     }
     Object.defineProperty(w, key, { value: true });
+    const sameWindow = (t: unknown) => typeof t === 'string' && /^_(self|top|parent)$/i.test(t);
+    const openTab = (href: string): boolean => {
+        const fn = (window as unknown as { __omoOpenTab?: (url: string) => Promise<void> }).__omoOpenTab;
+        if (!fn || !/^https?:/i.test(href)) {
+            return false;
+        }
+        void fn(href).catch(() => undefined);
+        return true;
+    };
     const open = window.open;
-    window.open = function (this: Window, url?: string | URL, ...rest: unknown[]): Window | null {
+    window.open = function (this: Window, url?: string | URL, target?: string, ...rest: unknown[]): Window | null {
         try {
-            const href = new URL(String(url ?? ''), location.href).href;
-            if (/^https?:/i.test(href)) {
-                const navigate = (window as unknown as { __omoNavigate?: (url: string) => Promise<void> }).__omoNavigate;
-                if (navigate) void navigate(href).catch(() => undefined);
-                else window.top!.location.assign(href);
+            if (!sameWindow(target) && openTab(new URL(String(url ?? ''), location.href).href)) {
                 return null;
             }
         } catch {
-            // Cross-origin frames may not navigate the top window; fall back to the browser's behaviour.
+            // Fall back to the browser; the service turns a real popup into a tab.
         }
-        return (open as (...a: unknown[]) => Window | null).call(this, url, ...rest);
+        return (open as (...a: unknown[]) => Window | null).call(this, url, target, ...rest);
     };
+    let pending: HTMLAnchorElement | undefined;
     addEventListener('click', e => {
         const a = (e.target as Element | null)?.closest?.('a[target]') as HTMLAnchorElement | null;
-        if (a && a.target !== '_self' && a.target !== '_top' && a.target !== '_parent') {
-            a.target = '_top';
-        }
+        pending = a && a.href && !sameWindow(a.target) && !a.hasAttribute('download') ? a : undefined;
     }, true);
+    // Bubble phase on window runs last: only links the page itself did not cancel become tabs.
+    addEventListener('click', e => {
+        const a = pending;
+        pending = undefined;
+        if (a && !e.defaultPrevented && openTab(a.href)) {
+            e.preventDefault();
+        }
+    });
+}
+
+interface Tab {
+    id: string;
+    /** Undefined while the leak guard has the tab asleep. */
+    page?: Page;
+    url: string;
+    title: string;
+    loading: boolean;
+    error?: string;
+    lastUsed: number;
+    audioScriptId?: string;
 }
 
 interface Surface {
     id: string;
+    /** The active tab's page: what the wall shows and what input reaches. */
     page: Page;
+    tabs: Tab[];
+    active: Tab;
     width: number;
     height: number;
     url: string;
@@ -341,7 +388,9 @@ interface Surface {
     sequence: number;
     lastFrame?: string;
     lastMeta?: string;
-    audioScriptId?: string;
+    /** Recent page-requested tab openings, for the rate limit. */
+    tabRequests: number[];
+    backgroundMetaAt: number;
     chain: Promise<unknown>;
 }
 
@@ -365,6 +414,9 @@ export class WebRuntimeService implements OmoWebService {
     #closingBrowser?: Browser;
     #profile?: string;
     #pending = 0;
+    /** Pages being created right now (they count against MAX_LIVE_PAGES and are not strays). */
+    #creating = 0;
+    #clock = 0;
     readonly #surfaces = new Map<string, Surface>();
     /** Why recently ended surface ids are gone, so callers get the exact reason. */
     readonly #gone = new Map<string, string>();
@@ -395,8 +447,9 @@ export class WebRuntimeService implements OmoWebService {
             return { available: false, detail: errorText(err) };
         }
         const n = this.#surfaces.size;
+        const live = this.#livePages();
         const running = this.#state === 'running'
-            ? `running, ${n} surface${n === 1 ? '' : 's'} open (max ${MAX_SURFACES})`
+            ? `running, ${n} surface${n === 1 ? '' : 's'} open (max ${MAX_SURFACES}), ${live} live page${live === 1 ? '' : 's'} (max ${MAX_LIVE_PAGES})`
             : this.#state === 'exited' ? 'browser exited unexpectedly; not running' : 'not running';
         return { available: true, detail: `Chrome at ${chrome}, Omo profile ${profile}: ${running}` };
     }
@@ -410,34 +463,21 @@ export class WebRuntimeService implements OmoWebService {
             throw new Error(`At most ${MAX_SURFACES} web surfaces can be open; close one first`);
         }
         this.#pending++;
-        let page: Page | undefined;
+        const tab: Tab = { id: newTabId(), url, title: '', loading: true, lastUsed: ++this.#clock };
+        const surface = {
+            id: `web-${crypto.randomBytes(6).toString('hex')}`, tabs: [tab], active: tab, width, height, url, title: '', loading: true,
+            muted: true, volume: 1, sequence: 0, tabRequests: [], backgroundMetaAt: 0, chain: Promise.resolve()
+        } as unknown as Surface;
         try {
-            const browser = await this.#ensureBrowser();
-            page = await withTimeout(browser.newPage(), this.#operationTimeoutMs, 'Opening a page');
-            const surface: Surface = {
-                id: `web-${crypto.randomBytes(6).toString('hex')}`, page, width, height, url, title: '', loading: true,
-                muted: true, volume: 1, sequence: 0, chain: Promise.resolve()
-            };
-            await withTimeout((async () => {
-                await page!.setViewport({ width, height, deviceScaleFactor: 1 });
-                await page!.emulateFocusedPage(true);
-                // Keep popup navigation in the same operation queue as clicks and screenshots.
-                // Direct location.assign can detach Chrome's capture target mid-screenshot.
-                await page!.exposeFunction('__omoNavigate', (href: string) => {
-                    const target = normalizeWebUrl(href);
-                    void this.#serial(surface, () => this.#goto(surface, target)).catch(() => undefined);
-                });
-                await page!.evaluateOnNewDocument(popupPolicyScript);
-                surface.audioScriptId = (await page!.evaluateOnNewDocument(audioPolicyScript, surface.muted, surface.volume)).identifier;
-            })(), this.#operationTimeoutMs, 'Preparing the page');
-            page.on('popup', popup => { void this.#foldPopup(surface, popup); });
-            page.on('close', () => this.#forget(surface.id, 'surface closed'));
+            await this.#ensureBrowser();
+            await this.#makePage(surface, tab);
+            surface.page = tab.page!;
             this.#surfaces.set(surface.id, surface);
             await this.#goto(surface, url);
             return this.#snapshot(surface);
         } catch (err) {
-            if (page && ![...this.#surfaces.values()].some(s => s.page === page)) {
-                await page.close().catch(() => undefined);
+            if (!this.#surfaces.has(surface.id)) {
+                await tab.page?.close().catch(() => undefined);
             }
             throw err;
         } finally {
@@ -483,6 +523,7 @@ export class WebRuntimeService implements OmoWebService {
         if (button !== 'left' && button !== 'right') {
             throw new Error('button must be "left" or "right"');
         }
+        this.#touch(surface);
         await this.#serial(surface, () => surface.page.mouse.click(x, y, { button }));
     }
 
@@ -496,6 +537,7 @@ export class WebRuntimeService implements OmoWebService {
         if (Buffer.byteLength(text, 'utf8') > MAX_TEXT_BYTES) {
             throw new Error(`text is larger than ${MAX_TEXT_BYTES} bytes`);
         }
+        this.#touch(surface);
         await this.#serial(surface, async () => {
             // Insert committed text, not key presses. A pasted newline must not submit a form.
             if (text) await surface.page.keyboard.sendCharacter(text.replace(/\r\n?/g, '\n'));
@@ -509,6 +551,7 @@ export class WebRuntimeService implements OmoWebService {
         if (typeof key !== 'string' || !ALLOWED_KEYS.includes(key)) {
             throw new Error('key is not one of the allowed keys');
         }
+        this.#touch(surface);
         await this.#serial(surface, async () => {
             const kb = surface.page.keyboard;
             if (key.startsWith('Control+')) {
@@ -534,6 +577,7 @@ export class WebRuntimeService implements OmoWebService {
         const bound = (v: unknown, n: string) => Math.max(-MAX_SCROLL_DELTA, Math.min(MAX_SCROLL_DELTA, finiteNumber(v, n)));
         const deltaX = bound(args.deltaX, 'deltaX');
         const deltaY = bound(args.deltaY, 'deltaY');
+        this.#touch(surface);
         await this.#serial(surface, async () => {
             await surface.page.mouse.move(x, y);
             await surface.page.mouse.wheel({ deltaX, deltaY });
@@ -551,22 +595,55 @@ export class WebRuntimeService implements OmoWebService {
         await this.#serial(surface, async () => {
             surface.muted = muted;
             surface.volume = volume;
-            const page = surface.page;
-            if (surface.audioScriptId) {
-                await page.removeScriptToEvaluateOnNewDocument(surface.audioScriptId);
-            }
-            surface.audioScriptId = (await page.evaluateOnNewDocument(audioPolicyScript, muted, volume)).identifier;
-            // Apply to every frame now; a frame that is mid-navigation picks the policy up from the new-document script.
-            await Promise.all(page.frames().map(f => withTimeout(f.evaluate(audioPolicyScript, muted, volume), 2000, 'audio')
-                .catch(() => undefined)));
+            // A hidden tab may be put to sleep meanwhile; only the shown tab's policy must land.
+            await Promise.all(surface.tabs.map(t => this.#applyAudio(surface, t).catch(err => {
+                if (t === surface.active) throw err;
+            })));
         });
+        return this.#snapshot(surface);
+    }
+
+    async listTabs(input: { id: string }): Promise<WebTab[]> {
+        const args = checkObject(input, 'listTabs');
+        const surface = this.#get(args.id);
+        await this.#serial(surface, async () => {
+            await Promise.all(surface.tabs.map(t => withTimeout(this.#refreshTab(t), 2000, 'title').catch(() => undefined)));
+        });
+        return this.#snapshot(surface).tabs;
+    }
+
+    async selectTab(input: { id: string; tabId: string }): Promise<WebSurface> {
+        const args = checkObject(input, 'selectTab');
+        const surface = this.#get(args.id);
+        const tab = this.#tab(surface, args.tabId);
+        await this.#serial(surface, async () => {
+            const woke = await this.#activate(surface, tab);
+            if (woke) await this.#gotoTab(surface, woke, woke.url);
+        });
+        this.#get(surface.id);
+        return this.#snapshot(surface);
+    }
+
+    async closeTab(input: { id: string; tabId: string }): Promise<WebSurface> {
+        const args = checkObject(input, 'closeTab');
+        const surface = this.#get(args.id);
+        const tab = this.#tab(surface, args.tabId);
+        await this.#serial(surface, async () => {
+            if (surface.tabs.length <= 1) {
+                throw new Error('The last tab stays open; close the page instead');
+            }
+            const woke = await this.#dropTab(surface, tab);
+            if (woke) await this.#gotoTab(surface, woke, woke.url);
+        });
+        this.#get(surface.id);
         return this.#snapshot(surface);
     }
 
     async close(id: string): Promise<void> {
         const surface = this.#get(id);
         this.#forget(surface.id, 'surface closed');
-        await withTimeout(surface.page.close(), this.#operationTimeoutMs, 'Closing the page').catch(() => undefined);
+        await Promise.all(surface.tabs.map(t => t.page && withTimeout(t.page.close(), this.#operationTimeoutMs, 'Closing the page')
+            .catch(() => undefined)));
         if (this.#surfaces.size === 0 && this.#pending === 0) {
             await this.#stopBrowser();
         }
@@ -593,6 +670,17 @@ export class WebRuntimeService implements OmoWebService {
         return surface;
     }
 
+    #tab(surface: Surface, tabId: unknown): Tab {
+        if (typeof tabId !== 'string' || !TAB_ID_RE.test(tabId)) {
+            throw new Error('invalid tab id');
+        }
+        const tab = surface.tabs.find(t => t.id === tabId);
+        if (!tab) {
+            throw new Error(`unknown tab ${tabId} on web surface ${surface.id}`);
+        }
+        return tab;
+    }
+
     #forget(id: string, reason: string): void {
         if (this.#surfaces.delete(id)) {
             this.#gone.set(id, reason);
@@ -600,6 +688,10 @@ export class WebRuntimeService implements OmoWebService {
                 this.#gone.delete(this.#gone.keys().next().value!);
             }
         }
+    }
+
+    #touch(surface: Surface): void {
+        surface.active.lastUsed = ++this.#clock;
     }
 
     #point(surface: Surface, xv: unknown, yv: unknown): { x: number; y: number } {
@@ -626,19 +718,47 @@ export class WebRuntimeService implements OmoWebService {
     }
 
     #snapshot(s: Surface): WebSurface {
-        const out: WebSurface = { id: s.id, url: s.url, title: s.title, width: s.width, height: s.height, loading: s.loading, muted: s.muted, volume: s.volume };
+        const tabs = s.tabs.map(t => {
+            const tab: WebTab = { id: t.id, url: t.url, title: t.title, active: t === s.active, loading: t.loading, sleeping: !t.page };
+            if (t.error) {
+                tab.error = t.error;
+            }
+            return tab;
+        });
+        const out: WebSurface = {
+            id: s.id, url: s.url, title: s.title, width: s.width, height: s.height, loading: s.loading, muted: s.muted, volume: s.volume,
+            tabs, activeTab: s.active.id
+        };
         if (s.error) {
             out.error = s.error;
         }
         return out;
     }
 
-    async #refreshMeta(s: Surface): Promise<void> {
-        const current = s.page.url();
-        if (/^https?:/i.test(current)) {
-            s.url = current;
+    /** The surface-level url/title/loading/error mirror the active tab. */
+    #mirror(s: Surface): void {
+        const t = s.active;
+        s.url = t.url;
+        s.title = t.title;
+        s.loading = t.loading;
+        s.error = t.error;
+    }
+
+    async #refreshTab(t: Tab): Promise<void> {
+        const page = t.page;
+        if (!page || page.isClosed()) {
+            return;
         }
-        s.title = (await s.page.title()).slice(0, 300);
+        const current = page.url();
+        if (/^https?:/i.test(current)) {
+            t.url = current;
+        }
+        t.title = (await page.title()).slice(0, 300);
+    }
+
+    async #refreshMeta(s: Surface): Promise<void> {
+        await this.#refreshTab(s.active);
+        this.#mirror(s);
     }
 
     async #capture(s: Surface): Promise<void> {
@@ -652,12 +772,17 @@ export class WebRuntimeService implements OmoWebService {
             data = await shot();
         } catch {
             // Headless Chrome may stop producing frames for a tab that is not in front (e.g. while a popup is
-            // being folded); bring the surface forward and try once more.
+            // being turned into a tab); bring the surface forward and try once more.
             this.#get(s.id);
             await withTimeout(s.page.bringToFront(), 1000, 'bringToFront').catch(() => undefined);
             data = await shot();
         }
         await withTimeout(this.#refreshMeta(s), 2000, 'title').catch(() => undefined);
+        // Background tab titles change too (a page finishing its load); read them now and then for the strip.
+        if (s.tabs.length > 1 && Date.now() - s.backgroundMetaAt > BACKGROUND_META_MS) {
+            s.backgroundMetaAt = Date.now();
+            await Promise.all(s.tabs.filter(t => t !== s.active).map(t => withTimeout(this.#refreshTab(t), 1000, 'title').catch(() => undefined)));
+        }
         const meta = JSON.stringify(this.#snapshot(s));
         if (data !== s.lastFrame || meta !== s.lastMeta || s.sequence === 0) {
             s.lastFrame = data;
@@ -666,37 +791,49 @@ export class WebRuntimeService implements OmoWebService {
         }
     }
 
+    /** Navigate the surface's active tab. */
     async #goto(s: Surface, url: string): Promise<void> {
-        s.loading = true;
-        s.error = undefined;
+        await this.#gotoTab(s, s.active, url);
+    }
+
+    async #gotoTab(s: Surface, t: Tab, url: string): Promise<void> {
+        t.loading = true;
+        t.error = undefined;
+        t.url = url;
+        if (t === s.active) this.#mirror(s);
         try {
-            const response = await s.page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.#navigationTimeoutMs });
-            s.url = /^https?:/i.test(s.page.url()) ? s.page.url() : url;
-            if (response && response.status() >= 400) {
-                s.error = `HTTP ${response.status()} ${response.statusText()}`.trim();
+            if (!t.page) {
+                await this.#makePage(s, t);
+                if (t === s.active) s.page = t.page!;
             }
-        } catch (err) {
-            if (!this.#surfaces.has(s.id)) {
-                this.#get(s.id);
-            }
-            const text = errorText(err);
-            s.error = /timeout/i.test(text) ? `Navigation timeout: ${url} did not load within ${this.#navigationTimeoutMs} ms` : text;
-            // Leave the page on whatever it was showing; stop the pending load so it cannot finish later unseen.
-            await withTimeout(this.#stopLoading(s), 2000, 'stop').catch(() => undefined);
-            if (/^https?:/i.test(s.page.url())) {
-                s.url = s.page.url();
-            } else {
-                s.url = url;
+            const page = t.page!;
+            try {
+                const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.#navigationTimeoutMs });
+                t.url = /^https?:/i.test(page.url()) ? page.url() : url;
+                if (response && response.status() >= 400) {
+                    t.error = `HTTP ${response.status()} ${response.statusText()}`.trim();
+                }
+            } catch (err) {
+                if (!this.#surfaces.has(s.id)) {
+                    this.#get(s.id);
+                }
+                const text = errorText(err);
+                t.error = /timeout/i.test(text) ? `Navigation timeout: ${url} did not load within ${this.#navigationTimeoutMs} ms` : text;
+                // Leave the page on whatever it was showing; stop the pending load so it cannot finish later unseen.
+                await withTimeout(this.#stopLoading(page), 2000, 'stop').catch(() => undefined);
+                t.url = /^https?:/i.test(page.url()) ? page.url() : url;
             }
         } finally {
-            s.loading = false;
+            t.loading = false;
+            if (t === s.active) this.#mirror(s);
         }
-        await withTimeout(this.#refreshMeta(s), 2000, 'Reading page title').catch(() => undefined);
+        await withTimeout(this.#refreshTab(t), 2000, 'Reading page title').catch(() => undefined);
+        if (t === s.active) this.#mirror(s);
     }
 
     /** Page.stopLoading over a private session; never exposed to callers. */
-    async #stopLoading(s: Surface): Promise<void> {
-        const session = await s.page.createCDPSession();
+    async #stopLoading(page: Page): Promise<void> {
+        const session = await page.createCDPSession();
         try {
             await session.send('Page.stopLoading');
         } finally {
@@ -704,8 +841,197 @@ export class WebRuntimeService implements OmoWebService {
         }
     }
 
-    /** A page-opened window must not become a hidden extra tab: show its address in the surface instead. */
-    async #foldPopup(s: Surface, popup: Page | null): Promise<void> {
+    #livePages(): number {
+        let n = 0;
+        for (const s of this.#surfaces.values()) {
+            n += s.tabs.filter(t => t.page).length;
+        }
+        return n;
+    }
+
+    /**
+     * Leak guard: before a page is created, total live pages stay under MAX_LIVE_PAGES by putting the
+     * least recently used hidden tab (of any surface) to sleep. Its address and title stay in the strip.
+     */
+    async #makeRoom(except: Tab): Promise<void> {
+        // The caller's own pending page is already counted in #creating.
+        while (this.#livePages() + this.#creating > MAX_LIVE_PAGES) {
+            let victim: { s: Surface; t: Tab } | undefined;
+            for (const s of this.#surfaces.values()) {
+                for (const t of s.tabs) {
+                    if (t.page && t !== s.active && t !== except && (!victim || t.lastUsed < victim.t.lastUsed)) {
+                        victim = { s, t };
+                    }
+                }
+            }
+            if (!victim) {
+                throw new Error(`At most ${MAX_LIVE_PAGES} web pages can be live; close a tab first`);
+            }
+            const page = victim.t.page!;
+            victim.t.page = undefined;
+            victim.t.audioScriptId = undefined;
+            await withTimeout(page.close(), this.#operationTimeoutMs, 'Closing a hidden page').catch(() => undefined);
+        }
+    }
+
+    /** Create the Chrome page for a tab: viewport, popup and audio policy, lifecycle hooks. */
+    async #makePage(s: Surface, t: Tab): Promise<void> {
+        this.#creating++;
+        let page: Page | undefined;
+        try {
+            await this.#makeRoom(t);
+            const browser = await this.#ensureBrowser();
+            page = await withTimeout(browser.newPage(), this.#operationTimeoutMs, 'Opening a page');
+            const p = page;
+            await withTimeout((async () => {
+                await p.setViewport({ width: s.width, height: s.height, deviceScaleFactor: 1 });
+                await p.emulateFocusedPage(true);
+                // Page-requested tabs run in the surface's operation queue, like clicks and screenshots.
+                await p.exposeFunction('__omoOpenTab', (href: string) => { this.#requestTab(s, href); });
+                await p.evaluateOnNewDocument(popupPolicyScript);
+            })(), this.#operationTimeoutMs, 'Preparing the page');
+            t.page = p;
+            await this.#applyAudio(s, t);
+            p.on('popup', popup => { void this.#adoptPopup(s, popup); });
+            p.on('close', () => this.#pageClosed(s, t, p));
+        } catch (err) {
+            if (page && t.page !== page) {
+                await page.close().catch(() => undefined);
+            }
+            throw err;
+        } finally {
+            this.#creating--;
+        }
+        t.lastUsed = ++this.#clock;
+    }
+
+    /** Hidden tabs are always muted; the active tab follows the surface's audio policy. */
+    async #applyAudio(s: Surface, t: Tab): Promise<void> {
+        const page = t.page;
+        if (!page || page.isClosed()) {
+            return;
+        }
+        const muted = t !== s.active || s.muted;
+        const volume = s.volume;
+        if (t.audioScriptId) {
+            await page.removeScriptToEvaluateOnNewDocument(t.audioScriptId).catch(() => undefined);
+        }
+        t.audioScriptId = (await page.evaluateOnNewDocument(audioPolicyScript, muted, volume)).identifier;
+        // Apply to every frame now; a frame that is mid-navigation picks the policy up from the new-document script.
+        await Promise.all(page.frames().map(f => withTimeout(f.evaluate(audioPolicyScript, muted, volume), 2000, 'audio')
+            .catch(() => undefined)));
+    }
+
+    /** A tab's page went away without us closing it (e.g. Chrome killed the renderer). */
+    #pageClosed(s: Surface, t: Tab, page: Page): void {
+        if (t.page !== page || !this.#surfaces.has(s.id)) {
+            return;
+        }
+        t.page = undefined;
+        if (s.tabs.length <= 1) {
+            this.#forget(s.id, 'surface closed');
+            return;
+        }
+        if (s.active === t) {
+            void this.#serial(s, async () => {
+                const woke = await this.#dropTab(s, t);
+                if (woke) await this.#gotoTab(s, woke, woke.url);
+            }).catch(() => undefined);
+        } else {
+            s.tabs = s.tabs.filter(x => x !== t);
+        }
+    }
+
+    /**
+     * Remove a tab (never the last). Closing the active tab shows its neighbour; returns that neighbour
+     * when it was asleep and still needs loading.
+     */
+    async #dropTab(s: Surface, t: Tab): Promise<Tab | undefined> {
+        const i = s.tabs.indexOf(t);
+        if (i < 0 || s.tabs.length <= 1) {
+            return undefined;
+        }
+        s.tabs.splice(i, 1);
+        const page = t.page;
+        t.page = undefined;
+        if (page) {
+            await withTimeout(page.close(), this.#operationTimeoutMs, 'Closing the tab').catch(() => undefined);
+        }
+        return s.active === t ? this.#activate(s, s.tabs[Math.min(i, s.tabs.length - 1)]) : undefined;
+    }
+
+    /**
+     * Make a tab the one on the wall and foreground it. A tab the leak guard put to sleep gets a fresh
+     * page here and is returned, so the caller loads its address.
+     */
+    async #activate(s: Surface, t: Tab): Promise<Tab | undefined> {
+        const old = s.active;
+        let woke: Tab | undefined;
+        if (!t.page) {
+            await this.#makePage(s, t);
+            t.loading = true;
+            woke = t;
+        }
+        s.active = t;
+        t.lastUsed = ++this.#clock;
+        s.page = t.page!;
+        this.#mirror(s);
+        await withTimeout(s.page.bringToFront(), 1000, 'bringToFront').catch(() => undefined);
+        if (old !== t) {
+            await Promise.all([this.#applyAudio(s, old), this.#applyAudio(s, t)].map(p => p.catch(() => undefined)));
+        }
+        return woke;
+    }
+
+    /** A page asked for a new window (target=_blank, window.open). The address is checked again here. */
+    #requestTab(s: Surface, href: unknown): void {
+        let url: string;
+        try {
+            url = normalizeWebUrl(href);
+        } catch {
+            return;
+        }
+        if (!this.#surfaces.has(s.id) || !isAllowedWebUrl(url)) {
+            return;
+        }
+        const now = Date.now();
+        s.tabRequests = s.tabRequests.filter(at => now - at < TAB_REQUEST_WINDOW_MS);
+        if (s.tabRequests.length >= TAB_REQUESTS_PER_WINDOW) {
+            s.active.error = 'This page tried to open too many tabs at once; extra ones were ignored';
+            this.#mirror(s);
+            return;
+        }
+        s.tabRequests.push(now);
+        // In the surface's operation queue, so a screenshot never races the new tab's first load.
+        void this.#serial(s, async () => this.#gotoTab(s, await this.#openTab(s, url), url)).catch(() => undefined);
+    }
+
+    /**
+     * A new tab for url becomes the active one; returns the tab the caller then loads url into. At
+     * MAX_TABS (or with no room for another live page) the active tab is returned instead, so a link
+     * never silently does nothing.
+     */
+    async #openTab(s: Surface, url: string): Promise<Tab> {
+        if (s.tabs.length >= MAX_TABS) {
+            return s.active;
+        }
+        const t: Tab = { id: newTabId(), url, title: '', loading: true, lastUsed: ++this.#clock };
+        try {
+            await this.#makePage(s, t);
+        } catch {
+            return s.active;
+        }
+        if (!this.#surfaces.has(s.id)) {
+            await t.page?.close().catch(() => undefined);
+            return s.active;
+        }
+        s.tabs.push(t);
+        await this.#activate(s, t);
+        return t;
+    }
+
+    /** A real popup window still appeared: close it and open its address as a tab of the surface. */
+    async #adoptPopup(s: Surface, popup: Page | null): Promise<void> {
         if (!popup) {
             return;
         }
@@ -720,8 +1046,17 @@ export class WebRuntimeService implements OmoWebService {
             await withTimeout(s.page.bringToFront(), 1000, 'bringToFront').catch(() => undefined);
         }
         if (this.#surfaces.has(s.id) && isAllowedWebUrl(href)) {
-            await this.#goto(s, href).catch(() => undefined);
+            this.#requestTab(s, href);
         }
+    }
+
+    #ownsPage(page: Page): boolean {
+        for (const s of this.#surfaces.values()) {
+            if (s.tabs.some(t => t.page === page)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     async #ensureBrowser(): Promise<Browser> {
@@ -780,24 +1115,24 @@ export class WebRuntimeService implements OmoWebService {
         this.#state = 'running';
         browser.on('disconnected', () => this.#onDisconnected(browser));
         browser.on('targetcreated', (t: Target) => { void this.#closeStrayPage(t); });
-        // Close the launch tab: only surface pages live in this browser.
+        // Close the launch tab: only surface tab pages live in this browser.
         for (const p of await browser.pages()) {
             await p.close().catch(() => undefined);
         }
         return browser;
     }
 
-    /** Any page that is not a surface (and not a popup being folded) is closed, so no hidden tabs accumulate. */
+    /** Any page that is not a surface tab (and not a popup being adopted) is closed, so no hidden tabs accumulate. */
     async #closeStrayPage(t: Target): Promise<void> {
         if (t.type() !== 'page') {
             return;
         }
         await new Promise(r => setTimeout(r, 3500));
-        if (this.#pending > 0) {
+        if (this.#pending > 0 || this.#creating > 0) {
             return;
         }
         const page = await t.page().catch(() => null);
-        if (page && !page.isClosed() && ![...this.#surfaces.values()].some(s => s.page === page)) {
+        if (page && !page.isClosed() && !this.#ownsPage(page)) {
             await page.close().catch(() => undefined);
         }
     }

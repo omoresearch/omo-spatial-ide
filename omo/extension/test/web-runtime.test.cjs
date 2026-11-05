@@ -201,7 +201,10 @@ test('arguments are validated: ids, sizes, coordinates, text size, key enum, and
   // Exactly 64 KiB is allowed.
   await svc.typeText({ id: surf.id, text: 'a'.repeat(64 * 1024) });
   const proto = Object.getOwnPropertyNames(Object.getPrototypeOf(svc)).filter(n => n !== 'constructor').sort();
-  assert.deepEqual(proto, ['click', 'close', 'closeAll', 'frame', 'key', 'navigate', 'open', 'scroll', 'setAudio', 'status', 'typeText']);
+  assert.deepEqual(proto, ['click', 'close', 'closeAll', 'closeTab', 'frame', 'key', 'listTabs', 'navigate', 'open', 'scroll', 'selectTab', 'setAudio', 'status', 'typeText']);
+  await assert.rejects(svc.selectTab({ id: surf.id, tabId: 'tab-zzz' }), /invalid tab id/);
+  await assert.rejects(svc.closeTab({ id: surf.id, tabId: 'tab-000000000000' }), /unknown tab/);
+  await assert.rejects(svc.closeTab({ id: surf.id, tabId: surf.tabs[0].id }), /last tab/);
 });
 
 test('caps: at most 4 surfaces; closing one frees a slot; ids from closed surfaces are refused', async () => {
@@ -255,17 +258,90 @@ test('a 404 is reported as an HTTP error, not success', async () => {
   assert.match(surf.error || '', /404/);
 });
 
-test('popups opened by a page do not become hidden extra tabs', async () => {
+async function waitTabs(svc, id, pred, ms = 8000) {
+  const end = Date.now() + ms;
+  let tabs;
+  do { tabs = await svc.listTabs({ id }); if (pred(tabs)) return tabs; await new Promise(r => setTimeout(r, 100)); } while (Date.now() < end);
+  return tabs;
+}
+
+test('popups and target=_blank open as tabs of the same surface (max 6); select/close tabs; unsafe links stay inert', async () => {
   const { svc } = service();
   const surf = await svc.open({ url: site.url('/popup'), width: 960, height: 600 });
+  assert.equal(surf.tabs.length, 1);
+  assert.equal(surf.activeTab, surf.tabs[0].id);
+  // window.open('/', '_blank') -> a second tab, which becomes active and is what the wall shows.
   await svc.click({ id: surf.id, x: 100, y: 100 });
   assert.ok(await site.waitFor(b => b.ev === 'popup'));
-  // The popup is folded into the surface itself (it navigates there) instead of an invisible page.
-  const end = Date.now() + 5000;
-  let f;
-  do { f = await svc.frame({ id: surf.id, afterSequence: 0 }); } while (f.surface.title !== 'Omo Fixture' && Date.now() < end);
-  assert.equal(f.surface.title, 'Omo Fixture');
-  assert.equal(f.surface.url, site.url('/'));
+  let tabs = await waitTabs(svc, surf.id, t => t.length === 2 && t[1].title === 'Omo Fixture');
+  assert.equal(tabs.length, 2);
+  assert.equal(tabs[1].url, site.url('/'));
+  assert.ok(tabs[1].active && !tabs[0].active);
+  let f = await nextFrame(svc, surf.id, 0);
+  assert.equal(f.surface.title, 'Omo Fixture', 'the wall shows the new active tab');
+  // No hidden Chrome page beyond the surface tabs.
+  assert.match((await svc.status()).detail, /2 live pages/);
+  // Back to the opener; an <a target=_blank> link adds a third tab.
+  let s2 = await svc.selectTab({ id: surf.id, tabId: tabs[0].id });
+  assert.equal(s2.title, 'Popup opener');
+  await svc.click({ id: surf.id, x: 100, y: 350 });
+  tabs = await waitTabs(svc, surf.id, t => t.length === 3 && t[2].title === 'Second page');
+  assert.equal(tabs[2].url, site.url('/two'));
+  assert.ok(tabs[2].active);
+  // A javascript: target=_blank link never opens a tab or runs.
+  await svc.selectTab({ id: surf.id, tabId: tabs[0].id });
+  await svc.click({ id: surf.id, x: 450, y: 350 });
+  await new Promise(r => setTimeout(r, 800));
+  tabs = await svc.listTabs({ id: surf.id });
+  assert.equal(tabs.length, 3);
+  assert.ok(tabs.every(t => /^http:/.test(t.url) && t.title !== 'pwned'));
+  // Close the active tab: its neighbour becomes active.
+  s2 = await svc.closeTab({ id: surf.id, tabId: tabs[0].id });
+  assert.equal(s2.tabs.length, 2);
+  assert.ok(s2.tabs.some(t => t.active));
+  // Cap: at 6 tabs a new-tab link loads in the current tab instead.
+  await svc.navigate({ id: surf.id, url: site.url('/popup') });
+  for (let i = 0; i < 6; i++) {
+    const n = (await svc.listTabs({ id: surf.id })).length;
+    const active = (await svc.listTabs({ id: surf.id })).find(t => t.active);
+    if (active.title !== 'Popup opener') await svc.navigate({ id: surf.id, url: site.url('/popup') });
+    await svc.click({ id: surf.id, x: 100, y: 350 });
+    await waitTabs(svc, surf.id, t => (n < 6 ? t.length === n + 1 : true) && t.find(x => x.active)?.title === 'Second page');
+    await new Promise(r => setTimeout(r, 2100)); // page tab-request rate window
+  }
+  tabs = await svc.listTabs({ id: surf.id });
+  assert.equal(tabs.length, 6, 'at most 6 tabs per surface');
+});
+
+test('leak guard: at most 12 live pages; the least recently used hidden tab sleeps and reloads when picked', async () => {
+  const { svc } = service();
+  const a = await svc.open({ url: site.url('/popup'), width: 640, height: 400 });
+  const b = await svc.open({ url: site.url('/popup'), width: 640, height: 400 });
+  for (const s of [a, b]) {
+    for (let i = 0; i < 5; i++) {
+      const before = (await svc.listTabs({ id: s.id })).length;
+      await svc.selectTab({ id: s.id, tabId: s.tabs[0].id });
+      await svc.click({ id: s.id, x: 100, y: 320 });
+      await waitTabs(svc, s.id, t => t.length === before + 1 && t.at(-1).title === 'Second page');
+      await new Promise(r => setTimeout(r, 2100));
+    }
+    assert.equal((await svc.listTabs({ id: s.id })).length, 6);
+  }
+  assert.match((await svc.status()).detail, /12 live pages/);
+  const oldest = (await svc.listTabs({ id: a.id }))[1];
+  // A third surface needs a page: the oldest hidden tab is put to sleep instead of exceeding 12.
+  const c = await svc.open({ url: site.url('/two'), width: 640, height: 400 });
+  assert.match((await svc.status()).detail, /12 live pages/);
+  let tabs = await svc.listTabs({ id: a.id });
+  assert.ok(tabs.find(t => t.id === oldest.id).sleeping, 'LRU hidden tab is asleep');
+  assert.equal(tabs.find(t => t.id === oldest.id).url, site.url('/two'), 'a sleeping tab keeps its address');
+  // Picking it wakes it (another hidden tab sleeps) and the wall shows it.
+  const woke = await svc.selectTab({ id: a.id, tabId: oldest.id });
+  assert.equal(woke.title, 'Second page');
+  assert.equal(woke.tabs.find(t => t.id === oldest.id).sleeping, false);
+  assert.match((await svc.status()).detail, /12 live pages/);
+  const f = await nextFrame(svc, c.id, 0);
+  assert.equal(f.surface.title, 'Second page');
 });
 
 test('lifecycle: closeAll ends only our Chrome; a crashed browser is reported exactly and open relaunches', async () => {

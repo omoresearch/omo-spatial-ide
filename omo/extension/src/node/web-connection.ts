@@ -26,6 +26,10 @@ export function webConnection(backend: OmoWebService): { service: OmoWebService;
         key: args => { check(args.id); return backend.key(args); },
         scroll: args => { check(args.id); return backend.scroll(args); },
         setAudio: args => { check(args.id); return backend.setAudio(args); },
+        // Tabs belong to their surface, so owning the surface id is owning its tabs.
+        listTabs: args => { check(args.id); return backend.listTabs(args); },
+        selectTab: args => { check(args.id); return backend.selectTab(args); },
+        closeTab: args => { check(args.id); return backend.closeTab(args); },
         close: async id => { check(id); try { await backend.close(id); } finally { owned.delete(id); } },
         closeAll
     };
