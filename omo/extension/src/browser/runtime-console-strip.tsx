@@ -122,6 +122,36 @@ export function ConsoleAlerts(props: { state: RuntimeConsoleState; controller?: 
     </div>;
 }
 
+/**
+ * Tabs strip for the attached / full-screen work area: the desk's tmux tabs from live console state.
+ * Switching uses the explicit selectTab action. "+ Shell" is the same action as the new-shell shortcut.
+ * Agent buttons only ask: requestNewTab puts up the usual confirmation, so nothing starts on a click.
+ */
+export function FocusTabs(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; onPicked?: () => void; agents?: boolean }): React.ReactElement | null {
+    const { state, controller } = props;
+    const ws = state.workspace;
+    if (!ws) return null;
+    const locked = state.acting || !!state.pending;
+    const launchers = launcherOptions(state.host);
+    const shell = launchers.find(o => o.kind === 'shell');
+    const done = (): void => props.onPicked?.();
+    return <div className="omo-focus-tabs" role="tablist" aria-label="Desk tabs" data-testid="focus-tabs">
+        {ws.tabs.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={tab.id === state.activeTabId} data-testid={`focus-tab-${tab.id}`}
+            className={`omo-focus-tab kind-${tab.kind} state-${tab.state} ${tab.id === state.activeTabId ? 'is-active' : ''}`} disabled={state.acting}
+            title={`${AGENT_LABELS[tab.kind]} · ${STATE_LABEL[tab.state]}${tab.detail ? ` · ${tab.detail}` : ''}`}
+            onClick={() => { void controller?.selectTab(tab.id); done(); }}>
+            <span className="omo-focus-tab-name">{tab.name}</span>
+            {tab.busy && <i className="omo-focus-tab-busy" aria-label="Process active" />}
+            {tab.state !== 'running' && <small>{STATE_LABEL[tab.state]}</small>}
+        </button>)}
+        <button type="button" className="omo-focus-tab-new" data-testid="focus-new-shell" disabled={locked || !shell?.available}
+            title={shell?.available ? 'New shell tab (Ctrl+Shift+T)' : shell?.reason} onClick={() => { void controller?.requestNewTab('shell'); done(); }}>+ Shell</button>
+        {props.agents !== false && launchers.filter(o => o.kind !== 'shell').map(o => <button key={o.kind} type="button" className="omo-focus-tab-new is-agent" data-testid={`focus-new-${o.kind}`}
+            disabled={locked || !o.available} title={o.available ? `Start ${o.label} in a new tab (asks first)` : o.reason}
+            onClick={() => void controller?.requestNewTab(o.kind)}>+ {o.label}</button>)}
+    </div>;
+}
+
 /** Compact world overlay for the terminal station. It manages tabs; the monitor itself stays the terminal. */
 export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean; onOpenLink?: (url: string) => void; onReview?: () => Promise<GitReviewSnapshot | undefined>; onNewAgentTask?: () => void }): React.ReactElement {
     const { state, controller } = props;

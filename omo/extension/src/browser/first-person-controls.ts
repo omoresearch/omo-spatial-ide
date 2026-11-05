@@ -59,6 +59,8 @@ export class FirstPersonControls {
     fullRequest?: () => void;
     /** A plain click chose a desk monitor: focus mode frames it. Returns true when it attached. */
     attachRequest?: () => boolean;
+    /** omo focus lane: Ctrl+1..4 (or Tab when not typing) while attached asks focus mode to switch desk. */
+    deskRequest?: (slot: number | 'next' | 'previous') => void;
     constructor(private canvas: HTMLCanvasElement, private camera: THREE.PerspectiveCamera,
         private interact: (x: number, y: number, modifiers?: { ctrlKey: boolean; metaKey: boolean }) => 'terminal' | 'code' | undefined,
         private input: (text: string) => void, private message: (text: string) => void, private pasteText?: (text: string) => void,
@@ -138,6 +140,8 @@ export class FirstPersonControls {
                 event.preventDefault(); if (!this.copyOverride?.()) this.selection?.copy(); return;
             }
             const attached = this.attached;
+            // omo focus lane: Ctrl+1..4 while attached switches desks. Ctrl+digit sends nothing to a shell, so no input is lost.
+            if (attached && this.deskRequest && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && /^[1-4]$/.test(event.key)) { event.preventDefault(); this.deskRequest(Number(event.key)); return; }
             if (attached && (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
                 event.preventDefault(); this.setFull(!this.focusState.full); return;
             }
@@ -172,7 +176,9 @@ export class FirstPersonControls {
             }
             const key=event.key.toLowerCase();
             // Attached: the body is locked. F is the only free key (full screen).
-            if(attached){if(key==='f'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();this.setFull(!this.focusState.full);}return;}
+            if(attached){if(key==='f'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();this.setFull(!this.focusState.full);}
+                else if(key==='tab'&&this.deskRequest&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();this.deskRequest(event.shiftKey?'previous':'next');} // omo focus lane
+                return;}
             if(key==='f'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&this.fullRequest){event.preventDefault();this.keys.clear();this.fullRequest();return;}
             if(key==='l'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.repeat){event.preventDefault();this.setPointerLook(!this.lookEnabled);return;}
             if(['w','a','s','d'].includes(key)){event.preventDefault();this.keys.add(key);}
