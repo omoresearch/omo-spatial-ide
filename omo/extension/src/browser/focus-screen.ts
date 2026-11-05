@@ -9,9 +9,9 @@ export const FOCUS_REACH = 3.2;
 // Desk monitor in desk-local space (room-scene desk()). Used only if the live mesh is not reachable.
 const DESK_SCREEN = { y: 1.99, z: -0.296, width: 1.58, height: 0.9 };
 
-/** RoomScene keeps its walker private; focus mode reads it here so room-scene.ts stays untouched. */
+/** The room's walking controls, through RoomScene's public focusTarget() accessor. */
 export function sceneControls(scene: RoomScene | undefined): FirstPersonControls | undefined {
-    return (scene as unknown as { walker?: FirstPersonControls } | undefined)?.walker;
+    return scene?.focusTarget().controls;
 }
 
 /**
@@ -19,7 +19,7 @@ export function sceneControls(scene: RoomScene | undefined): FirstPersonControls
  * frame stays right when the room changes; falls back to the published desk spots.
  */
 export function stationScreen(scene: RoomScene | undefined, canvas: HTMLCanvasElement | undefined, station: TerminalWorkstation): FocusScreen | undefined {
-    const mesh = (scene as unknown as { screens?: Map<string, THREE.Object3D> } | undefined)?.screens?.get(station);
+    const mesh = scene?.focusTarget(station).screen;
     if (mesh instanceof THREE.Mesh && mesh.geometry instanceof THREE.PlaneGeometry) {
         mesh.updateWorldMatrix(true, false);
         const center = mesh.getWorldPosition(new THREE.Vector3()), scale = mesh.getWorldScale(new THREE.Vector3());

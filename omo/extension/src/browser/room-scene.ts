@@ -217,6 +217,8 @@ export class RoomScene {
         this.data.set(key, value); this.renderer.domElement.dataset[key] = value;
     }
     getPlayerPose():PlayerPose { return {...(this.walker?.pose ?? PLAYER_HOME)}; }
+    // --- omo focus lane: the one public read focus mode needs (walker + a station's screen mesh). ---
+    focusTarget(station?: Workstation): { controls?: FirstPersonControls; screen?: THREE.Mesh } { return { controls: this.walker, screen: station ? this.screens.get(station) : undefined }; }
     setPeers(members:RoomMember[]):void {
         const ids=new Set(members.map(m=>m.id));
         for(const [id,avatar] of this.peerAvatars)if(!ids.has(id)||members.find(m=>m.id===id)?.name!==avatar.member.name){
