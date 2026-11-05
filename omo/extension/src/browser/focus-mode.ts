@@ -67,7 +67,8 @@ export class FocusMode {
         this.open(station, true);
     }
     setFull(full: boolean): void { const c = this.bound?.controls; if (!c) return; c.setFull(full); if (c.attached) c.focusTerminal(); }
-    exit(): void { this.bound?.controls.detach(); }
+    /** Walk away. Keys return to the room so WASD works at once. */
+    exit(): void { const c = this.bound?.controls; if (!c) return; c.detach(); c.element.focus({ preventScroll: true }); }
     dispose(): void { this.unbind(); this.listeners.clear(); }
 
     private open(station: TerminalWorkstation, full: boolean): void {

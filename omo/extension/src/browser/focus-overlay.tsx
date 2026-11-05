@@ -73,6 +73,13 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
         return () => { delete root.dataset.focus; delete root.dataset.focusFull; };
     }, [controls, state.phase, state.full, attached]);
 
+    // Full window sizes its text from the window; follow resizes and the browser's own full screen.
+    React.useEffect(() => {
+        if (!shown || !state.full) return;
+        window.addEventListener('resize', bump); document.addEventListener('fullscreenchange', bump);
+        return () => { window.removeEventListener('resize', bump); document.removeEventListener('fullscreenchange', bump); };
+    }, [shown, state.full]);
+
     // Leaving full screen also leaves the browser's Fullscreen API.
     React.useEffect(() => {
         if ((!shown || !state.full) && document.fullscreenElement && box.current?.contains(document.fullscreenElement) !== false) void document.exitFullscreen?.().catch(() => undefined);
@@ -116,7 +123,7 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
             <span className="omo-focus-keys">{controls.typing ? 'Keys go to this terminal' : 'Click the screen to type'}</span>
             <button type="button" data-testid="focus-full-toggle" aria-pressed={state.full} onClick={() => focus.setFull(!state.full)}
                 title={state.full ? 'Back to the desk screen (Esc)' : 'Full-window terminal (Ctrl+Shift+F)'}>{state.full ? '▢ Desk view' : '⛶ Full screen'}</button>
-            {state.full && document.fullscreenEnabled && <button type="button" data-testid="focus-window-toggle" onClick={toggleWindow} title="Use the whole monitor">⤢ Monitor</button>}
+            {state.full && document.fullscreenEnabled && <button type="button" data-testid="focus-window-toggle" aria-pressed={!!document.fullscreenElement} onClick={toggleWindow} title="Use the whole monitor (browser full screen)">{document.fullscreenElement ? '⤡ Window' : '⤢ Monitor'}</button>}
             <button type="button" data-testid="focus-exit" onClick={() => focus.exit()} title="Walk away (Esc)">Esc · Walk</button>
         </div>
         <div className="omo-focus-screen" style={style} onPointerUp={refocus} onWheel={wheel}>
@@ -124,5 +131,8 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
         </div>
         <ConsoleAlerts state={desk.state} controller={desk.controller} onDone={() => controls.focusTerminal()} />
     </div>;
-    return createPortal(layer, host);
+    // The stage is a CSS container, which traps position: fixed. Full window mounts on the root
+    // instead (still inside .omo-root, so the design tokens apply) and covers the whole window.
+    const root = state.full ? controls.element.closest<HTMLElement>('.omo-root') : undefined;
+    return createPortal(layer, root ?? host);
 }
