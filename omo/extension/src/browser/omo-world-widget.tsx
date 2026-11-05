@@ -38,6 +38,10 @@ import type { StationRecipe } from './station-recipe';
 import { StationRecipePanel } from './station-recipe-panel';
 import { defaultStationLink, readStationLink, writeStationLink, webWallDistance } from './station-link';
 import type { StationLink } from './station-link';
+// --- omo voice lane (mount hook): room voice, talk-to-agent dictation, agent avatars ---
+import { VoiceHub } from './voice-hub';
+import { VoicePanel } from './voice-panel';
+// --- end omo voice lane ---
 
 export const TERMINAL_STATION_ID = 'terminal-1';
 const TERMINAL_STATIONS: TerminalWorkstation[] = ['terminal', 'terminal-2'];
@@ -143,6 +147,9 @@ export class OmoWorldWidget extends ReactWidget {
     private taskWorkspaceUiService!:TaskWorkspaceService;
     private reviewRequest=0;
     private codeReviewFrame?:CodeReviewFrame;
+    // --- omo voice lane (mount hook) ---
+    private voiceHub?: VoiceHub;
+    // --- end omo voice lane ---
 
     @postConstruct()
     protected init(): void {
@@ -154,6 +161,12 @@ export class OmoWorldWidget extends ReactWidget {
         try {const saved=sessionStorage.getItem('omo.presence.tab.v1');if(saved&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(saved))this.tabIdentity=saved;sessionStorage.setItem('omo.presence.tab.v1',this.tabIdentity);}catch{/* Memory-only identity; never guesses another tab's terminals. */}
         this.presence=new PresenceController({service:this.presenceService,pose:()=>this.worldScene?.getPlayerPose()??{...PLAYER_HOME},schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:state=>this.presenceChanged(state)});
         this.toDispose.push({dispose:()=>{void this.presence?.dispose().catch(()=>undefined);}});
+        // --- omo voice lane (mount hook): read-only access to presence, scene and desks. Starts nothing. ---
+        this.voiceHub=new VoiceHub({presenceService:this.presenceService,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',
+            desk:desk=>({state:this.consoleStates[desk],controller:this.consoles.get(desk)}),activeDesk:()=>this.activeStation,
+            onChange:()=>this.update(),message:text=>{this.feedback=text;this.update();}});
+        this.toDispose.push({dispose:()=>{this.voiceHub?.dispose();this.voiceHub=undefined;}});
+        // --- end omo voice lane ---
         this.review=new GitReviewController(this.gitReviewService,state=>{
             this.reviewState=state;
             if(state.phase!=='idle'){
@@ -553,6 +566,7 @@ export class OmoWorldWidget extends ReactWidget {
                     </div>
                     {this.room && !this.configuring && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
                         <PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>
+                        {/* omo voice lane (mount hook) */}{this.voiceHub&&<VoicePanel hub={this.voiceHub} view={this.voiceHub.state}/>}
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button>{ROOM_KITS[this.room?.kit ?? 'hermes-desk'].webWall && <button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button>}<button data-testid="station-mirror-controls" onClick={()=>this.selectStation('mirror')}>Mirror · {this.stationLink.targetStationId === 'terminal' ? 'Desk one' : 'Desk two'}</button><button data-testid="station-recipe-toggle" aria-expanded={this.recipeOpen} onClick={()=>{this.recipeOpen=!this.recipeOpen;this.update();}}>Station recipes</button></nav>
                         {this.recipeOpen&&<StationRecipePanel recipes={this.recipes} stationId={this.activeStation} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}}/>}
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.activeStation==='terminal-2'?'Desk two':'Desk one'} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>}

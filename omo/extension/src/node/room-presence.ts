@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto';
-import { presenceJoin, presenceLayout, presencePose } from '../common/presence-protocol';
-import type { OmoPresenceService as OmoPresenceServiceType, PresenceJoin, RoomMember, RoomSnapshot } from '../common/presence-protocol';
+import { presenceJoin, presenceLayout, presencePose, voiceSignal, voiceStatus, VOICE_INBOX_MAX } from '../common/presence-protocol';
+import type { OmoPresenceService as OmoPresenceServiceType, PresenceJoin, RoomMember, RoomSnapshot, VoiceSignalEnvelope } from '../common/presence-protocol';
 import { PLAYER_HOME } from '../common/player-state';
 import type { PlayerPose, RoomLayoutId } from '../common/player-state';
-interface Member extends RoomMember { clientId: string; seen: number }
+interface Member extends RoomMember { clientId: string; seen: number; inbox?: VoiceSignalEnvelope[] }
 interface Room { projectUri: string; theme: PresenceJoin['theme']; layout: RoomLayoutId; members: Map<string,Member> }
 /** Ephemeral visual presence. One server-owned member identity per RPC connection. */
 export class RoomPresence {
@@ -22,7 +22,7 @@ export class RoomPresence {
         const snapshot=():RoomSnapshot=>{
             const room=roomId&&this.rooms.get(roomId);
             if(!room||!room.members.has(selfId))throw new Error('Join a room first. Presence expired or disconnected.');
-            const result: RoomSnapshot = {roomId:roomId!,theme:room.theme,selfId,members:[...room.members.values()].map(m=>({id:m.id,name:m.name,pose:{...m.pose}}))};
+            const result: RoomSnapshot = {roomId:roomId!,theme:room.theme,selfId,members:[...room.members.values()].map(m=>{const out:RoomMember={id:m.id,name:m.name,pose:{...m.pose}};if(m.voice)out.voice={...m.voice};return out;})};
             if (room.layout === 'wide') result.layout = 'wide';
             return result;
         };
@@ -59,6 +59,30 @@ export class RoomPresence {
                 member.pose=pose;member.seen=this.now();return snapshot();
             },
             leave:async()=>{leave();},
+            // Room voice: the backend relays bounded signalling between voice-enabled members of
+            // the SAME room only. Media flows peer to peer; the backend never sees audio.
+            setVoice:async raw=>{
+                open();const status=voiceStatus(raw);this.sweep();
+                const member=roomId?this.rooms.get(roomId)?.members.get(selfId):undefined;
+                if(!member)throw new Error('Join a room before turning on voice.');
+                if(status){if(member.voice?.session!==status.session)member.inbox=[];member.voice=status;}
+                else{delete member.voice;delete member.inbox;}
+            },
+            signal:async raw=>{
+                open();const message=voiceSignal(raw);this.sweep();
+                const room=roomId?this.rooms.get(roomId):undefined,member=room?.members.get(selfId);
+                if(!room||!member?.voice||member.voice.session!==message.session)throw new Error('Turn on voice in a room first.');
+                const target=message.to!==selfId?room.members.get(message.to):undefined;
+                if(!target?.voice||target.voice.session!==message.toSession)return; // stale peer session: drop quietly
+                const inbox=target.inbox??(target.inbox=[]);
+                if(inbox.length>=VOICE_INBOX_MAX)throw new Error('That member is not reading voice signals. Try again.');
+                inbox.push({from:selfId,fromSession:message.session,kind:message.kind,data:message.data});
+            },
+            takeSignals:async()=>{
+                open();const member=roomId?this.rooms.get(roomId)?.members.get(selfId):undefined;
+                if(!member?.voice||!member.inbox?.length)return [];
+                const out=member.inbox;member.inbox=[];return out;
+            },
             dispose:()=>{closed=true;leave();}
         };return service;
     }

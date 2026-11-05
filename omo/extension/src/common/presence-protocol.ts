@@ -3,13 +3,41 @@ import type { PlayerPose, RoomLayoutId } from './player-state';
 export const OMO_PRESENCE_PATH = '/services/omo-presence';
 export const OmoPresenceService = Symbol('OmoPresenceService');
 export interface PresenceJoin { roomId: string; name: string; clientId: string; projectUri: string; theme: RoomTheme; layout?: RoomLayoutId }
-export interface RoomMember { id: string; name: string; pose: PlayerPose }
+export interface RoomMember { id: string; name: string; pose: PlayerPose; voice?: VoiceStatus }
 export interface RoomSnapshot { roomId: string; theme: RoomTheme; selfId: string; members: RoomMember[]; layout?: RoomLayoutId }
 /** Local trusted clients only. No terminal contents or remote-control messages. */
 export interface OmoPresenceService {
     join(input: PresenceJoin): Promise<RoomSnapshot>;
     update(pose: PlayerPose): Promise<RoomSnapshot>;
     leave(): Promise<void>;
+    // --- room voice (additive). Signalling only: no audio ever passes through the backend. ---
+    /** Publish or clear (null) this connection's own voice status. Requires a joined room. */
+    setVoice(status: VoiceStatus | null): Promise<void>;
+    /** Relay one WebRTC signalling message to a voice-enabled member of the same room. */
+    signal(message: VoiceSignal): Promise<void>;
+    /** Take (and clear) the signalling messages addressed to this connection. */
+    takeSignals(): Promise<VoiceSignalEnvelope[]>;
+}
+/** Voice state a member chose to publish. Booleans only; never audio, transcripts or terminal text. */
+export interface VoiceStatus { session: string; muted: boolean; speaking: boolean }
+export type VoiceSignalKind = 'offer' | 'answer' | 'ice' | 'bye';
+export interface VoiceSignal { to: string; toSession: string; session: string; kind: VoiceSignalKind; data: string }
+export interface VoiceSignalEnvelope { from: string; fromSession: string; kind: VoiceSignalKind; data: string }
+export const VOICE_SIGNAL_MAX_CHARS = 16 * 1024;
+export const VOICE_INBOX_MAX = 64;
+const VOICE_SESSION = /^[a-f0-9]{8,32}$/;
+export function voiceStatus(input: VoiceStatus | null): VoiceStatus | null {
+    if (input === null) return null;
+    if (!input || typeof input.session !== 'string' || !VOICE_SESSION.test(input.session) || typeof input.muted !== 'boolean' || typeof input.speaking !== 'boolean') throw new Error('Invalid voice status.');
+    return { session: input.session, muted: input.muted, speaking: input.speaking && !input.muted };
+}
+export function voiceSignal(input: VoiceSignal): VoiceSignal {
+    if (!input || typeof input.to !== 'string' || input.to.length > 64 || typeof input.toSession !== 'string' || !VOICE_SESSION.test(input.toSession)
+        || typeof input.session !== 'string' || !VOICE_SESSION.test(input.session)) throw new Error('Invalid voice signal address.');
+    if (input.kind !== 'offer' && input.kind !== 'answer' && input.kind !== 'ice' && input.kind !== 'bye') throw new Error('Invalid voice signal kind.');
+    if (typeof input.data !== 'string' || input.data.length > VOICE_SIGNAL_MAX_CHARS || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(input.data)) throw new Error('Invalid voice signal payload.');
+    if ((input.kind === 'offer' || input.kind === 'answer') && /^m=(?!audio)/m.test(input.data)) throw new Error('Room voice carries audio only.');
+    return { to: input.to, toSession: input.toSession, session: input.session, kind: input.kind, data: input.data };
 }
 export function presenceLayout(input: Pick<PresenceJoin, 'layout'>): RoomLayoutId {
     return input.layout ?? 'classic';
