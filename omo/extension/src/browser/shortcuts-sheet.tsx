@@ -64,7 +64,7 @@ export function ShortcutsSheet(props: { attached: boolean; onClose: () => void }
         if (event.key === 'Escape' || event.key === 'F1' || event.key === '?') { event.preventDefault(); props.onClose(); return; }
         // Keep Tab inside the dialog.
         if (event.key === 'Tab' && card.current) {
-            const items = [...card.current.querySelectorAll<HTMLElement>('button, [tabindex="0"]')];
+            const items = Array.from(card.current.querySelectorAll<HTMLElement>('button, [tabindex="0"]'));
             if (!items.length) return;
             const first = items[0], last = items[items.length - 1];
             if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
