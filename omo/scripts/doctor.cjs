@@ -72,13 +72,22 @@ function collectReport(options = {}) {
     const checks = [];
     const add = (id, required, found, detail, fix = '') => checks.push({ id, required, status: found ? 'ok' : required ? 'missing' : 'warning', detail: clean(detail), ...(found ? {} : { fix }) });
     add('node', true, Number(nodeVersion.split('.')[0]) >= 22, `Node.js ${nodeVersion}`, 'Use Node.js 22 or newer.');
-    add('platform', false, platform === 'linux', platform === 'linux' ? 'Linux: the verified local alpha platform.' : `${platform}: this host platform is not certified by the Linux acceptance suite.`, 'Use Linux (or a Linux environment). macOS and Windows installation are not certified.');
+    const mac = platform === 'darwin';
+    // macOS: supported code paths exist but have not been executed on a Mac yet. Warn "unverified"; never fail.
+    add('platform', false, platform === 'linux', platform === 'linux' ? 'Linux: the verified local alpha platform.'
+        : mac ? 'macOS: unverified. macOS support is implemented but has not yet been executed on macOS.'
+            : `${platform}: this host platform is not certified by the Linux acceptance suite.`,
+    mac ? 'Follow omo/MAC-SETUP.md (Homebrew tmux, python, bash, git) and report the verification checklist results.'
+        : 'Use Linux (or a Linux environment). macOS and Windows installation are not certified.');
+    const brewPrefixes = mac ? ['/opt/homebrew', '/usr/local'].filter(prefix => isExecutable(path.join(prefix, 'bin', 'brew'))) : [];
+    if (mac) add('homebrew', false, brewPrefixes.length > 0, brewPrefixes.length ? `Homebrew at ${brewPrefixes.join(', ')} (not executed)` : 'Homebrew was not found in /opt/homebrew or /usr/local.', 'Install Homebrew from https://brew.sh, then: brew install node@22 tmux python bash git');
+    const brewHint = (formula, otherwise) => `Install it with Homebrew (brew install ${formula}) or ${otherwise}`;
     const built = isFile(path.join(root, 'browser-app/lib/backend/main.js'));
     add('build', true, built, built ? 'The built Theia backend entry exists.' : 'The Theia application has not been built.', 'Stop any app using this checkout, then install locked dependencies with npm ci and run npm run build from omo/.');
     let discovery, locations;
     try {
         discovery = require(path.join(root, 'extension/lib/node/runtime-discovery.js'));
-        locations = discovery.discoverRuntime(env, home);
+        locations = discovery.discoverRuntime(env, home, platform);
         assertSafeDataDir(locations.dataDir, home);
         add('runtime', true, isFile(locations.hostScript), isFile(locations.hostScript) ? 'Runtime discovery is built and its host script exists.' : 'The configured Python runtime host script is missing.', 'Check OMO_SPATIAL_HOST_SCRIPT or restore omo/runtime; rebuild from this checkout.');
     } catch (error) {
@@ -90,22 +99,37 @@ function collectReport(options = {}) {
         add('runtime', true, false, detail, 'Check OMO_SPATIAL_DATA and OMO_SPATIAL_TMUX_SOCKET; they must not use Minecraft data or reserved sockets. If discovery is not built, install dependencies and run npm run compile.');
     }
     if (discovery && locations) {
-        add('tmux', true, !!locations.tmux, locations.tmux || 'No executable tmux was found.', 'Install tmux or set OMO_SPATIAL_TMUX to an absolute executable path.');
-        add('python', true, !!locations.python, locations.python || 'No executable Python 3 was found.', 'Install Python 3 or set OMO_SPATIAL_PYTHON to an absolute executable path.');
-        const bash = discovery.which('bash', env.PATH);
-        const git = discovery.which('git', env.PATH);
-        add('bash', true, !!bash, bash || 'No executable bash was found on PATH.', 'Install bash and put it on the application PATH.');
-        add('git', false, !!git, git || 'Git was not found; project change review needs it.', 'Install git and put it on the application PATH to use Code review.');
+        // The PATH the runtime host will really use (macOS: Homebrew bin directories first).
+        const searchPath = locations.searchPath ?? env.PATH;
+        add('tmux', true, !!locations.tmux, locations.tmux || 'No executable tmux was found.', mac ? brewHint('tmux', 'set OMO_SPATIAL_TMUX to an absolute executable path.') : 'Install tmux or set OMO_SPATIAL_TMUX to an absolute executable path.');
+        add('python', true, !!locations.python, locations.python || 'No executable Python 3 was found.', mac ? brewHint('python', 'set OMO_SPATIAL_PYTHON to an absolute Python 3.11+ executable.') : 'Install Python 3 or set OMO_SPATIAL_PYTHON to an absolute executable path.');
+        const bash = locations.bash ?? discovery.which('bash', searchPath);
+        const git = discovery.which('git', searchPath);
+        add('bash', true, !!bash, bash || 'No executable bash was found on PATH.', mac ? 'Install bash with Homebrew (brew install bash).' : 'Install bash and put it on the application PATH.');
+        add('git', false, !!git, git || 'Git was not found; project change review needs it.', mac ? 'Install git (xcode-select --install, or brew install git) to use Code review.' : 'Install git and put it on the application PATH to use Code review.');
+        if (mac) {
+            // Filesystem-only: versions are inferred from the location, never by executing anything.
+            // /usr/bin/python3 is Apple's Command Line Tools Python (3.9); owned agent starts need 3.11+.
+            const applePython = !!locations.python && /^\/usr\/bin\/python3(\.\d+)?$/.test(locations.python);
+            add('python-version', false, !!locations.python && !applePython, applePython
+                ? `${locations.python} is Apple's Command Line Tools Python (3.9); Omo needs Python 3.11 or newer.`
+                : locations.python ? `${locations.python} (version not executed; Python 3.11 or newer is required)` : 'No Python found.',
+            'brew install python, make sure /opt/homebrew/bin (or /usr/local/bin) is on PATH, or set OMO_SPATIAL_PYTHON to a Python 3.11+ executable.');
+            // /bin/bash on macOS is bash 3.2. The shell profile is written to work on it, but Homebrew bash is preferred.
+            const appleBash = bash === '/bin/bash';
+            add('bash-version', false, !!bash && !appleBash, appleBash ? '/bin/bash is macOS bash 3.2 (2007); tabs will work but Homebrew bash is preferred.'
+                : bash ? `${bash} (version not executed)` : 'No bash found.', 'brew install bash; Omo puts Homebrew bin directories ahead of /bin automatically.');
+        }
         for (const kind of ['hermes', 'claude', 'codex']) {
             const override = env[`OMO_SPATIAL_${kind.toUpperCase()}_BIN`];
             const pinned = kind === 'hermes' ? override : override?.trim();
             const pinnedCandidate = pinned
                 ? pinned.includes(path.sep)
                     ? runtimePath(pinned, locations.dataDir)
-                    : runtimeWhich(pinned, env.PATH, locations.dataDir)
+                    : runtimeWhich(pinned, searchPath, locations.dataDir)
                 : undefined;
             const candidates = pinned ? [pinnedCandidate] : [
-                runtimeWhich(kind, env.PATH, locations.dataDir),
+                runtimeWhich(kind, searchPath, locations.dataDir),
                 ...(kind === 'hermes' ? [] : [path.join(home, '.local/bin', kind), path.join(home, '.claude/local', kind), path.join(home, '.npm-global/bin', kind), path.join(home, '.bun/bin', kind), `/opt/homebrew/bin/${kind}`, `/usr/local/bin/${kind}`])
             ];
             let binary = candidates.find(candidate => isExecutable(candidate));
@@ -116,7 +140,7 @@ function collectReport(options = {}) {
     try {
         const web = require(path.join(root, 'extension/lib/node/web-runtime-service.js'));
         const chrome = web.discoverChrome(env, platform, web.defaultChromeCandidates(platform, home));
-        add('chrome', false, !!chrome, chrome ? `${chrome} (not launched; sandbox not tested)` : 'No installed Chrome/Chromium executable was found. The web wall is optional.', 'Install Chrome/Chromium or set OMO_SPATIAL_CHROME (or CHROME_PATH) to an absolute executable. Do not disable its sandbox.');
+        add('chrome', false, !!chrome, chrome ? `${chrome} (not launched; sandbox not tested)` : 'No installed Chrome/Chromium executable was found. The web wall is optional.', mac ? 'Install Google Chrome into /Applications (or brew install --cask google-chrome / chromium), or set OMO_SPATIAL_CHROME to the executable inside the .app bundle. Do not disable its sandbox.' : 'Install Chrome/Chromium or set OMO_SPATIAL_CHROME (or CHROME_PATH) to an absolute executable. Do not disable its sandbox.');
     } catch {
         add('chrome', false, false, 'Browser discovery is not built or could not be loaded.', 'Install dependencies and run npm run compile before checking the optional web wall.');
     }

@@ -117,6 +117,9 @@ def _load_runtime_module(name):
 
 
 launch_identity = _load_runtime_module("owned_agent_launch")
+# Process identity (pid + start time, parent, children, argv): /proc on Linux,
+# ps/pgrep on macOS, and "unknown" (refuse) wherever it cannot be proven.
+proc_identity = _load_runtime_module("process_identity")
 
 FAULT_NOOP_INPUT = os.environ.get("OMO_SPATIAL_FAULT") == "noop-input"   # test-only seeded fault
 # A pinned Hermes root (OMO_HERMES_ROOT) is where profiles are validated, so the Hermes
@@ -243,7 +246,8 @@ def agents():
     bash = shutil.which("bash")
     out = [{"kind": "shell", "available": bool(bash),
             "detail": "bash" if bash else "bash was not found on PATH",
-            **({} if bash else {"installHint": "Install bash (for example: sudo apt install bash)"})}]
+            **({} if bash else {"installHint": "Install bash (for example: brew install bash)" if sys.platform == "darwin"
+                                else "Install bash (for example: sudo apt install bash)"})}]
     labels = {"hermes": "Hermes", "claude": "Claude Code", "codex": "Codex"}
     for kind in ("hermes", "claude", "codex"):
         found = bool(info.get(kind, {}).get("found"))
@@ -591,25 +595,15 @@ def _pane_rows(target):
 
 
 def _process_start(pid):
-    """Kernel start time of a process (clock ticks since boot), "" when unknown.
-    With the pid it identifies one process; a recycled pid has another start time."""
-    try:
-        with open(f"/proc/{int(pid)}/stat", "rb") as stream:
-            raw = stream.read(4096).decode("ascii", "replace")
-        return raw[raw.rindex(")") + 2:].split()[19]
-    except (OSError, ValueError, IndexError):
-        return ""
+    """Start time of a process ("" when it cannot be proven). Linux: kernel clock
+    ticks since boot from /proc; macOS: ps lstart. With the pid it identifies one
+    process; a recycled pid has another start time."""
+    return proc_identity.start_time(pid)
 
 
 def _process_alive(pid, start):
-    """True only for the same live (non-zombie) process: pid + kernel start time."""
-    try:
-        with open(f"/proc/{int(pid)}/stat", "rb") as stream:
-            raw = stream.read(4096).decode("ascii", "replace")
-        fields = raw[raw.rindex(")") + 2:].split()
-        return bool(start) and fields[19] == start and fields[0] not in ("Z", "X")
-    except (OSError, ValueError, IndexError):
-        return False
+    """True only for the same live (non-zombie) process: pid + start time."""
+    return proc_identity.alive(pid, start)
 
 
 def _record_proven(record, row):
@@ -755,21 +749,13 @@ def _proven_agent_child(record):
     # whose receipt never arrived, and then only if it is our launch helper.
     if record.get("started"):
         return None
-    try:
-        with open(f"/proc/{pane_pid}/task/{pane_pid}/children", "r", encoding="ascii") as stream:
-            children = stream.read(4096).split()
-    except OSError:
-        return None
-    if len(children) != 1 or not children[0].isdigit():
+    children = proc_identity.children(pane_pid)
+    if children is None or len(children) != 1 or not children[0].isdigit():
         return None
     # The pane process is our helper (guarded exec / owned exec); its single
     # child is the agent. Require the pane's own cmdline to be that helper.
-    try:
-        with open(f"/proc/{pane_pid}/cmdline", "rb") as stream:
-            helper = [part.decode("utf-8", "replace") for part in stream.read(65536).split(b"\0") if part]
-    except OSError:
-        return None
-    if len(helper) < 2 or os.path.realpath(helper[1]) not in (os.path.realpath(GUARDED_HERMES_EXEC),
+    helper = proc_identity.argv(pane_pid)
+    if helper is None or len(helper) < 2 or os.path.realpath(helper[1]) not in (os.path.realpath(GUARDED_HERMES_EXEC),
                                                                os.path.realpath(OWNED_AGENT_EXEC)):
         return None
     return children[0]
@@ -793,12 +779,7 @@ def _reconnectable_owned_row(ws, tab, target):
 
 
 def _parent_pid(pid):
-    try:
-        with open(f"/proc/{int(pid)}/stat", "rb") as stream:
-            raw = stream.read(4096).decode("ascii", "replace")
-        return raw[raw.rindex(")") + 2:].split()[1]
-    except (OSError, ValueError, IndexError):
-        return ""
+    return proc_identity.parent_pid(pid)
 
 
 def _show_owned_pane(pane_id):

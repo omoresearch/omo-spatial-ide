@@ -19,13 +19,19 @@ function allowedUrl(value, redirect = false) {
 function validateLock(value) {
     if (!value || value.version !== 1 || typeof value.vscodeApi !== 'string' || !/^\d+\.\d+\.\d+$/.test(value.vscodeApi)
         || !Array.isArray(value.assets) || !value.assets.length || value.assets.length > 32 || !Array.isArray(value.exclude) || value.exclude.length > 128) throw Error('Invalid extension lock');
-    const seen = new Set();
+    // One artifact per (id, platform). The same extension may be pinned once per
+    // target platform (e.g. debugpy linux-x64 / darwin-arm64 / darwin-x64), but an
+    // id is either platform-neutral or platform-specific, never both.
+    const seen = new Set(), neutral = new Set(), specific = new Set();
     for (const item of value.assets) {
         if (!item || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(item.id || '') || !/^[A-Za-z0-9][A-Za-z0-9_.+-]{0,63}$/.test(item.version || '')
             || !['tar', 'vsix'].includes(item.format) || !/^[a-f0-9]{64}$/.test(item.sha256 || '') || !allowedUrl(item.url)
             || !Number.isInteger(item.maxBytes) || item.maxBytes < 1 || item.maxBytes > 100000000
-            || (item.platform !== undefined && !/^(linux|darwin|win32)-(x64|arm64)$/.test(item.platform)) || seen.has(item.id)) throw Error('Invalid or duplicate pinned extension artifact');
-        seen.add(item.id);
+            || (item.platform !== undefined && !/^(linux|darwin|win32)-(x64|arm64)$/.test(item.platform))
+            || seen.has(item.id + '@' + (item.platform ?? '*'))
+            || (item.platform === undefined ? specific.has(item.id) : neutral.has(item.id))) throw Error('Invalid or duplicate pinned extension artifact');
+        seen.add(item.id + '@' + (item.platform ?? '*'));
+        (item.platform === undefined ? neutral : specific).add(item.id);
     }
     if (value.exclude.some(id => typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(id))) throw Error('Invalid extension exclusion');
     return JSON.parse(JSON.stringify(value));
@@ -123,8 +129,9 @@ function ordinaryDirectory(dir) {
     const stat = fs.lstatSync(dir);
     if (!stat.isDirectory() || stat.isSymbolicLink() || fs.realpathSync(dir) !== path.resolve(dir)) throw Error('IDE bundle directory must be canonical and not redirected');
 }
-async function prepareIde(root, manifest, fetchAsset = download) {
+async function prepareIde(root, manifest, fetchAsset = download, hostPlatform = process.platform + '-' + process.arch) {
     manifest = validateLock(manifest);
+    const platformsFor = id => manifest.assets.filter(other => other.id === id).map(other => other.platform).join(', ');
     ordinaryDirectory(root);
     const existing = inspectPrepared(root, manifest);
     if (existing.ready) return existing;
@@ -146,7 +153,12 @@ async function prepareIde(root, manifest, fetchAsset = download) {
     };
     try {
         for (const item of manifest.assets) {
-            if (item.platform && item.platform !== process.platform + '-' + process.arch) { unsupported.push(item.id + ': ' + item.platform + ' only'); continue; }
+            if (item.platform && item.platform !== hostPlatform) {
+                // Another platform's pin. Unsupported only when no pin of this id matches this host.
+                if (!manifest.assets.some(other => other.id === item.id && other.platform === hostPlatform)
+                    && !unsupported.some(entry => entry.startsWith(item.id + ':'))) unsupported.push(item.id + ': ' + platformsFor(item.id) + ' only');
+                continue;
+            }
             const cached = path.join(cache, item.sha256 + '.' + (item.format === 'tar' ? 'tar.gz' : 'vsix'));
             let bytes;
             if (fs.existsSync(cached)) {
