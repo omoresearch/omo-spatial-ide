@@ -134,7 +134,7 @@ export function TaskOverviewPanel(props: TaskOverviewPanelProps): React.ReactEle
                     <dt>Tab</dt><dd>{selected.target.tabId}</dd>
                 </dl>
                 <h4>Task text</h4>
-                <pre>{selected.text}</pre>
+                <pre style={{ userSelect: 'text' }}>{selected.text}</pre>
             </> : <p>Select a task record to read its details.</p>}
         </article>
     </section>;

@@ -99,11 +99,13 @@ export class PointerLockLook {
     constructor(private readonly element: HTMLElement, onLook: (dx: number, dy: number) => void, onChange?: (locked: boolean) => void) {
         const move = (event: MouseEvent): void => { if (this.locked) onLook(event.movementX, event.movementY); };
         const change = (): void => onChange?.(this.locked);
+        // No document (server render, unit rig): pointer lock is simply unavailable.
+        if (typeof document === 'undefined') return;
         document.addEventListener('mousemove', move);
         document.addEventListener('pointerlockchange', change);
         this.listeners.push(() => document.removeEventListener('mousemove', move), () => document.removeEventListener('pointerlockchange', change));
     }
-    get locked(): boolean { return document.pointerLockElement === this.element; }
+    get locked(): boolean { return typeof document !== 'undefined' && document.pointerLockElement === this.element; }
     request(): void { if (!this.locked) void Promise.resolve(this.element.requestPointerLock?.()).catch(() => undefined); }
     exit(): void { if (this.locked) document.exitPointerLock(); }
     dispose(): void { this.exit(); this.listeners.forEach(off => off()); }
