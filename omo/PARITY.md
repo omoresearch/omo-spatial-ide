@@ -49,13 +49,13 @@ at the end.
 | Attach to a screen / full-window terminal | Focus mode (camera flight, F full screen) | done | `focus-mode.ts`, `focus-overlay.tsx` |
 | Colour + cursor on the in-world monitor (truecolour) | Truecolour frames on the texture | done | `room-scene.ts`, `PARITY-ADVANCED.md` |
 | Ctrl keys reach the terminal; Ctrl+Shift+T new shell; Alt+2 tab 2; Ctrl+Shift+P picker | Same | done | `first-person-controls.ts` |
-| Ctrl+Tab / Alt+1..9 / Ctrl+Shift+W / N / E / R shortcuts | Ctrl+Tab, Ctrl+Shift+Tab, Alt+1..9 (explicit select-tab), T, P; no W/N/E/R | partial | `first-person-controls.ts`, `focus-overlay.tsx` |
+| Ctrl+Tab / Alt+1..9 / Ctrl+Shift+W / N / E / R shortcuts | Ctrl+Tab, Ctrl+Shift+Tab, Alt+1..9 (explicit select-tab), T, P, and now W close tab (asks first; same keys again within 5 s confirm; Station Lock refuses), N rename workspace, E rename tab, R reconnect (starts nothing). Alt+Shift+W/N/E/T where Chrome keeps the Ctrl chord. F1 or ? opens the key sheet; a first-run coach mark shows once (`omo.coach.v1`) | done | `first-person-controls.ts`, `shortcuts-lane.tsx`, `shortcuts-sheet.tsx`, `coach-mark.tsx`, `shortcuts.css` |
 | Safe multi-line paste (bracketed, 256 KiB cap) | Same rules in browser, service and host | done | `PARITY-ADVANCED.md` |
 | Select / double / triple-click, copy (Ctrl+Shift+C) | Shift+drag/double/triple, Ctrl+Shift+C | done | `room-scene.ts`, `common/monitor-selection.ts` |
 | Scrollback (wheel, Shift+PgUp), find across history, clear | Manage ▸ Scroll / Find / Clear | done | `PARITY-ADVANCED.md` |
 | OSC 52 app copy (write only) | Pending-copy button, user click writes | done | `runtime-console-strip.tsx` (`runtime-copy-osc52`) |
 | Ctrl+click opens a link | Links list ▸ opens in managed web wall | done | `common/terminal-links.ts`, `runtime-console-strip.tsx` |
-| Right-click menu (Copy/Paste/Select all/Find/Clear) | Attached screen: Copy, Paste (same paste rules), Select all, Clear selection; Find stays in Manage | partial (no Find in menu) | `focus-overlay.tsx` (`TerminalMenu`) |
+| Right-click menu (Copy/Paste/Select all/Find/Clear) | Attached screen: Copy, Paste (same paste rules), Find… (find box over the screen, seeded with the selection, older/newer, reuses `controller.find`), Select all, Clear selection | done | `focus-overlay.tsx` (`TerminalMenu`), `shortcuts-lane.tsx` (`FindBox`) |
 | Bigger / smaller text on a wall (Ctrl+Shift+= / -) | Ctrl+Shift+= / - steps the attached view's text size (saved per device) | done | `first-person-controls.ts`, `focus-mode.ts` |
 | Bell reaches the screen | Orange lamp, desk badge, acknowledge | done | `room-scene.ts`, `runtime-console-controller.ts` (`unreadBells`) |
 
