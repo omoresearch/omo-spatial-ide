@@ -50,6 +50,8 @@ addEventListener('contextmenu', e => { post({ ev: 'contextmenu', button: e.butto
 
 const POPUP = `<!doctype html><html><head><title>Popup opener</title></head><body style="margin:0">
 <button id="b" style="position:absolute;left:0;top:0;width:300px;height:200px">open</button>
+<a id="l" href="/two" target="_blank" style="position:absolute;left:0;top:300px;width:300px;height:100px;display:block">new tab link</a>
+<a id="j" href="javascript:document.title='pwned'" target="_blank" style="position:absolute;left:400px;top:300px;width:200px;height:100px;display:block">js link</a>
 <script>b.onclick = () => { window.open('/', '_blank'); fetch('/beacon', { method: 'POST', body: JSON.stringify({ ev: 'popup' }) }); };</script>
 </body></html>`;
 

@@ -125,6 +125,31 @@ export class WebSurfaceController {
         if (!Number.isFinite(deltaY)) return;
         await this.action(surface => this.service.scroll({ id: surface.id, ...this.point, deltaX: 0, deltaY: Math.max(-1000, Math.min(1000, deltaY)) }));
     }
+    /** Show another page tab on the wall. The wall texture follows the active tab's frames. */
+    async selectTab(tabId: string): Promise<void> {
+        const surface = this.current.surface;
+        if (!surface || surface.activeTab === tabId || !surface.tabs?.some(t => t.id === tabId)) return;
+        await this.tabAction(() => this.service.selectTab({ id: surface.id, tabId }));
+    }
+    /** Close one page tab. The last tab is the page itself: closing it closes the wall's page. */
+    async closeTab(tabId: string): Promise<void> {
+        const surface = this.current.surface;
+        if (!surface || !surface.tabs?.some(t => t.id === tabId)) return;
+        if (surface.tabs.length <= 1) { await this.close(); return; }
+        await this.tabAction(() => this.service.closeTab({ id: surface.id, tabId }));
+    }
+    private async tabAction(run: () => Promise<WebSurface>): Promise<void> {
+        const epoch = this.epoch;
+        try {
+            const next = await run();
+            if (this.disposed || epoch !== this.epoch) return;
+            // The wall keeps the last pixels until the next poll (≤0.5 s) brings the new tab's frame.
+            this.set({ surface: next, error: '' });
+            this.point = { x: next.width / 2, y: next.height / 2 };
+        } catch (error) {
+            if (epoch === this.epoch) this.set({ error: error instanceof Error ? error.message : String(error) });
+        }
+    }
     async close(): Promise<void> {
         this.epoch++; this.cancel();
         const surface = this.current.surface;
