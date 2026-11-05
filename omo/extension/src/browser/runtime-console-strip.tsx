@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { AgentTaskDrawer } from './agent-task-drawer';
+import { AgentGlyph } from './agent-glyphs';
 import type { GitReviewSnapshot } from '../common/git-review-protocol';
 import type { SessionTab } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
@@ -140,6 +141,7 @@ export function FocusTabs(props: { state: RuntimeConsoleState; controller?: Runt
             className={`omo-focus-tab kind-${tab.kind} state-${tab.state} ${tab.id === state.activeTabId ? 'is-active' : ''}`} disabled={state.acting}
             title={`${AGENT_LABELS[tab.kind]} · ${STATE_LABEL[tab.state]}${tab.detail ? ` · ${tab.detail}` : ''}`}
             onClick={() => { void controller?.selectTab(tab.id); done(); }}>
+            <AgentGlyph kind={tab.kind} />{/* parity: per-kind tab glyph */}
             <span className="omo-focus-tab-name">{tab.name}</span>
             {tab.busy && <i className="omo-focus-tab-busy" aria-label="Process active" />}
             {tab.state !== 'running' && <small>{STATE_LABEL[tab.state]}</small>}
@@ -181,6 +183,7 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
                 <button role="tab" aria-selected={tab.id === state.activeTabId} data-testid={`runtime-tab-${tab.id}`} disabled={state.acting}
                     title={`${AGENT_LABELS[tab.kind]} · ${STATE_LABEL[tab.state]}${tab.detail ? ` · ${tab.detail}` : ''}`}
                     onClick={() => void controller?.selectTab(tab.id)}>
+                    <AgentGlyph kind={tab.kind} />{/* parity: per-kind tab glyph */}
                     {tab.name}{tab.busy && <i className="omo-console-busy" aria-label="Process active"> ●</i>}
                     {tab.state !== 'running' && <small> {STATE_LABEL[tab.state]}</small>}
                 </button>

@@ -26,7 +26,7 @@ at the end.
 | Tab kinds Shell / Hermes / Claude Code / Codex from **+** | "New" row with four kinds | done | `runtime-console-strip.tsx` (`runtime-new-*`) |
 | Not-installed CLI: honest install hint | Disabled launcher with reason + install hint | done | `runtime-console-controller.ts` (`LauncherOption.installHint`) |
 | **+** remembers last kind (+ then Enter repeats) | — | missing | — |
-| Tab glyphs (Hermes spark, Claude burst, Codex ring) | Tab class `kind-*`; avatar colour per kind | partial | `runtime-console-strip.tsx`, `agent-avatars.ts` |
+| Tab glyphs (Hermes spark, Claude burst, Codex ring) | SVG glyph per kind on desk tabs, attached-screen tabs, agent roster chips and in-world name tags | partial → **done (this branch)** | `agent-glyphs.tsx`, `runtime-console-strip.tsx` (`FocusTabs`, used by `focus-overlay.tsx`), `agent-avatars.ts` |
 | Tab state dots (idle / running / interrupted / exited) | State text + busy dot per tab | done | `runtime-console-strip.tsx` |
 | Rename / close (busy needs confirmation) / revive tab | ✎ × ↻ with confirmation | done | `runtime-console-controller.ts` (`requestClose`, `requestRevive`) |
 | Claude Code session id per tab, `--resume` after restore | Host launches `--session-id`; resume path | done | `runtime/omo_spatial_host.py` |

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AgentKind, SessionTab } from '../common/runtime-protocol';
 import { ROOM_LAYOUTS } from '../common/player-state';
+import { drawAgentGlyph } from './agent-glyphs';
 import type { PlayerPose, RoomLayoutId } from '../common/player-state';
 
 /**
@@ -84,14 +85,15 @@ export function aimedDesk(pose: PlayerPose, layout: RoomLayoutId, maxDistance = 
     return best?.desk;
 }
 
-function tagTexture(lines: Array<{ text: string; color: string; size: number }>, accent: string): THREE.CanvasTexture {
+function tagTexture(lines: Array<{ text: string; color: string; size: number }>, accent: string, glyph?: Exclude<AgentKind, 'shell'>): THREE.CanvasTexture {
     const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128;
     const c = canvas.getContext('2d')!;
     c.fillStyle = '#0d141ee8'; c.fillRect(0, 0, 512, 128);
     c.fillStyle = accent; c.fillRect(0, 0, 8, 128);
+    if (glyph) drawAgentGlyph(c, glyph, 22, 18, 40); // per-kind glyph (spark / burst / ring)
     c.textAlign = 'center';
     let y = lines.length === 1 ? 76 : 54;
-    for (const line of lines) { c.font = `${line.size}px sans-serif`; c.fillStyle = line.color; c.fillText(line.text, 260, y, 480); y += line.size + 12; }
+    for (const line of lines) { c.font = `${line.size}px sans-serif`; c.fillStyle = line.color; c.fillText(line.text, glyph ? 286 : 260, y, glyph ? 428 : 480); y += line.size + 12; }
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture;
 }
 
@@ -229,7 +231,7 @@ export class AgentAvatars {
                 redraw = true;
                 agent.tag.material.map?.dispose();
                 const accent = `#${KIND_COLOR[presence.kind].toString(16).padStart(6, '0')}`;
-                agent.tag.material.map = tagTexture([{ text: presence.label, color: '#f4efe3', size: 36 }, { text: `● ${ACTIVITY_TEXT[presence.activity]}${presence.speaking ? ' · speaking' : ''}`, color: ACTIVITY_COLOR[presence.activity], size: 26 }], accent);
+                agent.tag.material.map = tagTexture([{ text: presence.label, color: '#f4efe3', size: 36 }, { text: `● ${ACTIVITY_TEXT[presence.activity]}${presence.speaking ? ' · speaking' : ''}`, color: ACTIVITY_COLOR[presence.activity], size: 26 }], accent, presence.kind);
                 agent.tag.material.needsUpdate = true; agent.tagKey = tagKey;
             }
         }

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { VoiceHub, VoiceHubView } from './voice-hub';
+import { AgentGlyph } from './agent-glyphs';
 import '../../src/browser/voice.css';
 
 const DESK_NAME = { terminal: 'Desk one', 'terminal-2': 'Desk two' } as const;
@@ -47,7 +48,7 @@ export function VoicePanel(props: { hub: VoiceHub; view: VoiceHubView }): React.
         </div>
         {view.agents.length > 0 && <div className="omo-voice-row omo-agent-roster" data-testid="agent-roster">
             <strong>Agents here</strong>
-            {view.agents.map(a => <span key={a.key} className={`omo-agent-chip is-${a.kind} is-${a.activity}`} data-agent-key={a.key} data-activity={a.activity}>{a.label} <em>{DESK_NAME[a.desk]} · {ACTIVITY[a.activity]}{a.speaking ? ' · speaking' : ''}</em></span>)}
+            {view.agents.map(a => <span key={a.key} className={`omo-agent-chip is-${a.kind} is-${a.activity}`} data-agent-key={a.key} data-activity={a.activity}><AgentGlyph kind={a.kind} />{a.label} <em>{DESK_NAME[a.desk]} · {ACTIVITY[a.activity]}{a.speaking ? ' · speaking' : ''}</em></span>)}
         </div>}
         {(v.error || d.error) && <span role="alert" className="omo-error" data-testid="voice-error">{v.error || d.error}</span>}
         {!v.error && !d.error && (d.notice || v.notice) && <small role="status" data-testid="voice-notice">{d.phase === 'listening' ? '' : d.notice || v.notice}</small>}
