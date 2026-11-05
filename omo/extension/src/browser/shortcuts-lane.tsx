@@ -5,6 +5,8 @@ import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-co
 import { TAB_NAME_MAX, WORKSPACE_NAME_MAX } from './runtime-console-controller';
 import type { DeskShortcut, DeskShortcutDetail } from './first-person-controls';
 import type { FocusMode } from './focus-mode';
+import { ShortcutsSheet } from './shortcuts-sheet';
+import { CoachMark, coachSeen, markCoachSeen } from './coach-mark';
 
 /**
  * omo keys6 lane: desk keys (Ctrl+Shift+W / N / E / R, or Alt+Shift+…), sent by first-person-controls.ts
@@ -65,6 +67,9 @@ export function ShortcutsLane(props: ShortcutsLaneProps): React.ReactElement | n
     const [toast, setToast] = React.useState<{ text: string; tone: 'info' | 'warn'; id: number }>();
     const [rename, setRename] = React.useState<RenameBox>();
     const armed = React.useRef<{ station: TerminalWorkstation; tabId: string; at: number }>();
+    // F1 (or ? when not typing): the key sheet. First room on this device: the coach mark, once.
+    const [sheet, setSheet] = React.useState(false);
+    const [coach, setCoach] = React.useState(() => !coachSeen());
 
     const say = React.useCallback((text: string, tone: 'info' | 'warn' = 'info') => setToast({ text, tone, id: Date.now() }), []);
     React.useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(undefined), CLOSE_CONFIRM_MS); return () => window.clearTimeout(id); }, [toast]);
@@ -117,6 +122,14 @@ export function ShortcutsLane(props: ShortcutsLaneProps): React.ReactElement | n
         return () => window.removeEventListener('omo:desk-shortcut', listener);
     }, [run]);
 
+    React.useEffect(() => {
+        const toggle = (): void => setSheet(open => !open);
+        window.addEventListener('omo:keys-help', toggle);
+        return () => window.removeEventListener('omo:keys-help', toggle);
+    }, []);
+    const closeSheet = (): void => { setSheet(false); refocus(); };
+    const coachDone = (): void => { markCoachSeen(); setCoach(false); refocus(); };
+
     const saveRename = async (): Promise<void> => {
         const box = rename; if (!box) return;
         const controller = latest.current.desk(box.station).controller; if (!controller) return;
@@ -132,5 +145,7 @@ export function ShortcutsLane(props: ShortcutsLaneProps): React.ReactElement | n
     return createPortal(<div className="omo-keys-lane" data-testid="keys-lane">
         {toast && <div key={toast.id} className={`omo-keys-toast is-${toast.tone}`} role="status" data-testid="keys-toast">{toast.text}</div>}
         {rename && <RenameDialog box={rename} desk={props.desk(rename.station)} onChange={name => setRename({ ...rename, name })} onSave={() => void saveRename()} onCancel={cancelRename} />}
+        {sheet && <ShortcutsSheet attached={!!controls?.attached} onClose={closeSheet} />}
+        {coach && !sheet && !controls?.attached && <CoachMark onDone={coachDone} refocus={refocus} />}
     </div>, root);
 }
