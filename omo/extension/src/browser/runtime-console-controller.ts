@@ -14,6 +14,8 @@ export const MONITOR_ROWS = 22;
 export const TAB_NAME_MAX = 24;
 export const POLL_MS = 200;
 export const RETRY_MS = 1500;
+/** Idle interval for the pane clipboard-write check (it is also checked on every new frame). */
+const CLIPBOARD_CHECK_MS = 1000;
 export const AGENT_KINDS: AgentKind[] = ['shell', 'hermes', 'claude', 'codex'];
 export const AGENT_LABELS: Record<AgentKind, string> = { shell: 'Shell', hermes: 'Hermes', claude: 'Claude Code', codex: 'Codex' };
 export const WORKSPACE_NAME_MAX = 40;
@@ -209,6 +211,7 @@ export class RuntimeConsoleController {
     private epoch = 0;
     private viewGen = 0;
     private pollInFlight = -1;
+    private clipboardCheckedAt = 0;
     private timer: unknown;
     private disposed = false;
     private current: RuntimeConsoleState = RuntimeConsoleController.initial();
@@ -221,10 +224,22 @@ export class RuntimeConsoleController {
     get state(): RuntimeConsoleState { return this.current; }
     get launchers(): LauncherOption[] { return launcherOptions(this.current.host); }
 
+    /**
+     * Apply a state patch and notify. A non-empty patch that changes nothing is dropped, so an idle
+     * poll does not re-render the widget. An empty patch is an explicit "notify anyway".
+     */
     private set(patch: Partial<RuntimeConsoleState>): void {
         if (this.disposed) return;
+        const keys = Object.keys(patch) as Array<keyof RuntimeConsoleState>;
+        if (keys.length && keys.every(key => Object.is(this.current[key], patch[key]))) return;
         this.current = { ...this.current, ...patch };
         this.options.onChange(this.current);
+    }
+    /** Keep the old workspace object when the polled one has the same content (each poll returns a new copy). */
+    private sameWorkspace(next: SessionWorkspace): SessionWorkspace {
+        const old = this.current.workspace;
+        if (!old) return next;
+        try { return JSON.stringify(old) === JSON.stringify(next) ? old : next; } catch { return next; }
     }
     private activeTab(): SessionTab | undefined { return this.current.workspace?.tabs.find(t => t.id === this.current.activeTabId); }
 
@@ -465,20 +480,21 @@ export class RuntimeConsoleController {
         }
         if (this.pollInFlight === gen) this.pollInFlight = -1;
         if (epoch !== this.epoch || gen !== this.viewGen || this.disposed) return;
-        if (result.workspace) this.set({ workspace: result.workspace });
-        const tab = this.activeTab();
+        // One notify per poll: the workspace, phase and frame go out in a single patch.
+        const workspace = result.workspace ? this.sameWorkspace(result.workspace) : this.current.workspace;
+        const tab = workspace?.tabs.find(t => t.id === this.current.activeTabId);
         if (result.state === 'detached' || result.state === 'error') {
             this.viewId = undefined;
             const reason = result.detail ? ` (${result.detail})` : '';
             this.set(result.state === 'error'
-                ? { phase: 'error', error: `Terminal view error${reason}.`, statusText: 'Reattaching the monitor…' }
-                : { phase: 'reconnecting', statusText: `Monitor disconnected${reason}. Reattaching…` });
+                ? { workspace, phase: 'error', error: `Terminal view error${reason}.`, statusText: 'Reattaching the monitor…' }
+                : { workspace, phase: 'reconnecting', statusText: `Monitor disconnected${reason}. Reattaching…` });
             this.later(() => void this.attachActive(epoch), this.options.retryMs ?? RETRY_MS);
             return;
         }
         const patch: Partial<RuntimeConsoleState> = result.state === 'connecting'
-            ? { phase: 'attaching', statusText: result.detail || 'Connecting…' }
-            : { phase: 'live', error: '', statusText: tab ? describeTab(tab) : 'Live' };
+            ? { workspace, phase: 'attaching', statusText: result.detail || 'Connecting…' }
+            : { workspace, phase: 'live', error: '', statusText: tab ? describeTab(tab) : 'Live' };
         const frame = result.frame;
         if (frame && frame.sequence > this.current.sequence) {
             if (Number.isSafeInteger(frame.bell) && frame.bell! >= 0) {
@@ -490,13 +506,18 @@ export class RuntimeConsoleController {
             Object.assign(patch, { sequence: frame.sequence, lines: frame.lines, cells: frame.cells, foreground: frame.foreground, background: frame.background, truecolor: validTruecolor(frame.truecolor, frame.rows, frame.cols), cursor: frame.cursor, palette: frame.palette ?? this.current.palette });
             for (const key of ['history', 'scrollOffset', 'bracketedPaste'] as const) if (frame[key] !== undefined) Object.assign(patch, { [key]: frame[key] });
         }
+        // Show the frame first; the clipboard check is a second round trip and must not delay it.
+        this.set(patch);
+        // A pane clipboard write comes with output, so check on a new frame, else at most once a second.
         const workspaceId = this.current.workspace?.id;
         const tabId = this.current.activeTabId;
-        if (workspaceId && tabId) {
+        const now = Date.now();
+        if (workspaceId && tabId && (patch.sequence !== undefined || now - this.clipboardCheckedAt >= CLIPBOARD_CHECK_MS)) {
+            this.clipboardCheckedAt = now;
             const copy = await this.readClipboardNotification(epoch, gen, viewId, workspaceId, tabId);
-            if (copy) patch.pendingClipboard = copy;
+            if (epoch !== this.epoch || gen !== this.viewGen || this.disposed) return;
+            if (copy) this.set({ pendingClipboard: copy });
         }
-        this.set(patch);
         this.later(() => void this.pollOnce(epoch, gen), this.options.pollMs ?? POLL_MS);
     }
 
