@@ -44,6 +44,8 @@ export class FocusMode {
     split = readPref(SPLIT_KEY) === 'true';
     /** Set by the overlay: copies a DOM text selection. Returns true when it handled the copy. */
     copySelection?: () => boolean;
+    /** Set by the overlay: Alt+1..9 / Ctrl+Tab picks a tab of the active desk (explicit selectTab). True when handled. */
+    tabRequest?: (slot: number | 'next' | 'previous') => boolean;
     private bound?: { scene: RoomScene; controls: FirstPersonControls; off: () => void };
     private listeners = new Set<() => void>();
     constructor(private options: FocusModeOptions) {}
@@ -63,6 +65,8 @@ export class FocusMode {
         controls.fullRequest = () => this.fullScreenNearest();
         controls.copyOverride = () => this.copySelection?.() ?? false;
         controls.deskRequest = slot => this.quickSwitch(slot);
+        controls.tabRequest = slot => this.tabRequest?.(slot) ?? false;
+        controls.comfortRequest = direction => { if (controls.attached) this.stepComfort(direction); return controls.attached; };
         const off = controls.onFocusChange(state => this.publish(state));
         this.bound = { scene, controls, off };
         this.publish(controls.focus);
@@ -92,6 +96,8 @@ export class FocusMode {
     /** Walk away. Keys return to the room so WASD works at once. */
     exit(): void { const c = this.bound?.controls; if (!c) return; c.detach(); c.element.focus({ preventScroll: true }); }
     dispose(): void { this.unbind(); this.listeners.clear(); }
+    /** One-line hint in the room's feedback line. */
+    say(text: string): void { this.options.message(text); }
 
     /** A- / A+. Keys go straight back to the terminal. */
     stepComfort(direction: 1 | -1): void {
@@ -131,6 +137,7 @@ export class FocusMode {
     private unbind(): void {
         const b = this.bound; if (!b) return;
         b.off(); b.controls.attachRequest = undefined; b.controls.fullRequest = undefined; b.controls.copyOverride = undefined; b.controls.deskRequest = undefined;
+        b.controls.tabRequest = undefined; b.controls.comfortRequest = undefined;
         this.bound = undefined;
     }
     private publish(state: FocusState): void { this.state = state; this.listeners.forEach(listener => listener()); }

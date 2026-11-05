@@ -35,88 +35,94 @@
 .omo-root[data-focus="attached"] .omo-scene canvas { cursor: default; }
 
 /* ---------- Focus layer: one work area, edge to edge ---------- */
-/* Attached: the layer covers the whole scene. A soft vignette and blur hide the room edges, so no
-   slivers of the 3D scene show past the bezel. Full: the same layout over the whole window. */
+/* Attached and full: a solid work area with no margin. The room is hidden behind it; only the slim
+   top HUD bar sits above the terminal. Full is the same layout over the whole window. */
 .omo-focus-layer {
-    position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: var(--omo-sp-2);
-    padding: var(--omo-sp-2) var(--omo-sp-3) var(--omo-sp-3); box-sizing: border-box; font-family: var(--omo-font);
-    background: radial-gradient(130% 120% at 50% 50%, rgba(6, 10, 14, .55) 0%, rgba(6, 10, 14, .86) 62%, var(--omo-bg-0) 100%);
-    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    --omo-term-bg: #091119; --omo-focus-bar-h: 40px;
+    position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: 0;
+    padding: 0; box-sizing: border-box; font-family: var(--omo-font); background: var(--omo-term-bg);
 }
 .omo-focus-layer.is-screen { opacity: 0; transition: opacity var(--omo-dur-2) var(--omo-ease); }
 .omo-focus-layer.is-screen.is-settled { opacity: 1; }
-.omo-focus-layer.is-full { position: fixed; z-index: 1000; background: var(--omo-bg-0); backdrop-filter: none; animation: omo-focus-in var(--omo-dur-2) var(--omo-ease); }
-.omo-focus-layer:fullscreen { background: var(--omo-bg-0); }
+.omo-focus-layer.is-full { position: fixed; z-index: 1000; animation: omo-focus-in var(--omo-dur-2) var(--omo-ease); }
+.omo-focus-layer:fullscreen { background: var(--omo-term-bg); }
 @keyframes omo-focus-in { from { opacity: 0; } to { opacity: 1; } }
 
+/* One slim HUD bar across the top: desks, this desk's tabs, then size / view / walk on the right.
+   The right end leaves room for the HUD's chat and notification buttons (hud.css). */
 .omo-focus-bar {
-    flex: 0 0 auto; align-self: center; display: flex; align-items: center; gap: var(--omo-sp-2);
-    max-width: 100%; height: 36px; padding: 0 var(--omo-sp-1) 0 var(--omo-sp-3); white-space: nowrap; box-sizing: border-box;
-    background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2);
-    border-radius: var(--omo-r-pill); box-shadow: var(--omo-shadow-2); color: var(--omo-text-2); font-size: var(--omo-fs-xs);
+    flex: 0 0 var(--omo-focus-bar-h); display: flex; align-items: center; gap: var(--omo-sp-2); min-width: 0;
+    height: var(--omo-focus-bar-h); padding: 0 calc(var(--omo-sp-4) + 132px) 0 var(--omo-sp-3); white-space: nowrap; box-sizing: border-box;
+    background: var(--omo-bg-1); border-bottom: 1px solid var(--omo-line);
+    color: var(--omo-text-2); font: 500 var(--omo-fs-xs) var(--omo-font);
 }
+.omo-focus-layer.is-full .omo-focus-bar { padding-right: var(--omo-sp-3); }
 .omo-focus-bar strong { color: var(--omo-text); font-weight: 600; }
 .omo-focus-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--omo-accent); box-shadow: 0 0 0 3px var(--omo-accent-soft); }
-.omo-focus-status, .omo-focus-keys { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.omo-focus-sep { flex: 0 0 1px; align-self: stretch; margin: 10px 2px; background: var(--omo-line-2); }
+.omo-focus-fill { flex: 1 1 0; min-width: 0; }
+.omo-focus-status, .omo-focus-keys { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.omo-focus-status { color: var(--omo-warn); }
 .omo-focus-keys { color: var(--omo-text-3); }
+/* Every control in the bar and the tab strip: same height, size and weight (design tokens). */
 .omo-focus-bar button, .omo-focus-pane-label {
-    flex: 0 0 auto; height: var(--omo-control-h-sm); padding: 0 var(--omo-sp-3); border-radius: var(--omo-r-pill); border: 1px solid var(--omo-line-2);
-    background: var(--omo-surface-2); color: var(--omo-text); font: 500 var(--omo-fs-xs) var(--omo-font); cursor: pointer;
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: var(--omo-control-h-sm); padding: 0 10px;
+    border-radius: var(--omo-r-sm); border: 1px solid transparent; background: transparent; color: var(--omo-text-2);
+    font: 500 var(--omo-fs-xs)/1 var(--omo-font); cursor: pointer;
+    transition: background var(--omo-dur-1) var(--omo-ease), color var(--omo-dur-1) var(--omo-ease);
 }
-.omo-focus-bar button:hover, .omo-focus-pane-label:hover { background: var(--omo-surface-hover); }
-.omo-focus-bar button[aria-pressed="true"], .omo-focus-bar [data-testid="focus-full-toggle"] { border-color: var(--omo-accent-line); }
+.omo-focus-bar button:hover, .omo-focus-pane-label:hover { background: var(--omo-surface-2); color: var(--omo-text); }
+.omo-focus-bar button[aria-pressed="true"] { color: var(--omo-text); background: var(--omo-accent-soft); border-color: var(--omo-accent-line); }
 .omo-focus-desks, .omo-focus-comfort { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-.omo-focus-desks button { display: inline-flex; align-items: center; gap: 6px; }
-.omo-focus-desks button[aria-pressed="true"] { background: var(--omo-accent-soft); color: var(--omo-text); }
-.omo-focus-desks kbd { font: 600 var(--omo-fs-2xs) var(--omo-mono); color: var(--omo-text-3); }
-.omo-focus-comfort button { padding: 0 var(--omo-sp-2); min-width: 30px; }
-.omo-focus-comfort span { min-width: 38px; text-align: center; font: 600 var(--omo-fs-2xs) var(--omo-mono); color: var(--omo-text-2); }
+.omo-focus-desks kbd { font: 500 var(--omo-fs-2xs)/1 var(--omo-font); color: var(--omo-text-3); }
+.omo-focus-comfort { border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-sm); padding: 1px; }
+.omo-focus-comfort button { padding: 0 var(--omo-sp-2); min-width: 26px; height: 20px; justify-content: center; }
+.omo-focus-comfort span { min-width: 34px; text-align: center; font: 500 var(--omo-fs-xs)/1 var(--omo-font); font-variant-numeric: tabular-nums; color: var(--omo-text-2); }
 
 /* ---------- Panes: one desk, or two side by side ---------- */
-.omo-focus-panes { flex: 1 1 auto; min-height: 0; display: flex; gap: var(--omo-sp-3); }
-.omo-focus-pane { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.omo-focus-pane-head { flex: 0 0 auto; display: flex; align-items: center; gap: var(--omo-sp-2); min-width: 0; }
+.omo-focus-panes { flex: 1 1 auto; min-height: 0; display: flex; gap: 1px; background: var(--omo-line); }
+.omo-focus-pane { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--omo-term-bg); }
+.omo-focus-pane-head { flex: 0 0 auto; display: flex; align-items: center; gap: var(--omo-sp-2); min-width: 0; height: 36px; padding: 0 var(--omo-sp-2); border-bottom: 1px solid var(--omo-line); }
 .omo-focus-pane-label { display: inline-flex; align-items: baseline; gap: 6px; }
 .omo-focus-pane-label small { color: var(--omo-text-3); font-size: var(--omo-fs-2xs); }
 .omo-focus-pane.is-active .omo-focus-pane-label { border-color: var(--omo-accent-line); background: var(--omo-accent-soft); }
 
-/* The screen box fills its pane; the terminal text is sized to fit, times the comfort setting. */
+/* The screen box fills its pane edge to edge; text is sized to the height and its columns widen to the width.
+   Padding matches SCREEN_PAD in focus-terminal-view.tsx. */
 .omo-focus-screen {
-    position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; display: grid; place-items: center;
-    background: #091119; border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-md); cursor: text; user-select: text;
-    align-items: safe center; justify-items: safe center;
-    box-shadow: 0 18px 60px rgba(0, 0, 0, .45);
+    position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; display: grid; padding: 10px 16px; box-sizing: border-box;
+    background: var(--omo-term-bg); cursor: text; user-select: text; align-items: start; justify-items: safe center;
 }
-.omo-focus-pane.is-active .omo-focus-screen { border-color: var(--omo-accent-line); }
+.omo-focus-layer.is-split .omo-focus-pane.is-active .omo-focus-pane-head { box-shadow: inset 0 -2px 0 var(--omo-accent); }
 .omo-focus-layer.is-split .omo-focus-pane.is-passive .omo-focus-screen { cursor: pointer; opacity: .72; transition: opacity var(--omo-dur-1) var(--omo-ease); }
 .omo-focus-layer.is-split .omo-focus-pane.is-passive .omo-focus-screen:hover { opacity: .9; }
 .omo-focus-pane-idle { color: var(--omo-text-3); font-size: var(--omo-fs-sm); padding: var(--omo-sp-4); text-align: center; }
 
 /* ---------- Tabs strip ---------- */
-.omo-focus-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
-.omo-focus-tab, .omo-focus-tab-new {
-    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 var(--omo-sp-3);
-    border-radius: var(--omo-r-sm); border: 1px solid var(--omo-line-2); background: var(--omo-glass-strong); color: var(--omo-text-2);
-    font: 500 var(--omo-fs-xs) var(--omo-font); cursor: pointer;
+.omo-focus-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; }
+.omo-focus-tabs::-webkit-scrollbar { display: none; }
+.omo-focus-bar .omo-focus-tab, .omo-focus-bar .omo-focus-tab-new, .omo-focus-tab, .omo-focus-tab-new {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: var(--omo-control-h-sm); padding: 0 10px;
+    border-radius: var(--omo-r-sm); border: 1px solid transparent; background: transparent; color: var(--omo-text-2);
+    font: 500 var(--omo-fs-xs)/1 var(--omo-font); cursor: pointer;
 }
-.omo-focus-tab:hover, .omo-focus-tab-new:hover { background: var(--omo-surface-hover); color: var(--omo-text); }
-.omo-focus-tab.is-active { color: var(--omo-text); border-color: var(--omo-accent-line); background: var(--omo-accent-soft); }
+.omo-focus-tab:hover, .omo-focus-tab-new:hover { background: var(--omo-surface-2); color: var(--omo-text); }
+.omo-focus-bar .omo-focus-tab.is-active, .omo-focus-tab.is-active { color: var(--omo-text); border-color: var(--omo-accent-line); background: var(--omo-accent-soft); }
 .omo-focus-tab.kind-hermes .omo-focus-tab-name { color: var(--omo-agent-hermes); }
 .omo-focus-tab.kind-claude .omo-focus-tab-name { color: var(--omo-agent-claude); }
 .omo-focus-tab.kind-codex .omo-focus-tab-name { color: var(--omo-agent-codex); }
 .omo-focus-tab.state-interrupted, .omo-focus-tab.state-exited { border-style: dashed; }
 .omo-focus-tab small { color: var(--omo-danger); font-size: var(--omo-fs-2xs); }
 .omo-focus-tab-busy { width: 6px; height: 6px; border-radius: 50%; background: var(--omo-accent); }
-.omo-focus-tab-new { border-style: dashed; color: var(--omo-text-3); }
-.omo-focus-tab-new.is-agent { font-size: var(--omo-fs-2xs); }
+.omo-focus-bar .omo-focus-tab-new, .omo-focus-tab-new { color: var(--omo-text-3); }
 .omo-focus-tab:disabled, .omo-focus-tab-new:disabled { opacity: .45; cursor: default; }
 .omo-focus-tab:focus-visible, .omo-focus-tab-new:focus-visible, .omo-focus-pane-label:focus-visible { outline: none; box-shadow: var(--omo-focus); }
 
 /* ---------- Crisp terminal text ---------- */
-.omo-focus-term { box-sizing: border-box; width: auto; height: auto; padding: 0; color: #e0e8eb; display: flex; flex-direction: column; font-variant-ligatures: none; -webkit-font-smoothing: antialiased; }
-.omo-focus-term-title { display: flex; justify-content: space-between; gap: 2ch; color: #b9e3d5; font-weight: 700; padding-bottom: .3em; margin-bottom: .3em; border-bottom: 1px solid var(--omo-line); white-space: pre; overflow: hidden; }
+.omo-focus-term { box-sizing: border-box; width: auto; height: auto; padding: 0; color: #e0e8eb; --omo-cell: 1ch; display: flex; flex-direction: column; font-variant-ligatures: none; -webkit-font-smoothing: antialiased; }
+.omo-focus-term-title { display: flex; justify-content: space-between; gap: 2ch; color: #b9e3d5; font-weight: 700; letter-spacing: 0; padding-bottom: .3em; margin-bottom: .3em; border-bottom: 1px solid var(--omo-line); white-space: pre; overflow: hidden; }
 .omo-focus-term-title .is-bell { color: var(--omo-warn); }
-.omo-focus-term-grid { white-space: pre; min-width: 80ch; }
+.omo-focus-term-grid { white-space: pre; min-width: calc(80 * var(--omo-cell)); }
 .omo-focus-term-row { height: 1.3em; overflow: hidden; }
 .omo-focus-cell { display: inline-block; overflow: hidden; vertical-align: top; }
 .omo-focus-term-empty { color: var(--omo-text-3); }
@@ -130,11 +136,28 @@
     backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-lg); box-shadow: var(--omo-shadow-3);
 }
 
+/* ---------- Right-click menu of the attached terminal ---------- */
+.omo-focus-menu {
+    position: absolute; z-index: 4; min-width: 208px; padding: var(--omo-sp-1); display: flex; flex-direction: column; gap: 1px;
+    background: var(--omo-surface-2); border: 1px solid var(--omo-line-3); border-radius: var(--omo-r-md); box-shadow: var(--omo-shadow-3);
+    font: 500 var(--omo-fs-sm)/1 var(--omo-font); cursor: default; user-select: none; animation: omo-focus-in var(--omo-dur-1) var(--omo-ease);
+}
+.omo-focus-menu button {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--omo-sp-4); height: 28px; padding: 0 var(--omo-sp-2);
+    border: 0; border-radius: var(--omo-r-xs); background: transparent; color: var(--omo-text); font: inherit; text-align: left; cursor: pointer;
+}
+.omo-focus-menu button:hover:not(:disabled), .omo-focus-menu button:focus-visible { background: var(--omo-accent-soft); outline: none; }
+.omo-focus-menu button:disabled { color: var(--omo-text-3); cursor: default; }
+.omo-focus-menu button:disabled kbd { opacity: .7; }
+.omo-focus-menu kbd { font: 500 var(--omo-fs-2xs)/1 var(--omo-font); color: var(--omo-text-3); }
+.omo-focus-menu hr { border: 0; height: 1px; margin: 3px 2px; background: var(--omo-line-2); }
+
 @media (prefers-reduced-motion: reduce) {
     .omo-focus-term .is-cursor { animation: none; }
     .omo-focus-layer.is-screen, .omo-focus-layer.is-full { transition: none; animation: none; }
 }
 /* Narrow windows: drop the hint text first, then stack split panes. */
-@media (max-width: 900px) { .omo-focus-keys { display: none; } .omo-focus-layer.is-split .omo-focus-panes { flex-direction: column; } }
+@media (max-width: 1100px) { .omo-focus-keys { display: none; } }
+@media (max-width: 900px) { .omo-focus-desks kbd { display: none; } .omo-focus-layer.is-split .omo-focus-panes { flex-direction: column; } }
 /* Overview camera: attaching needs first person, so the launcher hides. */
 .omo-scene-wrap:not(.omo-walking) .omo-focus-launch { display: none; }

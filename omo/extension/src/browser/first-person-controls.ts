@@ -61,6 +61,10 @@ export class FirstPersonControls {
     attachRequest?: () => boolean;
     /** omo focus lane: Ctrl+1..4 (or Tab when not typing) while attached asks focus mode to switch desk. */
     deskRequest?: (slot: number | 'next' | 'previous') => void;
+    /** Alt+1..9 / Ctrl+Tab while attached or typing: pick a tab of the active desk. True when it handled the key. */
+    tabRequest?: (slot: number | 'next' | 'previous') => boolean;
+    /** Ctrl+Shift+= / Ctrl+Shift+- while attached: text size. True when it handled the key. */
+    comfortRequest?: (direction: 1 | -1) => boolean;
     constructor(private canvas: HTMLCanvasElement, private camera: THREE.PerspectiveCamera,
         private interact: (x: number, y: number, modifiers?: { ctrlKey: boolean; metaKey: boolean }) => 'terminal' | 'code' | undefined,
         private input: (text: string) => void, private message: (text: string) => void, private pasteText?: (text: string) => void,
@@ -140,6 +144,22 @@ export class FirstPersonControls {
                 event.preventDefault(); if (!this.copyOverride?.()) this.selection?.copy(); return;
             }
             const attached = this.attached;
+            // Ctrl+Shift+M: room chat as a drawer over the work area. Keys stay here until the chat box is clicked.
+            if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.code === 'KeyM') {
+                event.preventDefault(); if (attached && this.focusState.full) this.setFull(false);
+                window.dispatchEvent(new CustomEvent('omo:chat-toggle', { detail: { attached } })); return;
+            }
+            // Ctrl+Shift+= / Ctrl+Shift+-: text size of the attached view. Sends nothing to the shell.
+            if (attached && this.comfortRequest && event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey
+                && ['Equal', 'Minus', 'NumpadAdd', 'NumpadSubtract'].includes(event.code)) {
+                event.preventDefault(); this.comfortRequest(event.code === 'Equal' || event.code === 'NumpadAdd' ? 1 : -1); return;
+            }
+            // Ctrl+Tab / Ctrl+Shift+Tab and Alt+1..9: tabs of this desk, through the explicit select-tab action. No key is sent.
+            if ((attached || this.typing) && this.tabRequest && event.ctrlKey && !event.altKey && !event.metaKey && event.key === 'Tab') {
+                event.preventDefault(); this.tabRequest(event.shiftKey ? 'previous' : 'next'); return;
+            }
+            if ((attached || this.typing) && this.tabRequest && event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey && /^Digit[1-9]$/.test(event.code)
+                && this.tabRequest(Number(event.code.slice(5)))) { event.preventDefault(); return; }
             // omo focus lane: Ctrl+1..4 while attached switches desks. Ctrl+digit sends nothing to a shell, so no input is lost.
             if (attached && this.deskRequest && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && /^[1-4]$/.test(event.key)) { event.preventDefault(); this.deskRequest(Number(event.key)); return; }
             if (attached && (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f') {

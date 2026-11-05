@@ -4,7 +4,7 @@ import type { MonitorFrame, TerminalWorkstation } from './room-scene';
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';
 import { FocusMode } from './focus-mode';
 import { FOCUS_STATIONS } from './focus-screen';
-import { FocusTerminalView, fitFont } from './focus-terminal-view';
+import { FocusTerminalView, fitFont, fitSpacing } from './focus-terminal-view';
 import { ConsoleAlerts, FocusTabs } from './runtime-console-strip';
 import '../../src/browser/focus-mode.css';
 
@@ -33,6 +33,53 @@ function useSize(ref: React.RefObject<HTMLElement>): { width: number; height: nu
     return size;
 }
 
+/** The DOM text selection, when it lies inside this element. */
+function selectionIn(el: HTMLElement | null): string {
+    const selection = window.getSelection(), text = selection?.toString() ?? '';
+    return text && el && selection?.anchorNode && el.contains(selection.anchorNode) ? text : '';
+}
+
+/**
+ * Right-click menu of the attached terminal. Copy writes the DOM selection; Paste reads the clipboard
+ * only on this explicit click and sends it through the controller's paste rules (size limit,
+ * multi-line only with bracketed paste, never an added Enter).
+ */
+function TerminalMenu(props: { at: { x: number; y: number }; screen: HTMLElement | null; controller?: RuntimeConsoleController; close: () => void; refocus: () => void }): React.ReactElement {
+    const { screen, controller } = props;
+    const selected = selectionIn(screen);
+    const menu = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+        const away = (event: Event): void => { if (!menu.current?.contains(event.target as Node)) props.close(); };
+        window.addEventListener('pointerdown', away, true); window.addEventListener('blur', props.close);
+        return () => { window.removeEventListener('pointerdown', away, true); window.removeEventListener('blur', props.close); };
+    }, [props.close]);
+    const done = (): void => { props.close(); props.refocus(); };
+    const copy = (): void => { if (selected) void navigator.clipboard?.writeText(selected).catch(() => undefined); done(); };
+    const paste = async (): Promise<void> => {
+        props.close();
+        let text = '';
+        try { text = await navigator.clipboard.readText(); } catch { /* Permission refused: Ctrl+V still works. */ }
+        if (text) await controller?.paste(text);
+        props.refocus();
+    };
+    const selectAll = (): void => {
+        const grid = screen?.querySelector('.omo-focus-term-grid'), selection = window.getSelection();
+        if (grid && selection) { const range = document.createRange(); range.selectNodeContents(grid); selection.removeAllRanges(); selection.addRange(range); }
+        props.close(); props.refocus();
+    };
+    const clear = (): void => { window.getSelection()?.removeAllRanges(); done(); };
+    const item = (id: string, label: string, keys: string, run: () => void, disabled = false): React.ReactElement =>
+        <button type="button" role="menuitem" data-testid={`focus-menu-${id}`} disabled={disabled} onClick={run}><span>{label}</span><kbd>{keys}</kbd></button>;
+    return <div ref={menu} className="omo-focus-menu" role="menu" aria-label="Terminal" data-testid="focus-menu" style={{ left: props.at.x, top: props.at.y }}
+        onMouseDown={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>
+        {item('copy', 'Copy', 'Ctrl+Shift+C', copy, !selected)}
+        {item('paste', 'Paste', 'Ctrl+V', () => void paste(), !controller)}
+        <hr />
+        {item('select-all', 'Select all', '', selectAll)}
+        {item('clear', 'Clear selection', '', clear, !selected)}
+    </div>;
+}
+
 /**
  * One desk in the work area: its tabs strip, its live terminal and its alerts.
  * The active pane receives keys (through the world canvas). Clicking the other pane moves the keys there.
@@ -43,19 +90,30 @@ function FocusPane(props: { station: TerminalWorkstation; frame: MonitorFrame; d
     const screen = React.useRef<HTMLDivElement>(null);
     const size = useSize(screen);
     const fontSize = size ? Math.max(6, fitFont(size.width, size.height) * props.comfort) : 14;
+    // Columns follow the width: the view's column pitch widens to the pane (DOM only; tmux keeps its size).
+    const spacing = size ? fitSpacing(size.width, fontSize) : 0;
+    const [menu, setMenu] = React.useState<{ x: number; y: number }>();
+    const closeMenu = React.useCallback(() => setMenu(undefined), []);
     const idle = desk.state.phase === 'idle' && !props.frame.lines.length;
     const back = (): void => active ? props.refocus() : props.activate();
     const wheel = (event: React.WheelEvent): void => { void desk.controller?.wheel(-Math.sign(event.deltaY) * 3); };
+    const contextMenu = (event: React.MouseEvent): void => {
+        if (!active || idle) return;
+        event.preventDefault();
+        const box = screen.current!.getBoundingClientRect();
+        setMenu({ x: Math.min(event.clientX - box.left, box.width - 220), y: Math.min(event.clientY - box.top, box.height - 170) });
+    };
     return <section className={`omo-focus-pane ${active ? 'is-active' : 'is-passive'}`} data-testid={`focus-pane-${station}`} data-active={String(active)} aria-label={DESK_LABEL[station]}>
-        <div className="omo-focus-pane-head">
-            {props.split && <button type="button" className="omo-focus-pane-label" data-testid={`focus-pane-label-${station}`} aria-pressed={active} onClick={back}
-                title={active ? 'Keys go to this desk' : `Move the keys to ${DESK_LABEL[station]}`}>{DESK_LABEL[station]}<small>{active ? (props.typing ? 'keys here' : 'click to type') : 'click to type here'}</small></button>}
+        {props.split && <div className="omo-focus-pane-head">
+            <button type="button" className="omo-focus-pane-label" data-testid={`focus-pane-label-${station}`} aria-pressed={active} onClick={back}
+                title={active ? 'Keys go to this desk' : `Move the keys to ${DESK_LABEL[station]}`}>{DESK_LABEL[station]}<small>{active ? (props.typing ? 'keys here' : 'click to type') : 'click to type here'}</small></button>
             <FocusTabs state={desk.state} controller={desk.controller} agents={active} onPicked={back} />
-        </div>
+        </div>}
         <div ref={screen} className="omo-focus-screen" data-testid={active ? 'focus-screen-active' : undefined}
-            onPointerUp={active ? props.refocus : props.activate} onWheel={wheel}>
+            onPointerUp={event => { if (event.button === 0) (active ? props.refocus : props.activate)(); }} onWheel={wheel} onContextMenu={contextMenu}>
             {idle ? <div className="omo-focus-pane-idle">Click to use {DESK_LABEL[station]} here · same as clicking its monitor. No agent starts.</div>
-                : <FocusTerminalView frame={props.frame} fontSize={fontSize} />}
+                : <FocusTerminalView frame={props.frame} fontSize={fontSize} spacing={spacing} />}
+            {menu && <TerminalMenu at={menu} screen={screen.current} controller={desk.controller} close={closeMenu} refocus={props.refocus} />}
         </div>
         <ConsoleAlerts state={desk.state} controller={desk.controller} onDone={back} />
     </section>;
@@ -98,6 +156,24 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
         return () => { focus.copySelection = undefined; };
     }, [focus, shown]);
 
+    // Alt+1..9 and Ctrl+Tab: tabs of the desk that has the keys, through the explicit selectTab action.
+    const deskOf = props.desk;
+    React.useEffect(() => {
+        focus.tabRequest = slot => {
+            const active = focus.activeStation();
+            if (!(FOCUS_STATIONS as readonly string[]).includes(active)) return false;
+            const { state: desk, controller } = deskOf(active as TerminalWorkstation);
+            const tabs = desk.workspace?.tabs ?? [];
+            if (!controller || !tabs.length || desk.acting || desk.pending) return false;
+            const at = Math.max(0, tabs.findIndex(t => t.id === desk.activeTabId));
+            const tab = slot === 'next' ? tabs[(at + 1) % tabs.length] : slot === 'previous' ? tabs[(at + tabs.length - 1) % tabs.length] : tabs[slot - 1];
+            if (!tab) { focus.say(`This desk has ${tabs.length} tab${tabs.length === 1 ? '' : 's'} · Alt+1 to Alt+${Math.min(9, tabs.length)} picks one.`); return true; }
+            if (tab.id !== desk.activeTabId) void controller.selectTab(tab.id);
+            return true;
+        };
+        return () => { focus.tabRequest = undefined; };
+    }, [focus, deskOf]);
+
     // Chrome hides while attached (CSS keys off this attribute). React does not own it.
     React.useEffect(() => {
         const root = controls?.element.closest<HTMLElement>('.omo-root');
@@ -137,6 +213,9 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
     const settled = state.phase === 'attached';
     const split = state.full && focus.split;
     const panes = split ? FOCUS_STATIONS : [station];
+    const desk = props.desk(station);
+    // The tab already shows "busy" and the terminal title its status, so the bar only speaks when not live.
+    const status = desk.state.phase === 'live' ? '' : desk.state.statusText;
     // A click on the layer's own margin must not take focus away from the terminal.
     const keepFocus = (event: React.MouseEvent): void => { if (event.target === event.currentTarget) event.preventDefault(); };
     const layer = <div ref={box} className={`omo-focus-layer ${state.full ? 'is-full' : 'is-screen'} ${settled ? 'is-settled' : ''} ${split ? 'is-split' : ''}`}
@@ -148,12 +227,14 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
                 {FOCUS_STATIONS.map((s, i) => <button key={s} type="button" data-testid={`focus-desk-${s}`} aria-pressed={s === station}
                     title={`${DESK_LABEL[s]} (Ctrl+${i + 1})`} onClick={() => focus.switchTo(s)}>{DESK_LABEL[s]}<kbd>⌃{i + 1}</kbd></button>)}
             </span>
-            <span className="omo-focus-status" role="status">{props.desk(station).state.statusText}</span>
-            <span className="omo-focus-keys">{controls.typing ? 'Keys go to this terminal' : 'Click the screen to type'}</span>
+            {!split && <><span className="omo-focus-sep" aria-hidden="true" /><FocusTabs state={desk.state} controller={desk.controller} onPicked={refocus} /></>}
+            <span className="omo-focus-fill" />
+            {status && <span className="omo-focus-status" role="status" data-testid="focus-status">{status}</span>}
+            <span className="omo-focus-keys" data-testid="focus-keys">{controls.typing ? 'Typing here' : 'Click the screen to type'}</span>
             <span className="omo-focus-comfort" role="group" aria-label="Text size">
-                <button type="button" data-testid="focus-text-smaller" aria-label="Smaller text" title="Smaller text" onClick={() => focus.stepComfort(-1)}>A−</button>
-                <span data-testid="focus-text-size" title="Comfort text size (saved on this device)">{Math.round(focus.comfort * 100)}%</span>
-                <button type="button" data-testid="focus-text-larger" aria-label="Larger text" title="Larger text" onClick={() => focus.stepComfort(1)}>A+</button>
+                <button type="button" data-testid="focus-text-smaller" aria-label="Smaller text" title="Smaller text (Ctrl+Shift+−)" onClick={() => focus.stepComfort(-1)}>A−</button>
+                <span data-testid="focus-text-size" title="Text size (saved on this device)">{Math.round(focus.comfort * 100)}%</span>
+                <button type="button" data-testid="focus-text-larger" aria-label="Larger text" title="Larger text (Ctrl+Shift+=)" onClick={() => focus.stepComfort(1)}>A+</button>
             </span>
             {state.full && <button type="button" data-testid="focus-split-toggle" aria-pressed={split} onClick={() => focus.setSplit(!focus.split)}
                 title={split ? 'One desk' : 'Desk one and Desk two side by side'}>{split ? '▭ One desk' : '◫ Split'}</button>}
