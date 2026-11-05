@@ -5,6 +5,8 @@ import type { HudHub, HudView } from './hud-hub';
 import type { ChatLine, ChatState } from './chat-controller';
 import { CHAT_HELP } from './chat-controller';
 import { colourHex } from './hud-peers';
+import { EMOTE_TEXT } from './chat-controller';
+import { Icon } from './icons';
 
 function Line(props: { line: ChatLine }): React.ReactElement {
     const { line } = props;
@@ -13,7 +15,7 @@ function Line(props: { line: ChatLine }): React.ReactElement {
         <time>{time}</time>
         {line.kind === 'text' && <b style={{ color: colourHex(line.colour) }}>{line.self ? 'You' : line.fromName}</b>}
         {/* Plain text only: React escapes it, nothing is parsed as markup or links. */}
-        <span>{line.text}</span>
+        <span>{line.kind === 'emote' && line.emote ? line.text.replace(EMOTE_TEXT[line.emote].glyph, '').trim() : line.text}</span>
     </li>;
 }
 
@@ -48,18 +50,18 @@ export function ChatPanel(props: { hub: HudHub; view: HudView; chat: ChatState }
     const others = view.members.filter(m => m.id !== view.selfId);
     if (!chat.open) return <button type="button" className="omo-chat-toggle" data-testid="chat-open" onMouseDown={keepKeys}
         onClick={() => { if (attachedNow()) { toggleQuiet(); return; } hub.chat.setOpen(true); hub.focusChat?.(); }} title="Room chat (Enter · Ctrl+Shift+M over a screen)">
-        💬 Chat{chat.unread > 0 && <strong data-testid="chat-unread"> {chat.unread}</strong>}
+        <Icon name="chat" size={15} />Chat{chat.unread > 0 && <strong data-testid="chat-unread">{chat.unread}</strong>}
     </button>;
     return <section className="omo-chat-panel" data-testid="chat-panel" aria-label="Room chat">
         <header>
             <strong>Room chat</strong>
             <small className="omo-chat-drawer-hint">Ctrl+Shift+M</small>
             {view.joined && <span className="omo-chat-colours" role="group" aria-label="Your name colour">{PRESENCE_COLOURS.map((c: PresenceColour) => <button type="button" key={c} data-testid={`chat-colour-${c}`} aria-pressed={self?.colour === c} title={c} style={{ background: colourHex(c) }} onClick={() => void hub.chat.setColour(c)} />)}</span>}
-            <button type="button" data-testid="chat-close" aria-label="Close chat" onMouseDown={keepKeys}
-                onClick={() => { const back = attachedNow() && document.activeElement === input.current; hub.chat.setOpen(false); if (back) (document.querySelector(CANVAS) as HTMLElement | null)?.focus(); }}>×</button>
+            <button type="button" data-testid="chat-close" aria-label="Close chat" title="Close chat (Esc)" onMouseDown={keepKeys}
+                onClick={() => { const back = attachedNow() && document.activeElement === input.current; hub.chat.setOpen(false); if (back) (document.querySelector(CANVAS) as HTMLElement | null)?.focus(); }}><Icon name="x" size={15} /></button>
         </header>
         {others.length > 0 && <ul className="omo-chat-members" data-testid="chat-members">{others.map(m => <li key={m.id} data-member-id={m.id}>
-            <i style={{ background: colourHex(m.colour) }} />{m.name}{m.voice?.speaking ? ' ♪' : ''}
+            <i style={{ background: colourHex(m.colour) }} />{m.name}{m.voice?.speaking && <Icon name="volume" size={13} className="omo-chat-speaking" label="Speaking" />}
             <button type="button" data-testid="chat-tp" title={`Stand next to ${m.name} (moves only you)`} onClick={() => hub.teleport(m.id)}>Go to</button>
             <button type="button" data-testid="chat-follow" aria-pressed={view.following === m.id} title={`Follow ${m.name}`} onClick={() => hub.follow(view.following === m.id ? undefined : m.id)}>{view.following === m.id ? 'Stop' : 'Follow'}</button>
             <button type="button" data-testid="chat-mention" title={`Mention ${m.name}`} onClick={() => { setText(t => `${t}@${m.name.replace(/\s+/g, '-')} `); input.current?.focus(); }}>@</button>
@@ -72,7 +74,7 @@ export function ChatPanel(props: { hub: HudHub; view: HudView; chat: ChatState }
                 onChange={event => setText(event.target.value)}
                 onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape' || (event.ctrlKey && event.shiftKey && event.code === 'KeyM')) { event.preventDefault(); hub.chat.setOpen(false); (document.querySelector(CANVAS) as HTMLElement | null)?.focus(); } }} />
             <button data-testid="chat-send" disabled={chat.sending || !text.trim()}>{text.trim().startsWith('@') ? 'Draft' : 'Send'}</button>
-            <span className="omo-chat-emotes">{(['wave', 'cheer', 'thumbsup', 'clap'] as const).map(e => <button type="button" key={e} data-testid={`chat-emote-${e}`} disabled={!view.joined || chat.sending} title={`/${e}`} onClick={() => void hub.chat.submit(`/${e}`)}>{{ wave: '👋', cheer: '🎉', thumbsup: '👍', clap: '👏' }[e]}</button>)}</span>
+            <span className="omo-chat-emotes">{(['wave', 'cheer', 'thumbsup', 'clap'] as const).map(e => <button type="button" key={e} data-testid={`chat-emote-${e}`} disabled={!view.joined || chat.sending} title={`Send /${e} to the room`} onClick={() => void hub.chat.submit(`/${e}`)}>{{ wave: 'Wave', cheer: 'Cheer', thumbsup: '+1', clap: 'Clap' }[e]}</button>)}</span>
         </form>
         {chat.error && <p role="alert" className="omo-error" data-testid="chat-error">{chat.error}</p>}
         <small>Chat goes only to people in this room and is not saved. @agent lines stay on this device as a draft; Enter is never pressed.</small>

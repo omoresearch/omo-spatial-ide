@@ -6,6 +6,7 @@ import { FocusMode } from './focus-mode';
 import { FOCUS_STATIONS } from './focus-screen';
 import { FocusTerminalView, termFont, useCellRatio } from './focus-terminal-view';
 import { ConsoleAlerts, FocusTabs } from './runtime-console-strip';
+import { Icon } from './icons';
 import '../../src/browser/focus-mode.css';
 
 export interface FocusOverlayProps {
@@ -105,7 +106,8 @@ function FocusPane(props: { station: TerminalWorkstation; frame: MonitorFrame; d
     return <section className={`omo-focus-pane ${active ? 'is-active' : 'is-passive'}`} data-testid={`focus-pane-${station}`} data-active={String(active)} aria-label={DESK_LABEL[station]}>
         {props.split && <div className="omo-focus-pane-head">
             <button type="button" className="omo-focus-pane-label" data-testid={`focus-pane-label-${station}`} aria-pressed={active} onClick={back}
-                title={active ? 'Keys go to this desk' : `Move the keys to ${DESK_LABEL[station]}`}>{DESK_LABEL[station]}<small>{active ? (props.typing ? 'keys here' : 'click to type') : 'click to type here'}</small></button>
+                title={active ? 'Keys go to this desk' : `Move the keys to ${DESK_LABEL[station]}`}>{DESK_LABEL[station]}{active && props.typing
+                    ? <small className="is-keys"><Icon name="keyboard" size={13} />Keys here</small> : <small>{active ? 'Click to type' : 'Click to type here'}</small>}</button>
             <FocusTabs state={desk.state} controller={desk.controller} agents={active} onPicked={back} />
         </div>}
         <div ref={screen} className="omo-focus-screen" data-testid={active ? 'focus-screen-active' : undefined}
@@ -116,6 +118,48 @@ function FocusPane(props: { station: TerminalWorkstation; frame: MonitorFrame; d
         </div>
         <ConsoleAlerts state={desk.state} controller={desk.controller} onDone={back} />
     </section>;
+}
+
+/**
+ * The bar's "⋯" menu: less-used view settings (text size, split, whole monitor). Opening it never
+ * takes the keys: the terminal keeps them, and every item hands them straight back.
+ */
+function BarMenu(props: { focus: FocusMode; full: boolean; split: boolean; toggleWindow: () => void; refocus: () => void }): React.ReactElement {
+    const { focus, full, split } = props;
+    const [open, setOpen] = React.useState(false);
+    const box = React.useRef<HTMLSpanElement>(null);
+    React.useEffect(() => {
+        if (!open) return;
+        const away = (event: Event): void => { if (!box.current?.contains(event.target as Node)) setOpen(false); };
+        const close = (): void => setOpen(false);
+        window.addEventListener('pointerdown', away, true); window.addEventListener('blur', close);
+        return () => { window.removeEventListener('pointerdown', away, true); window.removeEventListener('blur', close); };
+    }, [open]);
+    const run = (action: () => void, keep = false): void => { action(); if (!keep) setOpen(false); props.refocus(); };
+    const monitor = !!document.fullscreenElement;
+    return <span ref={box} className="omo-focus-more">
+        <button type="button" data-testid="focus-more" aria-haspopup="menu" aria-expanded={open} aria-label="More view options" title="More: text size, split, whole monitor"
+            onMouseDown={event => event.preventDefault()} onClick={() => setOpen(!open)}><Icon name="more" size={16} /></button>
+        {open && <div className="omo-focus-menu omo-focus-more-menu" role="menu" aria-label="View options" data-testid="focus-more-menu" onMouseDown={event => event.preventDefault()}>
+            <div className="omo-focus-menu-row" role="group" aria-label="Text size">
+                <span><Icon name="type" size={15} />Text size</span>
+                <span className="omo-focus-comfort">
+                    <button type="button" role="menuitem" data-testid="focus-text-smaller" aria-label="Smaller text" title="Smaller text (Ctrl+Shift+−)" onClick={() => run(() => focus.stepComfort(-1), true)}>A−</button>
+                    <output data-testid="focus-text-size" title="Text size (saved on this device)">{Math.round(focus.comfort * 100)}%</output>
+                    <button type="button" role="menuitem" data-testid="focus-text-larger" aria-label="Larger text" title="Larger text (Ctrl+Shift+=)" onClick={() => run(() => focus.stepComfort(1), true)}>A+</button>
+                </span>
+            </div>
+            {full && <><hr />
+                <button type="button" role="menuitemcheckbox" aria-checked={split} data-testid="focus-split-toggle" onClick={() => run(() => focus.setSplit(!focus.split))}>
+                    <span><Icon name={split ? 'single' : 'split'} size={15} />{split ? 'One desk' : 'Both desks side by side'}</span><kbd /></button>
+                {document.fullscreenEnabled && <button type="button" role="menuitemcheckbox" aria-checked={monitor} data-testid="focus-window-toggle" onClick={() => run(props.toggleWindow)}>
+                    <span><Icon name={monitor ? 'window' : 'monitor'} size={15} />{monitor ? 'Back to the window' : 'Use the whole monitor'}</span><kbd /></button>}
+            </>}
+            {!full && <><hr />
+                <button type="button" role="menuitem" data-testid="focus-menu-full" onClick={() => run(() => focus.setFull(true))}>
+                    <span><Icon name="maximize" size={15} />Full-window terminal</span><kbd>Ctrl+Shift+F</kbd></button></>}
+        </div>}
+    </span>;
 }
 
 /**
@@ -197,7 +241,7 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
     if (!host || !controls?.enabled) return null;
     if (!shown || !station) {
         return createPortal(<button type="button" className="omo-focus-launch" data-testid="focus-full-launch" title="Full-screen terminal (F)"
-            onClick={() => focus.fullScreenActive()}>⛶ Full-screen terminal <kbd>F</kbd></button>, host);
+            onClick={() => focus.fullScreenActive()}><Icon name="maximize" size={14} />Full-screen terminal <kbd>F</kbd></button>, host);
     }
 
     const refocus = (): void => {
@@ -231,20 +275,15 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
             </span>
             {!split && <><span className="omo-focus-sep" aria-hidden="true" /><FocusTabs state={desk.state} controller={desk.controller} onPicked={refocus} /></>}
             <span className="omo-focus-fill" />
-            {bells > 0 && <span className="omo-focus-bell" data-testid="focus-bell">Bell · {bells}</span>}
+            {bells > 0 && <span className="omo-focus-bell" data-testid="focus-bell" title={`This desk rang its bell ${bells} time${bells === 1 ? '' : 's'}`}><Icon name="bell" size={14} />{bells}</span>}
             {status && <span className="omo-focus-status" role="status" data-testid="focus-status">{status}</span>}
-            <span className="omo-focus-keys" data-testid="focus-keys">{controls.typing ? 'Typing here' : 'Click the screen to type'}</span>
-            <span className="omo-focus-comfort" role="group" aria-label="Text size">
-                <button type="button" data-testid="focus-text-smaller" aria-label="Smaller text" title="Smaller text (Ctrl+Shift+−)" onClick={() => focus.stepComfort(-1)}>A−</button>
-                <span data-testid="focus-text-size" title="Text size (saved on this device)">{Math.round(focus.comfort * 100)}%</span>
-                <button type="button" data-testid="focus-text-larger" aria-label="Larger text" title="Larger text (Ctrl+Shift+=)" onClick={() => focus.stepComfort(1)}>A+</button>
-            </span>
-            {state.full && <button type="button" data-testid="focus-split-toggle" aria-pressed={split} onClick={() => focus.setSplit(!focus.split)}
-                title={split ? 'One desk' : 'Desk one and Desk two side by side'}>{split ? '▭ One desk' : '◫ Split'}</button>}
+            <span className={`omo-focus-keys ${controls.typing ? 'is-on' : ''}`} data-testid="focus-keys" data-typing={String(controls.typing)}
+                title={controls.typing ? `Your keystrokes go to the terminal on ${DESK_LABEL[station]}` : 'Click the screen to send keys to this terminal'}>
+                <Icon name="keyboard" size={15} />{controls.typing ? <>Keys <span aria-hidden="true">→</span><span className="omo-sr"> to</span> {DESK_LABEL[station]}</> : 'Click to type'}</span>
             <button type="button" data-testid="focus-full-toggle" aria-pressed={state.full} onClick={() => focus.setFull(!state.full)}
-                title={state.full ? 'Back to the desk screen (Esc)' : 'Full-window terminal (Ctrl+Shift+F)'}>{state.full ? '▢ Desk view' : '⛶ Full screen'}</button>
-            {state.full && document.fullscreenEnabled && <button type="button" data-testid="focus-window-toggle" aria-pressed={!!document.fullscreenElement} onClick={toggleWindow} title="Use the whole monitor (browser full screen)">{document.fullscreenElement ? '⤡ Window' : '⤢ Monitor'}</button>}
-            <button type="button" data-testid="focus-exit" onClick={() => focus.exit()} title="Walk away (Esc)">Esc · Walk</button>
+                title={state.full ? 'Back to the desk screen (Esc)' : 'Full-window terminal (Ctrl+Shift+F)'}><Icon name={state.full ? 'minimize' : 'maximize'} size={15} />{state.full ? 'Desk view' : 'Full screen'}</button>
+            <button type="button" data-testid="focus-exit" onClick={() => focus.exit()} title="Walk away (Esc)"><Icon name="walk" size={15} />Walk<kbd>Esc</kbd></button>
+            <BarMenu focus={focus} full={state.full} split={split} toggleWindow={toggleWindow} refocus={refocus} />
         </div>
         <div className="omo-focus-panes" onMouseDown={keepFocus}>
             {panes.map(s => <FocusPane key={s} station={s} frame={props.frames[s]} desk={props.desk(s)} active={s === station} split={split}

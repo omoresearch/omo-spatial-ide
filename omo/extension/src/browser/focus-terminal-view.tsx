@@ -4,12 +4,14 @@ import { cellRuns, dominantKey, MONITOR_COLS, MONITOR_ROWS } from './runtime-con
 import { visibleMonitorCells } from '../common/monitor-selection';
 
 const BASE = '#091119';
-/** Terminal text size in CSS px at 100%. A− / A+ scale it; it never grows past what fits the pane. */
+/** Smallest default terminal text size in CSS px at 100%: small panes never go below it (they scroll). */
 export const TERM_FONT = 16;
+/** Largest default size at 100%: on big screens the text stops here and the card still fills the pane. */
+export const TERM_FONT_MAX = 22;
 /** Row height in em. Matches .omo-focus-term-row in focus-mode.css. */
 const LINE = 1.4;
 /** Screen padding + card padding + card border on both sides, in px (focus-mode.css). */
-const FRAME = { x: 2 * (24 + 20 + 1), y: 2 * (20 + 14 + 1) };
+const FRAME = { x: 2 * (20 + 20 + 1), y: 2 * (14 + 14 + 1) };
 
 /**
  * Advance of one cell per 1px of font size, measured with the font the element really renders
@@ -35,10 +37,15 @@ export function useCellRatio(ref: React.RefObject<HTMLElement>): number {
     return ratio;
 }
 
-/** Terminal text size: the default scaled by comfort, capped so the whole 80 x 22 grid fits the box. */
+/**
+ * Terminal text size. At 100% the 80 x 22 grid grows to fill the pane (between TERM_FONT and
+ * TERM_FONT_MAX), so there is no empty band under the terminal. A− / A+ scale that; it never
+ * grows past what fits the box.
+ */
 export function termFont(width: number, height: number, ratio: number, comfort: number): number {
     const fits = Math.min((width - FRAME.x) / (MONITOR_COLS * ratio), (height - FRAME.y) / (MONITOR_ROWS * LINE));
-    return Math.max(8, Math.floor(Math.min(TERM_FONT * comfort, fits)));
+    const base = Math.max(TERM_FONT, Math.min(TERM_FONT_MAX, fits));
+    return Math.max(8, Math.floor(Math.min(base * comfort, fits)));
 }
 
 function hex(value: string | undefined): string | undefined {

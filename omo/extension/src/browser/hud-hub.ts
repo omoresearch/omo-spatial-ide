@@ -73,7 +73,7 @@ export class HudHub {
         this.notices = new NotificationsHub({
             desk: desk => host.desk(desk).state, agents: () => host.agents(), now: () => Date.now(),
             watching: () => this.watching()
-        }, notice => this.toast('info', `${notice.kind === 'approval' ? '⚠' : notice.kind === 'finished' ? '✓' : '🔔'} ${notice.text}`));
+        }, notice => this.toast('info', notice.text, undefined, notice.kind === 'approval' ? 'alert' : notice.kind === 'finished' ? 'check' : 'bell'));
         this.view = this.compute();
         this.bindKeys();
         this.timer = window.setInterval(() => this.tick(), 250);
@@ -103,9 +103,9 @@ export class HudHub {
         this.listeners.push(() => window.removeEventListener('keydown', down, true));
     }
 
-    toast(kind: ToastKind, text: string, colour?: PresenceColour): void {
+    toast(kind: ToastKind, text: string, colour?: PresenceColour, icon?: Toast['icon']): void {
         const now = Date.now();
-        this.toasts = [...this.toasts.filter(t => now - t.at < TOAST_MS), { id: `t${++toastSeq}`, kind, text, at: now, colour }].slice(-TOAST_MAX);
+        this.toasts = [...this.toasts.filter(t => now - t.at < TOAST_MS), { id: `t${++toastSeq}`, kind, text, at: now, colour, icon }].slice(-TOAST_MAX);
         this.changed();
     }
     dismissToast(id: string): void { this.toasts = this.toasts.filter(t => t.id !== id); this.changed(); }

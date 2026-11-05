@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { AgentTaskDrawer } from './agent-task-drawer';
 import { AgentGlyph } from './agent-glyphs';
+import { Icon } from './icons';
 import type { GitReviewSnapshot } from '../common/git-review-protocol';
 import type { SessionTab } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
@@ -44,15 +45,15 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
         <form className="omo-console-row" onSubmit={e => { e.preventDefault(); void controller?.find(query, 0); }}>
             <span className="omo-console-label">Find</span>
             <input data-testid="runtime-find-input" aria-label="Find in history" style={FIELD_STYLE} maxLength={200} value={query} onChange={e => setQuery(e.target.value)} />
-            <button type="button" data-testid="runtime-find-older" disabled={!query} onClick={() => void controller?.find(query, 1)} title="Older match">▲</button>
-            <button type="button" data-testid="runtime-find-newer" disabled={!query} onClick={() => void controller?.find(query, -1)} title="Newer match">▼</button>
+            <button type="button" data-testid="runtime-find-older" disabled={!query} onClick={() => void controller?.find(query, 1)} title="Older match" aria-label="Older match"><Icon name="chevron-up" size={13} /></button>
+            <button type="button" data-testid="runtime-find-newer" disabled={!query} onClick={() => void controller?.find(query, -1)} title="Newer match" aria-label="Newer match"><Icon name="chevron-down" size={13} /></button>
             {state.find && <span className="omo-console-hint">{state.find.count ? `${state.find.index} of ${state.find.count}` : 'no match'}</span>}
             {state.find && <button type="button" onClick={() => { setQuery(''); void controller?.find('', 0); }}>Clear find</button>}
         </form>
         <div className="omo-console-row">
             <span className="omo-console-label">Scroll</span>
-            <button data-testid="runtime-scroll-up" onClick={() => void controller?.scroll(10)} title="Ten lines older">▲ 10</button>
-            <button data-testid="runtime-scroll-down" onClick={() => void controller?.scroll(-10)} title="Ten lines newer">▼ 10</button>
+            <button data-testid="runtime-scroll-up" onClick={() => void controller?.scroll(10)} title="Ten lines older"><Icon name="chevron-up" size={13} />10</button>
+            <button data-testid="runtime-scroll-down" onClick={() => void controller?.scroll(-10)} title="Ten lines newer"><Icon name="chevron-down" size={13} />10</button>
             <button data-testid="runtime-scroll-live" disabled={!state.scrollOffset} onClick={() => void controller?.scroll(-100000)}>Back to live</button>
             <span className="omo-console-hint">{state.scrollOffset ? `${state.scrollOffset} lines back` : 'live'}{state.history !== undefined ? ` · ${state.history} lines of history` : ''}</span>
             <button data-testid="runtime-clear-history" disabled={locked} onClick={() => controller?.requestClearHistory()}>Clear scrollback…</button>
@@ -151,12 +152,12 @@ export function FocusTabs(props: { state: RuntimeConsoleState; controller?: Runt
         </button>)}
         {repeat && <button type="button" className="omo-focus-tab-new is-repeat" data-testid="focus-new-last" data-kind={repeat.kind} disabled={locked || !repeat.available}
             title={repeat.available ? `New ${repeat.label} tab, like the last one${repeat.kind === 'shell' ? '' : ' (asks first)'}` : repeat.reason}
-            onClick={() => { void controller?.requestNewTab(repeat.kind); if (repeat.kind === 'shell') done(); }}>+ <AgentGlyph kind={repeat.kind} />{repeat.label}</button>}
+            onClick={() => { void controller?.requestNewTab(repeat.kind); if (repeat.kind === 'shell') done(); }}><Icon name="plus" size={13} className="omo-tab-plus" /><AgentGlyph kind={repeat.kind} size={13} /><span className="omo-focus-tab-label">{repeat.label}</span></button>}
         <button type="button" className="omo-focus-tab-new" data-testid="focus-new-shell" disabled={locked || !shell?.available}
-            title={shell?.available ? 'New shell tab (Ctrl+Shift+T)' : shell?.reason} onClick={() => { void controller?.requestNewTab('shell'); done(); }}>+ Shell</button>
+            title={shell?.available ? 'New shell tab (Ctrl+Shift+T)' : shell?.reason} onClick={() => { void controller?.requestNewTab('shell'); done(); }}><Icon name="plus" size={13} className="omo-tab-plus" />Shell</button>
         {props.agents !== false && launchers.filter(o => o.kind !== 'shell').map(o => <button key={o.kind} type="button" className="omo-focus-tab-new is-agent" data-testid={`focus-new-${o.kind}`}
-            disabled={locked || !o.available} title={o.available ? `Start ${o.label} in a new tab (asks first)` : o.reason}
-            onClick={() => void controller?.requestNewTab(o.kind)}>+ {o.label}</button>)}
+            disabled={locked || !o.available} title={o.available ? `Start ${o.label} in a new tab (asks first)` : o.reason} aria-label={`New ${o.label} tab (asks first)`}
+            onClick={() => void controller?.requestNewTab(o.kind)}><Icon name="plus" size={13} className="omo-tab-plus" /><AgentGlyph kind={o.kind} size={13} /><span className="omo-focus-tab-label">{o.label}</span></button>)}
     </div>;
 }
 
@@ -193,12 +194,12 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
                     {tab.name}{tab.busy && <i className="omo-console-busy" aria-label="Process active"> ●</i>}
                     {tab.state !== 'running' && <small> {STATE_LABEL[tab.state]}</small>}
                 </button>
-                {(tab.state === 'interrupted' || tab.state === 'exited') && <button className="omo-console-mini" disabled={locked} data-testid={`runtime-revive-${tab.id}`} onClick={() => controller?.requestRevive(tab.id)} title="Start this tab again">↻</button>}
-                <button className="omo-console-mini" aria-label={`Rename ${tab.name}`} disabled={locked} data-testid={`runtime-rename-${tab.id}`} onClick={() => setEditing({ tabId: tab.id, name: tab.name })} title="Rename tab">✎</button>
-                <button className="omo-console-mini" aria-label={`Close ${tab.name}`} disabled={locked || !!state.stationLocked} data-testid={`runtime-close-${tab.id}`} onClick={() => controller?.requestClose(tab.id)} title={state.stationLocked ? 'Desk is locked: unlock it in Station recipes to close tabs' : 'Close tab'}>×</button>
+                {(tab.state === 'interrupted' || tab.state === 'exited') && <button className="omo-console-mini" disabled={locked} data-testid={`runtime-revive-${tab.id}`} onClick={() => controller?.requestRevive(tab.id)} title="Start this tab again" aria-label={`Start ${tab.name} again`}><Icon name="refresh" size={13} /></button>}
+                <button className="omo-console-mini" aria-label={`Rename ${tab.name}`} disabled={locked} data-testid={`runtime-rename-${tab.id}`} onClick={() => setEditing({ tabId: tab.id, name: tab.name })} title="Rename tab"><Icon name="pencil" size={13} /></button>
+                <button className="omo-console-mini" aria-label={`Close ${tab.name}`} disabled={locked || !!state.stationLocked} data-testid={`runtime-close-${tab.id}`} onClick={() => controller?.requestClose(tab.id)} title={state.stationLocked ? 'Desk is locked: unlock it in Station recipes to close tabs' : 'Close tab'}><Icon name="x" size={13} /></button>
             </span>)}
         </div>}
-        {ws && state.stationLocked && <p className="omo-console-hint" data-testid="runtime-station-locked" role="note">🔒 This desk is locked: tabs cannot be closed and its recipe and room layout cannot change. Unlock in Station recipes.</p>}
+        {ws && state.stationLocked && <p className="omo-console-hint" data-testid="runtime-station-locked" role="note"><Icon name="lock" size={13} /> This desk is locked: tabs cannot be closed and its recipe and room layout cannot change. Unlock in Station recipes.</p>}
         {ws && editing && <form className="omo-console-row" data-testid="runtime-rename-form" onSubmit={event => { event.preventDefault(); void controller?.renameTab(editing.tabId, editing.name).then(saved => { if (saved) setEditing(undefined); }); }}>
             <label>Tab name <input autoFocus aria-label="Tab name" data-testid="runtime-rename-name" maxLength={TAB_NAME_MAX} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
             <button data-testid="runtime-rename-save" disabled={locked || !editing.name.trim()}>Save name</button>
@@ -209,14 +210,14 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
             {launchersLastFirst(launchers).map((o, i) => <button key={o.kind} data-testid={`runtime-new-${o.kind}`} disabled={locked || !o.available}
                 className={i === 0 && o.kind === readLastTabKind() ? 'is-last-kind' : undefined} data-last-kind={i === 0 && o.kind === readLastTabKind() ? 'true' : undefined}
                 title={o.available ? `Open a new ${o.label} tab${i === 0 && o.kind === readLastTabKind() ? ' (last used)' : ''}${o.kind === 'shell' ? '' : ' — asks first'}` : `${o.reason}${o.installHint ? ` — install: ${o.installHint}` : ''}`}
-                onClick={() => void controller?.requestNewTab(o.kind)}>+ {o.label}</button>)}
+                onClick={() => void controller?.requestNewTab(o.kind)}><Icon name="plus" size={12} className="omo-tab-plus" /><AgentGlyph kind={o.kind} size={12} />{o.label}</button>)}
             {!!state.host?.profiles.length && <label className="omo-console-profile">Profile
                 <select data-testid="runtime-profile" value={state.profile} disabled={locked} onChange={event => controller?.setProfile(event.target.value)}>
                     {state.host.profiles.map(p => <option key={p} value={p}>{p}</option>)}
                 </select></label>}
-            <button type="button" data-testid="runtime-task-toggle" aria-expanded={task} onClick={() => { setTask(!task); setDrawer(false); }}>Task {task ? '▴' : '▾'}</button>
+            <button type="button" data-testid="runtime-task-toggle" aria-expanded={task} onClick={() => { setTask(!task); setDrawer(false); }}>Task<Icon name={task ? 'chevron-up' : 'chevron-down'} size={12} /></button>
             {props.onNewAgentTask && <button type="button" data-testid="agent-workflow-toggle" onClick={props.onNewAgentTask}>New agent task</button>}
-            <button data-testid="runtime-manage-toggle" aria-expanded={drawer} onClick={() => { setDrawer(!drawer); setTask(false); }} title="Find, scrollback, copy, paste and workspaces">{drawer ? 'Manage ▴' : 'Manage ▾'}</button>
+            <button data-testid="runtime-manage-toggle" aria-expanded={drawer} onClick={() => { setDrawer(!drawer); setTask(false); }} title="Find, scrollback, copy, paste and workspaces">Manage<Icon name={drawer ? 'chevron-up' : 'chevron-down'} size={12} /></button>
         </div>}
         {ws && task && <AgentTaskDrawer state={state} controller={controller} onReview={props.onReview} />}
         {ws && drawer && <ManageDrawer state={state} controller={controller} locked={locked} onOpenLink={props.onOpenLink} />}

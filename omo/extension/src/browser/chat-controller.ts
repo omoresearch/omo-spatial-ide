@@ -7,7 +7,7 @@ import { DESKS, DESK_NAME, DeskTabs, MentionTarget, mentionsName, parseMention }
 export type ChatLineKind = 'text' | 'emote' | 'system' | 'draft' | 'error';
 export interface ChatLine { id: string; kind: ChatLineKind; at: number; from?: string; fromName?: string; colour?: PresenceColour; self?: boolean; text: string; emote?: ChatEmote; mentionsMe?: boolean }
 export type ToastKind = 'join' | 'leave' | 'mention' | 'info';
-export interface Toast { id: string; kind: ToastKind; text: string; at: number; colour?: PresenceColour }
+export interface Toast { id: string; kind: ToastKind; text: string; at: number; colour?: PresenceColour; /** Line icon name (icons.tsx) for agent notices. */ icon?: 'check' | 'alert' | 'bell' }
 export interface ChatState { lines: ChatLine[]; unread: number; open: boolean; sending: boolean; error: string }
 
 export interface ChatHost {

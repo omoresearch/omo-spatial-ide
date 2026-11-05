@@ -1,6 +1,8 @@
 /* Multiplayer + agent HUD (omo/build-parity2). Sits over the 3D view, under the focus layer. */
 .omo-hud-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; font-family: var(--omo-font); font-size: var(--omo-fs-xs); color: var(--omo-text); }
 .omo-hud-layer button { font: inherit; cursor: pointer; }
+.omo-hud-layer button:focus-visible { outline: none; box-shadow: var(--omo-focus); }
+.omo-hud-layer .omo-icon { flex: 0 0 auto; display: block; }
 .omo-hud-layer > * > * { pointer-events: auto; }
 
 /* Who is speaking: top centre. */
@@ -13,20 +15,25 @@
 @media (prefers-reduced-motion: reduce) { .omo-hud-wave b { animation: none; height: 8px; } }
 
 /* Follow banner. */
-.omo-hud-follow { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); padding: 4px 6px 4px 12px; background: var(--omo-glass); border: 1px solid var(--omo-accent-line, var(--omo-line-2)); border-radius: var(--omo-r-pill); display: flex; gap: 8px; align-items: center; }
-.omo-hud-follow button { height: 22px; border-radius: var(--omo-r-pill); border: 1px solid var(--omo-line-2); background: var(--omo-surface-2); color: var(--omo-text); padding: 0 10px; }
+.omo-hud-follow { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); padding: 4px 4px 4px 12px; background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-accent-line); border-radius: var(--omo-r-pill); display: flex; gap: var(--omo-sp-2); align-items: center; box-shadow: var(--omo-shadow-2); }
+.omo-hud-follow .omo-icon { color: var(--omo-accent); }
+.omo-hud-follow button { height: var(--omo-control-h-sm); border-radius: var(--omo-r-pill); border: 1px solid var(--omo-line-2); background: var(--omo-surface-2); color: var(--omo-text); padding: 0 10px; }
 
 /* Toasts: top right, under the notification bell. */
 .omo-hud-toasts { position: absolute; top: 52px; right: var(--omo-sp-4); display: flex; flex-direction: column; gap: 6px; align-items: flex-end; max-width: min(360px, 45%); }
-.omo-hud-toast { text-align: left; padding: 7px 12px; color: var(--omo-text); background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2); border-left: 4px solid var(--omo-accent); border-radius: var(--omo-r-sm); box-shadow: var(--omo-shadow-2); animation: omo-hud-in .18s ease-out; }
+.omo-hud-toast { display: flex; align-items: center; gap: var(--omo-sp-2); text-align: left; padding: 7px 12px; color: var(--omo-text); background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2); border-left: 4px solid var(--omo-accent); border-radius: var(--omo-r-sm); box-shadow: var(--omo-shadow-2); animation: omo-hud-in .18s ease-out; }
 .omo-hud-toast.is-leave { border-left-color: var(--omo-text-3); color: var(--omo-text-2); }
 .omo-hud-toast.is-mention { border-left-color: var(--omo-warn); }
+.omo-hud-toast .is-check { color: var(--omo-ok); } .omo-hud-toast .is-alert, .omo-hud-toast .is-bell { color: var(--omo-warn); }
 @keyframes omo-hud-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 /* Agent notifications: bell top right. */
 .omo-hud-notices { position: absolute; top: var(--omo-sp-3); right: var(--omo-sp-4); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.omo-hud-bell { position: relative; height: 32px; min-width: 32px; padding: 0 8px; background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-pill); color: var(--omo-text); box-shadow: var(--omo-shadow-2); }
-.omo-hud-bell strong { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--omo-warn); color: #2b1a00; font-size: 10px; line-height: 16px; }
+.omo-hud-bell { position: relative; display: inline-flex; align-items: center; justify-content: center; height: 32px; min-width: 32px; padding: 0 8px; background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-pill); color: var(--omo-text); box-shadow: var(--omo-shadow-2); }
+.omo-hud-bell:hover, .omo-chat-toggle:hover { background: var(--omo-surface-3); color: var(--omo-text); }
+.omo-hud-bell[aria-expanded="true"] { color: var(--omo-text); background: var(--omo-surface-2); }
+.omo-hud-bell.has-unread { color: var(--omo-warn); }
+.omo-hud-bell strong { position: absolute; top: -5px; right: -5px; box-sizing: border-box; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--omo-warn); color: var(--omo-accent-ink); font: 700 var(--omo-fs-2xs)/16px var(--omo-font); text-align: center; box-shadow: 0 0 0 2px var(--omo-bg-1); }
 .omo-hud-notice-list { z-index: 1; width: min(380px, 70vw); max-height: 55vh; overflow: auto; padding: 8px; background: var(--omo-bg-1, #101622); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-md, 10px); box-shadow: var(--omo-shadow-2); }
 .omo-hud-notice-list header { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
 .omo-hud-notice-list header strong { flex: 1; }
@@ -36,24 +43,26 @@
 .omo-hud-notice-list li.is-read { opacity: .6; }
 .omo-hud-notice-list li span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; }
 .omo-hud-notice-list li small, .omo-hud-notice-list > small, .omo-hud-notice-list p { color: var(--omo-text-3); }
-.omo-hud-icon { text-align: center; font-weight: 700; }
+.omo-hud-icon { display: grid; place-items: center; color: var(--omo-text-2); }
 .is-finished .omo-hud-icon { color: var(--omo-ok, #7fe0a4); } .is-approval .omo-hud-icon, .is-bell .omo-hud-icon { color: var(--omo-warn); } .is-interrupted .omo-hud-icon { color: var(--omo-danger); }
 
 /* Chat: bottom left, above the scene hint line. */
 .omo-hud-chat { position: absolute; left: var(--omo-sp-4); bottom: 52px; display: flex; flex-direction: column; align-items: flex-start; max-width: min(420px, calc(100% - 2 * var(--omo-sp-4))); }
-.omo-chat-toggle { height: 30px; padding: 0 12px; background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-pill); color: var(--omo-text); box-shadow: var(--omo-shadow-2); }
-.omo-chat-toggle strong { color: var(--omo-warn); }
+.omo-chat-toggle { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-pill); color: var(--omo-text); box-shadow: var(--omo-shadow-2); }
+.omo-chat-toggle strong { min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: var(--omo-warn); color: var(--omo-accent-ink); font: 700 var(--omo-fs-2xs)/16px var(--omo-font); text-align: center; }
 .omo-chat-panel { width: min(420px, 100%); display: flex; flex-direction: column; gap: 6px; padding: 8px; background: rgba(12, 18, 26, .9); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-md, 10px); box-shadow: var(--omo-shadow-2); }
 .omo-chat-panel header { display: flex; align-items: center; gap: 8px; }
 .omo-chat-panel header strong { flex: 1; }
-.omo-chat-panel header > button { background: transparent; border: 0; color: var(--omo-text-2); font-size: 16px; }
+.omo-chat-panel header > button { display: grid; place-items: center; width: var(--omo-control-h-sm); height: var(--omo-control-h-sm); padding: 0; background: transparent; border: 0; border-radius: var(--omo-r-sm); color: var(--omo-text-2); }
+.omo-chat-panel header > button:hover { background: var(--omo-surface-2); color: var(--omo-text); }
 .omo-chat-colours { display: inline-flex; gap: 3px; }
 .omo-chat-colours button { width: 14px; height: 14px; border-radius: 50%; border: 2px solid transparent; padding: 0; }
 .omo-chat-colours button[aria-pressed="true"] { border-color: #fff; }
 .omo-chat-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .omo-chat-members li { display: flex; align-items: center; gap: 6px; }
+.omo-chat-speaking { color: var(--omo-accent); }
 .omo-chat-members li i { width: 9px; height: 9px; border-radius: 50%; }
-.omo-chat-members li button { margin-left: auto; height: 20px; padding: 0 7px; border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-sm); background: var(--omo-surface-2); color: var(--omo-text); }
+.omo-chat-members li button { margin-left: auto; height: var(--omo-control-h-sm); padding: 0 7px; border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-sm); background: var(--omo-surface-2); color: var(--omo-text); }
 .omo-chat-members li button + button { margin-left: 0; }
 .omo-chat-members li button[aria-pressed="true"] { background: var(--omo-accent); color: var(--omo-accent-ink); }
 .omo-chat-log { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; user-select: text; }
@@ -64,13 +73,14 @@
 .omo-chat-line.is-draft span { color: var(--omo-accent); }
 .omo-chat-line.is-mention { background: var(--omo-warn-soft); border-radius: 4px; }
 .omo-chat-form { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-.omo-chat-form input { flex: 1 1 180px; min-width: 0; height: 28px; padding: 0 8px; background: var(--omo-bg-0); color: var(--omo-text); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-sm); font: inherit; }
-.omo-chat-form > button { height: 28px; padding: 0 10px; border: 0; border-radius: var(--omo-r-sm); background: var(--omo-accent); color: var(--omo-accent-ink); font-weight: 600; }
+.omo-chat-form input { flex: 1 1 180px; min-width: 0; height: var(--omo-control-h); padding: 0 8px; background: var(--omo-bg-0); color: var(--omo-text); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-sm); font: inherit; }
+.omo-chat-form > button { height: var(--omo-control-h); padding: 0 10px; border: 0; border-radius: var(--omo-r-sm); background: var(--omo-accent); color: var(--omo-accent-ink); font-weight: 600; }
 .omo-chat-form > button:disabled { opacity: .5; }
-.omo-chat-emotes { display: inline-flex; gap: 2px; }
-.omo-chat-emotes button { height: 26px; width: 26px; padding: 0; border: 1px solid var(--omo-line); border-radius: var(--omo-r-sm); background: transparent; }
+.omo-chat-emotes { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.omo-chat-emotes button { height: var(--omo-control-h-sm); padding: 0 var(--omo-sp-2); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-pill); background: transparent; color: var(--omo-text-2); font-size: var(--omo-fs-xs); }
+.omo-chat-emotes button:not(:disabled):hover { background: var(--omo-surface-2); color: var(--omo-text); }
 .omo-chat-emotes button:disabled { opacity: .4; }
-.omo-chat-panel > small { color: var(--omo-text-3); font-size: 10px; }
+.omo-chat-panel > small { color: var(--omo-text-3); font-size: var(--omo-fs-2xs); line-height: 1.4; }
 .omo-chat-panel .omo-error { margin: 0; }
 /* Attached to a screen: the HUD sits over the work area, fully usable. Bell and chat live in the right
    end of the focus bar (focus-mode.css keeps that space free); chat opens as a right-side drawer over
@@ -78,12 +88,15 @@
 .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-layer { z-index: 7; }
 .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-layer { font-size: var(--omo-fs-md); }
 .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-notices { top: 8px; right: var(--omo-sp-3); }
-.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-bell { height: var(--omo-control-h); min-width: var(--omo-control-h); padding: 0 6px; border-radius: var(--omo-r-sm); border-color: var(--omo-line-2); box-shadow: none; background: transparent; backdrop-filter: none; font-size: var(--omo-fs-md); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-bell { height: var(--omo-control-h); min-width: var(--omo-control-h); padding: 0; border-radius: var(--omo-r-sm); border-color: transparent; box-shadow: none; background: transparent; backdrop-filter: none; color: var(--omo-text-2); font-size: var(--omo-fs-md); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-bell:hover { background: var(--omo-surface-2); color: var(--omo-text); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-bell.has-unread { color: var(--omo-warn); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-bell strong { top: -2px; right: -4px; }
 .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-notice-list { margin-top: 4px; }
 .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-toasts { top: 52px; }
 .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-speaking { top: 48px; }
 .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-chat { left: auto; bottom: auto; top: 8px; right: calc(var(--omo-sp-3) + var(--omo-control-h) + 6px); max-width: none; }
-.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-chat-toggle { height: var(--omo-control-h); padding: 0 10px; border-radius: var(--omo-r-sm); border-color: var(--omo-line-2); box-shadow: none; background: transparent; color: var(--omo-text-2); backdrop-filter: none; font: 500 var(--omo-fs-md)/1 var(--omo-font); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-chat-toggle { height: var(--omo-control-h); padding: 0 10px; border-radius: var(--omo-r-sm); border-color: transparent; box-shadow: none; background: transparent; color: var(--omo-text-2); backdrop-filter: none; font: 500 var(--omo-fs-md)/1 var(--omo-font); }
 .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-chat:has(.omo-chat-panel) { top: 44px; right: 0; bottom: 0; width: min(360px, 42%); }
 .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-chat-panel {
     width: 100%; height: 100%; box-sizing: border-box; padding: var(--omo-sp-3); gap: var(--omo-sp-2); border-radius: 0; border-width: 0 0 0 1px;
@@ -95,3 +108,9 @@
 @keyframes omo-hud-drawer { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .omo-chat-panel { animation: none !important; } }
 .omo-scene-wrap:not(.omo-walking) .omo-hud-follow { display: none; }
+
+/* Line icons (icons.tsx). Stroke and colour come from currentColor, so each control's token colour applies. */
+.omo-icon { flex: 0 0 auto; display: inline-block; vertical-align: -0.18em; }
+/* Buttons that carry an icon next to their label keep both on one centred line. */
+.omo-console-strip button:has(> .omo-icon), .omo-console-hint:has(> .omo-icon) { display: inline-flex; align-items: center; gap: 4px; }
+.omo-console-mini:has(> .omo-icon) { justify-content: center; min-width: 22px; }

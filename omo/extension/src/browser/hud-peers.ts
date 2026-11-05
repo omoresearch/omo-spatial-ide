@@ -87,7 +87,7 @@ export class HudPeers {
         for (const [id, avatar] of avatars) {
             const member = members.find(m => m.id === id) ?? avatar.member;
             const colour = member.colour ? PRESENCE_COLOUR_HEX[member.colour] : DEFAULT_PEER;
-            const note = this.following === id ? '👣 following' : '';
+            const note = this.following === id ? 'following' : '';
             const key = `${member.name}|${colour}|${note}`;
             if (this.applied.get(avatar.root) === key) continue;
             this.applied.set(avatar.root, key); changed = true;
