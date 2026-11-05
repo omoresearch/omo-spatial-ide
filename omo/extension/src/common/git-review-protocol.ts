@@ -12,6 +12,8 @@ export interface GitReviewSnapshot {
     projectUri: string;
     branch: string;
     head?: string;
+    /** Present only when the server selected a registered task workspace base. */
+    baseHead?: string;
     changes: GitChange[];
     truncated: boolean;
 }

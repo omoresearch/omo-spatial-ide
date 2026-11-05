@@ -118,7 +118,7 @@ test('agent tabs never start without an explicit confirmed start', { skip }, asy
     await assert.rejects(service.newTab({ workspaceId: ws.id, kind, confirmedStart: false }), /confirmed start/);
   }
   await assert.rejects(service.newTab({ workspaceId: ws.id, kind: 'codex', confirmedStart: true }), /not available.*npm install -g @openai\/codex/);
-  await assert.rejects(service.newTab({ workspaceId: ws.id, kind: 'hermes', profile: 'nope', confirmedStart: true }), /no Hermes profile/);
+  await assert.rejects(service.newTab({ workspaceId: ws.id, kind: 'hermes', profile: 'nope', confirmedStart: true }), /Hermes profile state database is absent/);
   assert.deepEqual(h.agentLog(s), [], 'no agent process was started');
   assert.equal((await service.getWorkspace(ws.id)).tabs.length, 1);
 });

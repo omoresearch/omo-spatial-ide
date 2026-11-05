@@ -151,3 +151,24 @@
 .omo-task-overview-view h2, .omo-task-overview-view h3, .omo-task-overview-view h4 { color:#edf5ed; }
 .omo-task-overview-view p, .omo-task-overview-view small, .omo-task-overview-view dt { color:#a8bdba; }
 .omo-task-overview-view pre { user-select:text; color:#dfe9e5; background:#0d1721; border:1px solid #ffffff12; border-radius:5px; padding:9px; }
+.omo-agent-workflow { margin-top:8px; padding:10px; border:1px solid #9ac5b640; border-radius:8px; background:#101c27; color:#cfdeda; }
+.omo-agent-workflow-header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.omo-agent-workflow-header h3 { margin:4px 0; color:#edf5ed; font-size:13px; }
+.omo-agent-workflow-header button, .omo-agent-workflow button { background:#22383a; border:1px solid #ffffff22; color:#e1ece7; border-radius:5px; padding:6px 9px; font-size:10px; }
+.omo-agent-workflow form { display:flex; flex-direction:column; gap:7px; }
+.omo-agent-workflow label { display:flex; flex-direction:column; gap:4px; color:#a8bdba; font-size:10px; }
+.omo-agent-workflow input, .omo-agent-workflow textarea, .omo-agent-workflow select { background:#0d1721; color:#e1ece7; border:1px solid #ffffff22; border-radius:4px; padding:6px; font:inherit; }
+.omo-agent-workflow-row { display:flex; gap:8px; }
+.omo-agent-workflow-row > label { flex:1; }
+.omo-agent-workflow-confirm { flex-direction:row!important; align-items:center; }
+.omo-agent-workflow-note, .omo-agent-workflow p, .omo-agent-workflow dt, .omo-agent-workflow dd { color:#9db1b2; font-size:10px; line-height:1.45; }
+.omo-agent-workflow-note { margin:5px 0 8px; }
+.omo-agent-workflow-handoff { border-top:1px solid #ffffff14; padding-top:7px; }
+.omo-agent-workflow-handoff dl { display:grid; grid-template-columns:auto 1fr; gap:3px 8px; margin:6px 0; }
+.omo-agent-workflow-handoff dd { margin:0; overflow-wrap:anywhere; }
+.omo-agent-workflow-handoff pre { max-height:110px; overflow:auto; white-space:pre-wrap; user-select:text; background:#0d1721; border:1px solid #ffffff12; padding:7px; color:#dfe9e5; }
+.omo-agent-workflow-steps { border-top:1px solid #ffffff14; margin-top:8px; padding-top:4px; }
+.omo-agent-workflow-steps pre { max-height:120px; overflow:auto; white-space:pre-wrap; user-select:text; }
+.omo-agent-workflow button:disabled { opacity:.4; cursor:not-allowed; }
+.omo-agent-workflow [role=alert] { color:#f4b29f; }
+@media(max-width:760px) { .omo-agent-workflow-row { flex-direction:column; } }

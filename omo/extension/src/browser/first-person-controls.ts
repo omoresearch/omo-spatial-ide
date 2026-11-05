@@ -10,6 +10,7 @@ export interface SelectionGestures {
     clear(): void;
     copy(): void;
 }
+export type MonitorShortcut = 'new-shell' | 'select-tab-2' | 'workspace-picker';
 
 export class FirstPersonControls {
     enabled = false;
@@ -22,9 +23,9 @@ export class FirstPersonControls {
     private pointer?: { x: number; y: number; startX: number; startY: number; dragged: boolean };
     private listeners: Array<() => void> = [];
     constructor(private canvas: HTMLCanvasElement, private camera: THREE.PerspectiveCamera,
-        private interact: (x: number, y: number) => 'terminal' | 'code' | undefined,
+        private interact: (x: number, y: number, modifiers?: { ctrlKey: boolean; metaKey: boolean }) => 'terminal' | 'code' | undefined,
         private input: (text: string) => void, private message: (text: string) => void, private pasteText?: (text: string) => void,
-        private selection?: SelectionGestures, private layout: RoomLayoutId = 'classic') {
+        private selection?: SelectionGestures, private layout: RoomLayoutId = 'classic', private shortcut?: (shortcut: MonitorShortcut) => void) {
         const on = <K extends keyof HTMLElementEventMap>(name: K, fn: (event: HTMLElementEventMap[K]) => void): void => {
             const globalInput = name === 'keydown' || name === 'keyup' || name === 'paste';
             const target: EventTarget = globalInput ? window : canvas;
@@ -68,7 +69,7 @@ export class FirstPersonControls {
             if (this.selecting) { this.selecting = false; this.selection?.end(); return; }
             if (!this.pointer) return; const dragged=this.pointer.dragged;this.pointer=undefined;
             if (!dragged) {
-                const hit=this.interact(event.clientX,event.clientY);
+                const hit=this.interact(event.clientX,event.clientY,{ctrlKey:event.ctrlKey,metaKey:event.metaKey});
                 if(hit==='terminal')this.focusTerminal();
             }
         });
@@ -85,6 +86,15 @@ export class FirstPersonControls {
             event.stopImmediatePropagation();
             if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'c') {
                 event.preventDefault(); this.selection?.copy(); return;
+            }
+            if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 't') {
+                event.preventDefault(); this.releaseTyping(); this.shortcut?.('new-shell'); return;
+            }
+            if (event.altKey && event.key === '2') {
+                event.preventDefault(); this.releaseTyping(); this.shortcut?.('select-tab-2'); return;
+            }
+            if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'p') {
+                event.preventDefault(); this.releaseTyping(); this.shortcut?.('workspace-picker'); return;
             }
             if(event.key==='Escape'){event.preventDefault();this.selection?.clear();this.typing=false;this.keys.clear();this.message('Walking · WASD to move. Drag to look. Click a monitor to use it.');return;}
             if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return;

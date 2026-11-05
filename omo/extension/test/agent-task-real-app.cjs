@@ -26,6 +26,7 @@ const { DESK_ONE } = require('./world-navigation-targets.cjs');
         const hermesRoot = path.join(owned, 'hermes');
         for (const dir of [project, bin, path.join(hermesRoot, 'profiles', 'default')]) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(path.join(hermesRoot, 'profiles', 'default', 'config.yaml'), '# Owned fixture; never a real Hermes profile.\n');
+        require('./owned-app-fixture.cjs').initializeFixtureHermesState(hermesRoot);
         fs.writeFileSync(agentLog, ''); fs.writeFileSync(launchLog, '');
         const fixture = `#!/usr/bin/python3
 # Terminal fixture only. Does not import or call an agent SDK, model or network client.

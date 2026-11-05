@@ -1,9 +1,19 @@
 import type { OmoWebService, WebSurface, WebSurfaceFrame, WebKey } from '../common/web-runtime-protocol';
 
+function distanceGain(distance: number): number {
+    if (!Number.isFinite(distance)) return 0;
+    if (distance <= 6) return 1;
+    if (distance >= 40) return 0;
+    return Math.max(0, Math.min(1, 1 - (distance - 6) / 34));
+}
+
 export interface WebWallState {
     phase: 'idle' | 'checking' | 'loading' | 'live' | 'error';
     surface?: WebSurface;
     frame?: WebSurfaceFrame;
+    baseVolume: number;
+    distance: number;
+    gain: number;
     error: string;
 }
 export interface WebWallOptions {
@@ -17,7 +27,9 @@ export interface WebWallOptions {
 export class WebSurfaceController {
     private service: OmoWebService;
     private options: WebWallOptions;
-    private current: WebWallState = { phase: 'idle', error: '' };
+    private current: WebWallState = { phase: 'idle', error: '', baseVolume: 1, distance: 0, gain: 1 };
+    private baseVolume = 1;
+    private distance = 0;
     private epoch = 0;
     private polling = -1;
     private timer?: unknown;
@@ -80,12 +92,27 @@ export class WebSurfaceController {
         if (new TextEncoder().encode(text).length > 65536 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text)) { this.set({ error: 'Browser paste is too large or contains unsafe control characters.' }); return; }
         if (text) await this.action(surface => this.service.typeText({ id: surface.id, text }));
     }
+    private effectiveVolume(): number { return Math.round(this.baseVolume * distanceGain(this.distance) * 100) / 100; }
+    get audioPreferences(): { muted: boolean; baseVolume: number } { return { muted: this.current.surface?.muted ?? false, baseVolume: this.baseVolume }; }
+    async setDistance(distance: number): Promise<void> {
+        if (!Number.isFinite(distance) || Math.abs(distance - this.distance) < 0.25) return;
+        this.distance = Math.max(0, distance);
+        this.set({ distance: this.distance, gain: distanceGain(this.distance), baseVolume: this.baseVolume });
+        const surface = this.current.surface;
+        if (!surface) return;
+        const epoch = this.epoch;
+        try {
+            const next = await this.service.setAudio({ id: surface.id, muted: surface.muted, volume: this.effectiveVolume() });
+            if (epoch === this.epoch) this.set({ surface: next, distance: this.distance, gain: distanceGain(this.distance), baseVolume: this.baseVolume });
+        } catch (error) { if (epoch === this.epoch) this.set({ error: `Distance audio update denied: ${error instanceof Error ? error.message : String(error)}` }); }
+    }
     async setAudio(muted: boolean, volume: number): Promise<void> {
         if (!Number.isFinite(volume)) return;
+        this.baseVolume = Math.max(0, Math.min(1, volume));
         const epoch = this.epoch;
         await this.action(async surface => {
-            const next = await this.service.setAudio({ id: surface.id, muted, volume: Math.max(0, Math.min(1, volume)) });
-            if (epoch === this.epoch) this.set({ surface: next });
+            const next = await this.service.setAudio({ id: surface.id, muted, volume: this.effectiveVolume() });
+            if (epoch === this.epoch) this.set({ surface: next, baseVolume: this.baseVolume, distance: this.distance, gain: distanceGain(this.distance) });
         });
     }
     async click(point: { x: number; y: number }): Promise<void> {

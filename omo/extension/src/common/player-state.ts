@@ -1,6 +1,18 @@
 export interface PlayerPose { x: number; z: number; yaw: number; pitch: number; }
 export type RoomLayoutId = 'classic' | 'wide';
+export type RoomKitId = 'hermes-desk' | 'terminal-nook' | 'web-gallery';
 export interface RoomDeskPosition { x: number; z: number; }
+export interface RoomKit {
+    label: string;
+    description: string;
+    mirror: boolean;
+    webWall: boolean;
+}
+export const ROOM_KITS: Record<RoomKitId, RoomKit> = {
+    'hermes-desk': { label: 'Hermes desk', description: 'Two live desks and a linked mirror for agent work.', mirror: true, webWall: true },
+    'terminal-nook': { label: 'Terminal nook', description: 'A focused terminal room with a linked extra monitor.', mirror: true, webWall: false },
+    'web-gallery': { label: 'Web gallery', description: 'Two desks, a managed web wall and a linked mirror.', mirror: true, webWall: true }
+};
 export interface RoomLayout {
     label: string;
     description: string;

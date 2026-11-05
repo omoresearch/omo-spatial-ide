@@ -4,6 +4,8 @@ import { execFile, ExecFileException } from 'child_process';
 import { promisify } from 'util';
 import { pathToFileURL } from 'url';
 import { GitChange, GitReviewPatch, GitReviewService, GitReviewSnapshot } from '../common/git-review-protocol';
+import type { TaskWorkspace, TaskWorkspaceService } from '../common/task-workspace-protocol';
+import { TaskBranchReviewBackend } from './task-branch-review';
 import { projectDirectory } from './omo-runtime-service';
 
 const execFileAsync = promisify(execFile);
@@ -271,5 +273,66 @@ export class GitReviewBackend implements GitReviewService {
             throw new Error('binary or non-text changes cannot be shown as a unified patch');
         }
         return { projectUri: result.projectUri, path: relativePath, status: change.status, patch };
+    }
+}
+
+/**
+ * Read-only review facade for the actual project page. A registered task
+ * worktree is reviewed against its server-captured baseHead; the browser only
+ * supplies the current project URI and an exact listed path. Ordinary projects
+ * keep the existing HEAD-based review.
+ */
+export function projectGitReviewConnection(backend: GitReviewService): GitReviewService {
+    return Object.freeze(Object.assign(Object.create(null), {
+        list: (projectUri: string) => backend.list(projectUri),
+        diff: (input: { projectUri: string; path: string }) => backend.diff(input)
+    }));
+}
+
+export class ProjectGitReviewBackend implements GitReviewService {
+    private readonly ordinary = new GitReviewBackend();
+    private readonly taskReview = new TaskBranchReviewBackend();
+
+    constructor(private readonly workspaces: Pick<TaskWorkspaceService, 'getTaskWorkspace'>) {}
+
+    private async registered(projectUri: string): Promise<TaskWorkspace | undefined> {
+        const workspace = await this.workspaces.getTaskWorkspace(projectUri);
+        if (workspace && workspace.worktreeUri !== projectUri) throw new Error('registered task workspace authority did not match the requested project');
+        return workspace;
+    }
+
+    async list(projectUri: string): Promise<GitReviewSnapshot> {
+        const workspace = await this.registered(projectUri);
+        if (!workspace) return this.ordinary.list(projectUri);
+        const snapshot = await this.taskReview.list({
+            worktreeUri: workspace.worktreeUri,
+            baseHead: workspace.baseHead,
+            branch: workspace.branch
+        });
+        return {
+            projectUri: snapshot.worktreeUri,
+            branch: snapshot.branch,
+            head: snapshot.head,
+            baseHead: workspace.baseHead,
+            changes: snapshot.changes,
+            truncated: snapshot.truncated
+        };
+    }
+
+    async diff(input: { projectUri: string; path: string }): Promise<GitReviewPatch> {
+        const workspace = await this.registered(input.projectUri);
+        if (!workspace) return this.ordinary.diff(input);
+        const patch = await this.taskReview.diff({
+            worktreeUri: workspace.worktreeUri,
+            baseHead: workspace.baseHead,
+            branch: workspace.branch,
+            path: input.path
+        });
+        return {
+            projectUri: patch.worktreeUri,
+            path: patch.path,
+            status: patch.status,
+            patch: patch.patch
+        };
     }
 }

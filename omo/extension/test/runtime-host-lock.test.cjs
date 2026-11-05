@@ -40,6 +40,8 @@ function scratch(label) {
   }
   fs.mkdirSync(path.join(s.hermes, 'profiles', 'alpha'), { recursive: true });
   fs.writeFileSync(path.join(s.hermes, 'profiles', 'alpha', 'config.yaml'), 'fixture: true\n');
+  h.initializeFixtureHermesState(s.hermes);
+  h.initializeFixtureHermesState(path.join(s.hermes, 'profiles', 'alpha'));
   fs.writeFileSync(path.join(s.bin, 'hermes'), FIXTURE_HERMES, { mode: 0o755 });
   fs.writeFileSync(s.log, '');
   return s;

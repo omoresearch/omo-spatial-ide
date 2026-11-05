@@ -15,4 +15,6 @@ export interface TaskWorkspace {
 export interface TaskWorkspaceService {
     list(projectUri: string): Promise<TaskWorkspace[]>;
     create(input: { projectUri: string; name: string; confirmedCreate: boolean }): Promise<TaskWorkspace>;
+    /** Read-only authority for a previously registered canonical worktree. */
+    getTaskWorkspace(worktreeUri: string): Promise<TaskWorkspace | undefined>;
 }

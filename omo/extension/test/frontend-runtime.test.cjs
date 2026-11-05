@@ -18,7 +18,7 @@ test('binding opens the station workspace once, attaches the active tab at 80x22
   service.pollQueue.push(frame(3, ['$ ls', 'README.md'], { foreground: ['7777', '777777777'], background: ['0000', '000000000'], palette: { '7': 'e8e1d5', '0': '1a1511' }, cursor: { x: 2, y: 0, visible: true } }));
   const { controller, timers } = await live({ service });
   assert.deepEqual(service.named('openWorkspace').map(c => c.arg), [{ stationId: 'terminal-1', projectUri: 'file:///p/a', name: 'Room A' }]);
-  assert.deepEqual(service.named('attach').map(c => c.arg), [{ workspaceId: 'ws-1', tabId: 't1', cols: 80, rows: 22 }]);
+  assert.deepEqual(service.named('attach').map(c => c.arg), [{ workspaceId: 'ws-1', tabId: 't1', cols: 80, rows: 22, stationId: 'terminal-1' }]);
   assert.deepEqual(service.named('poll')[0].arg, { viewId: 'v1', afterSequence: 0 });
   const s = controller.state;
   assert.equal(s.phase, 'live');
@@ -292,4 +292,52 @@ test('the most common background key is treated as the terminal background', () 
   const { dominantKey } = H.loadController();
   assert.equal(dominantKey(['0000', '0044', '000']), '0');
   assert.equal(dominantKey(undefined), undefined);
+});
+
+test('R2 clipboard notifications use the current view and tab, never frame.osc52', async () => {
+  const service = new H.FakeRuntime();
+  service.pollQueue.push(frame(1, ['copy']));
+  service.takeClipboardNotification = async input => {
+    service.record('takeClipboardNotification', input);
+    return { viewId: input.viewId, text: 'from pane', chars: 9, userGestureRequired: true, writeOnly: true };
+  };
+  const { controller, timers } = await live({ service });
+  assert.deepEqual(controller.state.pendingClipboard, { text: 'from pane', chars: 9 });
+  assert.equal(service.named('takeClipboardNotification')[0].arg.viewId, 'v1');
+  service.pollQueue.push(frame(2, ['old'], { osc52: { operation: 'write', text: 'must not be trusted', chars: 18 } }));
+  service.takeClipboardNotification = async input => ({ viewId: 'other-view', text: 'foreign', chars: 7, userGestureRequired: true, writeOnly: true });
+  controller.acknowledgePendingClipboard('cleared');
+  await timers.tick();
+  controller.dispose();
+  assert.equal(controller.state.pendingClipboard, undefined);
+});
+
+test('R2 notification is discarded when the active tab changes during the write-only fetch', async () => {
+  const service = new H.FakeRuntime();
+  service.ws = H.workspace([H.tab('t1'), H.tab('t2', { name: 'Second' })]);
+  service.pollQueue.push(frame(1, ['first']));
+  const { controller, timers } = await live({ service });
+  const hold = H.deferred();
+  service.pollQueue.push(frame(2, ['second']));
+  service.takeClipboardNotification = async () => hold.promise;
+  await timers.tick();
+  const changing = controller.selectTab('t2');
+  hold.resolve({ viewId: 'v1', text: 'stale tab copy', chars: 15, userGestureRequired: true, writeOnly: true });
+  await changing;
+  await H.settle();
+  assert.equal(controller.state.pendingClipboard, undefined);
+  controller.dispose();
+});
+
+test('R2 truecolour metadata is accepted only as exact safe rows and cells', async () => {
+  const service = new H.FakeRuntime();
+  service.pollQueue.push({ state: 'live', frame: { sequence: 1, cols: 2, rows: 2, lines: ['ab', 'cd'],
+    truecolor: { foreground: [['#112233', '#445566'], ['#778899', '#aabbcc']], background: [['#010203', '#040506'], ['#070809', '#0a0b0c']] },
+    foreground: ['77', '77'], background: ['00', '00'], palette: { '7': 'ffffff', '0': '000000' } } });
+  const { controller, timers } = await live({ service });
+  assert.equal(controller.state.truecolor.foreground[0][0], '#112233');
+  service.pollQueue.push(frame(2, ['bad'], { truecolor: { foreground: [['#112233']], background: [['not-hex']] } }));
+  await timers.tick();
+  assert.equal(controller.state.truecolor, undefined);
+  controller.dispose();
 });

@@ -13,12 +13,15 @@ import { OMO_TASK_WORKSPACE_PATH } from '../common/task-workspace-protocol';
 import { TaskWorkspaceBackend, taskWorkspaceConnection } from './task-workspaces';
 import { RoomPresence } from './room-presence';
 import { OMO_GIT_REVIEW_PATH } from '../common/git-review-protocol';
-import { GitReviewBackend } from './git-review';
+import { ProjectGitReviewBackend, projectGitReviewConnection } from './git-review';
+import { StandaloneSecurityContribution } from './standalone-security';
+import { WsRequestValidatorContribution } from '@theia/core/lib/node/ws-request-validators';
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
 export const OmoManagedWeb = Symbol('OmoManagedWeb');
 const OmoRoomPresence = Symbol('OmoRoomPresence');
 const OmoTaskWorkspaceBackend = Symbol('OmoTaskWorkspaceBackend');
+const OmoStandaloneSecurity = Symbol('OmoStandaloneSecurity');
 
 /** Stops the runtime host with the backend. The tmux server and every tab keep running. */
 @injectable()
@@ -36,11 +39,17 @@ export default new ContainerModule(bind => {
     bind(OmoManagedWeb).toDynamicValue(() => new WebRuntimeService()).inSingletonScope();
     bind(OmoRoomPresence).toDynamicValue(() => new RoomPresence()).inSingletonScope();
     bind(OmoTaskWorkspaceBackend).toDynamicValue(ctx => new TaskWorkspaceBackend(ctx.container.get<RuntimeHost>(OmoRuntimeHost))).inSingletonScope();
+    bind(OmoStandaloneSecurity).toDynamicValue(() => new StandaloneSecurityContribution()).inSingletonScope();
+    bind(BackendApplicationContribution).toService(OmoStandaloneSecurity);
+    bind(WsRequestValidatorContribution).toService(OmoStandaloneSecurity);
     bind(ConnectionHandler).toDynamicValue(ctx => {
         const taskWorkspaces = ctx.container.get<TaskWorkspaceBackend>(OmoTaskWorkspaceBackend);
         return new RpcConnectionHandler<object>(OMO_TASK_WORKSPACE_PATH, () => taskWorkspaceConnection(taskWorkspaces));
     }).inSingletonScope();
-    bind(ConnectionHandler).toDynamicValue(()=>new RpcConnectionHandler<object>(OMO_GIT_REVIEW_PATH,()=>new GitReviewBackend())).inSingletonScope();
+    bind(ConnectionHandler).toDynamicValue(ctx => {
+        const taskWorkspaces = ctx.container.get<TaskWorkspaceBackend>(OmoTaskWorkspaceBackend);
+        return new RpcConnectionHandler<object>(OMO_GIT_REVIEW_PATH, () => projectGitReviewConnection(new ProjectGitReviewBackend(taskWorkspaces)));
+    }).inSingletonScope();
     bind(ConnectionHandler).toDynamicValue(ctx => {
         const rooms=ctx.container.get<RoomPresence>(OmoRoomPresence);
         return new RpcConnectionHandler<object>(OMO_PRESENCE_PATH,proxy=>{

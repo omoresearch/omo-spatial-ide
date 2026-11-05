@@ -109,7 +109,7 @@ test('manual resume: shells, busy and non-running tabs are refused; idle agents 
   controller.requestResume('t1');
   assert.match(controller.state.error, /shell/); assert.equal(controller.state.pending, undefined);
   controller.requestResume('th');
-  assert.match(controller.state.error, /working|busy/); assert.equal(controller.state.pending, undefined);
+  assert.match(controller.state.error, /process active/i); assert.equal(controller.state.pending, undefined);
   controller.requestResume('tx');
   assert.match(controller.state.error, /revive/i); assert.equal(controller.state.pending, undefined);
   controller.requestResume('tc');

@@ -9,10 +9,12 @@
   "scripts": {
     "start": "node scripts/start.cjs",
     "doctor": "node scripts/doctor.cjs",
+    "prepare:ide": "node scripts/prepare-ide.cjs",
+    "check:ide": "node scripts/prepare-ide.cjs --check --json",
     "test:e2e": "node extension/test/runtime-real-app.cjs",
     "test:ci-e2e": "node scripts/ci-e2e.cjs",
     "compile": "tsc -p extension",
-    "build": "npm run compile && npm run build --workspace=omo-browser",
+    "build": "npm run prepare:ide && npm run compile && npm run build --workspace=omo-browser",
     "test": "node --experimental-strip-types --test extension/test/*.test.cjs"
   },
   "devDependencies": {

@@ -1,5 +1,6 @@
 import type { AgentKind, FindResult, HostStatus, OmoRuntimeService, RuntimeFrame, RuntimePoll, SessionTab, SessionWorkspace, ViewModes, WorkspaceSummary } from '../common/runtime-protocol';
 import type { AgentTaskTarget } from './agent-task-draft';
+import type { StationRecipe } from './station-recipe';
 export type { AgentTaskTarget } from './agent-task-draft';
 
 /**
@@ -22,7 +23,7 @@ export interface CopyRange { x1: number; y1: number; x2: number; y2: number; uni
 
 export interface StationBinding { stationId: string; projectUri: string; name: string }
 export type RuntimePhase = 'idle' | 'checking' | 'unavailable' | 'opening' | 'attaching' | 'live' | 'reconnecting' | 'interrupted' | 'error';
-export interface PendingAction { type: 'new' | 'close' | 'revive' | 'deleteWorkspace' | 'deleteWorkspaceBusy' | 'resume' | 'clearHistory'; kind?: AgentKind; tabId?: string; workspaceId?: string; message: string; confirmLabel: string }
+export interface PendingAction { type: 'new' | 'close' | 'revive' | 'deleteWorkspace' | 'deleteWorkspaceBusy' | 'resume' | 'clearHistory' | 'recipe'; kind?: AgentKind; tabId?: string; workspaceId?: string; recipe?: StationRecipe; message: string; confirmLabel: string }
 export interface RuntimeConsoleState {
     phase: RuntimePhase;
     statusText: string;
@@ -36,6 +37,7 @@ export interface RuntimeConsoleState {
     cells?: RuntimeFrame['cells'];
     foreground?: string[];
     background?: string[];
+    truecolor?: RuntimeFrame['truecolor'];
     palette?: Record<string, string>;
     cursor?: RuntimeFrame['cursor'];
     sequence: number;
@@ -48,6 +50,7 @@ export interface RuntimeConsoleState {
     /** Bells actually received by this desk's attached views, not an inferred task state. */
     unreadBells: number;
     bracketedPaste?: boolean;
+    pendingClipboard?: { text: string; chars: number };
     /** Workspace board (read-only list from live metadata), loaded on request. */
     board?: WorkspaceSummary[];
     find?: FindResult;
@@ -60,6 +63,8 @@ export interface RuntimeConsoleOptions {
     schedule: (fn: () => void, ms: number) => unknown;
     cancel: (handle: unknown) => void;
     onChange: (state: RuntimeConsoleState) => void;
+    onMirrorFrame?: (frame: RuntimeFrame | undefined) => void;
+    onMirrorError?: (message: string) => void;
     pollMs?: number;
     retryMs?: number;
 }
@@ -129,17 +134,19 @@ export function dominantKey(rows: string[] | undefined): string | undefined {
 
 export interface CellRun { x: number; text: string; fg: string; bg: string; columns?: number; glyphColumns?: number }
 /** Split one monitor row into runs of equal colour. fg/bg hold one palette key per cell. */
-export function cellRuns(line: string, fg: string | undefined, bg: string | undefined, palette: Record<string, string> | undefined, defaults: { fg: string; bg: string }, grid?: readonly string[]): CellRun[] {
+export function cellRuns(line: string, fg: string | undefined, bg: string | undefined, palette: Record<string, string> | undefined, defaults: { fg: string; bg: string }, grid?: readonly string[], direct?: { fg?: readonly string[]; bg?: readonly string[] }): CellRun[] {
     const cells = grid ? grid.slice(0,MONITOR_COLS) : Array.from(line);
-    const colour = (codes: string | undefined, i: number, fallback: string): string => {
+    const colour = (codes: string | undefined, i: number, fallback: string, exact: readonly string[] | undefined): string => {
+        const exactValue = exact?.[i];
+        if (typeof exactValue === 'string' && /^#[0-9a-fA-F]{6}$/.test(exactValue)) return exactValue;
         const key = codes?.[i];
         const value = key !== undefined ? palette?.[key] : undefined;
-        if (!value) return fallback;
+        if (!value || !/^(?:#[0-9a-fA-F]{6}|[0-9a-fA-F]{6})$/.test(value)) return fallback;
         return value.startsWith('#') ? value : `#${value}`;
     };
     const runs: CellRun[] = [];
     cells.forEach((ch, i) => {
-        const f = colour(fg, i, defaults.fg); const b = colour(bg, i, defaults.bg);
+        const f = colour(fg, i, defaults.fg, direct?.fg); const b = colour(bg, i, defaults.bg, direct?.bg);
         if (grid) {
             let glyphColumns = 1;
             while (i+glyphColumns < cells.length && cells[i+glyphColumns] === '') glyphColumns++;
@@ -152,11 +159,37 @@ export function cellRuns(line: string, fg: string | undefined, bg: string | unde
     return runs;
 }
 
+function validTruecolor(value: unknown, rows: number, cols: number): RuntimeFrame['truecolor'] | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !Number.isSafeInteger(rows) || !Number.isSafeInteger(cols) || rows < 1 || cols < 1) return undefined;
+    const candidate = value as { foreground?: unknown; background?: unknown };
+    if (!Array.isArray(candidate.foreground) || !Array.isArray(candidate.background)
+        || candidate.foreground.length !== rows || candidate.background.length !== rows) return undefined;
+    const safeRows = (input: unknown): input is string[][] => Array.isArray(input) && input.length === rows
+        && input.every(row => Array.isArray(row) && row.length === cols && row.every(color => typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)));
+    if (!safeRows(candidate.foreground) || !safeRows(candidate.background)) return undefined;
+    return {
+        foreground: candidate.foreground.map(row => row.slice()),
+        background: candidate.background.map(row => row.slice())
+    };
+}
+
+function validClipboardNotification(value: unknown, viewId: string): { text: string; chars: number } | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    const candidate = value as { viewId?: unknown; text?: unknown; chars?: unknown; userGestureRequired?: unknown; writeOnly?: unknown };
+    if (candidate.viewId !== viewId || candidate.userGestureRequired !== true || candidate.writeOnly !== true
+        || typeof candidate.text !== 'string' || !candidate.text || candidate.text.length > 65536
+        || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(candidate.text)) return undefined;
+    const chars = typeof candidate.chars === 'number' && Number.isSafeInteger(candidate.chars)
+        ? candidate.chars : candidate.text.length;
+    if (chars < 0 || chars > 65536) return undefined;
+    return { text: candidate.text, chars };
+}
+
 function describeTab(tab: SessionTab): string {
     if (tab.state === 'interrupted') return `${tab.name} was interrupted${tab.detail ? ` (${tab.detail})` : ''}. Revive it from the console strip when you are ready.`;
     if (tab.state === 'exited') return `${tab.name} has exited${tab.detail ? ` (${tab.detail})` : ''}.`;
     if (tab.state === 'sleeping') return `${tab.name} is asleep. It resumes when shown.`;
-    return `Live · ${tab.name}${tab.busy ? ' · working' : ''}`;
+    return `Live · ${tab.name}${tab.busy ? ' · Process active' : ''}`;
 }
 
 export class RuntimeConsoleController {
@@ -164,6 +197,15 @@ export class RuntimeConsoleController {
     private readonly options: RuntimeConsoleOptions;
     private binding?: StationBinding;
     private viewId?: string;
+    private mirrorViewId?: string;
+    private mirrorTimer: unknown;
+    private mirrorSequence = 0;
+    private mirrorStationId?: string;
+    private mirrorAttachInFlight?: Promise<boolean>;
+    private mirrorAttachEpoch = -1;
+    private mirrorAttachGen = -1;
+    private mirrorAttachGeneration = -1;
+    private mirrorGeneration = 0;
     private epoch = 0;
     private viewGen = 0;
     private pollInFlight = -1;
@@ -242,8 +284,76 @@ export class RuntimeConsoleController {
         const epoch = this.epoch; const gen = this.viewGen;
         this.timer = this.options.schedule(() => { this.timer = undefined; if (epoch === this.epoch && gen === this.viewGen && !this.disposed) fn(); }, ms);
     }
+    private clearMirrorTimer(): void { if (this.mirrorTimer !== undefined) { this.options.cancel(this.mirrorTimer); this.mirrorTimer = undefined; } }
+    private releaseMirror(notify = true): void {
+        this.mirrorGeneration++;
+        this.clearMirrorTimer();
+        const viewId = this.mirrorViewId; this.mirrorViewId = undefined; this.mirrorStationId = undefined; this.mirrorSequence = 0;
+        if (notify) this.options.onMirrorFrame?.(undefined);
+        if (viewId) this.service.detach(viewId).catch(() => undefined);
+    }
+    /** Attach a second physical view to this desk's station. It never opens a workspace or tab. */
+    async attachMirror(stationId = this.binding?.stationId, cols = 120, rows = 40): Promise<boolean> {
+        const workspace = this.current.workspace;
+        const tab = this.activeTab();
+        if (this.disposed || !stationId || !workspace || !tab || !this.viewId || this.current.phase !== 'live') {
+            this.options.onMirrorError?.('Open a live desk before attaching its mirror.');
+            return false;
+        }
+        if (this.mirrorAttachInFlight && this.mirrorAttachEpoch === this.epoch && this.mirrorAttachGen === this.viewGen
+            && this.mirrorAttachGeneration === this.mirrorGeneration) return this.mirrorAttachInFlight;
+        const epoch = this.epoch;
+        const gen = this.viewGen;
+        let attachGeneration = this.mirrorGeneration;
+        const operation = (async (): Promise<boolean> => {
+            this.clearMirrorTimer();
+            if (this.mirrorViewId) this.releaseMirror(false);
+            attachGeneration = this.mirrorGeneration;
+            try {
+                const attach = this.service.attach.bind(this.service) as unknown as (input: { workspaceId: string; tabId: string; cols: number; rows: number; stationId?: string }) => Promise<{ viewId: string }>;
+                const result = await attach({ workspaceId: workspace.id, tabId: tab.id, cols: Math.max(20, Math.min(240, Math.floor(cols))), rows: Math.max(5, Math.min(80, Math.floor(rows))), stationId });
+                if (this.disposed || epoch !== this.epoch || gen !== this.viewGen || attachGeneration !== this.mirrorGeneration || !this.viewId
+                    || this.current.workspace?.id !== workspace.id || this.current.activeTabId !== tab.id) {
+                    await this.service.detach(result.viewId).catch(() => undefined); return false;
+                }
+                this.mirrorViewId = result.viewId; this.mirrorStationId = stationId; this.mirrorSequence = 0;
+                void this.pollMirror(epoch, result.viewId);
+                return true;
+            } catch (error) {
+                if (!this.disposed && epoch === this.epoch && gen === this.viewGen && attachGeneration === this.mirrorGeneration) {
+                    this.options.onMirrorError?.(`Could not attach the mirror: ${message(error)}`);
+                    this.options.onMirrorFrame?.(undefined);
+                }
+                return false;
+            }
+        })();
+        this.mirrorAttachEpoch = epoch;
+        this.mirrorAttachGen = gen;
+        this.mirrorAttachGeneration = attachGeneration;
+        this.mirrorAttachInFlight = operation;
+        try { return await operation; }
+        finally { if (this.mirrorAttachInFlight === operation) this.mirrorAttachInFlight = undefined; }
+    }
+    detachMirror(): void { this.releaseMirror(); }
+    private async pollMirror(epoch: number, viewId: string): Promise<void> {
+        if (this.disposed || epoch !== this.epoch || this.mirrorViewId !== viewId) return;
+        try {
+            const result = await this.service.poll({ viewId, afterSequence: this.mirrorSequence });
+            if (this.disposed || epoch !== this.epoch || this.mirrorViewId !== viewId) return;
+            if (result.state === 'error' || result.state === 'detached') {
+                this.options.onMirrorError?.(`Mirror disconnected${result.detail ? ` (${result.detail})` : ''}.`); this.releaseMirror(); return;
+            }
+            if (result.frame && result.frame.sequence > this.mirrorSequence) {
+                this.mirrorSequence = result.frame.sequence; this.options.onMirrorFrame?.(result.frame);
+            }
+            this.mirrorTimer = this.options.schedule(() => { this.mirrorTimer = undefined; void this.pollMirror(epoch, viewId); }, this.options.pollMs ?? POLL_MS);
+        } catch (error) {
+            if (this.mirrorViewId === viewId) this.options.onMirrorError?.(`Mirror polling failed: ${message(error)}`);
+        }
+    }
     /** Detach the current monitor view. Never closes the tab or its processes. */
     private releaseView(): void {
+        this.releaseMirror();
         this.viewGen++; this.clearTimer();
         const viewId = this.viewId; this.viewId = undefined;
         if (viewId) this.service.detach(viewId).catch(() => undefined);
@@ -311,12 +421,13 @@ export class RuntimeConsoleController {
         this.releaseView();
         const gen = this.viewGen;
         const workspace = this.current.workspace; const tab = this.activeTab();
-        this.set({ lines: [], cells: undefined, foreground: undefined, background: undefined, cursor: undefined, sequence: 0, history: undefined, scrollOffset: undefined, bell: undefined, bracketedPaste: undefined, find: undefined });
+        this.set({ lines: [], cells: undefined, foreground: undefined, background: undefined, truecolor: undefined, cursor: undefined, sequence: 0, history: undefined, scrollOffset: undefined, bell: undefined, bracketedPaste: undefined, find: undefined });
         if (!workspace || !tab) { this.set({ phase: 'idle', statusText: 'This workspace has no tabs. Start a shell from the console strip.' }); return; }
         if (tab.state === 'interrupted' || tab.state === 'exited') { this.set({ phase: 'interrupted', statusText: describeTab(tab) }); return; }
         this.set({ phase: 'attaching', statusText: `Connecting the monitor to ${tab.name}…` });
         let viewId: string;
-        try { ({ viewId } = await this.service.attach({ workspaceId: workspace.id, tabId: tab.id, cols: MONITOR_COLS, rows: MONITOR_ROWS })); } catch (error) {
+        try {            const attach = this.service.attach.bind(this.service) as unknown as (input: { workspaceId: string; tabId: string; cols: number; rows: number; stationId?: string }) => Promise<{ viewId: string }>;
+            ({ viewId } = await attach({ workspaceId: workspace.id, tabId: tab.id, cols: MONITOR_COLS, rows: MONITOR_ROWS, stationId: this.binding?.stationId })); } catch (error) {
             if (epoch !== this.epoch || gen !== this.viewGen) return;
             this.set({ phase: 'reconnecting', error: `Could not attach to ${tab.name}: ${message(error)}`, statusText: 'Reconnecting…' });
             this.later(() => void this.attachActive(epoch), this.options.retryMs ?? RETRY_MS);
@@ -325,6 +436,19 @@ export class RuntimeConsoleController {
         if (epoch !== this.epoch || gen !== this.viewGen || this.disposed) { this.service.detach(viewId).catch(() => undefined); return; }
         this.viewId = viewId;
         await this.pollOnce(epoch, gen);
+    }
+
+    private async readClipboardNotification(epoch: number, gen: number, viewId: string, workspaceId: string, tabId: string): Promise<{ text: string; chars: number } | undefined> {
+        const take = this.service.takeClipboardNotification;
+        if (typeof take !== 'function') return undefined;
+        try {
+            const notification = await take.call(this.service, { viewId });
+            if (epoch !== this.epoch || gen !== this.viewGen || this.disposed || this.viewId !== viewId
+                || this.current.workspace?.id !== workspaceId || this.current.activeTabId !== tabId) return undefined;
+            return validClipboardNotification(notification, viewId);
+        } catch {
+            return undefined;
+        }
     }
 
     private async pollOnce(epoch: number, gen: number): Promise<void> {
@@ -363,8 +487,14 @@ export class RuntimeConsoleController {
                 patch.unreadBells = Math.min(Number.MAX_SAFE_INTEGER, this.current.unreadBells + delta);
                 patch.bell = frame.bell;
             }
-            Object.assign(patch, { sequence: frame.sequence, lines: frame.lines, cells: frame.cells, foreground: frame.foreground, background: frame.background, cursor: frame.cursor, palette: frame.palette ?? this.current.palette });
+            Object.assign(patch, { sequence: frame.sequence, lines: frame.lines, cells: frame.cells, foreground: frame.foreground, background: frame.background, truecolor: validTruecolor(frame.truecolor, frame.rows, frame.cols), cursor: frame.cursor, palette: frame.palette ?? this.current.palette });
             for (const key of ['history', 'scrollOffset', 'bracketedPaste'] as const) if (frame[key] !== undefined) Object.assign(patch, { [key]: frame[key] });
+        }
+        const workspaceId = this.current.workspace?.id;
+        const tabId = this.current.activeTabId;
+        if (workspaceId && tabId) {
+            const copy = await this.readClipboardNotification(epoch, gen, viewId, workspaceId, tabId);
+            if (copy) patch.pendingClipboard = copy;
         }
         this.set(patch);
         this.later(() => void this.pollOnce(epoch, gen), this.options.pollMs ?? POLL_MS);
@@ -372,6 +502,16 @@ export class RuntimeConsoleController {
 
     /** Acknowledge this desk's signal only. Never sends a key or starts/resumes an agent. */
     acknowledgeBells(): void { this.set({ unreadBells: 0 }); }
+    acknowledgePendingClipboard(notice: string): void { this.set({ pendingClipboard: undefined, notice, error: '' }); }
+
+    /** Saving a recipe is browser state only. Applying it has one explicit launch confirmation. */
+    requestRecipeApply(recipe: StationRecipe): void {
+        const workspace = this.current.workspace;
+        if (!workspace || this.current.acting || !recipe || !recipe.tabs.length) return;
+        const kinds = recipe.tabs.map(tab => tab.kind === 'shell' ? 'Shell' : tab.kind === 'hermes' ? 'Hermes' : tab.kind === 'claude' ? 'Claude Code' : 'Codex').join(', ');
+        this.set({ error: '', notice: '', pending: { type: 'recipe', recipe, confirmLabel: 'Start recipe tabs',
+            message: `Apply “${recipe.name}” to ${workspace.name}? It will save profile “${recipe.profile}” and start exactly these requested tabs: ${kinds}. Nothing launches until you confirm.` } });
+    }
 
     async sendInput(data: string): Promise<void> {
         if (this.disposed || !data) return;
@@ -434,7 +574,7 @@ export class RuntimeConsoleController {
         const tab = this.current.workspace?.tabs.find(t => t.id === tabId);
         if (!tab || this.current.acting) return;
         this.set({ error: '', notice: '', pending: { type: 'close', tabId, confirmLabel: 'Close tab',
-            message: `Close “${tab.name}”? This ends what is running in it${tab.busy ? ', and it is working right now' : ''}.` } });
+            message: `Close “${tab.name}”? This ends what is running in it${tab.busy ? ', and Process active right now' : ''}.` } });
     }
     requestRevive(tabId: string): void {
         const tab = this.current.workspace?.tabs.find(t => t.id === tabId);
@@ -473,6 +613,18 @@ export class RuntimeConsoleController {
             } else if (action.type === 'revive') {
                 next = await this.service.reviveTab({ workspaceId: workspace.id, tabId: action.tabId!, confirmedStart: true });
                 activate = action.tabId; notice = 'Tab revived.';
+            } else if (action.type === 'recipe') {
+                const recipe = action.recipe!;
+                if (recipe.profile && this.current.host?.profiles.includes(recipe.profile)) {
+                    next = await this.service.setWorkspaceProfile({ workspaceId: workspace.id, profile: recipe.profile });
+                } else next = workspace;
+                for (const tab of recipe.tabs) {
+                    next = await this.service.newTab(tab.kind === 'hermes'
+                        ? { workspaceId: next.id, kind: tab.kind, name: tab.name, profile: recipe.profile, confirmedStart: true }
+                        : { workspaceId: next.id, kind: tab.kind, name: tab.name, confirmedStart: true });
+                    activate = next.tabs.at(-1)?.id;
+                }
+                notice = `Recipe “${recipe.name}” applied. Inspect the physical screen; no task was submitted.`;
             } else {
                 next = await this.service.closeTab({ workspaceId: workspace.id, tabId: action.tabId!, confirmedClose: true });
                 notice = 'Tab closed.';
@@ -487,7 +639,7 @@ export class RuntimeConsoleController {
             }
         } catch (error) {
             if (epoch !== this.epoch) return;
-            this.set({ acting: false, notice: '', error: `${action.type === 'new' ? 'Could not start the tab' : action.type === 'revive' ? 'Could not revive the tab' : 'Could not close the tab'}: ${message(error)}` });
+            this.set({ acting: false, notice: '', error: `${action.type === 'new' ? 'Could not start the tab' : action.type === 'revive' ? 'Could not revive the tab' : action.type === 'recipe' ? 'Could not apply the station recipe' : 'Could not close the tab'}: ${message(error)}` });
         }
     }
 
@@ -584,7 +736,7 @@ export class RuntimeConsoleController {
         if (!tab || this.current.acting) return;
         if (tab.kind === 'shell') { this.set({ pending: undefined, notice: '', error: 'A shell tab has no agent to resume.' }); return; }
         if (tab.state !== 'running' && tab.state !== 'sleeping') { this.set({ pending: undefined, notice: '', error: `${tab.name} is not running. Revive it first.` }); return; }
-        if (tab.busy) { this.set({ pending: undefined, notice: '', error: `${tab.name} is working right now. Finish or interrupt it first.` }); return; }
+        if (tab.busy) { this.set({ pending: undefined, notice: '', error: `${tab.name} is Process active right now. Finish or interrupt it first.` }); return; }
         const option = this.launchers.find(o => o.kind === tab.kind)!;
         if (!option.available) { this.set({ pending: undefined, error: `${option.label} is not available: ${option.reason}` }); return; }
         this.set({ error: '', notice: '', pending: { type: 'resume', tabId, confirmLabel: `Start ${option.label}`,

@@ -30,6 +30,11 @@ async function openWorld(tag, viewport = { width: 1440, height: 960 }) {
 async function axis(page, key, field, goal, direction) {
     await page.focus(CANVAS); await page.keyboard.down(key);
     try { await page.waitForFunction((field, goal, direction) => { const n = Number(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset[field]); return direction > 0 ? n >= goal : n <= goal; }, { timeout: 20000 }, field, goal, direction); }
+    catch (error) {
+        const state = await page.$eval(CANVAS, canvas => ({ x: canvas.dataset.playerX, z: canvas.dataset.playerZ, navigation: canvas.dataset.navigation, typing: canvas.dataset.typing, focus: document.activeElement?.tagName }));
+        error.message += `; actual walking state ${JSON.stringify({ key, field, goal, direction, ...state })}`;
+        throw error;
+    }
     finally { await page.keyboard.up(key); }
 }
 async function walkTo(page, x, z) {

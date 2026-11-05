@@ -2,11 +2,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {
-    AgentKind, CopyResult, FindResult, HostStatus, OmoRuntimeService, PASTE_MAX_BYTES, PasteResult, ResumeResult,
+    AgentKind, CopyResult, FindResult, HostStatus, IdleSleepSettings, OmoRuntimeService, PASTE_MAX_BYTES, PasteResult, RuntimeClipboardNotification, ResumeResult,
     RuntimePoll, SessionWorkspace, ViewModes, WorkspaceSummary
 } from '../common/runtime-protocol';
 import { RuntimeLocations } from './runtime-discovery';
 import { RuntimeHost } from './runtime-host';
+import { assertHermesProfileTurnLeaseFree } from './hermes-profile-lease';
 
 const AGENT_KINDS: readonly AgentKind[] = ['shell', 'hermes', 'claude', 'codex'];
 const INSTALL_TMUX = 'Install tmux (for example: sudo apt install tmux, or brew install tmux) or set OMO_SPATIAL_TMUX to a tmux binary.';
@@ -84,6 +85,15 @@ export class OmoRuntimeServiceImpl implements OmoRuntimeService {
         }
     }
 
+    async setIdleSleep(input: { authorized: boolean; afterSeconds?: number }): Promise<IdleSleepSettings> {
+        if (typeof input?.authorized !== 'boolean') throw new Error('authorized must be true or false');
+        const afterSeconds = input.authorized ? input.afterSeconds : undefined;
+        if (input.authorized && (typeof afterSeconds !== 'number' || !Number.isFinite(afterSeconds))) {
+            throw new Error('afterSeconds is required when idle sleep is authorized');
+        }
+        return this.host.request('sleep_configure', { authorized: input.authorized, afterSeconds });
+    }
+
     async openWorkspace(input: { stationId: string; projectUri: string; name: string; profile?: string }): Promise<SessionWorkspace> {
         const stationId = requireString(input?.stationId, 'stationId', 128);
         const projectUri = requireString(input?.projectUri, 'projectUri', 4096);
@@ -97,14 +107,36 @@ export class OmoRuntimeServiceImpl implements OmoRuntimeService {
         return this.host.request('get', { workspaceId: requireString(workspaceId, 'workspaceId', 64) });
     }
 
+    private async workspaceForAgent(workspaceId: string, tabId?: string): Promise<{ workspace: SessionWorkspace; profile: string; kind?: AgentKind }> {
+        const workspace = await this.host.request<SessionWorkspace>('get', { workspaceId });
+        const tab = tabId ? workspace.tabs.find(item => item.id === tabId) : undefined;
+        if (tabId && !tab) throw new Error('no such tab');
+        // A tab launches with its captured profile; only a new tab uses the workspace default.
+        return { workspace, profile: tab?.profile || workspace.profile || 'default', kind: tab?.kind };
+    }
+
+    private assertHermesLeaseFree(profile: string): void {
+        // The host receives the same OMO_SPATIAL_HERMES_ROOT and uses it for
+        // Hermes tabs. This read is local, read-only and never touches auth data.
+        assertHermesProfileTurnLeaseFree(profile, this.host.hermesLeaseEnvironment ?? process.env);
+    }
+
     async newTab(input: { workspaceId: string; kind: AgentKind; name?: string; profile?: string; confirmedStart: boolean }): Promise<SessionWorkspace> {
         if (!AGENT_KINDS.includes(input?.kind)) {
             throw new Error('kind must be shell, hermes, claude or codex');
         }
+        const workspaceId = requireString(input.workspaceId, 'workspaceId', 64);
+        if (input.kind === 'hermes') {
+            if (input.confirmedStart !== true) throw new Error('starting hermes needs an explicit confirmed start');
+            const current = await this.workspaceForAgent(workspaceId);
+            this.assertHermesLeaseFree(typeof input.profile === 'string' && input.profile ? input.profile : current.profile);
+        }
         return this.host.request('tab_new', {
-            workspaceId: requireString(input.workspaceId, 'workspaceId', 64), kind: input.kind,
+            workspaceId, kind: input.kind,
             name: typeof input.name === 'string' ? input.name.slice(0, 80) : '',
-            profile: typeof input.profile === 'string' ? input.profile.slice(0, 64) : '',
+            // Omit an unchosen profile so the host captures the workspace profile at
+            // creation; an empty string would mean an explicit default profile.
+            ...(typeof input.profile === 'string' && input.profile ? { profile: input.profile.slice(0, 64) } : {}),
             confirmedStart: input.confirmedStart === true
         });
     }
@@ -124,19 +156,32 @@ export class OmoRuntimeServiceImpl implements OmoRuntimeService {
     }
 
     async reviveTab(input: { workspaceId: string; tabId: string; confirmedStart: boolean }): Promise<SessionWorkspace> {
+        const workspaceId = requireString(input?.workspaceId, 'workspaceId', 64);
+        const tabId = requireString(input.tabId, 'tabId', 64);
+        if (input.confirmedStart !== true) throw new Error('reviving a tab starts it again; confirm the start first');
+        const current = await this.workspaceForAgent(workspaceId, tabId);
+        if (current.kind === 'hermes') this.assertHermesLeaseFree(current.profile);
         return this.host.request('tab_revive', {
-            workspaceId: requireString(input?.workspaceId, 'workspaceId', 64), tabId: requireString(input.tabId, 'tabId', 64),
-            confirmedStart: input.confirmedStart === true
+            workspaceId, tabId,
+            confirmedStart: true
         });
     }
 
-    async attach(input: { workspaceId: string; tabId: string; cols: number; rows: number }): Promise<{ viewId: string }> {
-        const result = await this.host.request<{ viewId: string }>('attach', {
+    async attach(input: { workspaceId: string; tabId: string; cols: number; rows: number; stationId?: string }): Promise<{ viewId: string; stationId?: string; tabId: string }> {
+        const stationId = input?.stationId === undefined ? undefined : requireString(input.stationId, 'stationId', 128);
+        const result = await this.host.request<{ viewId: string; stationId?: string; tabId: string }>('attach', {
             workspaceId: requireString(input?.workspaceId, 'workspaceId', 64), tabId: requireString(input.tabId, 'tabId', 64),
-            cols: requireSize(input.cols, 'cols'), rows: requireSize(input.rows, 'rows')
+            cols: requireSize(input.cols, 'cols'), rows: requireSize(input.rows, 'rows'), ...(stationId === undefined ? {} : { stationId })
         });
         this.views.add(result.viewId);
         return result;
+    }
+
+    async takeClipboardNotification(input: { viewId: string }): Promise<RuntimeClipboardNotification | undefined> {
+        const result = await this.host.request<RuntimeClipboardNotification | null>('clipboard_pending', {
+            viewId: requireString(input?.viewId, 'viewId', 64)
+        });
+        return result || undefined;
     }
 
     async poll(input: { viewId: string; afterSequence: number }): Promise<RuntimePoll> {
@@ -205,9 +250,14 @@ export class OmoRuntimeServiceImpl implements OmoRuntimeService {
     }
 
     async resumeAgent(input: { workspaceId: string; tabId: string; confirmedStart: boolean }): Promise<ResumeResult> {
+        const workspaceId = requireString(input?.workspaceId, 'workspaceId', 64);
+        const tabId = requireString(input.tabId, 'tabId', 64);
+        if (input.confirmedStart !== true) throw new Error('resuming an agent starts it; confirm the start first');
+        const current = await this.workspaceForAgent(workspaceId, tabId);
+        if (current.kind === 'hermes') this.assertHermesLeaseFree(current.profile);
         return this.host.request('agent_resume', {
-            workspaceId: requireString(input?.workspaceId, 'workspaceId', 64), tabId: requireString(input.tabId, 'tabId', 64),
-            confirmedStart: input.confirmedStart === true
+            workspaceId, tabId,
+            confirmedStart: true
         });
     }
 

@@ -13,6 +13,8 @@ export interface HostStatus {
     agents: AgentAvailability[];
     profiles: string[];
     detail: string;
+    limits?: RuntimeLimits;
+    idleSleep?: IdleSleepSettings;
 }
 export interface SessionTab {
     id: string;
@@ -21,6 +23,8 @@ export interface SessionTab {
     state: 'running' | 'exited' | 'interrupted' | 'sleeping' | 'unknown';
     busy: boolean;
     detail?: string;
+    /** Hermes tabs: the captured profile this tab launches with ('default' for the base profile). */
+    profile?: string;
 }
 export interface SessionWorkspace {
     id: string;
@@ -29,7 +33,7 @@ export interface SessionWorkspace {
     profile: string;
     tabs: SessionTab[];
     state: 'running' | 'ended' | 'interrupted' | 'unknown';
-    /** Metadata only; the spatial runtime has no auto-sleep. */
+    /** Metadata only; opt-in idle sleep is controlled by the runtime service. */
     keepAwake?: boolean;
 }
 /** One row of the workspace board: live metadata plus the stations bound to it. */
@@ -45,6 +49,31 @@ export interface ViewModes {
 export interface FindResult { query: string; index: number; count: number }
 export interface CopyResult { text: string; chars: number; lines: number }
 export interface PasteResult { bracketed: boolean; bytes: number }
+/** A pane-originated OSC 52 write offered to the browser for an explicit copy click. */
+export interface RuntimeClipboardNotification {
+    viewId: string;
+    text: string;
+    chars: number;
+    /** The browser must use a user gesture. The runtime never reads a clipboard. */
+    userGestureRequired: true;
+    /** This DTO is write-only; no response or clipboard read is supported. */
+    writeOnly: true;
+}
+export interface RuntimeColorMetadata {
+    /** Exact sRGB CSS colours for each parser cell, including defaults. */
+    foreground: string[][];
+    background: string[][];
+}
+export interface RuntimeLimits {
+    workspaces: number;
+    tabsPerWorkspace: number;
+    views: number;
+}
+export interface IdleSleepSettings {
+    authorized: boolean;
+    afterSeconds: number;
+    detail: string;
+}
 export interface ResumeResult { workspace: SessionWorkspace; detail: string; fresh: boolean }
 /** Bridge-enforced paste limit (bytes of UTF-8). */
 export const PASTE_MAX_BYTES = 256 * 1024;
@@ -58,6 +87,8 @@ export interface RuntimeFrame {
     foreground?: string[];
     background?: string[];
     palette?: Record<string, string>;
+    /** Optional exact sRGB colours. Legacy palette fields stay unchanged. */
+    truecolor?: RuntimeColorMetadata;
     cursor?: { x: number; y: number; visible: boolean };
     /** Lines of tmux history above the screen. */
     history?: number;
@@ -77,14 +108,17 @@ export interface RuntimePoll {
 /** Local, single-user backend. No bridge credentials are returned to the browser. */
 export interface OmoRuntimeService {
     status(): Promise<HostStatus>;
+    setIdleSleep(input: { authorized: boolean; afterSeconds?: number }): Promise<IdleSleepSettings>;
     openWorkspace(input: { stationId: string; projectUri: string; name: string; profile?: string }): Promise<SessionWorkspace>;
     getWorkspace(workspaceId: string): Promise<SessionWorkspace>;
     newTab(input: { workspaceId: string; kind: AgentKind; name?: string; profile?: string; confirmedStart: boolean }): Promise<SessionWorkspace>;
     renameTab(input: { workspaceId: string; tabId: string; name: string }): Promise<SessionWorkspace>;
     closeTab(input: { workspaceId: string; tabId: string; confirmedClose: boolean }): Promise<SessionWorkspace>;
     reviveTab(input: { workspaceId: string; tabId: string; confirmedStart: boolean }): Promise<SessionWorkspace>;
-    attach(input: { workspaceId: string; tabId: string; cols: number; rows: number }): Promise<{ viewId: string }>;
+    attach(input: { workspaceId: string; tabId: string; cols: number; rows: number; stationId?: string }): Promise<{ viewId: string; stationId?: string; tabId: string }>;
     poll(input: { viewId: string; afterSequence: number }): Promise<RuntimePoll>;
+    /** Consume one pane-originated OSC 52 write notification. This is not a clipboard read. */
+    takeClipboardNotification(input: { viewId: string }): Promise<RuntimeClipboardNotification | undefined>;
     input(input: { viewId: string; data: string }): Promise<void>;
     resize(input: { viewId: string; cols: number; rows: number }): Promise<void>;
     detach(viewId: string): Promise<void>;

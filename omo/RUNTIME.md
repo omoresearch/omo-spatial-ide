@@ -10,7 +10,8 @@ Codex tabs, served to the browser through the Theia backend service `OmoRuntimeS
 | --- | --- |
 | `extension/src/node/omo-backend-module.ts` | Theia backend module: binds `RpcConnectionHandler` on `OMO_RUNTIME_PATH`, one service per frontend connection, and a lifecycle contribution that stops the host with the backend. |
 | `extension/src/node/omo-runtime-service.ts` | Validates every RPC argument, turns the `projectUri` into a real directory, forwards to the host, detaches a connection's views when it closes. |
-| `extension/src/node/runtime-host.ts` | Starts and supervises `runtime/omo_spatial_host.py` over a JSON-lines stdio pipe. Restarts it on the next request after a crash (1 s back-off). |
+| `extension/src/node/runtime-host.ts` | Starts and supervises `runtime/omo_spatial_host.py` over a JSON-lines stdio pipe. Restarts it on the next request after a crash (1 s back-off). It passes the bounded cwd-record interval and never starts a provider. |
+| `extension/src/node/standalone-security.ts` | Additive parent hook for standalone HTTP and WebSocket Host/Origin loopback checks. Team mode skips this guard because team auth owns that boundary. |
 | `extension/src/node/runtime-discovery.ts` | Finds tmux and python3, picks the data dir and socket, and strips inherited variables. |
 | `runtime/omo_spatial_host.py` | Adapter on top of the vendored bridge: project working directory, station bindings, confirmation gates and frames. |
 | `runtime/bridge/` | The Omo Minecraft bridge, vendored unchanged. See `runtime/UPSTREAM.md`. |
@@ -52,9 +53,19 @@ RPC reply, log line or frame contains it.
 - `newTab` for `hermes`, `claude` or `codex` needs `confirmedStart: true`. A missing CLI is
   rejected with its install hint. Agent tabs start in the project directory. Hermes resumes the
   tab's own conversation (`-c omo:<ws>:<tab>`). Claude uses a session id taken from the tab.
+  Hermes starts, revives, explicit resumes and sleep wakes all enter the app-owned guarded exec
+  shim inside the tmux shell. The early Node/Python lease checks are only defence; the shim is
+  final authority. It denies absent, non-file, malformed, missing-table, read-only or unreservable
+  state, and active leases. It uses `BEGIN IMMEDIATE` on an existing `state.db`, validates every
+  row before expiry filtering, and holds the reservation through direct Hermes `Popen` exec
+  success. It then rolls back, so no expired row is reclaimed and no profile table is changed.
+  SQLite WAL/SHM sidecars can exist while the reservation is held. This is process-creation
+  linearization, not lifetime profile exclusivity. No unsupported missing-profile initialization
+  command is guessed.
 - `closeTab` needs `confirmedClose: true`. `reviveTab` needs `confirmedStart: true`.
-- `attach` never restores, wakes or starts anything. An interrupted tab must be revived first.
-  Auto-sleep is off (`OMO_SLEEP_AFTER=0`).
+- `attach` never restores or starts an interrupted agent. A sleeping Hermes tab is woken only after the
+  explicit idle-sleep authorization and profile-lease guard; otherwise attach is still read-only.
+  Auto-sleep is off by default.
 - `detach`, a closed browser connection, an idle view (not polled for 90 s) and a backend stop
   only remove the view's grouped tmux session and its client. Shells and agents keep running. The
   runtime never kills a tmux server.
@@ -68,6 +79,24 @@ RPC reply, log line or frame contains it.
   for readable text, without continuation placeholders. The browser uses cells for geometry and
   copying and falls back to legacy text only when metadata is absent. Invalid supplied rows fail
   closed. Missing cells in a new legacy frame clear old cell data instead of reusing it.
+- Every frame may also contain additive `truecolor.foreground` and `truecolor.background` arrays.
+  They are `rows × cols` exact sRGB CSS colours, including `#rrggbb` colours supplied by a terminal;
+  the legacy palette keys remain unchanged for old clients. Cursor coordinates are the same parser
+  cell coordinates as `cells`.
+- `attach` accepts optional `stationId`. Without it, views remain independent. With it, an explicit
+  attach steers all views for that workspace and station to the requested tab. Mirror views keep
+  their own requested dimensions. The response includes the selected `tabId` and optional station.
+- `takeClipboardNotification({viewId})` consumes one bounded OSC 52 write notification. The DTO is
+  `{viewId,text,chars,userGestureRequired:true,writeOnly:true}`. It is not a host clipboard read;
+  there is no OSC 52 query reply, raw input, synthetic Enter, or server clipboard permission request.
+- `setIdleSleep({authorized:true,afterSeconds})` is the explicit opt-in. The standalone host then
+  periodically records each live pane cwd and uses the bridge's guarded idle check. Draft text,
+  busy prompts, visible goals/questions/subagents, watched views and held Hermes turn leases refuse
+  sleep. A sleeping Hermes tab is woken only after the same lease check; unsafe resume fails visibly.
+  `authorized:false` turns it off. The default remains off.
+- `status` returns `limits` (`workspaces:128`, `tabsPerWorkspace:12`, `views:192`) and idle-sleep
+  metadata. Limits are enforced with a reservation lock for concurrent view attaches; max+1 is a
+  readable refusal and does not leak a view, workspace or tab.
 
 ## Commands
 
@@ -83,10 +112,15 @@ real bash and tmux, and fixture `hermes`/`claude` scripts that only record argv 
 agent or model is ever started. They need tmux and `/usr/bin/python3`, and skip honestly when
 these are missing.
 
+- Standalone HTTP and WebSocket requests use `StandaloneSecurity` with the same loopback Host and
+  same-authority Origin check. Missing, external, malformed, `null`, comma-separated and forwarded
+  authorities are refused. Team mode returns a delegation result and does not make public auth claims;
+  team token and host authorization remain the team stack's responsibility.
+
 ## Limits
 
-- Text frames carry 16-colour palette keys (the bridge's CC palette), not full truecolor. Bold and
-  underline show only as brighter colours.
+- Text frames carry 16-colour palette keys (the bridge's CC palette), not full truecolor. Clients that
+  understand the additive `truecolor` DTO can use exact sRGB values; old clients keep the palette.
 - Advanced copy, paste, find and scrollback are documented in `PARITY-ADVANCED.md`. Visible URL
   actions are frontend-only; the bridge's host-browser open and clipboard access stay unexposed.
 - Parser-authoritative cell rendering is not a promise of universal font coverage, emoji shaping,

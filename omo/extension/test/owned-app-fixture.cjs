@@ -38,6 +38,7 @@ async function ownedAppFixture(tag) {
         fs.writeFileSync(agentLog, '');
         fs.writeFileSync(path.join(project, 'README.md'), '# Owned spatial IDE test project\n');
         fs.writeFileSync(path.join(hermesRoot, 'profiles', 'default', 'config.yaml'), '# Fixture profile, never a real agent.\n');
+        initializeFixtureHermesState(hermesRoot);
         const recorder = `#!/usr/bin/python3
 import os, sys, json
 with open(${JSON.stringify(agentLog)}, 'a') as f:
@@ -69,4 +70,14 @@ for line in sys.stdin: pass
         return { owned, project, agentLog, env, dispose };
     } catch (error) { await dispose(); throw error; }
 }
-module.exports = { ownedAppFixture };
+function initializeFixtureHermesState(root) {
+    const stat = fs.lstatSync(root);
+    if (!path.isAbsolute(root) || !stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Expected an owned fixture root');
+    const database = path.join(root, 'state.db');
+    fs.closeSync(fs.openSync(database, 'wx', 0o600));
+    const result = spawnSync('/usr/bin/python3', ['-c',
+        'import sqlite3,sys\nc=sqlite3.connect(sys.argv[1])\nc.execute("CREATE TABLE session_turn_leases(conversation_id TEXT PRIMARY KEY, holder TEXT NOT NULL, acquired_at REAL NOT NULL, expires_at REAL NOT NULL)")\nc.commit()\nc.close()', database],
+        { encoding: 'utf8', timeout: 5000 });
+    if (result.status !== 0) throw new Error('Owned fixture lease schema initialization failed');
+}
+module.exports = { ownedAppFixture, initializeFixtureHermesState };

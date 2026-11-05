@@ -33,6 +33,12 @@ export class RuntimeHost {
         return this.child?.pid;
     }
 
+    /** Only the profile-location inputs; never expose the host's full environment. */
+    get hermesLeaseEnvironment(): NodeJS.ProcessEnv {
+        return { HOME: this.env.HOME, USERPROFILE: this.env.USERPROFILE,
+            OMO_SPATIAL_HERMES_ROOT: this.env.OMO_SPATIAL_HERMES_ROOT };
+    }
+
     async request<T>(op: string, args: object = {}): Promise<T> {
         await this.start();
         const child = this.child;
@@ -90,6 +96,9 @@ export class RuntimeHost {
         }
         if (this.env.OMO_SPATIAL_FAULT) {
             env.OMO_SPATIAL_FAULT = this.env.OMO_SPATIAL_FAULT;
+        }
+        if (this.env.OMO_SPATIAL_REMEMBER_EVERY) {
+            env.OMO_SPATIAL_REMEMBER_EVERY = this.env.OMO_SPATIAL_REMEMBER_EVERY;
         }
         const child = cp.spawn(python, ['-I', '-B', '-u', hostScript], { env, cwd: dataDir, stdio: ['pipe', 'pipe', 'pipe'] });
         this.child = child;

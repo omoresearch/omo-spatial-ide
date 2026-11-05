@@ -15,6 +15,11 @@ export function scopeTaskWorkspaceService(service: TaskWorkspaceService, current
             const result = await service.create(input);
             check(projectUri);
             return result;
+        },
+        async getTaskWorkspace(worktreeUri) {
+            const result = await service.getTaskWorkspace(worktreeUri);
+            if (result && !current(result.sourceProjectUri)) throw new Error('Task workspace context changed');
+            return result;
         }
     };
 }

@@ -32,12 +32,15 @@ test('the open drawer has board, find, scrollback, copy, paste, profile and keep
   const html = render(baseState({ board, find: { query: 'x', index: 1, count: 4 }, scrollOffset: 12 }), { initialDrawer: true });
   for (const id of ['runtime-manage', 'runtime-find-input', 'runtime-find-older', 'runtime-scroll-up', 'runtime-scroll-live', 'runtime-copy-screen',
     'runtime-paste-input', 'runtime-paste-send', 'runtime-clear-history', 'runtime-ws-profile', 'runtime-keep-awake', 'runtime-board',
-    'runtime-board-bind-ws-2', 'runtime-board-delete-ws-2', 'runtime-ws-rename', 'runtime-resume-t2']) {
+    'runtime-board-bind', 'runtime-board-delete', 'runtime-ws-rename', 'runtime-resume-t2']) {
     assert.match(html, new RegExp(`data-testid="${id}"`), `${id} is rendered`);
   }
   assert.match(html, /1 of 4/);
   assert.match(html, /12 lines back/);
-  assert.doesNotMatch(html, /runtime-board-bind-ws-1/, 'the current workspace is not offered for rebinding');
+  assert.doesNotMatch(html, /ws-1|ws-2/, 'workspace identifiers must not leak into board DOM');
+  assert.equal((html.match(/data-testid="runtime-board-bind"/g) || []).length, 1, 'only the other workspace can be bound');
+  assert.equal((html.match(/data-testid="runtime-board-delete"/g) || []).length, 1, 'only the other workspace has the row delete action');
+  assert.match(html, /aria-label="Show workspace Other room here"/);
   assert.doesNotMatch(html, /runtime-resume-t1/, 'shell tabs have no resume control');
 });
 

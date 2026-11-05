@@ -9,6 +9,7 @@ const h = require('./runtime-test-helpers.cjs');
 
 const s = h.scratch('extra');
 fs.mkdirSync(path.join(s.hermesRoot, 'profiles', 'beta'), { recursive: true });
+h.initializeFixtureHermesState(path.join(s.hermesRoot, 'profiles', 'beta'));
 const haveRuntime = !!(s.env.OMO_SPATIAL_TMUX && s.env.OMO_SPATIAL_PYTHON);
 const skip = haveRuntime ? false : 'tmux or python3 not available on this machine';
 let { host, service } = haveRuntime ? h.makeService(s) : {};

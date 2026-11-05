@@ -102,12 +102,14 @@ test('the Theia backend module binds OmoRuntimeService on OMO_RUNTIME_PATH over 
   const { Uint8ArrayWriteBuffer, Uint8ArrayReadBuffer } = require('@theia/core/lib/common/message-rpc/uint8-array-message-buffer');
   const { OMO_RUNTIME_PATH } = require(path.resolve(__dirname, '../lib/common/runtime-protocol.js'));
   const container = new Container();
-  container.load(h.lib('omo-backend-module').default);
+  const backendModule = h.lib('omo-backend-module');
+  container.load(backendModule.default);
   const handler = container.getAll(ConnectionHandler).find(c => c.path === OMO_RUNTIME_PATH);
   assert.ok(handler, 'a ConnectionHandler is bound on ' + OMO_RUNTIME_PATH);
   assert.equal(OMO_RUNTIME_PATH, '/services/omo-runtime');
-  const lifecycle = container.getAll(BackendApplicationContribution);
-  cleanup.push(() => lifecycle[0].host.stop());
+  const lifecycle = container.getAll(BackendApplicationContribution).find(item => item instanceof backendModule.OmoRuntimeLifecycle);
+  assert.ok(lifecycle, 'the exact runtime lifecycle is bound, independent of security contribution order');
+  cleanup.push(() => lifecycle.onStop());
   // An in-memory pipe between a "frontend" proxy and the backend handler: Theia's real RPC encoding.
   let left, right;
   const writer = target => () => {

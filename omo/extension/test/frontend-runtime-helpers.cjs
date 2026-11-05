@@ -73,6 +73,7 @@ class FakeRuntime {
     if (typeof next === 'function') return next(input);
     return next ?? { state: 'live' };
   }
+  async takeClipboardNotification(input) { this.record('takeClipboardNotification', input); return undefined; }
   async input(input) { this.record('input', input); }
   async resize(input) { this.record('resize', input); }
   async detach(viewId) { this.record('detach', viewId); }

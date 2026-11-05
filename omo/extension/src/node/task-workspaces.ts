@@ -247,11 +247,12 @@ async function runGit(projectDir: string, command: readonly string[], allowedExi
     ]);
 }
 
-/** TypeScript private methods are not an RPC allowlist. Expose only this facade. */
+/** TypeScript private methods are not an RPC allowlist. Expose exactly these three methods. */
 export function taskWorkspaceConnection(backend: TaskWorkspaceService): TaskWorkspaceService {
     return Object.freeze(Object.assign(Object.create(null), {
         list: (projectUri: string) => backend.list(projectUri),
-        create: (input: { projectUri: string; name: string; confirmedCreate: boolean }) => backend.create(input)
+        create: (input: { projectUri: string; name: string; confirmedCreate: boolean }) => backend.create(input),
+        getTaskWorkspace: (worktreeUri: string) => backend.getTaskWorkspace(worktreeUri)
     }));
 }
 
@@ -387,6 +388,27 @@ export class TaskWorkspaceBackend implements TaskWorkspaceService {
                 .filter(workspace => workspace.sourceProjectUri === project.uri)
                 .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
                 .map(workspace => ({ ...workspace }));
+        });
+    }
+
+    async getTaskWorkspace(worktreeUri: string): Promise<TaskWorkspace | undefined> {
+        if (typeof worktreeUri !== 'string' || worktreeUri.length === 0 || worktreeUri.length > 4096 || CONTROL_RE.test(worktreeUri)) {
+            throw new Error('worktreeUri must be a canonical file:// URI');
+        }
+        let canonicalUri: string;
+        try {
+            const directory = fileURLToPath(worktreeUri);
+            if (!path.isAbsolute(directory) || pathToFileURL(directory).href !== worktreeUri) throw new Error();
+            if (fs.realpathSync(directory) !== directory || !fs.statSync(directory).isDirectory()) throw new Error();
+            canonicalUri = worktreeUri;
+        } catch {
+            throw new Error('worktreeUri must be an existing canonical directory');
+        }
+        return this.exclusive(async () => {
+            const manifest = this.readManifest();
+            this.verifyWorktreeDirectories(manifest);
+            const workspace = manifest.workspaces.find(item => item.worktreeUri === canonicalUri);
+            return workspace ? { ...workspace } : undefined;
         });
     }
 

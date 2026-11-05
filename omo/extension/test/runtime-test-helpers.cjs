@@ -31,6 +31,8 @@ const PYTHON = locatePython();
 function findTmux() { return TMUX; }
 function findPython() { return PYTHON; }
 
+const { initializeFixtureHermesState } = require('./owned-app-fixture.cjs');
+
 const FIXTURE = `#!/bin/sh
 # Fixture agent: records argv and cwd, then waits. Never calls a model.
 log="$FIXTURE_AGENT_LOG"
@@ -50,6 +52,8 @@ function scratch(label = 'rt') {
     fs.mkdirSync(d, { recursive: true });
   }
   fs.writeFileSync(path.join(hermesRoot, 'profiles', 'alpha', 'config.yaml'), 'secret: never-read\n');
+  initializeFixtureHermesState(hermesRoot);
+  initializeFixtureHermesState(path.join(hermesRoot, 'profiles', 'alpha'));
   const log = path.join(root, 'agents.log');
   fs.writeFileSync(log, '');
   for (const name of ['hermes', 'claude']) {
@@ -111,4 +115,4 @@ function agentLog(s) {
   return fs.readFileSync(s.log, 'utf8').split('\n').filter(Boolean).map(l => l.split('\t'));
 }
 
-module.exports = { lib, scratch, makeService, pollUntil, agentLog, killScratchServer, tmux, findTmux, findPython };
+module.exports = { lib, scratch, makeService, pollUntil, agentLog, killScratchServer, tmux, findTmux, findPython, initializeFixtureHermesState };

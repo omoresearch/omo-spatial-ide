@@ -58,16 +58,36 @@ test.after(() => {
   for (const root of roots) fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('RPC facade exposes only the confirmed create and scoped list methods', async () => {
+test('RPC facade exposes only the exact three read/create/lookup methods', async () => {
   const s = makeRepo('rpc');
   const api = taskWorkspaceConnection(s.backend());
   assert.equal(Object.getPrototypeOf(api), null);
-  assert.deepEqual(Object.keys(api).sort(), ['create', 'list']);
+  assert.deepEqual(Object.keys(api).sort(), ['create', 'getTaskWorkspace', 'list']);
   assert.ok(Object.isFrozen(api));
   for (const name of ['writeManifest', 'readManifest', 'initialiseState', 'repository', 'constructor']) assert.equal(name in api, false);
   await assert.rejects(api.create({ projectUri: s.uri, name: 'No confirmation', confirmedCreate: false }), /confirmed create/);
   const created = await api.create({ projectUri: s.uri, name: 'Confirmed', confirmedCreate: true });
   assert.deepEqual(await api.list(s.uri), [created]);
+  assert.deepEqual(await api.getTaskWorkspace(created.worktreeUri), created);
+});
+
+test('lookup is registered, canonical and read-only; unknown worktrees return undefined', async () => {
+  const s = makeRepo('lookup');
+  const workspace = await s.backend().create({ projectUri: s.uri, name: 'Lookup', confirmedCreate: true });
+  assert.deepEqual(await s.backend().getTaskWorkspace(workspace.worktreeUri), workspace);
+  assert.equal(await s.backend().getTaskWorkspace(pathToFileURL(path.join(s.root, 'not-registered')).href).catch(error => {
+    assert.match(error.message, /existing canonical directory/);
+    return 'refused';
+  }), 'refused');
+  const outsider = path.join(s.root, 'outsider');
+  fs.mkdirSync(outsider);
+  assert.equal(await s.backend().getTaskWorkspace(pathToFileURL(outsider).href), undefined);
+  const regular = path.join(s.root, 'regular-file');
+  fs.writeFileSync(regular, 'not a worktree directory');
+  await assert.rejects(s.backend().getTaskWorkspace(pathToFileURL(regular).href), /existing canonical directory/);
+  const alias = path.join(s.root, 'worktree-alias');
+  fs.symlinkSync(fileURLToPath(workspace.worktreeUri), alias, 'dir');
+  await assert.rejects(s.backend().getTaskWorkspace(pathToFileURL(alias).href), /canonical directory/);
 });
 
 test('creates a confirmed persisted worktree from captured HEAD and records dirty-source warning', async () => {

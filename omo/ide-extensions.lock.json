@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "vscodeApi": "1.108.2",
+  "exclude": [
+    "ms-vscode.js-debug-companion",
+    "vscode.extension-editing",
+    "ms-python.vscode-pylance"
+  ],
+  "assets": [
+    {
+      "id": "vscode-builtin-extensions",
+      "version": "1.108.2",
+      "format": "tar",
+      "url": "https://github.com/eclipse-theia/vscode-builtin-extensions/releases/download/1.108.2/vscode-builtin-extensions-1.108.2.tar.gz",
+      "sha256": "05a20cf3e671c8d328b04d9ce72b25688b0e762e4a3f5592f31a21ee38280367",
+      "maxBytes": 50000000
+    },
+    {
+      "id": "ms-python.python",
+      "version": "2026.2.0",
+      "format": "vsix",
+      "url": "https://open-vsx.org/api/ms-python/python/2026.2.0/file/ms-python.python-2026.2.0.vsix",
+      "sha256": "f958e2df01d4eb4cdd4455728afd0576c0de9a8bd892e1a5e2603f612d1004f6",
+      "maxBytes": 80000000
+    },
+    {
+      "id": "ms-pyright.pyright",
+      "version": "1.1.402",
+      "format": "vsix",
+      "url": "https://open-vsx.org/api/ms-pyright/pyright/1.1.402/file/ms-pyright.pyright-1.1.402.vsix",
+      "sha256": "7ffa5a8649fa800b282c25ad70ce290367e036238d52727da7cdcac3d57439e9",
+      "maxBytes": 80000000
+    },
+    {
+      "id": "ms-python.debugpy",
+      "version": "2026.6.0",
+      "format": "vsix",
+      "url": "https://open-vsx.org/api/ms-python/debugpy/linux-x64/2026.6.0/file/ms-python.debugpy-2026.6.0@linux-x64.vsix",
+      "sha256": "c7744af4bf72978f5792624a71c80e2b622a1118574fada3a903d70ac03d5bca",
+      "maxBytes": 80000000,
+      "platform": "linux-x64"
+    }
+  ]
+}

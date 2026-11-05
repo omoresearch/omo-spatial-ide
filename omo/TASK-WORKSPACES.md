@@ -8,13 +8,15 @@ The backend is registered on:
 
 `/services/omo-task-workspaces`
 
-The RPC target is a frozen, null-prototype facade exposing only `list` and
-`create`, not the backend class or its TypeScript-private manifest helpers.
+The RPC target is a frozen, null-prototype facade exposing exactly `list`,
+`create` and `getTaskWorkspace`. It does not expose the backend class or its
+TypeScript-private manifest helpers.
 
 The protocol exports `TaskWorkspaceService` and provides:
 
 - `list(projectUri)`
 - `create({ projectUri, name, confirmedCreate })`
+- `getTaskWorkspace(worktreeUri)`
 
 A returned task workspace contains its server-generated id, canonical source URI,
 worktree URI, `omo/task/<id>` branch, captured base HEAD, display name, UTC
@@ -73,6 +75,14 @@ This backend has no APIs for delete, apply, start, merge, reset, force, stage,
 commit, remove, provider access, network access, or automatic runtime/agent/
 browser starts.
 
+`getTaskWorkspace(worktreeUri)` is read-only continuation authority. It accepts
+only an existing canonical `file://` directory, requires that the argument is
+exactly the canonical URI, validates the manifest and every registered
+worktree, and returns a copied manifest record only when that exact URI is
+registered. Unknown or symlink/non-canonical paths are refused or return
+`undefined`; the method never searches arbitrary paths or starts, promotes or
+deletes a worktree.
+
 ## Source test evidence
 
 The source test is:
@@ -114,8 +124,8 @@ Commands run in this worktree:
 - Green: `node --test extension/test/task-workspaces.test.cjs` returned 11
   passing, 0 failing, 0 skipped.
 
-No fetch, remote helper, login, build, install, browser, service, provider,
-agent, commit, or push was run.
+No fetch, remote helper, login, build, install, browser, service, provider, agent,
+implementation-worktree commit, or push was run.
 
 ## Frontend and actual-page checks
 

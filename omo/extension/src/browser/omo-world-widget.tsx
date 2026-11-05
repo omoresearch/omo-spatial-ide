@@ -9,9 +9,10 @@ import URI from '@theia/core/lib/common/uri';
 import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame, CodeReviewFrame } from './room-scene';
 import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
 import { exportRoomPreset, parseRoomPreset, ROOM_PRESET_FILENAME, ROOM_PRESET_MAX_BYTES } from '../common/room-preset';
-import { ROOM_LAYOUTS } from '../common/player-state';
-import type { RoomLayoutId } from '../common/player-state';
+import { ROOM_LAYOUTS, ROOM_KITS } from '../common/player-state';
+import type { RoomLayoutId, RoomKitId, PlayerPose } from '../common/player-state';
 import { OmoRuntimeService } from '../common/runtime-protocol';
+import type { RuntimeFrame } from '../common/runtime-protocol';
 import { RuntimeConsoleController, RuntimeConsoleState, StationBinding } from './runtime-console-controller';
 import { RuntimeConsoleStrip } from './runtime-console-strip';
 import { OmoWebService, WebSurfaceFrame } from '../common/web-runtime-protocol';
@@ -30,6 +31,13 @@ import { TaskOverviewPanel } from './task-overview-panel';
 import { TaskWorkspaceService } from '../common/task-workspace-protocol';
 import { TaskWorkspacePanel } from './task-workspace-panel';
 import { scopeTaskWorkspaceService } from './task-workspace-controller';
+import { AgentWorkflowPanel } from './agent-workflow-panel';
+import type { TaskWorkspaceAuthority } from './task-handoff';
+import { readStationRecipes, writeStationRecipes, makeStationRecipe } from './station-recipe';
+import type { StationRecipe } from './station-recipe';
+import { StationRecipePanel } from './station-recipe-panel';
+import { defaultStationLink, readStationLink, writeStationLink, webWallDistance } from './station-link';
+import type { StationLink } from './station-link';
 
 export const TERMINAL_STATION_ID = 'terminal-1';
 const TERMINAL_STATIONS: TerminalWorkstation[] = ['terminal', 'terminal-2'];
@@ -40,7 +48,7 @@ const THEMES = {
     jungle: { title: 'Prehistoric jungle', eyebrow: 'EXPEDITION / 02', description: 'A green retreat. Room to think, space to build.', symbol: '✳' }
 };
 
-function SceneView(props: { theme: RoomTheme; layout: RoomLayoutId; camera: RoomState['camera']; onSelect: (station: Workstation, point?: ScreenPoint) => void; onTextSelect: (station: TerminalWorkstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrames: Record<TerminalWorkstation, MonitorFrame>; webFrame?: WebSurfaceFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onPaste: (text: string) => void; onScroll?: (delta: number) => void; onMessage: (text: string) => void }): React.ReactElement {
+function SceneView(props: { theme: RoomTheme; layout: RoomLayoutId; kit: RoomKitId; camera: RoomState['camera']; onSelect: (station: Workstation, point?: ScreenPoint) => void; onTextSelect: (station: TerminalWorkstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrames: Record<TerminalWorkstation, MonitorFrame>; webFrame?: WebSurfaceFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onPaste: (text: string) => void; onScroll?: (delta: number) => void; onMessage: (text: string) => void; onShortcut?: (shortcut: 'new-shell' | 'select-tab-2' | 'workspace-picker') => void; onOpenLink?: (url: string) => void; onPose?: (pose: PlayerPose) => void }): React.ReactElement {
     const host = React.useRef<HTMLDivElement>(null);
     const instance = React.useRef<RoomScene>();
     const callbacks = React.useRef(props); callbacks.current = props;
@@ -54,14 +62,15 @@ function SceneView(props: { theme: RoomTheme; layout: RoomLayoutId; camera: Room
     React.useEffect(() => {
         if (!host.current) return;
         setError(''); setReady(false);
-        const scene = new RoomScene(host.current, { theme: props.theme, layout: props.layout, camera: props.camera, walk: mode==='walk',
+        const scene = new RoomScene(host.current, { theme: props.theme, layout: props.layout, kit: props.kit, camera: props.camera, walk: mode==='walk',
             onInput: text=>callbacks.current.onInput(text),onPaste:text=>callbacks.current.onPaste(text),onScroll:delta=>callbacks.current.onScroll?.(delta),onMessage:text=>callbacks.current.onMessage(text),
+            onShortcut: shortcut=>callbacks.current.onShortcut?.(shortcut), onOpenLink:url=>callbacks.current.onOpenLink?.(url), onPose:pose=>callbacks.current.onPose?.(pose),
             onSelect: (action,point) => callbacks.current.onSelect(action,point), onCameraChange: camera => callbacks.current.onCamera(camera),
             onTextSelect: station => callbacks.current.onTextSelect(station),
             onReady: () => setReady(true), onError: message => setError(message) });
         instance.current = scene;scene.setTerminalFrames(callbacks.current.terminalFrames);if(callbacks.current.webFrame)scene.setWebFrame(callbacks.current.webFrame);callbacks.current.onInstance?.(scene);
         return () => { scene.dispose(); instance.current = undefined; callbacks.current.onInstance?.(undefined); };
-    }, [props.theme, props.layout]);
+    }, [props.theme, props.layout, props.kit]);
     return <div className={`omo-scene-wrap ${mode==='walk'?'omo-walking':''}`} data-theme={props.theme} data-navigation={mode}>
         <div ref={host} className="omo-scene" data-testid="omo-scene" data-ready={ready ? 'true' : 'false'} />
         {error && <div className="omo-render-error" role="alert"><strong>3D rendering could not start.</strong><p>{error}</p><p>The project terminal and editor are still available from the toolbar.</p></div>}
@@ -90,6 +99,7 @@ export class OmoWorldWidget extends ReactWidget {
     private room?: RoomState;
     private draftTheme: RoomTheme = 'station';
     private draftLayout: RoomLayoutId = 'classic';
+    private draftKit: RoomKitId = 'hermes-desk';
     private draftName = '';
     private draftCamera?: RoomState['camera'];
     private presetRevision = 0;
@@ -108,9 +118,14 @@ export class OmoWorldWidget extends ReactWidget {
     private activeStation: TerminalWorkstation = 'terminal';
     private activeMode: Workstation = 'terminal';
     private monitors: Record<TerminalWorkstation, MonitorFrame> = { terminal: { lines: [] }, 'terminal-2': { lines: [] } };
+    private mirrorMonitor?: MonitorFrame;
+    private mirrorAttached = false;
+    private mirrorAttaching = false;
     private web?: WebSurfaceController;
-    private webState: WebWallState = { phase: 'idle', error: '' };
+    private webState: WebWallState = { phase: 'idle', error: '', baseVolume: 1, distance: 0, gain: 1 };
     private savedWebUrl = '';
+    private savedWebAudio = { muted: false, baseVolume: 1 };
+    private webAudioApplied = false;
     private worldScene?: RoomScene;
     private presence?: PresenceController;
     private presenceState:PresenceState={phase:'solo',error:''};
@@ -121,13 +136,17 @@ export class OmoWorldWidget extends ReactWidget {
     private reviewOpen=false;
     private taskOverviewOpen=false;
     private taskWorkspacesOpen=false;
+    private taskWorkflowOpen=false;
+    private recipeOpen=false;
+    private recipes: StationRecipe[]=[];
+    private stationLink: StationLink=defaultStationLink();
     private taskWorkspaceUiService!:TaskWorkspaceService;
     private reviewRequest=0;
     private codeReviewFrame?:CodeReviewFrame;
 
     @postConstruct()
     protected init(): void {
-        this.taskWorkspaceUiService=scopeTaskWorkspaceService(this.taskWorkspaceService,uri=>this.taskWorkspacesOpen&&this.project?.toString()===uri);
+        this.taskWorkspaceUiService=scopeTaskWorkspaceService(this.taskWorkspaceService,uri=>this.project?.toString()===uri&&(this.taskWorkspacesOpen||this.taskWorkflowOpen));
         this.id = OmoWorldWidget.ID; this.title.label = 'World'; this.title.caption = 'Omo · Your spatial workspace';
         this.title.closable = false; this.title.iconClass = 'codicon codicon-globe';
         this.addClass('omo-world-widget'); this.node.tabIndex = -1;
@@ -143,10 +162,10 @@ export class OmoWorldWidget extends ReactWidget {
             }
             this.update();
         });
-        this.toDispose.push({dispose:()=>{this.reviewRequest++;this.reviewOpen=false;this.taskOverviewOpen=false;this.taskWorkspacesOpen=false;this.review?.close();}});
+        this.toDispose.push({dispose:()=>{this.reviewRequest++;this.reviewOpen=false;this.taskOverviewOpen=false;this.taskWorkspacesOpen=false;this.taskWorkflowOpen=false;this.review?.close();}});
         for (const station of TERMINAL_STATIONS) this.consoles.set(station, new RuntimeConsoleController({ service: this.runtime, storage: safeStorage(),
             schedule: (fn, ms) => window.setTimeout(fn, ms), cancel: handle => window.clearTimeout(handle as number),
-            onChange: state => this.consoleChanged(state, station) }));
+            onChange: state => this.consoleChanged(state, station), onMirrorFrame: frame => { this.mirrorMonitor = frame ? this.toMonitorFrame(frame, station) : undefined; if (!frame) this.mirrorAttached = false; this.worldScene?.setMirrorFrame(this.mirrorMonitor); }, onMirrorError: message => { this.feedback = message; this.update(); } }));
         this.console = this.consoles.get(this.activeStation);
         this.web = new WebSurfaceController({ service: this.webRuntime, schedule: (fn, ms) => window.setTimeout(fn, ms), cancel: handle => window.clearTimeout(handle as number), onChange: state => this.webChanged(state) });
         // Detach only: the runtime keeps every tab and process running.
@@ -159,13 +178,14 @@ export class OmoWorldWidget extends ReactWidget {
         const roots = await this.workspace.roots;
         this.project = roots[0]?.resource;
         this.readWebBinding();
+        this.readStationSettings();
         this.draftName = this.project?.path.base || 'My workspace';
         if (this.project) {
             try {
                 const raw = localStorage.getItem(this.storageKey());
                 this.room = parseRoomState(raw, this.project.toString());
                 if (raw && !this.room) this.feedback = 'Saved room settings could not be read. Choose a theme to recreate this project’s room.';
-                if (this.room) { this.draftTheme = this.room.theme; this.draftLayout = this.room.layout ?? 'classic'; this.draftName = this.room.projectName; this.configuring = false; }
+                if (this.room) { this.draftTheme = this.room.theme; this.draftLayout = this.room.layout ?? 'classic'; this.draftKit = this.room.kit ?? 'hermes-desk'; this.draftName = this.room.projectName; this.configuring = false; }
             } catch { this.error = 'Browser storage is unavailable. Allow local storage to save your room.'; }
         }
         this.initialized = true; this.update();
@@ -200,44 +220,79 @@ export class OmoWorldWidget extends ReactWidget {
         this.invalidatePresetRead(); this.draftCamera = undefined; this.presetStatus = '';
         this.taskOverviewOpen=false;
         this.taskWorkspacesOpen=false;
-        this.closeReview();this.codeReviewFrame=undefined;this.worldScene?.setCodeReview({title:'PROJECT CHANGES',lines:['Open review for the selected project.'],status:'No Git contents read yet'});
+        this.closeReview();
+        this.taskWorkflowOpen=false;this.codeReviewFrame=undefined;this.worldScene?.setCodeReview({title:'PROJECT CHANGES',lines:['Open review for the selected project.'],status:'No Git contents read yet'});
         this.leavePresence();this.personalRoom=undefined;
         this.project = next;
         this.readWebBinding();
-        this.room = undefined; this.configuring = true; this.draftLayout = 'classic'; this.draftName = next?.path.base || 'My workspace';
+        this.readStationSettings();
+        this.room = undefined; this.configuring = true; this.draftLayout = 'classic'; this.draftKit = 'hermes-desk'; this.draftName = next?.path.base || 'My workspace';
         if (next) {
             try {
                 this.room = parseRoomState(localStorage.getItem(this.storageKey()), next.toString());
-                if (this.room) { this.draftTheme = this.room.theme; this.draftLayout = this.room.layout ?? 'classic'; this.draftName = this.room.projectName; this.configuring = false; }
+                if (this.room) { this.draftTheme = this.room.theme; this.draftLayout = this.room.layout ?? 'classic'; this.draftKit = this.room.kit ?? 'hermes-desk'; this.draftName = this.room.projectName; this.configuring = false; }
             } catch { /* storage errors were reported at start-up */ }
         }
         void this.web?.close();
         for (const station of TERMINAL_STATIONS) { const binding = this.binding(station); if (binding) void this.consoles.get(station)?.reconnect(binding); else this.consoles.get(station)?.release(); }
         this.update();
     }
+    private readStationSettings(): void {
+        this.recipes = this.project ? readStationRecipes(safeStorage(), this.project.toString()) : [];
+        this.stationLink = this.project ? (readStationLink(safeStorage(), this.project.toString()) ?? defaultStationLink()) : defaultStationLink();
+    }
     private readWebBinding(): void {
         this.savedWebUrl = '';
+        this.savedWebAudio = { muted: false, baseVolume: 1 };
+        this.webAudioApplied = false;
         if (!this.project) return;
-        try { const data = JSON.parse(localStorage.getItem(`omo.webwall.v1:${this.project}`) || 'null'); if (typeof data?.url === 'string' && /^https?:\/\//.test(data.url)) this.savedWebUrl = data.url; } catch { /* a bad local binding is not permission to browse */ }
+        try { const data = JSON.parse(localStorage.getItem(`omo.webwall.v1:${this.project}`) || 'null'); if (typeof data?.url === 'string' && /^https?:\/\//.test(data.url)) this.savedWebUrl = data.url; if (typeof data?.muted === 'boolean' && typeof data?.baseVolume === 'number' && data.baseVolume >= 0 && data.baseVolume <= 1) this.savedWebAudio = { muted: data.muted, baseVolume: data.baseVolume }; } catch { /* a bad local binding is not permission to browse */ }
     }
     private webChanged(state: WebWallState): void {
         this.webState = state;
+        if (!state.surface) this.webAudioApplied = false;
+        if (state.surface && !this.webAudioApplied) {
+            this.webAudioApplied = true;
+            void this.web?.setAudio(this.savedWebAudio.muted, this.savedWebAudio.baseVolume);
+        }
         const url = state.surface?.url;
         if (this.project && url && /^https?:\/\//.test(url) && url !== this.savedWebUrl) {
             this.savedWebUrl = url;
-            try { localStorage.setItem(`omo.webwall.v1:${this.project}`, JSON.stringify({ url })); } catch { this.feedback = 'The web address could not be saved on this device.'; }
+        }
+        if (this.project && state.surface) {
+            const prefs = this.web?.audioPreferences ?? { muted: state.surface.muted, baseVolume: state.baseVolume ?? state.surface.volume };
+            this.savedWebAudio = prefs;
+            try { localStorage.setItem(`omo.webwall.v1:${this.project}`, JSON.stringify({ url: this.savedWebUrl || state.surface.url, muted: prefs.muted, baseVolume: prefs.baseVolume })); } catch { this.feedback = 'The web preferences could not be saved on this device.'; }
         }
         this.update();
     }
+    private toMonitorFrame(frame: RuntimeFrame, station: TerminalWorkstation): MonitorFrame {
+        const state = this.consoleStates[station];
+        const tab = state.workspace?.tabs.find(candidate => candidate.id === state.activeTabId);
+        return { lines: frame.lines, cells: frame.cells, foreground: frame.foreground, background: frame.background, truecolor: frame.truecolor, palette: frame.palette, cursor: frame.cursor,
+            unreadBells: 0, title: state.workspace ? `${state.workspace.name} / ${tab?.name ?? 'Mirror'}` : 'Linked monitor', status: tab?.busy ? 'Process active' : tab?.state === 'interrupted' ? 'interrupted' : 'live' };
+    }
     private consoleChanged(state: RuntimeConsoleState, station: TerminalWorkstation): void {
         const old = this.consoleStates[station];
-        const framed = state.lines !== old.lines || state.cursor !== old.cursor || state.statusText !== old.statusText || state.workspace !== old.workspace || state.activeTabId !== old.activeTabId || state.unreadBells !== old.unreadBells;
+        const framed = state.lines !== old.lines || state.cursor !== old.cursor || state.truecolor !== old.truecolor || state.statusText !== old.statusText || state.workspace !== old.workspace || state.activeTabId !== old.activeTabId || state.unreadBells !== old.unreadBells;
         this.consoleStates[station] = state;
+        if (state.phase === 'live' && station === this.stationLink.targetStationId && !this.mirrorAttached && !this.mirrorAttaching) {
+            // attachMirror clears its old frame synchronously. That is not a
+            // disconnect and must not allow the next poll to start another attach.
+            this.mirrorAttaching = true;
+            void this.consoles.get(station)?.attachMirror(this.binding(station)?.stationId).then(ok => {
+                if (station !== this.stationLink.targetStationId) {
+                    this.consoles.get(station)?.detachMirror();
+                    this.mirrorAttached = false;
+                } else this.mirrorAttached = ok;
+                this.mirrorAttaching = false;
+            }, () => { this.mirrorAttached = false; this.mirrorAttaching = false; });
+        }
         if (station === this.activeStation) this.consoleState = state;
         if (framed) {
             const tab = state.workspace?.tabs.find(t => t.id === state.activeTabId);
-            this.monitors = { ...this.monitors, [station]: { lines: state.lines, cells: state.cells, unreadBells: state.unreadBells, foreground: state.foreground, background: state.background, palette: state.palette, cursor: state.cursor,
-                title: tab ? `${state.workspace?.name ?? 'OMO'} / ${tab.name}` : undefined, status: state.phase === 'live' && tab?.state === 'running' ? (tab.busy ? 'working' : 'live') : (tab && tab.state !== 'running' ? tab.state : state.statusText) } };
+            this.monitors = { ...this.monitors, [station]: { lines: state.lines, cells: state.cells, unreadBells: state.unreadBells, foreground: state.foreground, background: state.background, truecolor: state.truecolor, palette: state.palette, cursor: state.cursor,
+                title: tab ? `${state.workspace?.name ?? 'OMO'} / ${tab.name}` : undefined, status: state.phase === 'live' && tab?.state === 'running' ? (tab.busy ? 'Process active' : 'live') : (tab && tab.state !== 'running' ? tab.state : state.statusText) } };
         }
         this.update();
     }
@@ -248,7 +303,7 @@ export class OmoWorldWidget extends ReactWidget {
     private createRoom = (): void => {
         if (!this.project || !this.draftName.trim() || this.presetLoading) return;
         this.invalidatePresetRead();
-        const next: RoomState = { version: 1, theme: this.draftTheme, layout: this.draftLayout, projectUri: this.project.toString(),
+        const next: RoomState = { version: 1, theme: this.draftTheme, layout: this.draftLayout, kit: this.draftKit, projectUri: this.project.toString(),
             projectName: this.draftName.trim().slice(0, 120), camera: { ...(this.draftCamera ?? this.room?.camera ?? CAMERA) } };
         if (!this.save(next)) return;
         this.room = next; this.configuring = false; this.feedback = 'Room saved on this device.'; this.update();
@@ -264,9 +319,40 @@ export class OmoWorldWidget extends ReactWidget {
         if (station !== 'web') { this.activeStation = station; this.console = this.consoles.get(station); this.consoleState = this.consoleStates[station]; }
         this.update();
     };
+    private saveStationRecipe = (input: Omit<StationRecipe, 'version' | 'id'>): void => {
+        if (!this.project) return;
+        try {
+            const recipe = makeStationRecipe(input);
+            const next = [...this.recipes.filter(existing => existing.id !== recipe.id), recipe];
+            if (!writeStationRecipes(safeStorage(), this.project.toString(), next)) throw new Error('The recipe is too large or storage is unavailable.');
+            this.recipes = next; this.feedback = 'Recipe saved. Saving did not launch a tab.'; this.update();
+        } catch (error) { this.error = error instanceof Error ? error.message : String(error); this.update(); }
+    };
+    private deleteStationRecipe = (recipe: StationRecipe): void => { if (!this.project) return; const next = this.recipes.filter(item => item.id !== recipe.id); if (writeStationRecipes(safeStorage(), this.project.toString(), next)) { this.recipes = next; this.update(); } };
+    private applyStationRecipe = (recipe: StationRecipe): void => { this.chooseStation(recipe.stationId); this.consoles.get(recipe.stationId)?.requestRecipeApply(recipe); this.recipeOpen = false; this.update(); };
+    private linkMirror = (targetStationId: 'terminal' | 'terminal-2'): void => {
+        if (!this.project) return;
+        const next: StationLink = { version: 1, mirrorId: 'monitor-mirror', targetStationId };
+        if (!writeStationLink(safeStorage(), this.project.toString(), next)) { this.error = 'The mirror link could not be saved.'; this.update(); return; }
+        this.stationLink = next; void this.consoles.get(targetStationId)?.attachMirror(this.binding(targetStationId)?.stationId); this.feedback = `Mirror linked to ${targetStationId === 'terminal' ? 'Desk one' : 'Desk two'}.`; this.update();
+    };
+    private monitorShortcut = (shortcut: 'new-shell' | 'select-tab-2' | 'workspace-picker'): void => {
+        if (shortcut === 'new-shell') void this.console?.requestNewTab('shell');
+        else if (shortcut === 'select-tab-2') { const tab = this.consoleState.workspace?.tabs[1]; if (tab) void this.console?.selectTab(tab.id); else { this.feedback = 'There is no second tab on this desk yet.'; this.update(); } }
+        else { this.console?.refreshBoard(); this.feedback = 'Workspace picker opened in Manage. No shell input was sent.'; this.update(); }
+    };
+    private poseChanged = (pose: PlayerPose): void => { void this.web?.setDistance(webWallDistance(pose)); };
+
     private selectStation = (station: Workstation, point?: ScreenPoint): void => {
         if (this.configuring) { this.feedback = 'Create your room first, then select a workstation.'; this.update(); return; }
         if (station === 'code') { void this.runAction(() => this.openCode()); return; }
+        if (station === 'mirror') {
+            const target = this.stationLink.targetStationId;
+            this.chooseStation(target);
+            const controller = this.consoles.get(target);
+            void controller?.attachMirror(this.binding(target)?.stationId).then(ok => { this.feedback = ok ? `Mirror follows ${target === 'terminal' ? 'Desk one' : 'Desk two'} · same station, independent view size.` : 'Mirror is not attached yet. Open the linked desk first.'; this.update(); });
+            return;
+        }
         this.chooseStation(station);
         if (station === 'web') {
             if (point && this.webState.surface) void this.web?.click(point);
@@ -332,6 +418,28 @@ export class OmoWorldWidget extends ReactWidget {
         this.taskOverviewOpen=false;this.taskWorkspacesOpen=true;this.update();
     };
     private closeTaskWorkspaces=():void=>{this.taskWorkspacesOpen=false;this.update();};
+    private openAgentWorkflow=():void=>{
+        if(!this.project||!this.room||this.activeMode==='web')return;
+        this.worldScene?.releaseTyping();
+        ++this.reviewRequest;this.reviewOpen=false;this.taskOverviewOpen=false;this.taskWorkspacesOpen=false;
+        this.taskWorkflowOpen=true;this.update();
+    };
+    private closeAgentWorkflow=():void=>{this.taskWorkflowOpen=false;this.update();};
+    private continueAgentWorkflowDesk=async(stationId:string):Promise<void>=>{
+        if(!this.project||!this.room||!this.taskWorkflowOpen)throw new Error('The agent task page is not active.');
+        const station=TERMINAL_STATIONS.find(candidate=>this.binding(candidate)?.stationId===stationId);
+        if(!station)throw new Error('The saved desk is not available in this room.');
+        this.chooseStation(station);
+        await this.openTerminal(station);
+    };
+    private openAgentWorkflowProject=async(uri:string,expectedSourceUri:string|undefined):Promise<void>=>{
+        if(!expectedSourceUri||!this.taskWorkflowOpen||this.project?.toString()!==expectedSourceUri)return;
+        const authority=this.taskWorkspaceUiService as TaskWorkspaceAuthority;
+        const receipt=await authority.getTaskWorkspace(uri);
+        if(!receipt||receipt.sourceProjectUri!==expectedSourceUri||receipt.worktreeUri!==uri)throw new Error('The registered task workspace did not match the open request.');
+        this.taskWorkflowOpen=false;this.update();
+        await this.workspace.open(new URI(uri),{preserveWindow:true});
+    };
     private openTaskProject=async(uri:string,expectedSourceUri:string|undefined):Promise<void>=>{
         if(!expectedSourceUri||!this.taskWorkspacesOpen||this.project?.toString()!==expectedSourceUri)return;
         this.closeWorkspacePanels();
@@ -394,7 +502,7 @@ export class OmoWorldWidget extends ReactWidget {
         } catch { this.error = 'Those saved appearance settings could not be exported.'; this.update(); }
     };
     private cancelConfiguration = (): void => { this.invalidatePresetRead(); this.presetRevision++; this.presetStatus = ''; this.error = ''; this.configuring = false; this.update(); };
-    private configure = (): void => { this.invalidatePresetRead(); this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
+    private configure = (): void => { this.invalidatePresetRead(); this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
 
     protected render(): React.ReactNode {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;
@@ -423,6 +531,9 @@ export class OmoWorldWidget extends ReactWidget {
                     <label className="omo-field">Room layout<select data-testid="room-layout" aria-label="Room layout" value={layout} disabled={this.presetLoading || this.busy} onChange={event => { this.draftLayout = event.target.value as RoomLayoutId; this.update(); }}>
                         {(Object.keys(ROOM_LAYOUTS) as RoomLayoutId[]).map(key => <option key={key} value={key}>{ROOM_LAYOUTS[key].label}</option>)}
                     </select><small>{ROOM_LAYOUTS[layout].description}</small></label>
+                    <label className="omo-field">Room kit<select data-testid="room-kit" aria-label="Room kit" value={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} disabled={this.presetLoading || this.busy} onChange={event => { this.draftKit = event.target.value as RoomKitId; this.update(); }}>
+                        {(Object.keys(ROOM_KITS) as RoomKitId[]).map(key => <option key={key} value={key}>{ROOM_KITS[key].label}</option>)}
+                    </select><small>{ROOM_KITS[this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'].description}</small></label>
                     <label className="omo-field">Workspace name<input data-testid="room-name" maxLength={120} defaultValue={this.draftName} onChange={event => { this.draftName = event.target.value; this.update(); }} placeholder="My next big thing" /></label>
                     <div className="omo-field">Project folder<div className="omo-folder"><span title={this.project?.path.toString()}>{this.project?.path.toString() ?? 'No folder selected'}</span><button onClick={this.chooseProject} disabled={this.busy}>Browse</button></div></div>
                     <fieldset className="omo-preset-controls" aria-label="Portable room appearance">
@@ -442,10 +553,11 @@ export class OmoWorldWidget extends ReactWidget {
                     </div>
                     {this.room && !this.configuring && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
                         <PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>
-                        <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button><button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button></nav>
-                        {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview}/>}
+                        <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button>{ROOM_KITS[this.room?.kit ?? 'hermes-desk'].webWall && <button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button>}<button data-testid="station-mirror-controls" onClick={()=>this.selectStation('mirror')}>Mirror · {this.stationLink.targetStationId === 'terminal' ? 'Desk one' : 'Desk two'}</button><button data-testid="station-recipe-toggle" aria-expanded={this.recipeOpen} onClick={()=>{this.recipeOpen=!this.recipeOpen;this.update();}}>Station recipes</button></nav>
+                        {this.recipeOpen&&<StationRecipePanel recipes={this.recipes} stationId={this.activeStation} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}}/>}
+                        {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.activeStation==='terminal-2'?'Desk two':'Desk one'} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>}
                     </div>}
-                    <SceneView key={`${theme}:${layout}:${this.presetRevision}`} theme={theme} layout={layout} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onMessage={text=>{this.feedback=text;this.update();}}/>
+                    <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}/>
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>
                     {!this.configuring && <aside className="omo-tool-dock" aria-label="Project tools"><span>YOUR WORKSTATIONS</span><button disabled={this.busy} data-testid="terminal-action" onClick={() => this.selectStation('terminal')}><b>01</b><div><strong>Terminal</strong><small>A real shell. Your project folder.</small></div><span>↗</span></button><button disabled={this.busy} data-testid="code-action" onClick={() => this.selectStation('code')}><b>02</b><div><strong>Code</strong><small>Files, editing and your next change.</small></div><span>↗</span></button><p>Nothing starts unless you choose it.</p></aside>}
                     {this.configuring && <div className="omo-preview-badge"><i/> LIVE ROOM PREVIEW</div>}

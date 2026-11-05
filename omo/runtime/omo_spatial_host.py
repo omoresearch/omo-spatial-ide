@@ -19,15 +19,19 @@ spatial IDE needs on top:
     agent tabs need an explicit confirmed start;
   * frames as plain text + per-cell colour strings for the browser.
 """
+import contextlib
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
 import shutil
 import signal
+import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -100,6 +104,19 @@ _DATA_LOCK = _lock_data_dir(_require_env())     # held for the life of the proce
 sys.path.insert(0, BRIDGE_DIR)
 import omobridge as ob  # noqa: E402  (env must be set first: the bridge reads it at import)
 import termcore  # noqa: E402
+
+
+def _load_runtime_module(name):
+    """Load an app-owned helper beside this file. The Theia backend starts the
+    host with `python -I`, which leaves the script directory off sys.path."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, name + ".py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+launch_identity = _load_runtime_module("owned_agent_launch")
 
 FAULT_NOOP_INPUT = os.environ.get("OMO_SPATIAL_FAULT") == "noop-input"   # test-only seeded fault
 # A pinned Hermes root (OMO_HERMES_ROOT) is where profiles are validated, so the Hermes
@@ -203,6 +220,15 @@ class Stations:
 
 STATIONS = Stations(STATIONS_FILE)
 
+# Runtime-only maintenance. The vendored bridge normally runs these loops from
+# its websocket server; the standalone stdio host must own them explicitly.
+MAINTENANCE_STOP = threading.Event()
+SLEEP_CONFIG_LOCK = threading.Lock()
+SLEEP_AUTHORIZED = False
+SLEEP_AFTER_SECONDS = 0.0
+REMEMBER_EVERY_SECONDS = max(1.0, float(os.environ.get("OMO_SPATIAL_REMEMBER_EVERY", "20")))
+SLEEP_SCAN_EVERY_SECONDS = 5.0
+
 
 # --------------------------------------------------------------------------- workspaces
 def agent_found(kind):
@@ -237,8 +263,8 @@ class SpatialWorkspaces(ob.Workspaces):
         if not tab.get("cwd") and project and os.path.isdir(project):
             tab["cwd"] = project
         profile = tab.get("profile")
-        if profile:
-            view = dict(ws, profile=profile)      # a tab-level Hermes profile
+        if "profile" in tab:
+            view = dict(ws, profile=profile or "")      # a tab-level Hermes profile
             super()._open_window_locked(view, tab, autorun)
             ws["server"] = view.get("server")
         else:
@@ -283,17 +309,132 @@ class SpatialWorkspaces(ob.Workspaces):
             if len(ws["tabs"]) >= ob.LIMITS["tabs_per_workspace"]:
                 raise ob.BridgeError(f"tab limit reached ({ob.LIMITS['tabs_per_workspace']} per workspace)")
             tab = {"id": ob.new_id(), "name": self._tab_name(ws, name, kind), "kind": kind}
-            if profile:
+            if profile is None and kind == "hermes":
+                # Capture the inherited profile at creation. A future change
+                # to workspace defaults must not retarget this conversation.
+                profile = ws.get("profile") or ""
+            if profile is not None:
                 tab["profile"] = self._check_profile(profile)
-            self._open_window_locked(ws, tab)
             ws["tabs"].append(tab)
+            try:
+                self._open_window_locked(ws, tab)
+            except Exception:
+                ws["tabs"].remove(tab)
+                raise
             ob.META.save()
             ob.log(f"spatial tab new {ws_id}/{tab['id']} kind={kind}")
             return tab["id"]
+    def wake(self, ws_id, tab_id):
+        """Resume sleeping Hermes in a new owned tmux pane, never by typing."""
+        if not self.is_asleep(ws_id, tab_id):
+            return None
+        end = time.monotonic() + ob.EXIT_WAIT
+        while time.monotonic() < end:
+            with self.lock:
+                ws = ob.META.workspaces.get(ws_id)
+                tab = next((t for t in ws["tabs"] if t["id"] == tab_id), None) if ws else None
+                if tab is None or not tab.get("asleep"):
+                    return None
+                wins = self._windows_locked(ws, ob.TM.server_id())
+                win = wins.get(tab_id)
+                if win is None:
+                    tab.pop("asleep", None)
+                    ob.META.save()
+                    return None
+                if ob.hermes_pid(win["pid"]) is None:
+                    command, busy = ob.foreground(win["cmd"], win["pid"])
+                    if busy:
+                        tab.pop("asleep", None)
+                        ob.META.save()
+                        return f"'{command}' is running in this tab, so Hermes was not resumed"
+                    try:
+                        _launch_owned_agent_locked(ws, tab, win)
+                    except HostError as exc:
+                        return f"sleeping Hermes could not be resumed safely: {exc}"
+                    tab.pop("asleep", None)
+                    ob.META.save()
+                    ob.log(f"wake {ws_id}/{tab_id}: an owned pane resumed its conversation")
+                    return "waking Hermes..."
+            time.sleep(0.25)
+        ob.log(f"wake {ws_id}/{tab_id}: the tab never returned to its shell")
+        return None
 
 
 WS = SpatialWorkspaces()
 OPEN_LOCK = threading.Lock()
+
+
+def _guarded_sleep_put_to_sleep(ws_id, tab_id, session, window, pane_pid, fingerprint):
+    """Check the selected profile lease immediately before the vendored sleep action."""
+    ws = ob.META.workspaces.get(ws_id)
+    tab = next((item for item in (ws or {}).get("tabs", []) if item.get("id") == tab_id), None)
+    if ws is None or tab is None:
+        ob.log(f"sleep denied {ws_id}/{tab_id}: tab disappeared")
+        return False
+    try:
+        profile = _selected_profile(ws, tab_id)
+        assert_hermes_turn_lease_free(profile)
+    except HostError as exc:
+        ob.log(f"sleep denied {ws_id}/{tab_id}: {exc}")
+        return False
+    return _ORIGINAL_SLEEP_PUT(ws_id, tab_id, session, window, pane_pid, fingerprint)
+
+
+_ORIGINAL_SLEEP_PUT = ob.SLEEPER.put_to_sleep
+ob.SLEEPER.put_to_sleep = _guarded_sleep_put_to_sleep
+
+
+def configure_idle_sleep(authorized, after_seconds=None):
+    """Enable auto-sleep only after an explicit, bounded user authorization."""
+    global SLEEP_AUTHORIZED, SLEEP_AFTER_SECONDS, SLEEP_SCAN_EVERY_SECONDS
+    if not isinstance(authorized, bool):
+        raise HostError("idle sleep authorization must be true or false")
+    if not authorized:
+        with SLEEP_CONFIG_LOCK:
+            SLEEP_AUTHORIZED = False
+            SLEEP_AFTER_SECONDS = 0.0
+            ob.SLEEP_AFTER = 0.0
+        return {"authorized": False, "afterSeconds": 0.0,
+                "detail": "idle Hermes sleep is off; no tab will be put to sleep"}
+    try:
+        seconds = float(str(after_seconds))
+    except (TypeError, ValueError):
+        raise HostError("idle sleep needs afterSeconds")
+    if not math.isfinite(seconds) or seconds < 1.0 or seconds > 86400.0:
+        raise HostError("afterSeconds must be between 1 and 86400")
+    with SLEEP_CONFIG_LOCK:
+        SLEEP_AUTHORIZED = True
+        SLEEP_AFTER_SECONDS = seconds
+        SLEEP_SCAN_EVERY_SECONDS = max(0.25, min(5.0, seconds / 4.0))
+        ob.SLEEP_AFTER = seconds
+        ob.SLEEP_SCAN = SLEEP_SCAN_EVERY_SECONDS
+    return {"authorized": True, "afterSeconds": seconds,
+            "detail": f"idle Hermes sleep is authorized after {seconds:g}s when all safety guards pass"}
+
+
+def maintenance_loop():
+    """Durably capture cwd and run opt-in guarded sleep for the stdio host."""
+    next_remember = time.monotonic() + REMEMBER_EVERY_SECONDS
+    next_sleep = time.monotonic() + SLEEP_SCAN_EVERY_SECONDS
+    while not MAINTENANCE_STOP.wait(0.25):
+        now = time.monotonic()
+        if now >= next_remember:
+            try:
+                WS.remember_cwds()
+            except Exception as exc:
+                ob.log(f"runtime cwd remember error: {exc!r}")
+            next_remember = now + REMEMBER_EVERY_SECONDS
+        with SLEEP_CONFIG_LOCK:
+            enabled = SLEEP_AUTHORIZED
+            interval = SLEEP_SCAN_EVERY_SECONDS
+        if enabled and now >= next_sleep:
+            try:
+                ob.SLEEPER.scan(now)
+            except Exception as exc:
+                ob.log(f"runtime sleep scan error: {exc!r}")
+            next_sleep = now + interval
+        elif not enabled:
+            next_sleep = now + interval
 
 
 def describe(ws_id):
@@ -305,6 +446,9 @@ def describe(ws_id):
         if state == "running" and t.get("sleeping"):
             state = "sleeping"
         tab = {"id": t["id"], "name": t["name"], "kind": t["kind"], "state": state, "busy": bool(t["busy"])}
+        if t["kind"] == "hermes":
+            # The captured profile that start/revive/resume/wake will use.
+            tab["profile"] = launch_identity.selected_tab_profile(raw, t["id"]) or "default"
         if t.get("command"):
             tab["detail"] = str(t["command"])
         elif state == "interrupted":
@@ -336,6 +480,528 @@ def need_agent(kind):
     if not agent_found(kind):
         hint = next((a.get("installHint", "") for a in agents() if a["kind"] == kind), "")
         raise HostError(f"{kind} is not available on this machine. Install: {hint}".strip())
+
+
+def _hermes_state_db(profile):
+    """Resolve only the installed Hermes state database, never auth or config files."""
+    name = str(profile or "default")
+    if name != "default" and not ob.PROFILE_RE.fullmatch(name):
+        raise HostError("invalid Hermes profile")
+    root = _hermes_root()
+    return os.path.join(root, "state.db") if name == "default" else os.path.join(root, "profiles", name, "state.db")
+
+
+def _hermes_root():
+    """The one root that supplies every checked state.db. The in-pane guard pins
+    this exact root as a non-empty canonical HERMES_HOME for the Hermes child."""
+    return os.path.realpath(HERMES_ROOT_PIN or ob.HERMES_ROOT)
+
+
+def assert_hermes_turn_lease_free(profile):
+    """Keep the old read guard as an early defence, but fail closed.
+
+    The final decision is made by guarded_hermes_exec.py inside the tmux shell,
+    while its BEGIN IMMEDIATE reservation is held through direct Hermes process
+    creation.
+    """
+    state_db = _hermes_state_db(profile)
+    if not os.path.exists(state_db):
+        raise HostError("Hermes profile state database is absent; refusing to start an agent.")
+    try:
+        if not os.path.isfile(state_db):
+            raise ValueError()
+        uri = "file:" + state_db.replace("\\", "/") + "?mode=ro"
+        with sqlite3.connect(uri, uri=True, timeout=0.25) as conn:
+            table = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_turn_leases'"
+            ).fetchall()
+            if table != [("session_turn_leases",)]:
+                raise ValueError()
+            rows = conn.execute(
+                "SELECT conversation_id, holder, acquired_at, expires_at "
+                "FROM session_turn_leases",
+            ).fetchall()
+            for conversation_id, holder, acquired_at, expires_at in rows:
+                if not isinstance(conversation_id, str) or not conversation_id or not isinstance(holder, str) or not holder:
+                    raise ValueError()
+                if isinstance(acquired_at, bool) or not isinstance(acquired_at, (int, float)) or not math.isfinite(float(acquired_at)):
+                    raise ValueError()
+                if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)) or not math.isfinite(float(expires_at)):
+                    raise ValueError()
+    except Exception:
+        raise HostError("Hermes turn-lease state is unavailable; refusing to start an agent.")
+    if any(expires_at > time.time() for _, _, _, expires_at in rows):
+        raise HostError("Hermes turn-lease state is held; refusing to start an agent.")
+
+
+GUARDED_HERMES_EXEC = os.path.join(HERE, "guarded_hermes_exec.py")
+
+
+def _hermes_executable():
+    """Resolve the bridge-selected Hermes binary before the shell is scheduled."""
+    configured = str(ob.HERMES_BIN or "").strip()
+    candidate = configured if os.path.isabs(configured) else shutil.which(configured)
+    if not candidate or not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
+        raise HostError("Hermes is not available on this machine.")
+    return os.path.realpath(candidate)
+
+
+def _selected_profile(ws, tab_id):
+    try:
+        return launch_identity.selected_tab_profile(ws, tab_id)
+    except ValueError as exc:
+        raise HostError(str(exc)) from exc
+
+
+def guarded_hermes_command(ws, tab_id):
+    """Build the final guarded Hermes command for this tab's captured profile.
+
+    The shim performs the final gate and directly Popen's Hermes with these
+    exact argv values. No task text or synthetic Enter is added here.
+    """
+    profile = _selected_profile(ws, tab_id)
+    hermes_argv = []
+    if profile:
+        hermes_argv += ["-p", profile]
+    hermes_argv += ["chat", "--tui", "-c", ob.hermes_title(ws["id"], tab_id), "--create-if-missing"]
+    state_db = _hermes_state_db(profile or "default")
+    parts = [sys.executable, GUARDED_HERMES_EXEC, "--state-db", state_db,
+             "--hermes-home", _hermes_root(),
+             "--hermes-executable", _hermes_executable(), "--", *hermes_argv]
+    return " ".join(ob.shell_quote(part) for part in parts)
+
+
+# The process is created by tmux itself in a second pane. The original pane is
+# never written to, replaced, or killed.
+OWNED_AGENT_EXEC = os.path.join(HERE, "owned_agent_exec.py")
+OWNED_PANE_LIMIT = 1
+
+
+def _pane_rows(target):
+    result = ob.TM.run("list-panes", "-t", target, "-F",
+                       "#{pane_id}\\t#{pane_dead}\\t#{@omo_owned_tab}\\t#{pane_pid}\\t#{pane_current_path}")
+    if result.returncode != 0:
+        raise HostError("the tab's tmux panes could not be inspected")
+    rows = []
+    for line in result.stdout.splitlines():
+        pane_id, dead, owned_tab, pid, cwd = (line.split("\\t", 4) + [""] * 5)[:5]
+        if launch_identity.valid_pane_id(pane_id):
+            rows.append({"id": pane_id, "dead": dead, "ownedTab": owned_tab, "pid": pid, "cwd": cwd})
+    return rows
+
+
+def _process_start(pid):
+    """Kernel start time of a process (clock ticks since boot), "" when unknown.
+    With the pid it identifies one process; a recycled pid has another start time."""
+    try:
+        with open(f"/proc/{int(pid)}/stat", "rb") as stream:
+            raw = stream.read(4096).decode("ascii", "replace")
+        return raw[raw.rindex(")") + 2:].split()[19]
+    except (OSError, ValueError, IndexError):
+        return ""
+
+
+def _process_alive(pid, start):
+    """True only for the same live (non-zombie) process: pid + kernel start time."""
+    try:
+        with open(f"/proc/{int(pid)}/stat", "rb") as stream:
+            raw = stream.read(4096).decode("ascii", "replace")
+        fields = raw[raw.rindex(")") + 2:].split()
+        return bool(start) and fields[19] == start and fields[0] not in ("Z", "X")
+    except (OSError, ValueError, IndexError):
+        return False
+
+
+def _record_proven(record, row):
+    """True only when this host created the pane: same tmux server, same pane id,
+    same pane process (pid + kernel start time). A recycled pane id alone is never proof."""
+    if not isinstance(record, dict) or row is None:
+        return False
+    server, pid, start = record.get("server"), str(record.get("panePid") or ""), record.get("paneStart")
+    if not server or server != ob.TM.server_id() or not pid or not start:
+        return False
+    return row["pid"] == pid and _process_start(pid) == start
+
+
+OWNED_OUTPUT_DIR = "owned-output"
+
+
+def _remove_retained_dead_owned_pane(ws, tab, row, target):
+    """Save the output of a dead pane owned by this tab, then remove ONLY that pane.
+
+    The removal is one server-side tmux command whose predicate checks, at the moment
+    it runs, that the pane is dead, carries this tab's ownership tag and still has the
+    same pane process id. A live, foreign or replaced pane is never removed."""
+    pane, pid = row["id"], row["pid"]
+    if not launch_identity.valid_pane_id(pane) or not pid.isdigit() or not re.fullmatch(r"[0-9a-f]{12}", tab["id"]):
+        raise HostError("an owned resume pane already exists in this tab")
+    text = ob.TM.run("capture-pane", "-p", "-J", "-S", "-", "-E", "-", "-t", pane)
+    if text.returncode != 0:
+        raise HostError("a finished agent pane in this tab could not be saved, so it was kept")
+    folder = os.path.join(os.environ["OMO_DATA"], OWNED_OUTPUT_DIR)
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    path = os.path.join(folder, f"{ws['id']}-{tab['id']}-{int(time.time() * 1000)}.log")
+    fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(text.stdout)
+        stream.flush()
+        os.fsync(stream.fileno())
+    predicate = ("#{&&:#{pane_dead},#{==:#{@omo_owned_tab}," + tab["id"] + "},#{==:#{pane_pid}," + pid + "}}")
+    ob.TM.run("if-shell", "-F", "-t", pane, predicate, "kill-pane -t " + pane)
+    if any(item["id"] == pane for item in _pane_rows(target)):
+        raise HostError("a finished agent pane in this tab could not be removed safely; its output was saved")
+    ob.log(f"owned dead pane {pane} of {ws['id']}/{tab['id']} removed; output saved to {path}")
+
+
+def _owned_pane_locked(ws, tab, target):
+    record = tab.get("ownedLaunch")
+    rows = _pane_rows(target)
+    pane_id = record.get("paneId") if isinstance(record, dict) else ""
+    row = next((item for item in rows if item["id"] == pane_id), None)
+    if row and row["dead"] != "1" and _record_proven(record, row):
+        if row["ownedTab"] == tab["id"] and (record.get("claimed") or record.get("started")) \
+                and not record.get("shown"):
+            return row          # a proven owned start that was never shown: reconnect, never restart
+        if row["ownedTab"] == tab["id"] or record.get("pending") is True:
+            raise HostError("an owned resume is already running in this tab")
+    if record:
+        # Stale metadata (another server, a recycled pane id or process, or a
+        # v2 record without process identity) is safe to forget. No pane is killed.
+        tab.pop("ownedLaunch", None)
+        ob.META.save()
+    # The server-side ownership tag is the authority. A live tagged pane is never
+    # touched; one retained dead tagged pane is saved and removed atomically.
+    owned = [item for item in rows if item["ownedTab"] == tab["id"]]
+    if len(owned) == 1 and owned[0]["dead"] == "1":
+        _remove_retained_dead_owned_pane(ws, tab, owned[0], target)
+        owned = [item for item in _pane_rows(target) if item["ownedTab"] == tab["id"]]
+    if len(owned) >= OWNED_PANE_LIMIT:
+        raise HostError("an owned resume pane already exists in this tab")
+    return None
+
+
+def _agent_executable(kind):
+    if kind == "hermes":
+        return _hermes_executable()
+    path = ob.find_agent(kind)
+    if not path:
+        raise HostError(f"{kind} is not available on this machine")
+    return os.path.realpath(path)
+
+
+def _owned_agent_argv(ws, tab, receipt=None, handshake=None):
+    kind = tab["kind"]
+    if kind == "hermes":
+        profile = _selected_profile(ws, tab["id"])
+        args = [sys.executable, GUARDED_HERMES_EXEC, "--state-db",
+                _hermes_state_db(profile or "default"), "--hermes-home", _hermes_root(),
+                "--hermes-executable", _agent_executable(kind)]
+        if receipt is not None:
+            args += ["--receipt", receipt]
+        if handshake is not None:
+            args += ["--handshake", handshake]
+        args += ["--"]
+        if profile:
+            args += ["-p", profile]
+        return args + ["chat", "--tui", "-c", ob.hermes_title(ws["id"], tab["id"]), "--create-if-missing"], profile, ob.hermes_title(ws["id"], tab["id"])
+    session = ob.claude_session(ws["id"], tab["id"]) if kind == "claude" else ""
+    args = [sys.executable, OWNED_AGENT_EXEC, "--kind", kind, "--executable", _agent_executable(kind),
+            "--session-id", session]
+    if receipt is not None:
+        args += ["--receipt", receipt]
+    if handshake is not None:
+        args += ["--handshake", handshake]
+    return args, "", session
+
+
+def _await_owned_receipt(path):
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        try:
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            with os.fdopen(fd, "r", encoding="utf-8") as stream:
+                value = json.loads(stream.read(4097))
+            if isinstance(value, dict) and value.get("state") == "denied":
+                return value
+            if (isinstance(value, dict) and value.get("state") == "started"
+                    and type(value.get("pid")) is int and value["pid"] > 0):
+                return value
+        except (OSError, ValueError):
+            pass
+        time.sleep(0.01)
+    return None
+
+
+UNCONFIRMED = ("the agent start could not be confirmed; it is not reported as started; "
+               "its owned pane was left untouched; retry to show it if it is running")
+NOT_SHOWN = "the agent is running but its screen could not be shown; no new agent was started; retry to show it"
+START_SETTLE_SECONDS = 0.3
+
+
+def _proven_agent_child(record):
+    """The agent process under a proven owned pane, or None. Identity is the pane
+    process (pid + kernel start time) and its direct child; never a pane id alone."""
+    pane_pid = str(record.get("panePid") or "")
+    if not pane_pid.isdigit() or _process_start(pane_pid) != record.get("paneStart"):
+        return None
+    agent = str(record.get("agentPid") or "")
+    if agent.isdigit():
+        if record.get("agentStart") and _process_start(agent) == record.get("agentStart") \
+                and _parent_pid(agent) == pane_pid:
+            return agent
+        return None
+    # A claimed/started launch always recorded its agent identity from the
+    # receipt; "any single child" is accepted only for an unconfirmed claim
+    # whose receipt never arrived, and then only if it is our launch helper.
+    if record.get("started"):
+        return None
+    try:
+        with open(f"/proc/{pane_pid}/task/{pane_pid}/children", "r", encoding="ascii") as stream:
+            children = stream.read(4096).split()
+    except OSError:
+        return None
+    if len(children) != 1 or not children[0].isdigit():
+        return None
+    # The pane process is our helper (guarded exec / owned exec); its single
+    # child is the agent. Require the pane's own cmdline to be that helper.
+    try:
+        with open(f"/proc/{pane_pid}/cmdline", "rb") as stream:
+            helper = [part.decode("utf-8", "replace") for part in stream.read(65536).split(b"\0") if part]
+    except OSError:
+        return None
+    if len(helper) < 2 or os.path.realpath(helper[1]) not in (os.path.realpath(GUARDED_HERMES_EXEC),
+                                                               os.path.realpath(OWNED_AGENT_EXEC)):
+        return None
+    return children[0]
+
+
+def _reconnectable_owned_row(ws, tab, target):
+    """The live row of a proven, started-or-claimed, never-shown owned pane, else None.
+    Read-only: lets an explicit retry show that agent even when the agent itself,
+    as the active pane, makes the tab look busy."""
+    record = tab.get("ownedLaunch")
+    if not isinstance(record, dict) or record.get("shown") or not (record.get("claimed") or record.get("started")):
+        return None
+    try:
+        rows = _pane_rows(target)
+    except HostError:
+        return None
+    row = next((item for item in rows if item["id"] == record.get("paneId")), None)
+    if row is None or row["dead"] == "1" or row["ownedTab"] != tab["id"] or not _record_proven(record, row):
+        return None
+    return row if _proven_agent_child(record) is not None else None
+
+
+def _parent_pid(pid):
+    try:
+        with open(f"/proc/{int(pid)}/stat", "rb") as stream:
+            raw = stream.read(4096).decode("ascii", "replace")
+        return raw[raw.rindex(")") + 2:].split()[1]
+    except (OSError, ValueError, IndexError):
+        return ""
+
+
+def _show_owned_pane(pane_id):
+    """Select and zoom one verified owned pane with tmux control commands only."""
+    selected = ob.TM.run("select-pane", "-t", pane_id)
+    zoom = ob.TM.run("display-message", "-p", "-t", pane_id, "#{window_zoomed_flag}")
+    if selected.returncode != 0 or zoom.returncode != 0:
+        return False
+    if zoom.stdout.strip() != "1" and ob.TM.run("resize-pane", "-Z", "-t", pane_id).returncode != 0:
+        return False
+    visible = ob.TM.run("display-message", "-p", "-t", pane_id, "#{pane_active}:#{window_zoomed_flag}")
+    return visible.returncode == 0 and visible.stdout.strip() == "1:1"
+
+
+def _reconnect_owned_locked(ws, tab, row):
+    """Show a proven existing owned agent. Never starts, kills or writes to anything."""
+    record = tab["ownedLaunch"]
+    agent = _proven_agent_child(record)
+    if agent is None:
+        raise HostError(UNCONFIRMED)
+    if not record.get("agentPid"):
+        record.update(agentPid=agent, agentStart=_process_start(agent))
+        ob.META.save()
+    if not _show_owned_pane(row["id"]):
+        raise HostError(NOT_SHOWN)
+    record["shown"] = True
+    ob.META.save()
+    return {"paneId": row["id"], "reconnected": True}
+
+
+# Pending-transition input gate. While an owned start is pending for a tab, every
+# view of that tab (physical or station mirror) refuses keyboard input, paste and
+# wheel bytes visibly. Nothing is queued or replayed. The check and the PTY write
+# happen under the same per-tab lock, so a delivery cannot pass the check and then
+# write after the transition began.
+PENDING_INPUT = "an agent is starting in this tab; input was not sent (nothing was queued)"
+_TAB_GATES = {}
+_TAB_GATES_LOCK = threading.Lock()
+
+
+class _TabGate:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.pending = 0
+
+
+def _tab_gate(ws_id, tab_id):
+    with _TAB_GATES_LOCK:
+        return _TAB_GATES.setdefault((ws_id, tab_id), _TabGate())
+
+
+@contextlib.contextmanager
+def _input_delivery(v):
+    """Hold the tab gate for one delivery. Caller holds v.lock (fixes v.tab_id)."""
+    gate = _tab_gate(v.ws_id, v.tab_id)
+    with gate.lock:
+        if gate.pending:
+            raise HostError(PENDING_INPUT)
+        yield
+
+
+@contextlib.contextmanager
+def _pending_transition(ws_id, tab_id):
+    gate = _tab_gate(ws_id, tab_id)
+    with gate.lock:            # waits for any in-flight delivery to finish
+        gate.pending += 1
+    try:
+        yield
+    finally:
+        with gate.lock:
+            gate.pending -= 1
+
+
+def _authorize_handshake(handshake):
+    fd = os.open(os.path.join(handshake, "go"), os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    os.close(fd)
+
+
+def _cancel_handshake(handshake):
+    """True when the start is now cancelled and can never be claimed. Atomic with
+    the shim's go->claimed rename: exactly one of the two renames succeeds."""
+    go, cancelled = os.path.join(handshake, "go"), os.path.join(handshake, "cancelled")
+    if not os.path.exists(go) and not os.path.exists(os.path.join(handshake, "claimed")):
+        fd = os.open(cancelled, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        os.close(fd)
+        return True
+    try:
+        os.rename(go, cancelled)
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def _launch_owned_agent_locked(ws, tab, window):
+    # The per-tab input gate is held for the whole pending transition, from
+    # split-window to the confirmed interactive screen (or a refusal).
+    with _pending_transition(ws["id"], tab["id"]):
+        target = f"={ob.ws_session(ws['id'])}:{window['id']}"
+        existing = _owned_pane_locked(ws, tab, target)
+        if existing is not None:
+            return _reconnect_owned_locked(ws, tab, existing)
+        cwd = launch_identity.cwd_for_pane(window, tab.get("cwd", ""))
+        if tab["kind"] == "hermes":
+            profile = _selected_profile(ws, tab["id"])
+            assert_hermes_turn_lease_free(profile)
+        with tempfile.TemporaryDirectory(prefix=".owned-launch-", dir=os.environ["OMO_DATA"]) as scratch:
+            receipt = os.path.join(scratch, "receipt.json")
+            handshake = os.path.join(scratch, "handshake")
+            os.mkdir(handshake, 0o700)
+            argv, profile, conversation = _owned_agent_argv(ws, tab, receipt, handshake)
+            # The pane's shim creates nothing until this host writes "go", which it
+            # does only after the server-side ownership tag is verified. Keep the
+            # original screen selected until the actual CLI exec is acknowledged.
+            server = ob.TM.server_id()
+            result = ob.TM.run("split-window", "-d", "-P", "-F", "#{pane_id} #{pane_pid}", "-t", target,
+                               "-c", cwd, "--", *argv)
+            if result.returncode != 0:
+                raise HostError("tmux could not create the owned resume pane: " + result.stderr.strip())
+            created = (result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "").split(" ")
+            pane_id, pane_pid = (created + ["", ""])[:2]
+            if not launch_identity.valid_pane_id(pane_id):
+                _cancel_handshake(handshake)
+                raise HostError("tmux created an owned pane without a valid pane id; nothing was started")
+            tab["ownedLaunch"] = {"paneId": pane_id, "kind": tab["kind"], "cwd": cwd,
+                                   "profile": profile, "conversation": conversation, "pending": True,
+                                   "server": server, "panePid": pane_pid if pane_pid.isdigit() else "",
+                                   "paneStart": _process_start(pane_pid) if pane_pid.isdigit() else ""}
+            ob.META.save()
+            tagged = ob.TM.run("set-option", "-p", "-t", pane_id, "@omo_owned_tab", tab["id"])
+            ob.TM.run("set-option", "-p", "-t", pane_id, "remain-on-exit", "off")
+            row = next((p for p in _pane_rows(target) if p["id"] == pane_id), None)
+            if tagged.returncode != 0 or row is None or row["ownedTab"] != tab["id"] \
+                    or not _record_proven(tab["ownedLaunch"], row):
+                _cancel_handshake(handshake)
+                tab.pop("ownedLaunch", None)
+                ob.META.save()
+                raise HostError("the owned pane could not be marked as this tab's; nothing was started; "
+                                "no shell input was changed")
+            _authorize_handshake(handshake)
+            acknowledgement = _await_owned_receipt(receipt)
+            if acknowledgement is None:
+                if _cancel_handshake(handshake):
+                    tab.pop("ownedLaunch", None)
+                    ob.META.save()
+                    raise HostError("the agent did not start in time and the start was cancelled; "
+                                    "nothing was started; no shell input was changed")
+                tab["ownedLaunch"].update(pending=False, claimed=True)
+                ob.META.save()
+                raise HostError(UNCONFIRMED)
+            if acknowledgement["state"] == "denied":
+                deadline = time.monotonic() + 0.5
+                while time.monotonic() < deadline:
+                    row = next((p for p in _pane_rows(target) if p["id"] == pane_id), None)
+                    if row is None or row["dead"] == "1":
+                        tab.pop("ownedLaunch", None)
+                        ob.META.save()
+                        break
+                    time.sleep(0.01)
+                raise HostError(str(acknowledgement.get("error") or "agent launch denied"))
+            agent = str(acknowledgement["pid"])
+            tab["ownedLaunch"].update(pending=False, claimed=True, started=True, agentPid=agent,
+                                      agentStart=_process_start(agent))
+            ob.META.save()
+            exited = ("the agent started then exited before its interactive screen was ready; "
+                      "no agent remains; no shell input was changed")
+            if not _process_alive(agent, tab["ownedLaunch"]["agentStart"]):
+                tab.pop("ownedLaunch", None)
+                ob.META.save()
+                raise HostError(exited)
+            row = next((p for p in _pane_rows(target) if p["id"] == pane_id), None)
+            if row is None or row["dead"] == "1":
+                tab.pop("ownedLaunch", None)
+                ob.META.save()
+                raise HostError(exited)
+            if row["ownedTab"] != tab["id"]:
+                raise HostError("the agent started but its owned pane could not be verified; no shell input was changed")
+            if not _show_owned_pane(pane_id):
+                if not _process_alive(agent, tab["ownedLaunch"]["agentStart"]):
+                    tab.pop("ownedLaunch", None)
+                    ob.META.save()
+                    raise HostError(exited)
+                raise HostError(NOT_SHOWN)
+            # Bounded settle window: a CLI that dies during startup (bad config,
+            # immediate exit) is reported truthfully instead of as a running agent.
+            settle = time.monotonic() + START_SETTLE_SECONDS
+            alive = _process_alive(agent, tab["ownedLaunch"]["agentStart"])
+            while alive and time.monotonic() < settle:
+                time.sleep(0.02)
+                alive = _process_alive(agent, tab["ownedLaunch"]["agentStart"])
+            if not alive:
+                # Shown, but the CLI is already gone: never report a running agent.
+                tab.pop("ownedLaunch", None)
+                ob.META.save()
+                raise HostError(exited)
+            tab["ownedLaunch"]["shown"] = True
+            ob.META.save()
+            return {"paneId": pane_id, "reconnected": False}
+
+
+# ob.tab_env -> ob.autorun_command -> ob.hermes_command is the bridge's
+# inside-shell autorun path. Replacing this app-owned function leaves the
+# vendored bridge unchanged while moving the final authority into the shell.
+ob.hermes_command = guarded_hermes_command
 
 
 def op_open(a):
@@ -370,9 +1036,14 @@ def op_tab_new(a):
         raise HostError("unknown tab kind")
     if kind != "shell" and a.get("confirmedStart") is not True:
         raise HostError(f"starting {kind} needs an explicit confirmed start")
+    if kind == "hermes":
+        ws = ob.META.workspaces[ws_id]
+        requested_profile = a.get("profile") if "profile" in a else None
+        profile = requested_profile if requested_profile is not None else ws.get("profile") or "default"
+        assert_hermes_turn_lease_free(profile)
     need_agent(kind)
     ensure_server()
-    WS.tab_new_project(ws_id, kind, a.get("name"), a.get("profile") or "")
+    WS.tab_new_project(ws_id, kind, a.get("name"), a.get("profile") if "profile" in a else None)
     return describe(ws_id)
 
 
@@ -397,6 +1068,9 @@ def op_tab_revive(a):
     if a.get("confirmedStart") is not True:
         raise HostError("reviving a tab starts it again; confirm the start first")
     tab = tab_of(ws_id, str(a.get("tabId") or ""))
+    if tab["kind"] == "hermes":
+        ws = ob.META.workspaces[ws_id]
+        assert_hermes_turn_lease_free(_selected_profile(ws, tab["id"]))
     need_agent(tab["kind"])
     ensure_server()
     WS.tab_revive(ws_id, tab["id"], tab["kind"])
@@ -486,8 +1160,8 @@ RESUME_NOTES = {
 
 
 def op_agent_resume(a):
-    """Type this tab's agent command into its idle shell. Explicit and confirmed only;
-    refused on shell tabs, on tabs that are not live and while anything is running."""
+    """Resume this tab in a new owned tmux pane. Explicit and confirmed only;
+    the existing shell pane is never written to or replaced."""
     ws_id = check_ws(a.get("workspaceId"))
     tab_id = str(a.get("tabId") or "")
     if a.get("confirmedStart") is not True:
@@ -502,36 +1176,88 @@ def op_agent_resume(a):
         state = next(t for t in WS._describe_locked(ws, ob.TM.server_id())["tabs"] if t["id"] == tab_id)
         if state["state"] != "live":
             raise HostError("this tab is not running; revive it first")
-        if state["busy"]:
+        target = f"={ob.ws_session(ws_id)}:{state['window']}" if state.get("window") else ""
+        reconnectable = _reconnectable_owned_row(ws, tab, target) if target else None
+        # A proven never-shown owned agent may itself be the foreground that
+        # makes the tab look busy; an explicit retry only shows it, never starts.
+        if state["busy"] and reconnectable is None:
             raise HostError(f"'{ob.clean(state['command'], 40)}' is running in this tab; finish or interrupt it first")
-        if tab["kind"] == "hermes":
-            view = dict(ws, profile=tab["profile"]) if tab.get("profile") else ws
-            command = ob.hermes_command(view, tab_id)
-        else:
-            command = ob.agent_command(ws, tab)
-        target = f"={ob.ws_session(ws_id)}:{state['window']}"
-        ob.TM.run("send-keys", "-t", target, "-l", command)
-        ob.TM.run("send-keys", "-t", target, "Enter")
+        window = next((item for item in ob.TM.windows(ob.ws_session(ws_id)) if item["id"] == state["window"]), None)
+        if window is None:
+            raise HostError("this tab's tmux pane is unavailable; try again")
+        launched = _launch_owned_agent_locked(ws, tab, window)
         tab.pop("asleep", None)
         ob.META.save()
-    ob.log(f"spatial agent resume {ws_id}/{tab_id} kind={tab['kind']}")
-    return {"workspace": describe(ws_id), "detail": RESUME_NOTES[tab["kind"]], "fresh": tab["kind"] == "codex"}
+    reconnected = bool(launched and launched.get("reconnected"))
+    ob.log(f"spatial agent resume {ws_id}/{tab_id} kind={tab['kind']} reconnected={reconnected}")
+    detail = ("Showing this tab's running agent; no new agent was started" if reconnected
+              else RESUME_NOTES[tab["kind"]])
+    return {"workspace": describe(ws_id), "detail": detail, "fresh": tab["kind"] == "codex" and not reconnected,
+            "reconnected": reconnected}
 
 
 # --------------------------------------------------------------------------- views
 class SpatialView:
-    def __init__(self, ws_id, tab_id, window, cols, rows):
+    def __init__(self, ws_id, tab_id, window, cols, rows, station_id=None):
         self.id = secrets.token_hex(12)
         self.changed = threading.Event()
-        self.view = ob.View(ws_id, tab_id, window, cols, rows, self.changed.set, lambda text: None)
+        self.view = ob.View(ws_id, tab_id, window, cols, rows, self.changed.set, self._on_clipboard)
         self.ws_id, self.tab_id = ws_id, tab_id
+        self.station_id = station_id
+        self.cols, self.rows = cols, rows
         self.sequence, self.digest, self.last_check = 0, "", 0.0
         self.last_text = 0.0
         self.last_poll = time.monotonic()
         self.closed = False
         self.lock = threading.Lock()
+        self.clipboard_lock = threading.Lock()
+        self.pending_clipboard = None
         self.find_at, self.find_mark = None, None
         self.bracketed, self.modes_at = False, 0.0
+
+    def _on_clipboard(self, text):
+        """Store a bounded pane write. Never reads or writes an OS clipboard."""
+        raw = str(text).encode("utf-8", "replace")[:65536]
+        bounded = raw.decode("utf-8", "ignore")
+        with self.clipboard_lock:
+            self.pending_clipboard = {"viewId": self.id, "text": bounded, "chars": len(bounded),
+                                      "userGestureRequired": True, "writeOnly": True}
+
+    def take_clipboard(self):
+        with self.clipboard_lock:
+            value, self.pending_clipboard = self.pending_clipboard, None
+        return value
+
+    def switch_tab(self, tab):
+        """Switch this station mirror without changing its requested dimensions."""
+        with self.lock:
+            if self.closed or self.tab_id == tab["id"]:
+                return
+            replacement = ob.View(self.ws_id, tab["id"], tab["window"], self.cols, self.rows,
+                                  self.changed.set, self._on_clipboard)
+            old = self.view
+            self.view = replacement
+            self.tab_id = tab["id"]
+            self.sequence, self.digest = 0, ""
+            self.changed.set()
+            old.close()
+
+    def _truecolor(self, ch):
+        """Return exact sRGB colours while leaving legacy palette encoding intact."""
+        def one(value, fallback):
+            value = str(value or "").lower()
+            if re.fullmatch(r"[0-9a-f]{6}", value):
+                return "#" + value
+            digit = termcore._slot(value, fallback)
+            return "#" + termcore.PALETTE.get(digit, termcore.PALETTE[termcore.DEFAULT_FG])
+
+        fg, bg = one(ch.fg, termcore.DEFAULT_FG), one(ch.bg, termcore.DEFAULT_BG)
+        if (ch.bold or ch.underscore) and (ch.fg == "default" or ch.fg in termcore._NAMES):
+            fg_digit = termcore.cell_colours(ch)[0]
+            fg = "#" + termcore.PALETTE[fg_digit]
+        if ch.reverse:
+            fg, bg = bg, fg
+        return fg, bg
 
     def modes(self, fresh=False):
         """Scroll position, history size (bridge View.poll) and whether the app
@@ -552,9 +1278,15 @@ class SpatialView:
         with pty.lock:
             cols, rows = pty.cols, pty.rows
             cells = []
+            true_fg, true_bg = [], []
             for y in range(rows):
                 row = pty.screen.buffer.get(y, {})
                 cells.append([row[x].data if x in row else " " for x in range(cols)])
+                rgb_row = [self._truecolor(row[x]) if x in row else
+                           ("#" + termcore.PALETTE[termcore.DEFAULT_FG], "#" + termcore.PALETTE[termcore.DEFAULT_BG])
+                           for x in range(cols)]
+                true_fg.append([pair[0] for pair in rgb_row])
+                true_bg.append([pair[1] for pair in rgb_row])
             marks = {}
             if self.find_mark and self.find_mark[0]:
                 spans = termcore.find_spans(pty._lines(), self.find_mark[0])
@@ -571,7 +1303,9 @@ class SpatialView:
         # Empty strings are authoritative continuation cells. Preserve every
         # code point in a leading cell, including its combining marks.
         return {"cols": cols, "rows": rows, "lines": ["".join(row) for row in cells], "cells": cells,
-                "foreground": fg, "background": bg, "palette": PALETTE, "cursor": cursor,
+                "foreground": fg, "background": bg, "palette": PALETTE,
+                "truecolor": {"foreground": true_fg, "background": true_bg},
+                "cursor": cursor,
                 "bell": bell, **self.modes()}
 
     def dead_reason(self):
@@ -601,8 +1335,46 @@ class SpatialView:
 
 VIEWS = {}
 VIEWS_LOCK = threading.Lock()
+VIEW_RESERVATIONS = set()
+STATION_LOCK = threading.Lock()
+STATION_ACTIVE_TABS = {}
 
 
+_ORIGINAL_SLEEP_WATCHED = ob.SLEEPER.watched
+
+
+def _runtime_watched():
+    watched = _ORIGINAL_SLEEP_WATCHED()
+    if watched is None:
+        return None
+    with VIEWS_LOCK:
+        watched.update((view.ws_id, view.tab_id) for view in VIEWS.values() if not view.closed)
+    return watched
+
+
+ob.SLEEPER.watched = _runtime_watched
+
+
+def station_key(workspace_id, station_id):
+    return (workspace_id, station_id)
+
+
+def station_views(workspace_id, station_id):
+    with VIEWS_LOCK:
+        return [v for v in VIEWS.values() if v.ws_id == workspace_id and v.station_id == station_id]
+
+
+def steer_station(workspace_id, station_id, tab):
+    """Steer all current mirrors of one station, preserving each view size."""
+    with STATION_LOCK:
+        STATION_ACTIVE_TABS[station_key(workspace_id, station_id)] = tab["id"]
+        current = station_views(workspace_id, station_id)
+        for view in current:
+            if view.tab_id != tab["id"]:
+                view.switch_tab(tab)
+
+
+# --------------------------------------------------------------------------- view lookup
 def get_view(view_id):
     with VIEWS_LOCK:
         v = VIEWS.get(str(view_id or ""))
@@ -617,21 +1389,57 @@ def clamp_size(cols, rows):
 
 def op_attach(a):
     ws_id = check_ws(a.get("workspaceId"))
-    tab_id = str(a.get("tabId") or "")
-    tab_of(ws_id, tab_id)
-    d = WS.describe(ws_id)            # never restore, wake or start anything here
-    tab = next(t for t in d["tabs"] if t["id"] == tab_id)
+    requested_tab_id = str(a.get("tabId") or "")
+    tab_of(ws_id, requested_tab_id)
+    station_id = a.get("stationId")
+    if station_id is not None:
+        station_id = str(station_id)
+        if not STATION_RE.match(station_id):
+            raise HostError("invalid station id")
+    d = WS.describe(ws_id)            # never restore or launch on a normal attach
+    tab = next(t for t in d["tabs"] if t["id"] == requested_tab_id)
+    # WS.describe exposes live + a separate sleeping flag, not the spatial
+    # frontend's normalized state='sleeping'. Consult persisted ownership too:
+    # a busy original shell suppresses that display flag but must still deny
+    # the attempted wake and clear its stale asleep marker.
+    raw_tab = tab_of(ws_id, requested_tab_id)
+    if tab["state"] == "live" and raw_tab.get("asleep"):
+        ws_record = ob.META.workspaces[ws_id]
+        profile = _selected_profile(ws_record, requested_tab_id)
+        assert_hermes_turn_lease_free(profile)
+        woke = WS.wake(ws_id, requested_tab_id)
+        if not woke:
+            raise HostError("sleeping Hermes could not be resumed safely; no work was killed")
+        if not str(woke).startswith("waking Hermes"):
+            raise HostError(str(woke))
+        d = WS.describe(ws_id)
+        tab = next(t for t in d["tabs"] if t["id"] == requested_tab_id)
     if tab["state"] != "live":
         raise HostError(f"tab is {tab['state']}; revive it before attaching")
-    with VIEWS_LOCK:
-        if len(VIEWS) >= ob.LIMITS["views"]:
-            raise HostError("too many open views")
+    if station_id is not None:
+        # An explicit attach to another tab is the station's steering gesture.
+        # Existing mirrors switch atomically under the station lock and retain size.
+        steer_station(ws_id, station_id, tab)
     cols, rows = clamp_size(a.get("cols"), a.get("rows"))
-    v = SpatialView(ws_id, tab_id, tab["window"], cols, rows)
-    sync_size(v, cols, rows, limit=1.0)
+    reservation = secrets.token_hex(8)
     with VIEWS_LOCK:
-        VIEWS[v.id] = v
-    return {"viewId": v.id}
+        if len(VIEWS) + len(VIEW_RESERVATIONS) >= ob.LIMITS["views"]:
+            raise HostError(f"too many open views ({ob.LIMITS['views']}); close one first")
+        VIEW_RESERVATIONS.add(reservation)
+    try:
+        v = SpatialView(ws_id, tab["id"], tab["window"], cols, rows, station_id)
+        sync_size(v, cols, rows, limit=1.0)
+        with VIEWS_LOCK:
+            VIEWS[v.id] = v
+        return {"viewId": v.id, "tabId": v.tab_id, **({"stationId": station_id} if station_id is not None else {})}
+    finally:
+        with VIEWS_LOCK:
+            VIEW_RESERVATIONS.discard(reservation)
+
+
+def op_clipboard_pending(a):
+    """Return and consume a pane OSC 52 write; this never reads a device clipboard."""
+    return get_view(a.get("viewId")).take_clipboard()
 
 
 def op_poll(a):
@@ -684,7 +1492,7 @@ def op_input(a):
         raise HostError("view is not live")
     if FAULT_NOOP_INPUT:
         return None
-    with v.lock:
+    with v.lock, _input_delivery(v):
         v.view.live_again()
         for part in (p for p in re.split(r"(\r)", data) if p):
             if part == "\r":
@@ -745,16 +1553,17 @@ def op_wheel(a):
     full-screen app without it, otherwise tmux history. Positive = up."""
     v = live_view(a)
     notches = max(-50, min(int(a.get("notches") or 0), 50))
-    pty = v.view.pty
-    v.modes(fresh=True)
-    if notches and pty.mouse and not v.view.scroll_pos:
-        x = max(0, min(int(a.get("x") or 0), pty.cols - 1))
-        y = max(0, min(int(a.get("y") or 0), pty.rows - 1))
-        pty.write(f"\x1b[<{64 if notches > 0 else 65};{x + 1};{y + 1}M".encode() * min(abs(notches), 10))
-    elif notches and v.view.alt and not v.view.scroll_pos:
-        pty.write((b"\x1b[A" if notches > 0 else b"\x1b[B") * min(abs(notches) * 3, 60))
-    elif notches:
-        v.view.scroll(notches * 3)
+    with v.lock, _input_delivery(v):
+        pty = v.view.pty
+        v.modes(fresh=True)
+        if notches and pty.mouse and not v.view.scroll_pos:
+            x = max(0, min(int(a.get("x") or 0), pty.cols - 1))
+            y = max(0, min(int(a.get("y") or 0), pty.rows - 1))
+            pty.write(f"\x1b[<{64 if notches > 0 else 65};{x + 1};{y + 1}M".encode() * min(abs(notches), 10))
+        elif notches and v.view.alt and not v.view.scroll_pos:
+            pty.write((b"\x1b[A" if notches > 0 else b"\x1b[B") * min(abs(notches) * 3, 60))
+        elif notches:
+            v.view.scroll(notches * 3)
     v.modes(fresh=True)
     return v.modes()
 
@@ -816,7 +1625,7 @@ def op_paste(a):
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     if not CONTROL_RE.sub("", text).strip():
         raise HostError("nothing to paste")
-    with v.lock:
+    with v.lock, _input_delivery(v):
         v.view.live_again()
         if v.modes(fresh=True)["bracketedPaste"]:
             data = ob.bracketed(re.sub(r"[\x80-\x9f]", "", text))     # the bridge strips C0; C1 controls go too
@@ -842,8 +1651,13 @@ def op_detach(a):
 
 def op_status(_a):
     tmux = bool(ob.TM.bin)
+    with SLEEP_CONFIG_LOCK:
+        sleep = {"authorized": SLEEP_AUTHORIZED, "afterSeconds": SLEEP_AFTER_SECONDS,
+                 "detail": "idle Hermes sleep is authorized" if SLEEP_AUTHORIZED else "idle Hermes sleep is off"}
     return {"available": tmux and bool(shutil.which("bash")), "tmux": tmux, "python": True,
-            "agents": agents(), "profiles": ob.hermes_profiles(),
+            "agents": agents(), "profiles": ob.hermes_profiles(), "limits": {
+                "workspaces": ob.LIMITS["workspaces"], "tabsPerWorkspace": ob.LIMITS["tabs_per_workspace"],
+                "views": ob.LIMITS["views"]}, "idleSleep": sleep,
             "detail": "tmux server " + ("running" if ob.TM.alive() else "not started yet")}
 
 
@@ -876,9 +1690,11 @@ def reap_idle_views():
 
 
 OPS = {
-    "status": op_status, "open": op_open, "get": lambda a: describe(check_ws(a.get("workspaceId"))),
+    "status": op_status, "sleep_configure": lambda a: configure_idle_sleep(a.get("authorized") is True, a.get("afterSeconds")),
+    "open": op_open, "get": lambda a: describe(check_ws(a.get("workspaceId"))),
     "tab_new": op_tab_new, "tab_rename": op_tab_rename, "tab_close": op_tab_close,
-    "tab_revive": op_tab_revive, "attach": op_attach, "poll": op_poll, "input": op_input,
+    "tab_revive": op_tab_revive, "attach": op_attach, "clipboard_pending": op_clipboard_pending,
+    "poll": op_poll, "input": op_input,
     "resize": op_resize, "detach": op_detach,
     "ws_list": op_ws_list, "ws_rename": op_ws_rename, "ws_delete": op_ws_delete, "station_bind": op_station_bind,
     "ws_profile": op_ws_profile, "ws_keep_awake": op_ws_keep_awake, "agent_resume": op_agent_resume,
@@ -914,9 +1730,10 @@ def reconcile():
 
 
 def main():
-    signal.signal(signal.SIGTERM, lambda *_: (close_all_views(), os._exit(0)))
+    signal.signal(signal.SIGTERM, lambda *_: (MAINTENANCE_STOP.set(), close_all_views(), os._exit(0)))
     reconcile()
-    threading.Thread(target=reap_idle_views, daemon=True).start()
+    threading.Thread(target=maintenance_loop, name="omo-spatial-maintenance", daemon=True).start()
+    threading.Thread(target=reap_idle_views, name="omo-spatial-view-reaper", daemon=True).start()
     send({"id": 0, "ok": True, "result": {"ready": True, "version": VERSION, "bridge": ob.VERSION}})
     pool = ThreadPoolExecutor(max_workers=32, thread_name_prefix="omo-spatial")
     # Keystrokes, resizes and detaches keep their arrival order on one thread.
@@ -929,6 +1746,7 @@ def main():
         if not isinstance(msg, dict):
             continue
         if msg.get("op") == "shutdown":
+            MAINTENANCE_STOP.set()
             close_all_views()
             send({"id": msg.get("id"), "ok": True, "result": None})
             break

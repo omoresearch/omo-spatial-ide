@@ -93,11 +93,11 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
             <button data-testid="runtime-board-refresh" onClick={() => void controller?.refreshBoard()}>{state.board ? 'Refresh list' : 'All workspaces'}</button>
         </div>
         {state.board && <ul data-testid="runtime-board" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {state.board.map(b => <li key={b.id} className="omo-console-row" data-testid={`runtime-board-${b.id}`}>
-                <span title={b.projectUri}>{b.name}{b.id === ws.id ? ' (here)' : ''}</span>
-                <span className="omo-console-hint">{b.state} · {b.tabs.length} tab{b.tabs.length === 1 ? '' : 's'}{b.tabs.some(t => t.busy) ? ' · working' : ''}{b.stations.length ? ` · stations: ${b.stations.join(', ')}` : ''}</span>
-                {b.id !== ws.id && b.projectUri === ws.projectUri && <button data-testid={`runtime-board-bind-${b.id}`} disabled={locked} onClick={() => void controller?.bindToWorkspace(b.id)}>Show here</button>}
-                {b.id !== ws.id && <button data-testid={`runtime-board-delete-${b.id}`} disabled={locked} onClick={() => controller?.requestDeleteWorkspace(b.id)}>Delete…</button>}
+            {state.board.map(b => <li key={b.id} className="omo-console-row" data-testid="runtime-board-entry">
+                <span>{b.name}{b.id === ws.id ? ' (here)' : ''}</span>
+                <span className="omo-console-hint">{b.state} · {b.tabs.length} tab{b.tabs.length === 1 ? '' : 's'}{b.tabs.some(t => t.busy) ? ' · Process active' : ''}{b.stations.length ? ' · linked station' : ''}</span>
+                {b.id !== ws.id && b.projectUri === ws.projectUri && <button data-testid="runtime-board-bind" aria-label={`Show workspace ${b.name} here`} disabled={locked} onClick={() => void controller?.bindToWorkspace(b.id)}>Show here</button>}
+                {b.id !== ws.id && <button data-testid="runtime-board-delete" aria-label={`Delete workspace ${b.name}`} disabled={locked} onClick={() => controller?.requestDeleteWorkspace(b.id)}>Delete…</button>}
             </li>)}
             <li className="omo-console-row"><button data-testid="runtime-board-delete-current" disabled={locked} onClick={() => controller?.requestDeleteWorkspace(ws.id)}>Delete this workspace…</button></li>
         </ul>}
@@ -105,7 +105,7 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
 }
 
 /** Compact world overlay for the terminal station. It manages tabs; the monitor itself stays the terminal. */
-export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean; onOpenLink?: (url: string) => void; onReview?: () => Promise<GitReviewSnapshot | undefined> }): React.ReactElement {
+export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean; onOpenLink?: (url: string) => void; onReview?: () => Promise<GitReviewSnapshot | undefined>; onNewAgentTask?: () => void }): React.ReactElement {
     const { state, controller } = props;
     const ws = state.workspace;
     const [drawer, setDrawer] = React.useState(!!props.initialDrawer);
@@ -114,12 +114,18 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
     React.useEffect(() => setEditing(undefined), [ws?.id]);
     const launchers = launcherOptions(state.host);
     const locked = !ws || state.acting || !!state.pending;
+    const copyPending = async (): Promise<void> => {
+        if (!state.pendingClipboard) return;
+        try { await navigator.clipboard.writeText(state.pendingClipboard.text); controller?.acknowledgePendingClipboard(`Copied ${state.pendingClipboard.chars} characters from a terminal OSC 52 write. Nothing was read or sent to the terminal.`); }
+        catch { controller?.acknowledgePendingClipboard('Clipboard permission was denied. Nothing was read or sent to the terminal.'); }
+    };
     const hint = launchers.filter(o => !o.available && o.installHint).map(o => `${o.label}: ${o.installHint}`).join(' · ');
     return <div className="omo-console-strip" data-testid="runtime-console" data-phase={state.phase} aria-label="Terminal station tabs">
         <div className="omo-console-row">
             <span className={`omo-console-dot is-${state.phase}`} aria-hidden="true" />
             <span className="omo-console-status" role="status" data-testid="runtime-status">{state.statusText}</span>
             {ws && <span className="omo-console-ws" title={ws.projectUri}>{ws.name}</span>}
+            {state.pendingClipboard && <button type="button" data-testid="runtime-copy-osc52" onClick={() => void copyPending()} title="Write the pending terminal copy to this browser clipboard">Copy pending terminal text ({state.pendingClipboard.chars})</button>}
             {state.unreadBells > 0 && <button data-testid="runtime-bell-ack" className="omo-bell-alert" onClick={() => controller?.acknowledgeBells()} title="Clear this desk's visual bell signal only; no command is sent">Acknowledge bell ({state.unreadBells})</button>}
         </div>
         {ws && <div className="omo-console-tabs" role="tablist" aria-label="Workspace tabs">
@@ -127,7 +133,7 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
                 <button role="tab" aria-selected={tab.id === state.activeTabId} data-testid={`runtime-tab-${tab.id}`} disabled={state.acting}
                     title={`${AGENT_LABELS[tab.kind]} · ${STATE_LABEL[tab.state]}${tab.detail ? ` · ${tab.detail}` : ''}`}
                     onClick={() => void controller?.selectTab(tab.id)}>
-                    {tab.name}{tab.busy && <i className="omo-console-busy" aria-label="working"> ●</i>}
+                    {tab.name}{tab.busy && <i className="omo-console-busy" aria-label="Process active"> ●</i>}
                     {tab.state !== 'running' && <small> {STATE_LABEL[tab.state]}</small>}
                 </button>
                 {(tab.state === 'interrupted' || tab.state === 'exited') && <button className="omo-console-mini" disabled={locked} data-testid={`runtime-revive-${tab.id}`} onClick={() => controller?.requestRevive(tab.id)} title="Start this tab again">↻</button>}
@@ -150,6 +156,7 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
                     {state.host.profiles.map(p => <option key={p} value={p}>{p}</option>)}
                 </select></label>}
             <button type="button" data-testid="runtime-task-toggle" aria-expanded={task} onClick={() => { setTask(!task); setDrawer(false); }}>Task {task ? '▴' : '▾'}</button>
+            {props.onNewAgentTask && <button type="button" data-testid="agent-workflow-toggle" onClick={props.onNewAgentTask}>New agent task</button>}
             <button data-testid="runtime-manage-toggle" aria-expanded={drawer} onClick={() => { setDrawer(!drawer); setTask(false); }} title="Find, scrollback, copy, paste and workspaces">{drawer ? 'Manage ▴' : 'Manage ▾'}</button>
         </div>}
         {ws && task && <AgentTaskDrawer state={state} controller={controller} onReview={props.onReview} />}
