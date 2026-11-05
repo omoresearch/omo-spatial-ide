@@ -4,7 +4,7 @@ import { AgentGlyph } from './agent-glyphs';
 import type { GitReviewSnapshot } from '../common/git-review-protocol';
 import type { SessionTab } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
-import { AGENT_LABELS, PASTE_LIMIT_BYTES, RuntimeConsoleController, RuntimeConsoleState, TAB_NAME_MAX, WORKSPACE_NAME_MAX, launcherOptions } from './runtime-console-controller';
+import { AGENT_LABELS, PASTE_LIMIT_BYTES, RuntimeConsoleController, RuntimeConsoleState, TAB_NAME_MAX, WORKSPACE_NAME_MAX, launcherOptions, launchersLastFirst, readLastTabKind } from './runtime-console-controller';
 
 const STATE_LABEL: Record<SessionTab['state'], string> = { running: 'running', exited: 'exited', interrupted: 'interrupted', sleeping: 'asleep', unknown: 'unknown' };
 
@@ -136,6 +136,9 @@ export function FocusTabs(props: { state: RuntimeConsoleState; controller?: Runt
     const launchers = launcherOptions(state.host);
     const shell = launchers.find(o => o.kind === 'shell');
     const done = (): void => props.onPicked?.();
+    // '+' repeats the last-used kind. Agents still go through requestNewTab's confirmation.
+    const last = launchers.find(o => o.kind === readLastTabKind());
+    const repeat = last && (last.kind === 'shell' || props.agents !== false) ? last : undefined;
     return <div className="omo-focus-tabs" role="tablist" aria-label="Desk tabs" data-testid="focus-tabs">
         {ws.tabs.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={tab.id === state.activeTabId} data-testid={`focus-tab-${tab.id}`}
             className={`omo-focus-tab kind-${tab.kind} state-${tab.state} ${tab.id === state.activeTabId ? 'is-active' : ''}`} disabled={state.acting}
@@ -146,6 +149,9 @@ export function FocusTabs(props: { state: RuntimeConsoleState; controller?: Runt
             {tab.busy && <i className="omo-focus-tab-busy" aria-label="Process active" />}
             {tab.state !== 'running' && <small>{STATE_LABEL[tab.state]}</small>}
         </button>)}
+        {repeat && <button type="button" className="omo-focus-tab-new is-repeat" data-testid="focus-new-last" data-kind={repeat.kind} disabled={locked || !repeat.available}
+            title={repeat.available ? `New ${repeat.label} tab, like the last one${repeat.kind === 'shell' ? '' : ' (asks first)'}` : repeat.reason}
+            onClick={() => { void controller?.requestNewTab(repeat.kind); if (repeat.kind === 'shell') done(); }}>+ <AgentGlyph kind={repeat.kind} />{repeat.label}</button>}
         <button type="button" className="omo-focus-tab-new" data-testid="focus-new-shell" disabled={locked || !shell?.available}
             title={shell?.available ? 'New shell tab (Ctrl+Shift+T)' : shell?.reason} onClick={() => { void controller?.requestNewTab('shell'); done(); }}>+ Shell</button>
         {props.agents !== false && launchers.filter(o => o.kind !== 'shell').map(o => <button key={o.kind} type="button" className="omo-focus-tab-new is-agent" data-testid={`focus-new-${o.kind}`}
@@ -199,8 +205,9 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
         </form>}
         {ws && <div className="omo-console-row omo-console-new">
             <span className="omo-console-label">New</span>
-            {launchers.map(o => <button key={o.kind} data-testid={`runtime-new-${o.kind}`} disabled={locked || !o.available}
-                title={o.available ? `Open a new ${o.label} tab` : `${o.reason}${o.installHint ? ` — install: ${o.installHint}` : ''}`}
+            {launchersLastFirst(launchers).map((o, i) => <button key={o.kind} data-testid={`runtime-new-${o.kind}`} disabled={locked || !o.available}
+                className={i === 0 && o.kind === readLastTabKind() ? 'is-last-kind' : undefined} data-last-kind={i === 0 && o.kind === readLastTabKind() ? 'true' : undefined}
+                title={o.available ? `Open a new ${o.label} tab${i === 0 && o.kind === readLastTabKind() ? ' (last used)' : ''}${o.kind === 'shell' ? '' : ' — asks first'}` : `${o.reason}${o.installHint ? ` — install: ${o.installHint}` : ''}`}
                 onClick={() => void controller?.requestNewTab(o.kind)}>+ {o.label}</button>)}
             {!!state.host?.profiles.length && <label className="omo-console-profile">Profile
                 <select data-testid="runtime-profile" value={state.profile} disabled={locked} onChange={event => controller?.setProfile(event.target.value)}>

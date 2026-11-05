@@ -25,7 +25,7 @@ at the end.
 | Terminal: persistent shell, nothing auto-starts | Desk shell tab in tmux; restore never launches an agent | done | `runtime/omo_spatial_host.py`, `INTEGRATION.md` |
 | Tab kinds Shell / Hermes / Claude Code / Codex from **+** | "New" row with four kinds | done | `runtime-console-strip.tsx` (`runtime-new-*`) |
 | Not-installed CLI: honest install hint | Disabled launcher with reason + install hint | done | `runtime-console-controller.ts` (`LauncherOption.installHint`) |
-| **+** remembers last kind (+ then Enter repeats) | — | missing | — |
+| **+** remembers last kind (+ then Enter repeats) | Last opened kind saved on this device; the New row lists it first and the attached-screen tab bar shows a "+ <last kind>" button. Agent kinds still show the usual Start confirmation; nothing starts on the click | missing → **done (this branch)** | `runtime-console-controller.ts` (`LAST_TAB_KIND_KEY`, `launchersLastFirst`), `runtime-console-strip.tsx` (`focus-new-last`) |
 | Tab glyphs (Hermes spark, Claude burst, Codex ring) | SVG glyph per kind on desk tabs, attached-screen tabs, agent roster chips and in-world name tags | partial → **done (this branch)** | `agent-glyphs.tsx`, `runtime-console-strip.tsx` (`FocusTabs`, used by `focus-overlay.tsx`), `agent-avatars.ts` |
 | Tab state dots (idle / running / interrupted / exited) | State text + busy dot per tab | done | `runtime-console-strip.tsx` |
 | Rename / close (busy needs confirmation) / revive tab | ✎ × ↻ with confirmation | done | `runtime-console-controller.ts` (`requestClose`, `requestRevive`) |

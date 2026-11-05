@@ -111,6 +111,20 @@ export function bindingKey(binding: Pick<StationBinding, 'stationId' | 'projectU
     return `omo.runtime.v1:${binding.projectUri}#${binding.stationId}`;
 }
 
+/** '+' remembers the last tab kind opened on this device (only the kind; never starts anything). */
+export const LAST_TAB_KIND_KEY = 'omo.runtime.last-tab-kind.v1';
+export function readLastTabKind(): AgentKind | undefined {
+    try { const value = globalThis.localStorage?.getItem(LAST_TAB_KIND_KEY); return AGENT_KINDS.includes(value as AgentKind) ? value as AgentKind : undefined; } catch { return undefined; }
+}
+export function rememberLastTabKind(kind: AgentKind): void {
+    try { globalThis.localStorage?.setItem(LAST_TAB_KIND_KEY, kind); } catch { /* storage unavailable: nothing remembered */ }
+}
+/** Launchers with the last-used kind first (the rest keep their order). */
+export function launchersLastFirst(options: LauncherOption[], last = readLastTabKind()): LauncherOption[] {
+    const index = last ? options.findIndex(o => o.kind === last) : -1;
+    return index <= 0 ? options : [options[index], ...options.slice(0, index), ...options.slice(index + 1)];
+}
+
 export function launcherOptions(host: HostStatus | undefined): LauncherOption[] {
     return AGENT_KINDS.map(kind => {
         const label = AGENT_LABELS[kind];
@@ -631,6 +645,7 @@ export class RuntimeConsoleController {
                 activate = next.tabs.find(t => !before.has(t.id))?.id;
                 notice = activate ? `${AGENT_LABELS[kind]} started in a new tab.` : '';
                 if (!activate) throw new Error('The runtime did not report a new tab.');
+                rememberLastTabKind(kind);
             } else if (action.type === 'revive') {
                 next = await this.service.reviveTab({ workspaceId: workspace.id, tabId: action.tabId!, confirmedStart: true });
                 activate = action.tabId; notice = 'Tab revived.';
