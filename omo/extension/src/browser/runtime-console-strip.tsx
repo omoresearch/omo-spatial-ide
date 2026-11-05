@@ -104,6 +104,24 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
     </div>;
 }
 
+/**
+ * The desk's pending confirmation, error and notice, without the rest of the strip.
+ * Focus mode hides the strip, so it shows this instead: a confirmation must never be hidden.
+ */
+export function ConsoleAlerts(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; onDone?: () => void }): React.ReactElement | null {
+    const { state, controller } = props;
+    if (!state.pending && !state.error && !state.notice) return null;
+    return <div className="omo-console-alerts" data-testid="focus-console-alerts">
+        {state.pending && <div className="omo-console-confirm" role="alertdialog" aria-label="Confirm" data-testid="focus-confirm">
+            <p>{state.pending.message}</p>
+            <button className="omo-console-go" data-testid="focus-confirm-yes" onClick={() => { void controller?.confirmPending(); props.onDone?.(); }}>{state.pending.confirmLabel}</button>
+            <button data-testid="focus-confirm-no" onClick={() => { controller?.cancelPending(); props.onDone?.(); }}>Cancel</button>
+        </div>}
+        {state.error && <div className="omo-console-error" role="alert">{state.error}</div>}
+        {!state.error && state.notice && <div className="omo-console-hint">{state.notice}</div>}
+    </div>;
+}
+
 /** Compact world overlay for the terminal station. It manages tabs; the monitor itself stays the terminal. */
 export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; initialDrawer?: boolean; onOpenLink?: (url: string) => void; onReview?: () => Promise<GitReviewSnapshot | undefined>; onNewAgentTask?: () => void }): React.ReactElement {
     const { state, controller } = props;

@@ -40,6 +40,8 @@ export class FirstPersonControls {
     copyOverride?: () => boolean;
     /** Plain F while walking: ask focus mode to attach to the nearest monitor in full screen. */
     fullRequest?: () => void;
+    /** A plain click chose a desk monitor: focus mode frames it. Returns true when it attached. */
+    attachRequest?: () => boolean;
     constructor(private canvas: HTMLCanvasElement, private camera: THREE.PerspectiveCamera,
         private interact: (x: number, y: number, modifiers?: { ctrlKey: boolean; metaKey: boolean }) => 'terminal' | 'code' | undefined,
         private input: (text: string) => void, private message: (text: string) => void, private pasteText?: (text: string) => void,
@@ -88,6 +90,8 @@ export class FirstPersonControls {
             if (!this.pointer) return; const dragged=this.pointer.dragged;this.pointer=undefined;
             if (!dragged) {
                 const hit=this.interact(event.clientX,event.clientY,{ctrlKey:event.ctrlKey,metaKey:event.metaKey});
+                // A plain click frames the desk screen; Ctrl/Cmd-click stays a link click.
+                if(hit==='terminal'&&!event.ctrlKey&&!event.metaKey&&this.attachRequest?.())return;
                 if(hit==='terminal')this.focusTerminal();
             }
         });
