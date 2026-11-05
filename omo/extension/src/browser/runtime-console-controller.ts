@@ -588,6 +588,18 @@ export class RuntimeConsoleController {
         }
     }
 
+    /**
+     * Opt-in idle sleep for unseen idle Hermes tabs (host-wide, off by default). Only an explicit
+     * user toggle calls this; it never starts, wakes or types into an agent.
+     */
+    async setIdleSleep(authorized: boolean, afterSeconds = 900): Promise<void> {
+        if (this.disposed || !this.current.host) return;
+        try {
+            const idleSleep = await this.service.setIdleSleep(authorized ? { authorized, afterSeconds: Math.max(60, Math.min(86400, Math.round(afterSeconds))) } : { authorized: false });
+            this.set({ host: { ...this.current.host!, idleSleep }, error: '', notice: idleSleep.authorized ? `Idle Hermes tabs you are not watching will sleep after ${Math.round(idleSleep.afterSeconds / 60)} min and wake when you look.` : 'Idle sleep is off. Tabs keep running.' });
+        } catch (error) { this.set({ error: `Idle sleep was not changed: ${error instanceof Error ? error.message : String(error)}` }); }
+    }
+
     setProfile(profile: string): void {
         if (this.current.host?.profiles.includes(profile)) this.set({ profile });
     }

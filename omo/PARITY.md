@@ -35,7 +35,7 @@ at the end.
 | Workspace switcher (search, switch, never stops anything) | Manage ▸ All workspaces, Show here | done | `runtime-console-strip.tsx` (`runtime-board-*`) |
 | Rename workspace / per-workspace Hermes profile | Manage ▸ Rename, Workspace profile | done | `PARITY-ADVANCED.md` |
 | `keep_awake` switch | Checkbox | done | `runtime-console-strip.tsx` (`runtime-keep-awake`) |
-| Auto-sleep idle unseen Hermes tabs, wake on view | Opt-in `setIdleSleep`, off by default | partial (off by default, no UI toggle) | `RUNTIME-COMPLETION.md` |
+| Auto-sleep idle unseen Hermes tabs, wake on view | Opt-in `setIdleSleep`, off by default; checkbox + minutes in Station recipes (station setup) | partial → **done (this branch)** | `station-recipe-panel.tsx` (`station-idle-sleep-toggle`), `runtime-console-controller.ts` (`setIdleSleep`), `RUNTIME-COMPLETION.md` |
 | Restore lost tabs after reboot (names, order, cwd, never re-run) | Host restore + cwd recorder | done | `runtime/omo_spatial_host.py`, `test/runtime-tab-restore-real-tmux.test.cjs` |
 | INTERRUPTED / ENDED / TAB ENDED states, reconnect pill | Phase + status text, reconnect on load | done | `runtime-console-controller.ts` |
 | Omo Pocket (station on an item) | Theia panels cover off-world use | n/a | — |
