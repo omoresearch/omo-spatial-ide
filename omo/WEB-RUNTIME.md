@@ -44,8 +44,16 @@ against a real Chrome directly.
   - At most 4. Ids are `web-<12 hex>`.
   - Size: 960x600 by default as the client requests it; any integer from 320x200 to 1920x1200 is
     accepted, otherwise the call rejects.
-  - Page-opened popups are closed and folded into the surface, which navigates to the popup's URL if
-    it passes the URL policy. Any other stray tab is closed. Downloads are denied.
+  - **Tabs.** Each surface has 1 to 6 page tabs (`MAX_TABS`). `target=_blank` links, `window.open`
+    and any real popup window become a new tab of the same surface, which turns active; the address is
+    checked again by the URL policy, so `javascript:` and other schemes never open. At 6 tabs the link
+    loads in the active tab instead. A page may request at most 3 tabs per 2 s. `listTabs`,
+    `selectTab` and `closeTab` manage them; the last tab cannot be closed (close the surface).
+    `frame()` and all input use the active tab. Hidden tabs are always muted.
+  - **Leak guard.** At most 12 live pages across all surfaces (`MAX_LIVE_PAGES`). Before a new page is
+    created, the least recently used hidden tab is put to sleep: its page is closed, its address and
+    title stay in the list (`sleeping: true`), and selecting it reloads it. Any other stray page is
+    closed. Downloads are denied.
 - **`frame()`** takes a real JPEG screenshot (quality 70) and reads the real URL and title.
   `sequence` only advances when the pixels or metadata change. If nothing changed after
   `afterSequence`, it waits up to 400 ms and then returns the unchanged frame.
@@ -80,7 +88,7 @@ against a real Chrome directly.
     elements created later and pages that unmute themselves. It covers same-origin and cross-origin
     iframes, and it survives navigation.
   - `setAudio` clamps volume to [0,1] and applies the policy immediately to every frame.
-- **No escape hatches.** The class has only the 11 `OmoWebService` methods. Internals are `#private`.
+- **No escape hatches.** The class has only the 14 `OmoWebService` methods. Internals are `#private`.
   There is no evaluate or CDP passthrough.
 
 ## Audio fidelity: what is and is not verified
@@ -120,7 +128,8 @@ The tests prove:
 - missing Chrome is reported honestly, and URL safety and argument validation hold;
 - the 4-surface cap and id ownership hold;
 - refused, hung and 404 navigations are honest and bounded;
-- popup folding, `closeAll` with no orphan processes, and an external kill reported exactly followed
+- popups and `target=_blank` becoming tabs (cap 6, select/close, `javascript:` inert), the 12-page
+  leak guard (LRU sleep and wake), `closeAll` with no orphan processes, and an external kill reported exactly followed
   by a relaunch;
 - a second backend is refused on a locked profile;
 - the audio policy is applied across frames and media.
