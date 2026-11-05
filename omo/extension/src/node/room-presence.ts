@@ -1,9 +1,14 @@
 import { randomUUID } from 'crypto';
-import { presenceJoin, presenceLayout, presencePose, voiceSignal, voiceStatus, VOICE_INBOX_MAX } from '../common/presence-protocol';
-import type { OmoPresenceService as OmoPresenceServiceType, PresenceJoin, RoomMember, RoomSnapshot, VoiceSignalEnvelope } from '../common/presence-protocol';
+import { presenceJoin, presenceLayout, presencePose, voiceSignal, voiceStatus, VOICE_INBOX_MAX, presenceColour, chatSay, PRESENCE_COLOURS, CHAT_INBOX_MAX, CHAT_RATE_COUNT, CHAT_RATE_WINDOW_MS } from '../common/presence-protocol';
+import type { OmoPresenceService as OmoPresenceServiceType, PresenceJoin, RoomMember, RoomSnapshot, VoiceSignalEnvelope, ChatMessage, PresenceColour } from '../common/presence-protocol';
 import { PLAYER_HOME } from '../common/player-state';
 import type { PlayerPose, RoomLayoutId } from '../common/player-state';
-interface Member extends RoomMember { clientId: string; seen: number; inbox?: VoiceSignalEnvelope[] }
+interface Member extends RoomMember { clientId: string; seen: number; inbox?: VoiceSignalEnvelope[]; chat?: ChatMessage[]; said?: number[] }
+/** First palette colour nobody in the room uses yet (stable, no randomness). */
+function freeColour(room: { members: Map<string, Member> }, self: string): PresenceColour {
+    const used = new Set([...room.members.values()].filter(m => m.id !== self).map(m => m.colour));
+    return PRESENCE_COLOURS.find(c => !used.has(c)) ?? PRESENCE_COLOURS[room.members.size % PRESENCE_COLOURS.length];
+}
 interface Room { projectUri: string; theme: PresenceJoin['theme']; layout: RoomLayoutId; members: Map<string,Member> }
 /** Ephemeral visual presence. One server-owned member identity per RPC connection. */
 export class RoomPresence {
@@ -22,7 +27,7 @@ export class RoomPresence {
         const snapshot=():RoomSnapshot=>{
             const room=roomId&&this.rooms.get(roomId);
             if(!room||!room.members.has(selfId))throw new Error('Join a room first. Presence expired or disconnected.');
-            const result: RoomSnapshot = {roomId:roomId!,theme:room.theme,selfId,members:[...room.members.values()].map(m=>{const out:RoomMember={id:m.id,name:m.name,pose:{...m.pose}};if(m.voice)out.voice={...m.voice};return out;})};
+            const result: RoomSnapshot = {roomId:roomId!,theme:room.theme,selfId,members:[...room.members.values()].map(m=>{const out:RoomMember={id:m.id,name:m.name,pose:{...m.pose}};if(m.voice)out.voice={...m.voice};if(m.colour)out.colour=m.colour;return out;})};
             if (room.layout === 'wide') result.layout = 'wide';
             return result;
         };
@@ -38,7 +43,8 @@ export class RoomPresence {
                 if(roomId!==input.roomId)leave();
                 if(!room){room={projectUri:input.projectUri,theme:input.theme,layout:presenceLayout(input),members:new Map()};this.rooms.set(input.roomId,room);}
                 const old=room.members.get(selfId);
-                room.members.set(selfId,{id:selfId,clientId:input.clientId,name:input.name,pose:old?.pose??{...PLAYER_HOME},seen:this.now()});roomId=input.roomId;previousJoin=input;membershipToken=Symbol();
+                const fresh:Member={id:selfId,clientId:input.clientId,name:input.name,pose:old?.pose??{...PLAYER_HOME},seen:this.now(),colour:old?.colour??freeColour(room,selfId)};if(old?.chat)fresh.chat=old.chat;if(old?.said)fresh.said=old.said;
+                room.members.set(selfId,fresh);roomId=input.roomId;previousJoin=input;membershipToken=Symbol();
                 return snapshot();
             },
             update:async raw=>{
@@ -82,6 +88,36 @@ export class RoomPresence {
                 open();const member=roomId?this.rooms.get(roomId)?.members.get(selfId):undefined;
                 if(!member?.voice||!member.inbox?.length)return [];
                 const out=member.inbox;member.inbox=[];return out;
+            },
+            // Room text chat: fan out to the OTHER members of the same room only. Memory only, bounded,
+            // rate limited. The backend never interprets a message and never forwards it to a terminal.
+            setColour:async raw=>{
+                open();const colour=presenceColour(raw);this.sweep();
+                const member=roomId?this.rooms.get(roomId)?.members.get(selfId):undefined;
+                if(!member)throw new Error('Join a room before choosing a colour.');
+                member.colour=colour;
+            },
+            say:async raw=>{
+                open();const said=chatSay(raw);this.sweep();
+                const room=roomId?this.rooms.get(roomId):undefined,member=room?.members.get(selfId);
+                if(!room||!member)throw new Error('Join a room before chatting.');
+                const now=this.now();member.said=(member.said??[]).filter(t=>now-t<CHAT_RATE_WINDOW_MS);
+                if(member.said.length>=CHAT_RATE_COUNT)throw new Error('You are sending messages too fast. Wait a few seconds.');
+                member.said.push(now);
+                const message:ChatMessage={id:randomUUID(),from:selfId,fromName:member.name,at:now,kind:said.kind};
+                if(member.colour)message.colour=member.colour;
+                if(said.kind==='text')message.text=said.text;else message.emote=said.emote;
+                for(const other of room.members.values()){
+                    if(other.id===selfId)continue;
+                    const inbox=other.chat??(other.chat=[]);
+                    inbox.push({...message});if(inbox.length>CHAT_INBOX_MAX)inbox.splice(0,inbox.length-CHAT_INBOX_MAX);
+                }
+                return {...message};
+            },
+            takeChat:async()=>{
+                open();const member=roomId?this.rooms.get(roomId)?.members.get(selfId):undefined;
+                if(!member?.chat?.length)return [];
+                const out=member.chat;member.chat=[];return out;
             },
             dispose:()=>{closed=true;leave();}
         };return service;

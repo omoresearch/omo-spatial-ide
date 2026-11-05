@@ -3,7 +3,7 @@ import type { PlayerPose, RoomLayoutId } from './player-state';
 export const OMO_PRESENCE_PATH = '/services/omo-presence';
 export const OmoPresenceService = Symbol('OmoPresenceService');
 export interface PresenceJoin { roomId: string; name: string; clientId: string; projectUri: string; theme: RoomTheme; layout?: RoomLayoutId }
-export interface RoomMember { id: string; name: string; pose: PlayerPose; voice?: VoiceStatus }
+export interface RoomMember { id: string; name: string; pose: PlayerPose; voice?: VoiceStatus; /** Name-tag colour (additive). One of PRESENCE_COLOURS. */ colour?: PresenceColour }
 export interface RoomSnapshot { roomId: string; theme: RoomTheme; selfId: string; members: RoomMember[]; layout?: RoomLayoutId }
 /** Local trusted clients only. No terminal contents or remote-control messages. */
 export interface OmoPresenceService {
@@ -17,6 +17,46 @@ export interface OmoPresenceService {
     signal(message: VoiceSignal): Promise<void>;
     /** Take (and clear) the signalling messages addressed to this connection. */
     takeSignals(): Promise<VoiceSignalEnvelope[]>;
+    // --- room text chat and name colour (additive). Room members only; nothing is stored on disk. ---
+    /** Choose this member's name-tag colour. Requires a joined room. */
+    setColour(colour: PresenceColour): Promise<void>;
+    /** Say one line (or one emote) to the other members of this room. Returns the stored message. */
+    say(input: ChatSay): Promise<ChatMessage>;
+    /** Take (and clear) the chat messages other members sent to this connection since the last call. */
+    takeChat(): Promise<ChatMessage[]>;
+}
+/** A small fixed palette. Colours are never free text, so a tag cannot carry markup or tracking. */
+export const PRESENCE_COLOURS = ['rose', 'sky', 'amber', 'mint', 'coral', 'violet', 'lime', 'sand'] as const;
+export type PresenceColour = typeof PRESENCE_COLOURS[number];
+export const PRESENCE_COLOUR_HEX: Record<PresenceColour, string> = {
+    coral: '#ff7a6b', amber: '#ffc04d', lime: '#a6e35a', mint: '#5fe0b5', sky: '#5fb4ff', violet: '#b48cff', rose: '#ff6fc4', sand: '#e0c9a0'
+};
+export function presenceColour(input: unknown): PresenceColour {
+    if (typeof input !== 'string' || !(PRESENCE_COLOURS as readonly string[]).includes(input)) throw new Error('Choose one of the room colours.');
+    return input as PresenceColour;
+}
+/** Emotes are a closed set: the receiver draws them, the sender cannot send pictures or markup. */
+export const CHAT_EMOTES = ['wave', 'cheer', 'thumbsup', 'clap'] as const;
+export type ChatEmote = typeof CHAT_EMOTES[number];
+export type ChatSay = { kind: 'text'; text: string } | { kind: 'emote'; emote: ChatEmote };
+export interface ChatMessage { id: string; from: string; fromName: string; colour?: PresenceColour; at: number; kind: 'text' | 'emote'; text?: string; emote?: ChatEmote }
+export const CHAT_TEXT_MAX = 500;
+export const CHAT_INBOX_MAX = 100;
+/** At most CHAT_RATE_COUNT lines per CHAT_RATE_WINDOW_MS per member. */
+export const CHAT_RATE_COUNT = 8;
+export const CHAT_RATE_WINDOW_MS = 10_000;
+export function chatSay(input: ChatSay): ChatSay {
+    if (!input || typeof input !== 'object') throw new Error('Invalid chat message.');
+    if (input.kind === 'emote') {
+        if (!(CHAT_EMOTES as readonly string[]).includes(input.emote)) throw new Error('Unknown emote.');
+        return { kind: 'emote', emote: input.emote };
+    }
+    if (input.kind !== 'text' || typeof input.text !== 'string') throw new Error('Invalid chat message.');
+    if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(input.text)) throw new Error('Chat is one line of plain text, without control characters.');
+    const text = input.text.trim();
+    if (!text) throw new Error('Type a message first.');
+    if (text.length > CHAT_TEXT_MAX) throw new Error(`Chat lines are at most ${CHAT_TEXT_MAX} characters.`);
+    return { kind: 'text', text };
 }
 /** Voice state a member chose to publish. Booleans only; never audio, transcripts or terminal text. */
 export interface VoiceStatus { session: string; muted: boolean; speaking: boolean }
