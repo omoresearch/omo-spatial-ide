@@ -102,7 +102,22 @@ function disposeTree(root: THREE.Object3D): void {
     });
 }
 
-interface AgentBody { root: THREE.Group; body: THREE.Group; tag: THREE.Sprite; ring: THREE.Mesh; tagKey: string; presence: AgentPresence; baseY: number }
+interface AgentBody { root: THREE.Group; body: THREE.Group; tag: THREE.Sprite; ring: THREE.Mesh; tagKey: string; presence: AgentPresence; baseY: number; slot: string }
+
+/**
+ * Optional hooks a host scene puts on `scene.userData.omoAmbient` so ambient modules join its single
+ * render loop instead of running their own. RoomScene provides them.
+ */
+export interface AmbientHost {
+    /** Register a per-frame tick. It returns true while it still animates (the host keeps drawing). */
+    add(tick: (seconds: number) => boolean): () => void;
+    /** Something changed outside a tick: draw one frame. `shadows` also refreshes the shadow map. */
+    invalidate(shadows?: boolean): void;
+}
+export function ambientHost(scene: THREE.Scene | undefined): AmbientHost | undefined {
+    const host = scene?.userData.omoAmbient as AmbientHost | undefined;
+    return host && typeof host.add === 'function' && typeof host.invalidate === 'function' ? host : undefined;
+}
 interface PeerMark { root: THREE.Group; ring: THREE.Mesh; icon: THREE.Sprite; state: string }
 
 /** Owns agent avatars and voice rings. Attach to a RoomScene's THREE.Scene; re-attach after the scene is rebuilt. */
@@ -116,64 +131,86 @@ export class AgentAvatars {
     private frame = 0;
     private agentList: AgentPresence[] = [];
     private peerList: VoiceIndicator[] = [];
+    private host?: AmbientHost;
+    private untick?: () => void;
+    private published = { agents: '', peers: '' };
 
     constructor() { this.group.name = 'omo-agent-avatars'; }
 
     attach(scene: THREE.Scene | undefined, layout: RoomLayoutId, canvas?: HTMLCanvasElement): void {
         if (scene === this.scene && layout === this.layout) return;
         this.detach();
-        this.scene = scene; this.layout = layout; this.canvas = canvas;
+        this.scene = scene; this.layout = layout; this.canvas = canvas; this.published = { agents: '', peers: '' };
         if (!scene) return;
         this.group = new THREE.Group(); this.group.name = 'omo-agent-avatars';
         scene.add(this.group);
+        this.host = ambientHost(scene);
         this.setAgents(this.agentList); this.setPeers(this.peerList);
-        const animate = (): void => { this.animate(performance.now() / 1000); this.frame = requestAnimationFrame(animate); };
-        this.frame = requestAnimationFrame(animate);
+        // Join the host's single render loop. Without a host, fall back to an own loop.
+        if (this.host) this.untick = this.host.add(seconds => this.tick(seconds));
+        else { const animate = (): void => { this.tick(performance.now() / 1000); this.frame = requestAnimationFrame(animate); }; this.frame = requestAnimationFrame(animate); }
     }
     detach(): void {
         cancelAnimationFrame(this.frame); this.frame = 0;
+        this.untick?.(); this.untick = undefined;
+        const host = this.host; this.host = undefined;
         for (const agent of this.agents.values()) disposeTree(agent.root);
         for (const peer of this.peers.values()) disposeTree(peer.root);
+        const had = this.group.children.length > 0;
         this.agents.clear(); this.peers.clear();
         this.scene?.remove(this.group); this.scene = undefined;
+        if (had) host?.invalidate(true);
     }
+    /** Draw one frame after a visible change (no-op without a host: the own loop draws nothing itself). */
+    private changed(shadows: boolean): void { this.host?.invalidate(shadows); }
 
     setAgents(list: AgentPresence[]): void {
         this.agentList = list;
         if (!this.scene) return;
+        let moved = false, redraw = false;
         const keep = new Set(list.map(a => a.key));
-        for (const [key, agent] of this.agents) if (!keep.has(key)) { this.group.remove(agent.root); disposeTree(agent.root); this.agents.delete(key); }
+        for (const [key, agent] of this.agents) if (!keep.has(key)) { this.group.remove(agent.root); disposeTree(agent.root); this.agents.delete(key); moved = true; }
         const perDesk: Record<DeskId, number> = { terminal: 0, 'terminal-2': 0 };
         for (const presence of list) {
             const slot = perDesk[presence.desk]++;
             let agent = this.agents.get(presence.key);
             if (!agent || agent.presence.kind !== presence.kind) {
                 if (agent) { this.group.remove(agent.root); disposeTree(agent.root); }
-                agent = this.build(presence); this.agents.set(presence.key, agent); this.group.add(agent.root);
+                agent = this.build(presence); this.agents.set(presence.key, agent); this.group.add(agent.root); moved = true;
             }
+            const was = agent.presence;
             agent.presence = presence;
-            const at = agentSpot(this.layout, presence.desk, slot);
-            agent.root.position.set(at.x, 0, at.z); agent.baseY = 0;
-            agent.root.rotation.y = at.yaw;
+            const slotKey = `${presence.desk}:${slot}`;
+            if (slotKey !== agent.slot) {
+                agent.slot = slotKey; moved = true;
+                const at = agentSpot(this.layout, presence.desk, slot);
+                agent.root.position.set(at.x, 0, at.z); agent.baseY = 0;
+                agent.root.rotation.y = at.yaw;
+            }
+            if (was.activity !== presence.activity || !!was.speaking !== !!presence.speaking) redraw = true;
             const tagKey = `${presence.label}|${presence.activity}|${presence.speaking ? 1 : 0}`;
             if (tagKey !== agent.tagKey) {
+                redraw = true;
                 agent.tag.material.map?.dispose();
                 const accent = `#${KIND_COLOR[presence.kind].toString(16).padStart(6, '0')}`;
                 agent.tag.material.map = tagTexture([{ text: presence.label, color: '#f4efe3', size: 36 }, { text: `● ${ACTIVITY_TEXT[presence.activity]}${presence.speaking ? ' · speaking' : ''}`, color: ACTIVITY_COLOR[presence.activity], size: 26 }], accent);
                 agent.tag.material.needsUpdate = true; agent.tagKey = tagKey;
             }
         }
+        if (moved || redraw) { this.pose(performance.now() / 1000); this.changed(moved); }
         this.publish();
     }
 
     setPeers(list: VoiceIndicator[]): void {
         this.peerList = list;
         if (!this.scene) return;
+        let changed = false;
         const keep = new Set(list.map(p => p.id));
-        for (const [id, mark] of this.peers) if (!keep.has(id)) { this.group.remove(mark.root); disposeTree(mark.root); this.peers.delete(id); }
+        for (const [id, mark] of this.peers) if (!keep.has(id)) { this.group.remove(mark.root); disposeTree(mark.root); this.peers.delete(id); changed = true; }
         for (const peer of list) {
             let mark = this.peers.get(peer.id);
             if (!mark) {
+                changed = true;
                 const root = new THREE.Group();
                 const ring = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.035, 8, 32), new THREE.MeshBasicMaterial({ color: 0x5dff9d, transparent: true, opacity: 0.9 }));
                 ring.rotation.x = Math.PI / 2; ring.position.y = 2.32; root.add(ring);
@@ -182,10 +219,10 @@ export class AgentAvatars {
                 mark = { root, ring, icon, state: '' };
                 this.peers.set(peer.id, mark); this.group.add(root);
             }
-            mark.root.position.set(peer.pose.x, 0, peer.pose.z);
+            if (mark.root.position.x !== peer.pose.x || mark.root.position.z !== peer.pose.z) { mark.root.position.set(peer.pose.x, 0, peer.pose.z); changed = true; }
             const state = peer.muted ? 'muted' : peer.speaking ? 'speaking' : 'quiet';
             if (state !== mark.state) {
-                mark.state = state;
+                mark.state = state; changed = true;
                 mark.ring.visible = state === 'speaking';
                 mark.icon.visible = state !== 'quiet';
                 mark.icon.material.map?.dispose();
@@ -195,6 +232,7 @@ export class AgentAvatars {
                 mark.icon.material.map = new THREE.CanvasTexture(canvas); mark.icon.material.needsUpdate = true;
             }
         }
+        if (changed) { this.pose(performance.now() / 1000); this.changed(false); }
         this.publish();
     }
 
@@ -213,10 +251,16 @@ export class AgentAvatars {
         ring.rotation.x = Math.PI / 2; ring.position.y = 1.86; ring.visible = false; body.add(ring);
         const tag = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: true }));
         tag.position.y = 2.25; tag.scale.set(1.5, 0.375, 1); root.add(tag);
-        return { root, body, tag, ring, tagKey: '', presence, baseY: 0 };
+        return { root, body, tag, ring, tagKey: '', presence, baseY: 0, slot: '' };
     }
 
-    private animate(t: number): void {
+    /**
+     * One frame of ambient motion, driven by the host's render loop (`t` in seconds). Returns true while
+     * anything still animates (a working agent bobs, a speaker's ring pulses); otherwise the host may idle.
+     */
+    tick(t: number): boolean { return this.pose(t); }
+    private pose(t: number): boolean {
+        let animating = false;
         for (const agent of this.agents.values()) {
             const working = agent.presence.activity === 'working';
             const asleep = agent.presence.activity === 'sleeping' || agent.presence.activity === 'exited';
@@ -224,15 +268,19 @@ export class AgentAvatars {
             agent.body.rotation.x = asleep ? 0.28 : 0;
             agent.ring.visible = !!agent.presence.speaking;
             if (agent.ring.visible) agent.ring.scale.setScalar(1 + Math.sin(t * 9) * 0.12);
+            if (working || agent.ring.visible) animating = true;
         }
-        for (const mark of this.peers.values()) if (mark.ring.visible) mark.ring.scale.setScalar(1 + Math.sin(t * 10) * 0.15);
+        for (const mark of this.peers.values()) if (mark.ring.visible) { mark.ring.scale.setScalar(1 + Math.sin(t * 10) * 0.15); animating = true; }
+        return animating;
     }
 
-    /** Test/inspection data on the canvas (names and states only). */
+    /** Test/inspection data on the canvas (names and states only). Written only when it changes. */
     private publish(): void {
         if (!this.canvas) return;
-        this.canvas.dataset.agentAvatars = JSON.stringify(this.agentList.map(a => ({ key: a.key, desk: a.desk, kind: a.kind, label: a.label, activity: a.activity, speaking: !!a.speaking })));
-        this.canvas.dataset.voiceIndicators = JSON.stringify(this.peerList.map(p => ({ id: p.id, name: p.name, speaking: p.speaking, muted: p.muted })));
+        const agents = JSON.stringify(this.agentList.map(a => ({ key: a.key, desk: a.desk, kind: a.kind, label: a.label, activity: a.activity, speaking: !!a.speaking })));
+        const peers = JSON.stringify(this.peerList.map(p => ({ id: p.id, name: p.name, speaking: p.speaking, muted: p.muted })));
+        if (agents !== this.published.agents) { this.published.agents = agents; this.canvas.dataset.agentAvatars = agents; }
+        if (peers !== this.published.peers) { this.published.peers = peers; this.canvas.dataset.voiceIndicators = peers; }
     }
 
     dispose(): void { this.detach(); this.agentList = []; this.peerList = []; }

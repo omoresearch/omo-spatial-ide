@@ -63,6 +63,24 @@ interface ScreenSurface {
 const SURFACE_W = 1024, SURFACE_H = 576;
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
 const MAX_PIXEL_RATIO = 1.5;
+/**
+ * Dynamic resolution while the view moves. Frame cost on slow machines scales with canvas pixels, so
+ * when sustained motion misses the frame budget the drawing buffer steps down (never below 0.75x CSS px)
+ * and steps back up after a long clean run. A still view is always redrawn at full resolution.
+ */
+const SCALE_STEPS = [1, 0.85, 0.72, 0.6, 0.5];
+/** Never below this many drawing-buffer pixels per CSS pixel, even at the lowest step. */
+const MIN_PIXEL_RATIO = 0.75;
+/** A still view is redrawn sharp after this pause (a short stop between keys keeps the reduced step). */
+const SHARPEN_DELAY_MS = 350;
+/** A rendered interval above SLOW_FRAME_MS missed a 60 Hz vsync. SLOW_LIMIT misses in a window step down. */
+const SLOW_FRAME_MS = 25, SLOW_LIMIT = 2, SCALE_WINDOW = 30, SCALE_DOWN_COOLDOWN_MS = 500, SCALE_UP_COOLDOWN_MS = 4000;
+/** Inspection data (dataset JSON) while the view moves: at most this often; always once when it settles. */
+const DATA_INTERVAL_MS = 150;
+/** onPose (React-side consumers) while walking: at most this often; always once when movement stops. */
+const POSE_INTERVAL_MS = 200;
+/** Ambient-only motion (avatars bobbing while the player stands still) draws at ~30 fps. */
+const AMBIENT_FRAME_MS = 32;
 
 export interface RoomSceneOptions {
     theme: RoomTheme;
@@ -96,14 +114,26 @@ export class RoomScene {
     private idle = true;
     private needsRender = true;
     private focusDrawn = false;
-    private lastPose = '';
-    private lastView = '';
+    private lastPose = { x: NaN, z: NaN, yaw: NaN, pitch: NaN, at: 0, pending: false };
+    private readonly lastView = new Float64Array(19).fill(NaN);
+    private lastData = 0;
+    private dataPending = false;
+    private lastAmbientRender = 0;
+    private readonly ambientTicks = new Set<(seconds: number) => boolean>();
+    private scaleStep = 0;
+    private scaleChangedAt = 0;
+    private frameCount = 0;
+    private slowFrames = 0;
+    /** The reduced step in use before the view settled; restored when motion resumes. */
+    private sharpStep = 0;
+    private sharpTimer?: number;
+    private lastRenderAt = 0;
+    /** Opt out with localStorage 'omo.dynamicResolution' = '0'. */
+    private readonly dynamicResolution = (() => { try { return localStorage.getItem('omo.dynamicResolution') !== '0'; } catch { return true; } })();
     private peerVersion = 0;
-    private ambientKey = 0;
-    private ambientLayout = 0;
     private readonly smoother = new PoseSmoother();
     private data = new Map<string, string>();
-    private labelPos = new WeakMap<HTMLElement, string>();
+    private labelPos = new WeakMap<HTMLElement, number>();
     private readonly tmp = { a: new THREE.Vector3(), b: new THREE.Vector3(), region: new THREE.Box2(), at: new THREE.Vector2() };
     /** Frames actually rendered (diagnostics). */
     renders = 0;
@@ -144,7 +174,7 @@ export class RoomScene {
         this.scene.background = new THREE.Color(jungle ? '#101c1a' : '#101622');
         this.scene.fog = new THREE.Fog(jungle ? '#101c1a' : '#101622', 33, 65);
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+        this.renderer.setPixelRatio(this.pixelRatio());
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         // The room is static: draw the shadow map once, and again only when something that casts moves.
@@ -168,6 +198,11 @@ export class RoomScene {
         accent.position.set(0, 4, -2); this.scene.add(accent);
         this.buildRoom(jungle);
         this.freeze(this.scene.children);
+        // Ambient modules (agent avatars) join this loop through scene.userData instead of running their own rAF.
+        this.scene.userData.omoAmbient = {
+            add: (tick: (seconds: number) => boolean): (() => void) => { this.ambientTicks.add(tick); this.invalidate(); return () => { this.ambientTicks.delete(tick); this.invalidate(); }; },
+            invalidate: (shadows = false): void => { if (shadows && this.renderer) this.renderer.shadowMap.needsUpdate = true; this.invalidate(); }
+        };
         canvas.dataset.roomLayout = this.options.layout ?? 'classic';
         canvas.dataset.deskPositions = JSON.stringify(Object.fromEntries(this.roots.filter(root => root.userData.workstation === 'terminal' || root.userData.workstation === 'terminal-2').map(root => {
             const point = root.getWorldPosition(new THREE.Vector3());
@@ -202,10 +237,6 @@ export class RoomScene {
         for (const name of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'blur'] as const) canvas.addEventListener(name, wake, true);
         for (const name of ['keydown', 'keyup'] as const) window.addEventListener(name, key, true);
         window.addEventListener('blur', wake);
-        // Agent avatars are added by another module without telling the room. While the loop is stopped,
-        // a cheap 4 Hz check notices them appear (once present, the loop itself keeps watching them).
-        const watch = window.setInterval(() => { if (!this.scheduled && this.ambient().key !== this.ambientKey) this.invalidate(false); }, 250);
-        this.cleanup.push(() => window.clearInterval(watch));
         this.cleanup.push(() => {
             for (const name of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'blur'] as const) canvas.removeEventListener(name, wake, true);
             for (const name of ['keydown', 'keyup'] as const) window.removeEventListener(name, key, true);
@@ -735,29 +766,63 @@ export class RoomScene {
     }
     private resize():void {
         const w=this.host.clientWidth,h=this.host.clientHeight;if(!w||!h)return;
-        this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.lastView='';this.positionCamera();
+        this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.lastView[0]=NaN;this.positionCamera();
+    }
+    /** Device pixel ratio for the drawing buffer: capped, then scaled by the dynamic-resolution step. */
+    private pixelRatio(): number {
+        const base = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+        return Math.max(Math.min(base, MIN_PIXEL_RATIO), base * SCALE_STEPS[this.scaleStep]);
     }
     /**
-     * The only animation loop. Each tick advances the walker and the view smoothing, then renders only
-     * when something visible changed. It reschedules itself while the player moves, the view is still
-     * settling, or agent avatars are present (their ambient motion is checked cheaply each tick and
-     * rendered only when it changes). Otherwise it stops; input, resize and content updates restart it.
+     * Track consecutive rendered frame intervals while moving. Missed vsyncs step the resolution down;
+     * a long clean run steps it back up one notch at a time. Only continuous motion counts (no idle gaps).
+     */
+    private governResolution(now: number, continuous: boolean): void {
+        if (!this.dynamicResolution) return;
+        const interval = now - this.lastRenderAt; this.lastRenderAt = now;
+        if (!continuous || interval > 100) { this.frameCount = 0; this.slowFrames = 0; return; }
+        this.frameCount++;
+        if (interval > SLOW_FRAME_MS) this.slowFrames++;
+        const since = now - this.scaleChangedAt;
+        let next = this.scaleStep;
+        if (this.slowFrames >= SLOW_LIMIT && since >= SCALE_DOWN_COOLDOWN_MS && next < SCALE_STEPS.length - 1) next++;
+        else if (this.frameCount >= SCALE_WINDOW) {
+            if (this.slowFrames === 0 && since >= SCALE_UP_COOLDOWN_MS && next > 0) next--;
+            this.frameCount = 0; this.slowFrames = 0;
+        }
+        if (next === this.scaleStep) return;
+        this.frameCount = 0; this.slowFrames = 0; this.scaleChangedAt = now;
+        this.applyScale(next);
+    }
+    private applyScale(step: number): void {
+        const before = this.pixelRatio(); this.scaleStep = step; const after = this.pixelRatio();
+        if (after !== before) { this.renderer.setPixelRatio(after); this.renderer.setSize(this.host.clientWidth, this.host.clientHeight); this.lastView[0] = NaN; }
+        this.setData('renderScale', String(SCALE_STEPS[step]));
+    }
+    /**
+     * The only animation loop. Each tick advances the walker, the view smoothing and any ambient modules
+     * (agent avatars), then renders only when something visible changed. It reschedules itself while the
+     * player moves, the view is still settling, or an ambient module still animates. Otherwise it stops;
+     * input, resize and content updates restart it. No allocations on the steady walking path.
      */
     private draw=():void=>{
         if(this.scheduled){cancelAnimationFrame(this.frame);this.scheduled=false;}
         this.frame=0;
         if(this.disposed||!this.renderer)return;
         const now=performance.now();
+        const wasIdle=this.idle;
         // After an idle gap the elapsed time is not motion time: advance one nominal frame.
         const delta=this.idle?1/60:Math.min((now-this.lastFrame)/1000,0.1);this.lastFrame=now;this.idle=false;
         const w=this.host.clientWidth,h=this.host.clientHeight;
         if(!w||!h){this.idle=true;return;}
-        let moving=false;
+        let moving=false,coasting=false;
         if(this.navigation==='walk'&&this.walker){
             const before=this.walker.pose;const bx=before.x,bz=before.z,byaw=before.yaw,bpitch=before.pitch;
             this.walker.step(delta);
             const pose=this.walker.pose;
             moving=pose.x!==bx||pose.z!==bz||pose.yaw!==byaw||pose.pitch!==bpitch;
+            // Keys held against a wall: keep ticking (velocity may change) but nothing to draw.
+            if(this.walker.coasting)coasting=true;
             if(this.walker.cameraOwned){
                 // Focus mode drives the camera (eased flight to/from a screen); keep drawing while it flies.
                 this.smoother.snap(pose);
@@ -768,41 +833,82 @@ export class RoomScene {
                 const view=this.smoother.step(pose,delta);
                 this.camera.position.set(view.x,1.75,view.z);this.camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
             }
-            const key=`${pose.x},${pose.z},${pose.yaw},${pose.pitch}`;
-            if(key!==this.lastPose){this.lastPose=key;this.options.onPose?.(pose);}
             if(!this.smoother.settled(pose))moving=true;
+            this.emitPose(pose,now,moving);
         }
-        const ambient=this.ambient();
-        if(ambient.key!==this.ambientKey){this.ambientKey=ambient.key;this.needsRender=true;}
-        if(ambient.layout!==this.ambientLayout){this.ambientLayout=ambient.layout;this.renderer.shadowMap.needsUpdate=true;}
-        if(moving||this.needsRender){
+        if(moving){
+            if(this.sharpTimer!==undefined){window.clearTimeout(this.sharpTimer);this.sharpTimer=undefined;}
+            if(this.sharpStep){if(this.scaleStep===0){this.applyScale(this.sharpStep);this.scaleChangedAt=now;}this.sharpStep=0;}
+        }
+        let animating=false;
+        if(this.ambientTicks.size){const t=now/1000;for(const tick of this.ambientTicks)if(tick(t))animating=true;}
+        const ambientFrame=animating&&now-this.lastAmbientRender>=AMBIENT_FRAME_MS;
+        if(moving||this.needsRender||ambientFrame){
             this.needsRender=false;
+            if(ambientFrame||!moving)this.lastAmbientRender=now;
             this.uploadDirty();
             this.renderer.render(this.scene,this.camera);this.renders++;
-            this.updateOverlays(w,h);
+            this.updateOverlays(w,h,now,moving);
+            this.governResolution(now,moving&&!wasIdle);
         }
-        if(moving||ambient.present)this.invalidate(false);else this.idle=true;
+        if(moving||animating||coasting)this.invalidate(false);
+        else{
+            this.idle=true;
+            // Settled: flush throttled inspection data and give the resolution back.
+            if(this.dataPending)this.updateOverlays(w,h,now,false);
+            // A still view is redrawn at full resolution after a short pause. The step is remembered for the next walk.
+            if(this.scaleStep&&this.sharpTimer===undefined)this.sharpTimer=window.setTimeout(()=>{
+                this.sharpTimer=undefined;if(this.disposed||!this.idle||!this.scaleStep)return;
+                this.sharpStep=this.scaleStep;this.applyScale(0);this.invalidate();
+            },SHARPEN_DELAY_MS);
+        }
     };
-    /** Agent avatars (owned by agent-avatars.ts) animate themselves; fingerprint them so idle rooms skip rendering. */
-    private ambient():{present:boolean;key:number;layout:number}{
-        const group=this.scene.children.find(child=>child.name==='omo-agent-avatars');
-        if(!group||!group.children.length)return{present:false,key:0,layout:0};
-        let key=17,layout=group.children.length;
-        const mix=(h:number,v:number):number=>(Math.imul(h,31)+Math.round(v*1000))|0;
-        group.traverse(node=>{
-            layout=mix(mix(mix(layout,node.position.x),node.position.z),node.visible?1:0);
-            key=mix(mix(mix(mix(mix(key,node.position.y),node.rotation.x),node.rotation.y),node.scale.x),node.visible?1:0);
-            if(node instanceof THREE.Sprite)key=mix(key,node.material.map?.id??-1);
-        });
-        return{present:true,key:mix(key,layout),layout};
+    /** Tell the host about the pose: throttled while walking, always once when it stops. No allocation. */
+    private emitPose(pose:PlayerPose,now:number,moving:boolean):void{
+        const l=this.lastPose;
+        if(pose.x!==l.x||pose.z!==l.z||pose.yaw!==l.yaw||pose.pitch!==l.pitch){l.x=pose.x;l.z=pose.z;l.yaw=pose.yaw;l.pitch=pose.pitch;l.pending=true;}
+        if(l.pending&&(!moving||now-l.at>=POSE_INTERVAL_MS)){l.pending=false;l.at=now;this.options.onPose?.(pose);}
     }
-    /** Screen-space labels and test/inspection data. Recomputed only when the view or the peers changed. */
-    private updateOverlays(w:number,h:number):void{
-        const e=this.camera.matrixWorld.elements;
-        const view=`${w},${h},${this.navigation},${this.peerVersion},${e[0]},${e[1]},${e[2]},${e[4]},${e[5]},${e[6]},${e[8]},${e[9]},${e[10]},${e[12]},${e[13]},${e[14]}`;
-        if(view===this.lastView)return;
-        this.lastView=view;
+    /**
+     * Screen-space labels follow the view every rendered frame (transform only: no layout). Test/inspection
+     * data (dataset JSON) is throttled while moving and written once more when the view settles.
+     */
+    private updateOverlays(w:number,h:number,now:number,moving:boolean):void{
+        const e=this.camera.matrixWorld.elements,v=this.lastView;
+        let same=v[16]===w&&v[17]===h&&v[18]===this.peerVersion;
+        for(let i=0;i<16&&same;i++)if(v[i]!==e[i])same=false;
+        if(same&&!this.dataPending)return;
+        if(!same){
+            for(let i=0;i<16;i++)v[i]=e[i];v[16]=w;v[17]=h;v[18]=this.peerVersion;
+            this.placeLabels(w,h);
+        }
+        if(moving&&now-this.lastData<DATA_INTERVAL_MS){this.dataPending=true;return;}
+        this.dataPending=false;this.lastData=now;
+        this.publishView(w,h);
+    }
+    private placeLabels(w:number,h:number):void{
         const {a,b}=this.tmp;
+        for(const label of this.labels){
+            const action = label.dataset.workstation as Workstation;
+            const root = this.rootFor(action);
+            if (!root) continue;
+            const p=a.copy(root.position).add(b.set(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3)).project(this.camera);
+            const mesh = this.screens.get(action);
+            const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(b)) : undefined;
+            const x=Math.round((p.x*0.5+0.5)*w*2)/2,y=Math.round((-p.y*0.5+0.5)*h*2)/2;
+            const visible=workstationLabelVisible(this.navigation, p.z, distance);
+            const placed=visible?x*65536+y:-1;
+            // Only touch the style when it changed. left/top stay fixed; the move is a compositor-only transform.
+            if(this.labelPos.get(label)!==placed){
+                this.labelPos.set(label,placed);
+                if(visible){label.style.left='0px';label.style.top='0px';label.style.transform=`translate(${x}px, ${y}px) translate(-50%, -50%)`;label.style.visibility='visible';}
+                else label.style.visibility='hidden';
+            }
+        }
+    }
+    private rootFor(action:Workstation):THREE.Object3D|undefined{for(const root of this.roots)if(root.userData.workstation===action)return root;return undefined;}
+    private publishView(w:number,h:number):void{
+        const {a}=this.tmp;
         const toScreen=(v:THREE.Vector3):{x:number;y:number}=>({x:(v.x*.5+.5)*w,y:(-v.y*.5+.5)*h});
         this.setData('peerPositions',JSON.stringify(Object.fromEntries([...this.peerAvatars].map(([id,avatar])=>{
             const p=avatar.root.localToWorld(a.set(0,1.55,0)).project(this.camera);
@@ -811,20 +917,10 @@ export class RoomScene {
         const targets: Record<string, { x: number; y: number; visible: boolean }> = {};
         for(const label of this.labels){
             const action = label.dataset.workstation as Workstation;
-            const root = this.roots.find(candidate => candidate.userData.workstation === action);
-            if (!root) continue;
-            const p=a.copy(root.position).add(b.set(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3)).project(this.camera);
             const mesh = this.screens.get(action);
-            const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(b)) : undefined;
-            const left=`${Math.round((p.x*0.5+0.5)*w*2)/2}px`,top=`${Math.round((-p.y*0.5+0.5)*h*2)/2}px`;
-            const visibility=workstationLabelVisible(this.navigation, p.z, distance) ? 'visible' : 'hidden';
-            const placed=`${left} ${top} ${visibility}`;
-            // Only touch the style when it changed: every write invalidates style and layout for the page.
-            if(this.labelPos.get(label)!==placed){this.labelPos.set(label,placed);label.style.left=left;label.style.top=top;label.style.visibility=visibility;}
-            if (mesh) {
-                const projected = mesh.getWorldPosition(a).project(this.camera);
-                targets[action] = { ...toScreen(projected), visible: projected.z >= -1 && projected.z <= 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 };
-            }
+            if (!mesh || !this.rootFor(action)) continue;
+            const projected = mesh.getWorldPosition(a).project(this.camera);
+            targets[action] = { ...toScreen(projected), visible: projected.z >= -1 && projected.z <= 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 };
         }
         if(targets.terminal){this.setData('terminalX',String(targets.terminal.x));this.setData('terminalY',String(targets.terminal.y));}
         this.setData('stationTargets',JSON.stringify(targets));
@@ -836,7 +932,7 @@ export class RoomScene {
     resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();this.invalidate();return;}this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
     dispose():void{
         this.setPeers([]);
-        this.disposed=true;this.walker?.dispose();cancelAnimationFrame(this.frame);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
+        this.disposed=true;this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
     }
