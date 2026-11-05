@@ -1,0 +1,28 @@
+app http://127.0.0.1:44575
+PASS HUD layer mounted over the 3D view
+PASS Join toast: Alice sees "Bob joined the room"
+PASS Each member gets a distinct name colour · rose/sky
+PASS Speaking HUD: Alice sees Bob speaking
+PASS Speaking HUD: Bob sees himself marked (you)
+PASS Speaking HUD clears when voice is turned off
+PASS Enter while walking opens chat and focuses input
+PASS Bob unread badge counts the one chat line (system lines do not count)
+PASS Bob gets the chat line + a mention toast · ["Alice: hello @Bob from Alice"]
+PASS Bob chat log shows Alice's line
+PASS Colour change reaches the other member
+PASS Wave emote: bubble over avatar + "Bob waves" in chat
+PASS Go to (teleport) puts Alice next to Bob · gap 1.10 m
+PASS Teleport never moves the other member
+PASS Follow keeps Alice close as Bob walks · gap 1.04 m, moved 3.97 m
+PASS Pressing a walk key stops follow
+PASS Leave toast: Alice sees "Bob left the room"
+PASS Agent "may need your approval" notice from the prompt on screen · ["finished:Hermes (Desk one) finished09:42 AM · Desk oneGo to desk","approval:Hermes (Desk one) may need your approval · check the screen0"]
+PASS Agent "finished" notice when its screen goes quiet · ["finished:Hermes (Desk one) finished09:42 AM · Desk oneGo to desk","approval:Hermes (Desk one) may need your approval · check the screen0"]
+PASS @desk1 line lands on the agent screen as a draft
+PASS Enter was NOT sent: fixture Hermes received no stdin line · ""
+PASS No agent was started by the mention
+PASS Chat shows a local draft note (not posted to the room)
+PASS @desk2 (not open) is refused with a reason
+PASS Bell shows in the agent notification list · ["bell:Desk one rang the bell09:42 AM · Desk oneGo to desk"]
+PASS Go to desk moves you to Desk one and selects it · {"x":-2.65,"z":1.8,"focus":"","active":"terminal"}
+SUMMARY 26/26 pass
