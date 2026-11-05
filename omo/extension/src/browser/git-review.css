@@ -43,3 +43,10 @@
     .omo-git-review-body > nav { flex-basis: 160px; }
     .omo-git-review-file { flex-wrap: wrap; }
 }
+/* Patch line colouring (markup from PatchLines in git-review-panel.tsx). */
+.omo-git-review pre:has(.omo-patch-line) { padding: var(--omo-sp-3) 0; }
+.omo-patch-line { display: block; padding: 0 var(--omo-sp-4); min-height: 1.65em; border-left: 3px solid transparent; }
+.omo-patch-line.is-add { background: rgba(123, 217, 154, .1); color: #c5f2d3; border-left-color: var(--omo-ok); }
+.omo-patch-line.is-del { background: rgba(255, 155, 143, .1); color: #ffd3cd; border-left-color: var(--omo-danger); }
+.omo-patch-line.is-hunk { color: var(--omo-info); background: rgba(158, 195, 255, .07); margin-top: var(--omo-sp-1); }
+.omo-patch-line.is-meta { color: var(--omo-text-3); }

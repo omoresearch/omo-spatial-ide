@@ -12,7 +12,15 @@ export function GitReviewPanel(props:{state:GitReviewState;onSelect(path:string)
             {props.state.snapshot&&!props.state.snapshot.changes.length&&<p>No saved Git changes in this project.</p>}
             {props.state.snapshot?.truncated&&<p role="status">Showing the first 200 changes. Narrow the project folder to review more.</p>}
         </nav><article><div className="omo-git-review-file"><strong>{props.state.selected??'Choose a changed file'}</strong><button data-testid="git-review-open-file" disabled={!selected?.uri||props.state.loadingPatch} onClick={()=>{if(selected?.uri)props.onOpenFile(selected.uri);}}>Open file in editor</button></div>
-            <pre data-testid="git-review-patch" aria-label="Read-only unified Git patch">{props.state.loadingPatch?'Reading patch…':props.state.patch?(props.state.patch.patch||'No net working-tree difference versus HEAD. The index can still differ.'): 'Choose a changed file to read its patch. File contents are not prefetched.'}</pre>
+            <pre data-testid="git-review-patch" aria-label="Read-only unified Git patch">{props.state.loadingPatch?'Reading patch…':props.state.patch?(props.state.patch.patch?<PatchLines text={props.state.patch.patch}/>:'No net working-tree difference versus HEAD. The index can still differ.'): 'Choose a changed file to read its patch. File contents are not prefetched.'}</pre>
         </article></div><p className="omo-git-review-note">This is a snapshot of saved files. Refresh after edits. No stage, commit, accept or revert action is performed. Terminal and agent sessions keep running.</p>
     </section>;
+}
+/** Markup only: one span per patch line so added/removed/hunk lines can be coloured. textContent is unchanged. */
+function PatchLines(props:{text:string}):React.ReactElement {
+    const lines=props.text.split('\n');
+    return <>{lines.map((line,index)=>{
+        const kind=/^(\+\+\+|---|diff |index |new file|deleted file|similarity|rename |old mode|new mode)/.test(line)?'meta':line.startsWith('@@')?'hunk':line.startsWith('+')?'add':line.startsWith('-')?'del':'ctx';
+        return <span key={index} className={`omo-patch-line is-${kind}`}>{index<lines.length-1?line+'\n':line}</span>;
+    })}</>;
 }

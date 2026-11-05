@@ -93,22 +93,19 @@
 /* ---------- Body ---------- */
 .omo-body { display: flex; flex: 1; min-height: 0; }
 
-/* ---------- Setup (onboarding): floating glass card over the live preview ---------- */
+/* ---------- Setup (onboarding): floating card, scrolling body + pinned action footer ---------- */
 .omo-onboarding {
-    width: 340px; flex-shrink: 0; margin: var(--omo-sp-3) 0 var(--omo-sp-3) var(--omo-sp-3); padding: var(--omo-sp-6) var(--omo-sp-5) var(--omo-sp-4);
+    width: 348px; flex-shrink: 0; margin: var(--omo-sp-3) 0 var(--omo-sp-3) var(--omo-sp-3); padding: 0; display: flex; flex-direction: column; overflow: hidden;
     background: linear-gradient(180deg, var(--omo-surface-1), var(--omo-bg-1)); border: 1px solid var(--omo-line);
-    border-radius: var(--omo-r-lg); box-shadow: var(--omo-shadow-2); overflow: auto; z-index: 2; animation: omo-rise var(--omo-dur-3) var(--omo-ease);
-    padding-bottom: 0; scrollbar-gutter: stable; display: flex; flex-direction: column;
+    border-radius: var(--omo-r-lg); box-shadow: var(--omo-shadow-2); z-index: 2; animation: omo-rise var(--omo-dur-3) var(--omo-ease);
 }
-.omo-onboarding > * { flex-shrink: 0; }
-/* Main action first, optional preset tools last (visual order only; DOM order unchanged). */
-.omo-onboarding > .omo-preset-controls { order: 3; margin-bottom: var(--omo-sp-4); }
-.omo-onboarding > .omo-primary, .omo-onboarding > .omo-cancel, .omo-onboarding > .omo-privacy { order: 2; }
-.omo-onboarding > .omo-primary {
-    position: sticky; bottom: var(--omo-sp-3); z-index: 1;
-    box-shadow: 0 -14px 18px 4px var(--omo-bg-1), 0 6px 20px -6px var(--omo-accent-line), inset 0 1px 0 rgba(255, 255, 255, .35);
+.omo-setup-scroll {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--omo-sp-6) var(--omo-sp-5) var(--omo-sp-5); scrollbar-gutter: stable;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
 }
-.omo-onboarding::-webkit-scrollbar-thumb { background-color: var(--omo-line-3); }
+.omo-setup-scroll::-webkit-scrollbar-thumb { background-color: var(--omo-line-3); }
+.omo-setup-actions { flex: 0 0 auto; padding: var(--omo-sp-3) var(--omo-sp-5) var(--omo-sp-3); border-top: 1px solid var(--omo-line); background: var(--omo-bg-1); }
+.omo-setup-actions .omo-primary { margin-top: 0; }
 .omo-kicker { color: var(--omo-text-3); font-size: var(--omo-fs-2xs); letter-spacing: var(--omo-tracking-caps); font-weight: 600; text-transform: uppercase; }
 .omo-onboarding .omo-kicker { color: var(--omo-accent); }
 .omo-onboarding h1 { font-size: var(--omo-fs-3xl); letter-spacing: -.03em; font-weight: 600; line-height: 1.12; color: var(--omo-text); margin: var(--omo-sp-3) 0 var(--omo-sp-2); }
@@ -152,7 +149,7 @@
 }
 .omo-folder button:not(:disabled):hover { background: var(--omo-surface-hover); }
 .omo-preset-controls {
-    margin: var(--omo-sp-4) 0 0; padding: var(--omo-sp-2) var(--omo-sp-3) var(--omo-sp-3); border: 1px solid var(--omo-line); border-radius: var(--omo-r-md);
+    margin: var(--omo-sp-4) 0 0; min-width: 0; padding: var(--omo-sp-2) var(--omo-sp-3) var(--omo-sp-3); border: 1px solid var(--omo-line); border-radius: var(--omo-r-md);
     background: var(--omo-bg-1); color: var(--omo-text-2); font-size: var(--omo-fs-xs);
 }
 .omo-preset-controls legend { padding: 0 6px; color: var(--omo-text); font-weight: 600; font-size: var(--omo-fs-xs); }
@@ -172,7 +169,7 @@
 .omo-primary:hover:not(:disabled) { background: var(--omo-accent-strong); transform: translateY(-1px); }
 .omo-primary:active:not(:disabled) { transform: none; }
 .omo-primary > span { font-size: 16px; }
-.omo-privacy { color: var(--omo-text-3); font-size: var(--omo-fs-xs); text-align: center; margin: var(--omo-sp-3) 0 0; }
+.omo-privacy { color: var(--omo-text-3); font-size: var(--omo-fs-xs); text-align: center; margin: var(--omo-sp-2) 0 0; }
 .omo-cancel { border: 0; background: transparent; color: var(--omo-text-2); height: 34px; width: 100%; margin-top: var(--omo-sp-1); border-radius: var(--omo-r-sm); font-size: var(--omo-fs-sm)!important; }
 .omo-cancel:hover { color: var(--omo-text); background: var(--omo-surface-2); }
 
@@ -293,6 +290,12 @@
 }
 @container omo-stage (min-width: 1500px) {
     .omo-stage-heading p { display: block!important; font-size: var(--omo-fs-xs)!important; color: var(--omo-text-3)!important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+/* Medium stage: the presence note collapses to an info chip (full text stays in the DOM and in its tooltip). */
+@container omo-stage (max-width: 1499px) {
+    .omo-presence-bar small { font-size: 0; flex: 0 0 auto; display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--omo-line-2); border-radius: 50%; cursor: help; }
+    .omo-presence-bar small::before { content: 'i'; font: 600 11px/1 var(--omo-font); color: var(--omo-text-2); }
+    .omo-stage-heading .omo-kicker { display: none; }
 }
 /* Narrow stage: presence drops to its own row under the toolbar. */
 @container omo-stage (max-width: 1180px) {
@@ -509,7 +512,7 @@
 
 /* ---------- Responsive ---------- */
 @media (max-height: 850px) {
-    .omo-onboarding { padding-top: var(--omo-sp-4); }
+    .omo-setup-scroll { padding-top: var(--omo-sp-4); }
     .omo-onboarding h1 { font-size: 26px; margin: var(--omo-sp-2) 0 6px; }
     .omo-intro { margin-bottom: var(--omo-sp-2); }
     .omo-step-title { margin-top: var(--omo-sp-3); margin-bottom: 6px; }
@@ -533,7 +536,7 @@
     .omo-brand-caption, .omo-local { display: none; }
     .omo-header { gap: var(--omo-sp-2); padding: 0 var(--omo-sp-2); }
     .omo-brand { flex: 0 0 auto; }
-    .omo-onboarding { width: 270px; padding: var(--omo-sp-4) var(--omo-sp-3); margin: var(--omo-sp-2) 0 var(--omo-sp-2) var(--omo-sp-2); }
+    .omo-onboarding { width: 270px; margin: var(--omo-sp-2) 0 var(--omo-sp-2) var(--omo-sp-2); }
     .omo-onboarding h1 { font-size: 24px; }
     .omo-stage-heading { left: var(--omo-sp-4); top: var(--omo-sp-4); right: var(--omo-sp-3); }
     .omo-stage-heading h2 { font-size: var(--omo-fs-xl); }

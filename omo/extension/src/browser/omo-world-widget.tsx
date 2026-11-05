@@ -520,7 +520,8 @@ export class OmoWorldWidget extends ReactWidget {
             {this.taskOverviewOpen&&this.project&&this.room&&<div className="omo-task-overview-view"><TaskOverviewPanel projectUri={this.project.toString()} onClose={this.closeTaskOverview}/></div>}
             {this.taskWorkspacesOpen&&this.project&&this.room&&<div className="omo-task-overview-view"><TaskWorkspacePanel projectUri={this.project.toString()} service={this.taskWorkspaceUiService} onClose={this.closeTaskWorkspaces} onOpen={uri=>this.openTaskProject(uri,taskSourceUri)}/></div>}
             <div className={`omo-body ${this.configuring ? 'is-onboarding' : ''}`} style={this.reviewOpen||this.taskOverviewOpen||this.taskWorkspacesOpen?{display:'none'}:undefined}>
-                {this.configuring ? <section className="omo-onboarding" data-testid="omo-onboarding">
+                {/* design lane (omo/build-design): setup markup + classNames only — scroll body + pinned action footer */}
+                {this.configuring ? <section className="omo-onboarding" data-testid="omo-onboarding"><div className="omo-setup-scroll">
                     <span className="omo-kicker">YOUR WORK, SOMEWHERE YOU REMEMBER</span>
                     <h1>A place for<br/>your next idea.</h1>
                     <p className="omo-intro">Make this workspace feel like you.<br/>Your code and tools are already at home.</p>
@@ -544,10 +545,11 @@ export class OmoWorldWidget extends ReactWidget {
                         <p>Appearance only. No project names, paths, sessions or agent settings. Import previews first; Save room applies it.</p>
                         <span role="status" data-testid="room-preset-status">{this.presetLoading ? 'Reading appearance preset…' : this.presetStatus}</span>
                     </fieldset>
+                    </div><div className="omo-setup-actions">
                     <button className="omo-primary" data-testid="create-room" disabled={!this.project || !this.draftName.trim() || this.busy || this.presetLoading} onClick={this.createRoom}>{this.room ? 'Save room' : 'Create my room'} <span>↗</span></button>
                     {this.room && <button className="omo-cancel" data-testid="cancel-room" onClick={this.cancelConfiguration}>Back to my room</button>}
                     <p className="omo-privacy">Saved on this device. No account. No model calls.</p>
-                </section> : null}
+                </div></section> : null}
                 <section className="omo-stage" aria-label="Spatial workspace">
                     <div className="omo-stage-heading"><div><span className="omo-kicker">{THEMES[theme].eyebrow}</span><h2>{this.configuring ? THEMES[theme].title : this.room!.projectName}</h2><p>{this.configuring ? THEMES[theme].description : 'Same project. A different perspective.'}</p></div>
                         {!this.configuring && <button className="omo-outline" data-testid="edit-room" onClick={this.configure}>◌ Customise room</button>}
