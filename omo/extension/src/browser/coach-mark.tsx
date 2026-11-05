@@ -1,4 +1,6 @@
 import * as React from 'react';
+import { Icon } from './icons';
+import type { IconName } from './icons';
 
 /**
  * omo keys6 lane: first-run coach mark. Three short steps, shown once after a room exists.
@@ -8,11 +10,11 @@ export const COACH_KEY = 'omo.coach.v1';
 export function coachSeen(): boolean { try { return localStorage.getItem(COACH_KEY) === 'seen'; } catch { return false; } }
 export function markCoachSeen(): void { try { localStorage.setItem(COACH_KEY, 'seen'); } catch { /* storage blocked: hidden for this session only */ } }
 
-interface CoachStep { title: string; body: string; keys: string[] }
+interface CoachStep { title: string; body: string; keys: string[]; icon: IconName }
 export const COACH_STEPS: readonly CoachStep[] = [
-    { title: 'Walk around', body: 'Use W A S D to walk. Drag to look.', keys: ['W', 'A', 'S', 'D'] },
-    { title: 'Use a screen', body: 'Click a desk screen to attach to it. Your keys go to that terminal.', keys: ['Click'] },
-    { title: 'Full screen and back', body: 'Press F for full screen. Esc goes back, one step at a time. F1 shows every key.', keys: ['F', 'Esc'] },
+    { title: 'Walk around', body: 'Use W A S D to walk. Drag to look.', keys: ['W', 'A', 'S', 'D'], icon: 'walk' },
+    { title: 'Use a screen', body: 'Click a desk screen to attach to it. Your keys go to that terminal.', keys: ['Click'], icon: 'monitor' },
+    { title: 'Full screen and back', body: 'Press F for full screen. Esc goes back, one step at a time. F1 shows every key.', keys: ['F', 'Esc'], icon: 'maximize' },
 ];
 
 export function CoachMark(props: { onDone: () => void; refocus: () => void }): React.ReactElement {
@@ -26,10 +28,10 @@ export function CoachMark(props: { onDone: () => void; refocus: () => void }): R
         <div className="omo-coach-top">
             <span className="omo-coach-count">{step + 1} of {COACH_STEPS.length}</span>
             <span className="omo-coach-dots" aria-hidden="true">{COACH_STEPS.map((_, i) => <i key={i} className={i === step ? 'is-on' : i < step ? 'is-done' : ''} />)}</span>
-            <button type="button" className="omo-coach-skip" data-testid="coach-skip" onClick={props.onDone} aria-label="Close the tips">✕</button>
+            <button type="button" className="omo-coach-skip" data-testid="coach-skip" onClick={props.onDone} aria-label="Close the tips"><Icon name="x" size={14} /></button>
         </div>
         <div className="omo-coach-body">
-            <span className="omo-coach-keys" aria-hidden="true">{s.keys.map(k => <kbd key={k}>{k}</kbd>)}</span>
+            <Icon name={s.icon} size={20} className="omo-coach-icon" /><span className="omo-coach-keys" aria-hidden="true">{s.keys.map(k => <kbd key={k}>{k}</kbd>)}</span>
             <div><strong>{s.title}</strong><p>{s.body}</p></div>
         </div>
         <div className="omo-coach-actions">

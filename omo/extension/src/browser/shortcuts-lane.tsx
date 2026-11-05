@@ -8,6 +8,7 @@ import type { FocusMode } from './focus-mode';
 import { ShortcutsSheet } from './shortcuts-sheet';
 import { CoachMark, coachSeen, markCoachSeen } from './coach-mark';
 import { Icon } from './icons';
+import '../../src/browser/shortcuts.css';
 
 /**
  * omo keys6 lane: desk keys (Ctrl+Shift+W / N / E / R, or Alt+Shift+…), sent by first-person-controls.ts

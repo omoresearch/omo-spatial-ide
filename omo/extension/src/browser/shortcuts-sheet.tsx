@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Icon } from './icons';
 
 /**
  * omo keys6 lane: the key sheet (F1, or ? when not typing). One list of every working key.
@@ -77,11 +78,11 @@ export function ShortcutsSheet(props: { attached: boolean; onClose: () => void }
         <div ref={card} className="omo-keys-sheet" role="dialog" aria-modal="true" aria-labelledby="omo-keys-title">
             <header className="omo-keys-head">
                 <div>
-                    <span className="omo-keys-kicker">Omo keys</span>
+                    <span className="omo-keys-kicker"><Icon name="keyboard" size={13} className="omo-keys-kicker-icon" />Omo keys</span>
                     <h2 id="omo-keys-title">Every shortcut</h2>
                     <p>{props.attached ? 'You are on a screen. Desk keys act on this desk only.' : 'You are walking. Click a desk screen to use the screen keys.'}</p>
                 </div>
-                <button ref={close} type="button" className="omo-keys-close" data-testid="keys-sheet-close" onClick={props.onClose} aria-label="Close the key sheet">Esc<span aria-hidden="true">✕</span></button>
+                <button ref={close} type="button" className="omo-keys-close" data-testid="keys-sheet-close" onClick={props.onClose} aria-label="Close the key sheet"><kbd>Esc</kbd><Icon name="x" size={14} /></button>
             </header>
             <div className="omo-keys-grid">
                 {groups.map(group => <section key={group.id} className="omo-keys-group" data-testid={`keys-group-${group.id}`} aria-label={group.title}>
