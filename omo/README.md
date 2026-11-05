@@ -28,7 +28,7 @@ See `INTEGRATION.md`, `RUNTIME.md`, `PARITY-ADVANCED.md` and `WEB-RUNTIME.md` fo
 
 ## Local run
 
-Run `npm run doctor` for a read-only setup check and concrete missing-tool/build fixes. It does not install software, start agents, launch Chrome or check logins. `npm run --silent doctor -- --json` returns a machine-readable report. See `SETUP.md` for first-run steps, exit codes and limits.
+Run `npm run doctor` for a read-only setup check and concrete missing-tool/build fixes. It does not install software, start agents, launch Chrome or check logins. `npm run --silent doctor -- --json` returns a machine-readable report. See `SETUP.md` for first-run steps, exit codes and limits. macOS: see `MAC-SETUP.md` (Homebrew steps; not yet executed on macOS).
 
 Prerequisites: Node 22, npm, Python 3, bash and tmux. Chrome is optional for terminals but required for the web wall. Native Theia dependencies can require build tools and libsecret on Linux. See the runtime docs for explicit tool-path overrides and missing-dependency messages.
 

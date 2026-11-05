@@ -48,6 +48,14 @@ Mechanism (job-control model, POSIX XBD 11.1.2 / XSH tcsetpgrp):
 Supported: Linux/POSIX, CPython >= 3.11, one supervised child per process,
 called from the main thread of a single-threaded supervisor (preexec_fn is
 used only in the terminal-foreground case).
+
+macOS: every call used here (setpgid via process_group, tcsetpgrp/tcgetpgrp,
+termios, pthread_sigmask, killpg, waitpid WUNTRACED, /dev/tty) is POSIX and
+present on Darwin; nothing reads /proc. CPython >= 3.11 is required for
+``process_group`` (Apple's Command Line Tools Python is 3.9: use Homebrew
+python).  The exit-time duplicate hangup handled by HANGUP_DRAIN_SECONDS is a
+Linux kernel behaviour (tty_old_pgrp); on macOS the bounded drain is harmless
+but unverified.  Not yet executed on macOS (see omo/MAC-SETUP.md).
 """
 from __future__ import annotations
 
