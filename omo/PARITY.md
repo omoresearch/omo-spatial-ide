@@ -14,7 +14,7 @@ Status words:
 `MC host` marks things the mod pack gets for free from Minecraft itself (chat, tab list,
 name tags, `/tp`). They are user-facing in the mod pack, so they are listed.
 
-Rows marked *planned: this branch* are the next build. See *Built in this branch*
+Branch `omo/build-parity2` adds the rows marked **(this branch)**. See *Built in this branch*
 at the end.
 
 ## 1. Stations, tabs and agents
@@ -87,8 +87,8 @@ at the end.
 |---|---|---|---|
 | Hermes Board (every workspace and what it runs) | Manage ▸ All workspaces (read-only) | done | `runtime-console-strip.tsx` (`runtime-board`) |
 | `/omo status`, `/omo workspaces`, `/omo rebind`, `/omo forget` | Manage drawer actions | done | `PARITY-ADVANCED.md` |
-| Lamp/redstone tells you an agent finished while you are away | Lamp + bell badge only on that desk | partial (planned: this branch) | `notifications-hub.ts`, `hud-notifications.tsx` |
-| Jump to the desk that needs you | — | missing (planned: this branch) | `hud-notifications.tsx` (`onJump`) |
+| Lamp/redstone tells you an agent finished while you are away | Lamp + bell badge only on that desk | partial → **done (this branch)** | `notifications-hub.ts`, `hud-notifications.tsx` |
+| Jump to the desk that needs you | — | missing → **done (this branch)** | `hud-notifications.tsx` (`onJump`) |
 
 ## 5. Multiplayer, chat and agents in the world
 
@@ -99,14 +99,14 @@ The mod pack is singleplayer / trusted LAN. Multiplayer UI comes from Minecraft 
 | Other players visible in the world (MC host) | Shared room: up to 8 avatars, live pose | done | `node/room-presence.ts`, `presence-controller.ts`, `room-scene.ts` (`setPeers`) |
 | Player list / tab list (MC host) | Member chips in the presence bar | done | `presence-strip.tsx` |
 | Name tag over each player (MC host) | Name sprite over avatar | done | `room-scene.ts` (`setPeers`) |
-| Per-player colour / skin (MC host) | All peers were one pink | missing (planned: this branch) | `common/presence-protocol.ts` (`colour`), `hud-peers.ts` |
-| Text chat (MC host `T`) | — | missing (planned: this branch) | `node/room-presence.ts` (`say`/`takeChat`), `chat-controller.ts`, `chat-panel.tsx` |
-| Chat to an agent ("you can talk to" an agent player) | Voice dictation → draft | partial (planned: this branch): `@desk` / `@agent` mention puts a DRAFT in that agent's tab, never Enter | `chat-mentions.ts`, `chat-controller.ts` |
-| "X joined / left the game" messages (MC host) | — | missing (planned: this branch) | `hud-toasts.tsx`, `chat-controller.ts` (`diffMembers`) |
-| `/tp` to a player, spectate/follow (MC host) | — | missing (planned: this branch) | `hud-peers.ts` (`placeBeside`, follow), `chat-panel.tsx` |
-| Emote / wave (MC host: crouch, hit) | — | missing (planned: this branch): `/wave` chat emote with avatar marker | `chat-controller.ts`, `hud-peers.ts` |
+| Per-player colour / skin (MC host) | All peers were one pink | missing → **done (this branch)** | `common/presence-protocol.ts` (`colour`), `hud-peers.ts` |
+| Text chat (MC host `T`) | — | missing → **done (this branch)** | `node/room-presence.ts` (`say`/`takeChat`), `chat-controller.ts`, `chat-panel.tsx` |
+| Chat to an agent ("you can talk to" an agent player) | Voice dictation → draft | partial → **done (this branch)**: `@desk` / `@agent` mention puts a DRAFT in that agent's tab, never Enter | `chat-mentions.ts`, `chat-controller.ts` |
+| "X joined / left the game" messages (MC host) | — | missing → **done (this branch)** | `hud-toasts.tsx`, `chat-controller.ts` (`diffMembers`) |
+| `/tp` to a player, spectate/follow (MC host) | — | missing → **done (this branch)** | `hud-peers.ts` (`placeBeside`, follow), `chat-panel.tsx` |
+| Emote / wave (MC host: crouch, hit) | — | missing → **done (this branch)**: `/wave` chat emote with avatar marker | `chat-controller.ts`, `hud-peers.ts` |
 | Room voice chat (Simple Voice Chat, used with the robots) | WebRTC, push-to-talk V, mute, proximity | done | `voice-controller.ts`, `voice-panel.tsx` |
-| Who is speaking (Simple Voice Chat icon) | Speaker ring over avatar, chip | partial (planned: this branch): on-canvas speaking HUD | `hud-speaking.tsx` |
+| Who is speaking (Simple Voice Chat icon) | Speaker ring over avatar, chip | partial → **done (this branch)**: on-canvas speaking HUD | `hud-speaking.tsx` |
 | Talk to an agent out loud | On-device dictation → draft (hold T) | done | `voice-dictation.ts`, `voice-hub.ts` |
 | Agent answers out loud | Opt-in on-device read-aloud | done | `voice-readaloud.ts` |
 | Agent bodies with `ChatGPT - <name>` tags walking in | Agent avatars stand at their desk with "Hermes · tab" tags | partial (stand at desk, do not walk) | `agent-avatars.ts` |
@@ -136,3 +136,16 @@ All of it is room-local and peer-to-peer through the existing presence service. 
 - The Minecraft repo is untouched.
 
 See the commit list on `omo/build-parity2` for the exact changes.
+
+### Verification (real app, 2026-11-06)
+
+`npx tsc -p extension` and `npm run build` pass before every commit. A scratch probe (not a new suite) ran the real app on a
+random port with the repo's owned fixture (no-network recorder agents, private tmux socket) and two real headless Chrome
+profiles (Chrome fake microphone for voice). Result: 26/26 checks pass, including: join/leave toasts, distinct colours and
+recolour, speaking HUD (peer + self, clears on voice off), Enter opens chat, chat line + @name mention toast + unread count,
+wave emote, Go to (teleport 1.1 m, the other member never moves), follow + walk key stops it, agent "finished" and
+"may need your approval" notices, bell notice + Go to desk, `@desk1` draft visible on the agent screen while the fixture
+Hermes received **no** stdin line (Enter never sent) and no agent launch, `@desk2` refused when the desk is not open.
+
+Known limits: the approval notice is a screen-text hint, not a protocol signal. Agent avatars still stand at their desk
+(no walking agent bodies). Chat is not stored; a page reload clears it. Notifications reset on reload.
