@@ -22,6 +22,7 @@ interface View { x: number; y: number; z: number; yaw: number; pitch: number }
 const EYE_Y = 1.75, EASE_MS = 260, FILL = 0.9;
 const ease = (t: number): number => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2;
 const wrapAngle = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export class FirstPersonControls {
     enabled = false;
@@ -175,7 +176,7 @@ export class FirstPersonControls {
         if (!this.enabled) return false;
         if (this.attached && this.focusState.screen?.id === screen.id) { if (full) this.setFull(true); this.focusTerminal(); return true; }
         this.keys.clear(); this.pointer = undefined;
-        this.flight = { from: this.currentView(), start: performance.now() };
+        this.flight = { from: this.currentView(), start: performance.now() - (reducedMotion() ? EASE_MS : 0) };
         this.setFocus({ phase: 'attaching', full, screen });
         this.focusTerminal();
         return true;
@@ -184,7 +185,7 @@ export class FirstPersonControls {
     detach(): void {
         if (!this.attached) return;
         this.typing = false; this.keys.clear(); this.selection?.clear();
-        this.flight = { from: this.currentView(), start: performance.now() };
+        this.flight = { from: this.currentView(), start: performance.now() - (reducedMotion() ? EASE_MS : 0) };
         this.setFocus({ ...this.focusState, phase: 'returning', full: false });
         this.apply();
         this.message('Walking · WASD to move. Drag to look. Click a monitor to use it.');

@@ -28,6 +28,8 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
     const [, bump] = React.useReducer((n: number) => n + 1, 0);
     React.useEffect(() => focus.subscribe(bump), [focus]);
     React.useEffect(() => { focus.sync(); });
+    // The scene can be rebuilt without a widget render; re-bind cheaply until it is there.
+    React.useEffect(() => { const id = window.setInterval(() => focus.sync(), 500); return () => window.clearInterval(id); }, [focus]);
     const state = focus.state;
     const controls = focus.controls;
     const station = state.screen?.id as TerminalWorkstation | undefined;
