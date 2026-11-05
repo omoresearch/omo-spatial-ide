@@ -15,6 +15,8 @@ const config = { executablePath:'/opt/google/chrome/chrome', headless:true, user
  args:['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader'], defaultViewport:{width:1440,height:960} };
 async function open(browser) {
  const page = await browser.newPage();
+ // Classic dock flows; focus mode is covered by its own check.
+ await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); } catch {} });
  page.on('pageerror',e=>console.error('PAGE ERROR:',e.message));
  await page.goto(process.env.OMO_URL || 'http://127.0.0.1:3190',{waitUntil:'domcontentloaded',timeout:60000});
  await page.waitForSelector('[data-testid="omo-world"]',{timeout:60000});

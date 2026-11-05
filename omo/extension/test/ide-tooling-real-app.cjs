@@ -51,8 +51,15 @@ async function until(predicate, label, timeout = 20000) {
             await page.keyboard.press('Enter');
         }
         fs.writeFileSync(path.join(app.project, 'answer.js'), 'module.exports = 42;\n');
-        await palette('Git: Stage All Changes');
-        await until(() => git('diff', '--cached', '--name-only') === 'answer.js', 'real Git stage');
+        // Readiness: the built-in Git extension must have discovered the repository (branch in the status bar)
+        // before its commands act; earlier the palette Enter could land before discovery and stage nothing.
+        await until(() => page.evaluate(() => /\bmain\b/.test(document.querySelector('#theia-statusBar')?.innerText || '')), 'Git repository discovered', 60000);
+        // Staging is idempotent: if the Git extension had not finished activating, issue the explicit command again.
+        for (let attempt = 0; ; attempt++) {
+            await palette('Git: Stage All Changes');
+            try { await until(() => git('diff', '--cached', '--name-only') === 'answer.js', 'real Git stage', 8000); break; }
+            catch (error) { if (attempt === 4) throw error; await pause(1500); }
+        }
         assert.match(git('diff', '--cached'), /module\.exports = 42/);
         checks.push('Builtin Git provider stages the exact owned file through the real command palette');
         await shortcut('KeyG', true);

@@ -74,6 +74,8 @@ export class FocusMode {
 
     /** A click on a desk monitor already chose the desk; frame it. */
     attachActive(): boolean {
+        // Setting: 'omo.focus.clickAttach' = 'false' keeps the classic click-to-type monitor (dock stays visible).
+        if (readPref('omo.focus.clickAttach') === 'false') return false;
         const station = this.options.activeStation();
         return isDesk(station) && this.attach(station, false);
     }

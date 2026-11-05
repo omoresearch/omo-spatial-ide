@@ -15,6 +15,8 @@ async function openWorld(tag, viewport = { width: 1440, height: 960 }) {
     const browser = await launch({ executablePath: process.env.CHROME_PATH || '/opt/google/chrome/chrome', headless: true, userDataDir: profile,
         args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], defaultViewport: viewport });
     const page = await browser.newPage();
+    // Classic dock flows; focus mode is covered by its own check.
+    await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); } catch {} });
     const trust = () => page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click());
     try {
         await page.goto(process.env.OMO_URL || 'http://127.0.0.1:3192', { waitUntil: 'domcontentloaded' });
@@ -24,6 +26,7 @@ async function openWorld(tag, viewport = { width: 1440, height: 960 }) {
             await trust(); await page.click('[data-testid="create-room"]');
             try { await page.waitForSelector(`${CANVAS}[data-navigation="walk"]`, { timeout: 5000 }); break; } catch (error) { if (i === 2) throw error; }
         }
+        await page.waitForFunction(() => !document.querySelector('.theia-preload'), { timeout: 30000 });
         return { browser, page, async dispose() { await browser.close(); fs.rmSync(profile, { recursive: true, force: true }); } };
     } catch (error) { fs.writeFileSync(path.join(ROOT, 'evidence', `${tag}-failed.txt`), await page.evaluate(() => document.body.innerText).catch(() => 'Page unavailable')); await browser.close(); fs.rmSync(profile, { recursive: true, force: true }); throw error; }
 }

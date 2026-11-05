@@ -37,7 +37,7 @@ for line in sys.stdin:
         await p.waitForSelector('[data-testid="runtime-confirm"]');
         await p.click('[data-testid="runtime-confirm-yes"]');
         await p.waitForFunction(() => document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.terminalText.includes('OWNED FIXTURE AGENT'));
-        await p.click('[data-testid="runtime-task-toggle"]');
+        for (let i = 0; i < 4 && !await p.$('[data-testid="agent-task-input"]'); i++) { if (await p.$eval('[data-testid="runtime-task-toggle"]', b => b.getAttribute('aria-expanded') !== 'true')) await p.click('[data-testid="runtime-task-toggle"]'); await pause(1000); }
         await p.waitForSelector('[data-testid="agent-task-input"]');
         const text = 'Fixture-only prepared task: ' + 'readable detail '.repeat(24);
         await p.type('[data-testid="agent-task-input"]', text);

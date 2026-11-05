@@ -58,7 +58,8 @@
 
 /* ---------- First-run coach mark ---------- */
 .omo-coach {
-    position: fixed; z-index: 1050; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(380px, calc(100vw - 32px));
+    /* Top-left corner, clear of the desk monitors: the tips must never cover a screen the player clicks. */
+    position: fixed; z-index: 1050; left: 64px; top: 96px; width: min(320px, calc(100vw - 96px));
     display: flex; flex-direction: column; gap: var(--omo-sp-3); padding: var(--omo-sp-4);
     background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-accent-line);
     border-radius: var(--omo-r-lg); box-shadow: var(--omo-shadow-3); animation: omo-keys-in var(--omo-dur-3) var(--omo-ease);
