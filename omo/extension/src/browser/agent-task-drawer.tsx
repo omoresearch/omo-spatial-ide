@@ -120,11 +120,10 @@ function TaskDraft(props: { target: AgentTaskTarget; ready: boolean; state: Runt
         } finally { if (mounted.current) setBusy(false); }
     };
     const blocked = !props.ready || busy || invalid || (multiline && state.bracketedPaste !== true);
-    return <section data-testid="agent-task-drawer" aria-label="Prepare an agent task" style={{ borderTop: '1px solid #ffffff14', paddingTop: 6, maxHeight: 230, overflowY: 'auto' }}>
+    return <section className="omo-task-drawer" data-testid="agent-task-drawer" aria-label="Prepare an agent task">
         <div className="omo-console-row"><strong>Task for {tab ? AGENT_LABELS[tab.kind] : 'agent'} · {tab?.name}</strong><span className="omo-console-hint">This browser tab only · kept across reload</span></div>
         <p className="omo-console-hint">Check the physical screen first: this tab can be at an agent, shell, login or permission prompt. Paste does not press Enter, start an agent, or prove work is complete.</p>
         <textarea data-testid="agent-task-input" aria-label="Agent task draft" rows={3} maxLength={TASK_DRAFT_LIMIT_BYTES} value={text}
-            style={{ boxSizing: 'border-box', width: '100%', resize: 'vertical', background: '#17232c', color: '#cfdeda', border: '1px solid #ffffff26', borderRadius: 4, padding: 6, fontSize: 12 }}
             placeholder="Describe the task for this agent tab…" onChange={event => {
                 generation.current++; setNotice(''); setText(event.target.value);
                 setSaved(!!storage && writeTaskDraft(storage, target, event.target.value));

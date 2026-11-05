@@ -11,7 +11,7 @@ export function PresenceStrip(props:{state:PresenceState;onJoin(code:string,name
             <button data-testid="presence-join" disabled={props.state.phase==='joining'} onClick={()=>props.onJoin(code,name)}>{props.state.phase==='joining'?'Joining…':'Join room'}</button>
         </>}
         <span className="omo-presence-members" data-testid="presence-members">{props.state.snapshot?.members.map(member=><span key={member.id} data-peer-id={member.id}>{member.name}{member.id===props.state.snapshot?.selfId?' (you)':''}</span>)}</span>
-        <small>{props.deskRoom?`Personal desks: ${props.deskRoom} · `:''}Local trusted clients only · No terminal sharing</small>
+        <small title={`${props.deskRoom?`Personal desks: ${props.deskRoom} · `:''}Local trusted clients only · No terminal sharing`}>{props.deskRoom?`Personal desks: ${props.deskRoom} · `:''}Local trusted clients only · No terminal sharing</small>
         {props.state.error&&<span role="alert" className="omo-error">{props.state.error}</span>}
     </section>;
 }

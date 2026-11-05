@@ -25,9 +25,9 @@ export function AgentTaskRunPanel(props: {
     const canSubmit = props.transitionReady && run.phase === 'prepared';
     const canReview = props.transitionReady && !props.reviewing && (run.phase === 'submitted' || run.phase === 'review-ready');
     const canDecide = props.transitionReady && !props.reviewing && run.phase === 'review-ready';
-    return <section data-testid="task-run-panel" aria-label="Task review" style={{ borderTop: '1px solid #ffffff14', marginTop: 6, paddingTop: 6 }}>
+    return <section className="omo-task-run" data-testid="task-run-panel" aria-label="Task review">
         <div className="omo-console-row"><strong data-testid="task-run-phase" data-phase={run.phase}>{PHASE_LABEL[run.phase]}</strong></div>
-        <pre data-testid="task-run-text" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 100, overflowY: 'auto', margin: '4px 0', font: 'inherit' }}>{run.text}</pre>
+        <pre data-testid="task-run-text">{run.text}</pre>
         <p className="omo-console-hint">This record is your control note. Decisions send no terminal input and perform no Git writes. They are not proof of execution, tests, completion or ownership.</p>
         <div className="omo-console-row">
             <button type="button" data-testid="task-run-submitted" disabled={!canSubmit} onClick={props.onSubmitted}>I submitted this in the terminal</button>

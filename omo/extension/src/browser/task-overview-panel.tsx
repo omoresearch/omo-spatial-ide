@@ -84,19 +84,19 @@ export function TaskOverviewPanel(props: TaskOverviewPanelProps): React.ReactEle
     const result = loaded.projectUri === props.projectUri ? loaded.result : EMPTY_RESULT;
     const selected = result.entries.find(entry => entryKey(entry) === selectedKey);
 
-    return <section data-testid="task-overview-panel" aria-label="Task overview" style={{ maxWidth: 720, maxHeight: '80vh', overflow: 'auto', padding: 12 }}>
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+    return <section className="omo-panel" data-testid="task-overview-panel" aria-label="Task overview">
+        <header className="omo-panel-header">
             <div>
-                <h2 style={{ margin: 0 }}>Task overview</h2>
-                <p style={{ margin: '4px 0', overflowWrap: 'anywhere' }}>Project: {props.projectUri}</p>
+                <h2>Task overview</h2>
+                <p className="omo-panel-meta">Project: {props.projectUri}</p>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="omo-panel-actions">
                 <button type="button" data-testid="task-overview-refresh" onClick={refresh}>Refresh</button>
                 <button type="button" data-testid="task-overview-close" onClick={props.onClose}>Close</button>
             </div>
         </header>
 
-        <p role="note" style={{ fontWeight: 600 }}>
+        <p role="note" className="omo-panel-note">
             Browser-tab-only latest records. This is not live execution, completion, or ownership monitoring.
         </p>
         {result.storageUnavailable && <p role="alert" data-testid="task-overview-storage-warning">
@@ -105,7 +105,7 @@ export function TaskOverviewPanel(props: TaskOverviewPanelProps): React.ReactEle
         {result.truncated && <p role="status">Some records were outside the safe overview limit and are not shown.</p>}
         {!result.storageUnavailable && result.entries.length === 0 && <p role="status">No task-run records are available for this project in this browser tab.</p>}
 
-        {result.entries.length > 0 && <div aria-label="Task records" style={{ maxHeight: 260, overflowY: 'auto' }}>
+        {result.entries.length > 0 && <div aria-label="Task records" className="omo-panel-list">
             {result.entries.map(entry => {
                 const key = entryKey(entry);
                 const selectedEntry = key === selectedKey;
@@ -115,27 +115,26 @@ export function TaskOverviewPanel(props: TaskOverviewPanelProps): React.ReactEle
                     data-testid="task-overview-entry"
                     aria-pressed={selectedEntry}
                     onClick={() => setSelectedKey(key)}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', margin: '4px 0', padding: 8 }}
                 >
                     <strong>{PHASE_LABEL[entry.phase]}</strong>
-                    <span data-testid="task-overview-entry-preview" style={{ display: 'block', overflowWrap: 'anywhere' }}>{taskTextPreview(entry.text)}</span>
+                    <span data-testid="task-overview-entry-preview">{taskTextPreview(entry.text)}</span>
                     <small>Desk {entry.target.stationId} · Workspace {entry.target.workspaceId} · Tab {entry.target.tabId}</small>
                 </button>;
             })}
         </div>}
 
-        <article data-testid="task-overview-detail" aria-live="polite" style={{ marginTop: 12 }}>
+        <article className="omo-panel-detail" data-testid="task-overview-detail" aria-live="polite">
             {selected ? <>
                 <h3>{PHASE_LABEL[selected.phase]}</h3>
                 <p>{PHASE_MEANING[selected.phase]}</p>
                 <dl>
-                    <dt>Project</dt><dd style={{ overflowWrap: 'anywhere' }}>{selected.target.projectUri}</dd>
+                    <dt>Project</dt><dd>{selected.target.projectUri}</dd>
                     <dt>Desk</dt><dd>{selected.target.stationId}</dd>
                     <dt>Workspace</dt><dd>{selected.target.workspaceId}</dd>
                     <dt>Tab</dt><dd>{selected.target.tabId}</dd>
                 </dl>
                 <h4>Task text</h4>
-                <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 220, overflowY: 'auto', userSelect: 'text', font: 'inherit' }}>{selected.text}</pre>
+                <pre>{selected.text}</pre>
             </> : <p>Select a task record to read its details.</p>}
         </article>
     </section>;

@@ -52,27 +52,25 @@ export function TaskWorkspacePanel(props: TaskWorkspacePanelProps): React.ReactE
         });
     };
 
-    return <section data-testid="task-workspace-panel" data-phase={visible.phase} aria-label="Isolated task workspaces"
-        style={{ maxWidth: 720, maxHeight: '80vh', overflowY: 'auto', padding: 14 }}>
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <h2 style={{ margin: 0 }}>Isolated task workspaces</h2>
-            <div style={{ display: 'flex', gap: 8 }}>
+    return <section className="omo-panel" data-testid="task-workspace-panel" data-phase={visible.phase} aria-label="Isolated task workspaces">
+        <header className="omo-panel-header">
+            <h2>Isolated task workspaces</h2>
+            <div className="omo-panel-actions">
                 <button type="button" data-testid="task-workspace-refresh" disabled={busy} onClick={() => { void currentController()?.load(); }}>Refresh</button>
                 <button type="button" data-testid="task-workspace-close" onClick={props.onClose}>Close</button>
             </div>
         </header>
-        <p style={{ overflowWrap: 'anywhere' }}>Source: {props.projectUri}</p>
-        <p role="note" data-testid="task-workspace-warning">
+        <p className="omo-panel-meta">Source: {props.projectUri}</p>
+        <p role="note" className="omo-panel-note" data-testid="task-workspace-warning">
             Each workspace creates a new Git branch and working folder from a captured commit.
             Uncommitted and untracked source changes are not copied. This does not start an agent, merge code or deploy anything.
         </p>
-        <form onSubmit={event => { event.preventDefault(); void currentController()?.create(value.name, value.confirmed, props.projectUri); }}>
-            <label style={{ display: 'block' }}>Task name
+        <form className="omo-panel-form" onSubmit={event => { event.preventDefault(); void currentController()?.create(value.name, value.confirmed, props.projectUri); }}>
+            <label>Task name
                 <input data-testid="task-workspace-name" value={value.name} maxLength={80} required disabled={busy}
-                    style={{ display: 'block', width: '100%', boxSizing: 'border-box', margin: '4px 0 8px' }}
                     onChange={event => setForm({ ...value, projectUri: props.projectUri, name: event.currentTarget.value })} />
             </label>
-            <label style={{ display: 'block', marginBottom: 8 }}>
+            <label>
                 <input type="checkbox" data-testid="task-workspace-confirm" checked={value.confirmed} disabled={busy}
                     onChange={event => setForm({ ...value, projectUri: props.projectUri, confirmed: event.currentTarget.checked })} />
                 {' '}Create a new branch and worktree from the saved commit; do not copy uncommitted changes.
@@ -86,9 +84,9 @@ export function TaskWorkspacePanel(props: TaskWorkspacePanelProps): React.ReactE
         {visible.notice && <p role={visible.phase === 'error' ? 'alert' : 'status'} data-testid="task-workspace-notice">{visible.notice}</p>}
         {openError?.projectUri === props.projectUri && <p role="alert">{openError.message}</p>}
         {visible.phase === 'ready' && visible.entries.length === 0 && <p>No isolated task workspaces are registered for this source project.</p>}
-        <ul style={{ paddingLeft: 20, maxHeight: 280, overflowY: 'auto' }}>
-            {visible.entries.map(entry => <li key={entry.id} data-testid="task-workspace-entry" data-worktree-id={entry.id} style={{ margin: '12px 0', overflowWrap: 'anywhere' }}>
-                <strong style={{ whiteSpace: 'pre-wrap' }}>{entry.name}</strong>
+        <ul className="omo-panel-list">
+            {visible.entries.map(entry => <li key={entry.id} data-testid="task-workspace-entry" data-worktree-id={entry.id}>
+                <strong>{entry.name}</strong>
                 <div><code>{entry.branch}</code></div>
                 <div><code>{entry.worktreeUri}</code></div>
                 <small>Base commit: <code>{entry.baseHead}</code></small>

@@ -510,10 +510,11 @@ export class OmoWorldWidget extends ReactWidget {
         const layout = this.configuring ? this.draftLayout : this.room?.layout ?? 'classic';
         const taskSourceUri=this.project?.toString();
         return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-project-uri={this.project?.toString()||''} data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode}>
+            {/* design lane (omo/build-design): header markup + classNames only */}
             <header className="omo-header">
-                <div className="omo-brand"><span className="omo-brand-mark">o<span>m</span>o</span><span className="omo-brand-caption">RESEARCH<br/>SPATIAL IDE</span></div>
+                <div className="omo-brand"><span className="omo-brand-mark">o<span>m</span>o</span><span className="omo-brand-caption">Spatial IDE</span></div>
                 <nav className="omo-view-switch" aria-label="Workspace views"><button className={!this.reviewOpen&&!this.taskOverviewOpen&&!this.taskWorkspacesOpen?'active':''} aria-current={!this.reviewOpen&&!this.taskOverviewOpen&&!this.taskWorkspacesOpen?'page':undefined} onClick={this.closeWorkspacePanels}>◈ World</button><button type="button" data-testid="task-overview-toggle" className={this.taskOverviewOpen?'active':''} aria-expanded={this.taskOverviewOpen} disabled={!this.room || !this.project || this.busy} onClick={() => this.taskOverviewOpen ? this.closeTaskOverview() : this.openTaskOverview()}>▤ Task overview</button><button type="button" data-testid="task-workspace-toggle" className={this.taskWorkspacesOpen?'active':''} aria-expanded={this.taskWorkspacesOpen} disabled={!this.room || !this.project || this.busy} onClick={() => this.taskWorkspacesOpen ? this.closeTaskWorkspaces() : this.openTaskWorkspaces()}>⑂ Task workspaces</button><button data-testid="review-action" className={this.reviewOpen?'active':''} disabled={!this.room || this.busy} onClick={() => this.selectStation('code')}>⌘ Code</button></nav>
-                <span className="omo-local"><i/> LOCAL WORKSPACE</span>
+                <span className="omo-local" title="Runs on this device"><i/> Local workspace</span>
             </header>
             {this.reviewOpen&&<GitReviewPanel state={this.reviewState} onSelect={path=>{void this.review?.select(path);}} onRefresh={()=>{if(this.project)void this.review?.open(this.project.toString());}} onClose={this.closeReview} onOpenFile={this.openReviewedFile} onOpenProject={()=>{void this.runAction(()=>this.openProjectFile());}}/>}
             {this.taskOverviewOpen&&this.project&&this.room&&<div className="omo-task-overview-view"><TaskOverviewPanel projectUri={this.project.toString()} onClose={this.closeTaskOverview}/></div>}
