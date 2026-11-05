@@ -145,16 +145,16 @@ export function FocusTabs(props: { state: RuntimeConsoleState; controller?: Runt
             className={`omo-focus-tab kind-${tab.kind} state-${tab.state} ${tab.id === state.activeTabId ? 'is-active' : ''}`} disabled={state.acting}
             title={`${AGENT_LABELS[tab.kind]} · ${STATE_LABEL[tab.state]}${tab.detail ? ` · ${tab.detail}` : ''}`}
             onClick={() => { void controller?.selectTab(tab.id); done(); }}>
-            <AgentGlyph kind={tab.kind} />{/* parity: per-kind tab glyph */}
+            {tab.kind === 'shell' ? <Icon name="terminal" size={13} className="omo-tab-shell" /> : <AgentGlyph kind={tab.kind} />}{/* parity: per-kind tab glyph */}
             <span className="omo-focus-tab-name">{tab.name}</span>
             {tab.busy && <i className="omo-focus-tab-busy" aria-label="Process active" />}
             {tab.state !== 'running' && <small>{STATE_LABEL[tab.state]}</small>}
         </button>)}
         {repeat && <button type="button" className="omo-focus-tab-new is-repeat" data-testid="focus-new-last" data-kind={repeat.kind} disabled={locked || !repeat.available}
             title={repeat.available ? `New ${repeat.label} tab, like the last one${repeat.kind === 'shell' ? '' : ' (asks first)'}` : repeat.reason}
-            onClick={() => { void controller?.requestNewTab(repeat.kind); if (repeat.kind === 'shell') done(); }}><Icon name="plus" size={13} className="omo-tab-plus" /><AgentGlyph kind={repeat.kind} size={13} /><span className="omo-focus-tab-label">{repeat.label}</span></button>}
+            onClick={() => { void controller?.requestNewTab(repeat.kind); if (repeat.kind === 'shell') done(); }}><Icon name="plus" size={13} className="omo-tab-plus" />{repeat.kind === 'shell' ? <Icon name="terminal" size={13} className="omo-tab-shell" /> : <AgentGlyph kind={repeat.kind} size={13} />}<span className="omo-focus-tab-label">{repeat.label}</span></button>}
         <button type="button" className="omo-focus-tab-new" data-testid="focus-new-shell" disabled={locked || !shell?.available}
-            title={shell?.available ? 'New shell tab (Ctrl+Shift+T)' : shell?.reason} onClick={() => { void controller?.requestNewTab('shell'); done(); }}><Icon name="plus" size={13} className="omo-tab-plus" />Shell</button>
+            title={shell?.available ? 'New shell tab (Ctrl+Shift+T)' : shell?.reason} aria-label="New shell tab" onClick={() => { void controller?.requestNewTab('shell'); done(); }}><Icon name="plus" size={13} className="omo-tab-plus" /><Icon name="terminal" size={13} className="omo-tab-shell" /><span className="omo-focus-tab-label">Shell</span></button>
         {props.agents !== false && launchers.filter(o => o.kind !== 'shell').map(o => <button key={o.kind} type="button" className="omo-focus-tab-new is-agent" data-testid={`focus-new-${o.kind}`}
             disabled={locked || !o.available} title={o.available ? `Start ${o.label} in a new tab (asks first)` : o.reason} aria-label={`New ${o.label} tab (asks first)`}
             onClick={() => void controller?.requestNewTab(o.kind)}><Icon name="plus" size={13} className="omo-tab-plus" /><AgentGlyph kind={o.kind} size={13} /><span className="omo-focus-tab-label">{o.label}</span></button>)}

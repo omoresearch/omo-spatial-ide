@@ -8,7 +8,7 @@ import * as React from 'react';
 export type IconName =
     | 'chat' | 'bell' | 'keyboard' | 'more' | 'maximize' | 'minimize' | 'split' | 'single' | 'monitor' | 'window'
     | 'walk' | 'check' | 'alert' | 'x' | 'stop' | 'lock' | 'mic' | 'mic-off' | 'volume' | 'chevron-up' | 'chevron-down'
-    | 'pencil' | 'refresh' | 'plus' | 'type' | 'follow' | 'users';
+    | 'pencil' | 'refresh' | 'plus' | 'type' | 'follow' | 'users' | 'terminal';
 
 const PATHS: Record<IconName, React.ReactNode> = {
     chat: <path d="M5 4.5h14A1.5 1.5 0 0 1 20.5 6v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 15V6A1.5 1.5 0 0 1 5 4.5Z" />,
@@ -37,6 +37,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
     plus: <path d="M12 5.5v13M5.5 12h13" />,
     type: <path d="M4 7.5V5h10v2.5M9 5v14M7 19h4M14 12.5V11h6v1.5M17 11v8M15.8 19h2.4" />,
     follow: <path d="M12 3.5 19 20l-7-3.8L5 20Z" />,
+    terminal: <><rect x="3" y="4.5" width="18" height="15" rx="2" /><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5" /></>,
     users: <><circle cx="9" cy="8.5" r="3.5" /><path d="M3 19.5a6 6 0 0 1 12 0M15.5 5.2a3.5 3.5 0 0 1 0 6.6M17.5 14a6 6 0 0 1 3.5 5.5" /></>
 };
 

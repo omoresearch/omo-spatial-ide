@@ -41,6 +41,7 @@
     --omo-term-bg: #091119; --omo-focus-bar-h: 44px;
     position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: 0;
     padding: 0; box-sizing: border-box; font-family: var(--omo-font); background: var(--omo-term-bg);
+    container: omo-focus / inline-size; /* the bar collapses by its own width (any side panel), not the window's */
 }
 .omo-focus-layer.is-screen { opacity: 0; transition: opacity var(--omo-dur-2) var(--omo-ease); }
 .omo-focus-layer.is-screen.is-settled { opacity: 1; }
@@ -112,10 +113,12 @@
 .omo-focus-pane { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--omo-term-bg); }
 /* Split only: each pane needs its own desk label and tabs. Same type and controls as the HUD bar. */
 .omo-focus-pane-head { flex: 0 0 auto; display: flex; align-items: center; gap: var(--omo-sp-2); min-width: 0; height: 40px; padding: 0 var(--omo-sp-3); border-bottom: 1px solid var(--omo-line); font: 500 var(--omo-fs-md)/1 var(--omo-font); }
-.omo-focus-pane-label { display: inline-flex; align-items: baseline; gap: 6px; }
-.omo-focus-pane-label small { display: inline-flex; align-items: center; gap: 4px; color: var(--omo-text-3); font-size: var(--omo-fs-xs); }
-.omo-focus-pane-label small.is-keys { color: var(--omo-accent); }
-.omo-focus-pane.is-active .omo-focus-pane-label { border-color: var(--omo-accent-line); background: var(--omo-accent-soft); }
+.omo-focus-pane-label { display: inline-flex; align-items: center; gap: var(--omo-sp-2); }
+.omo-focus-pane-label > span { color: var(--omo-text); font-weight: 600; }
+.omo-focus-pane-label small { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 var(--omo-sp-2); color: var(--omo-text-3); font-size: var(--omo-fs-xs);
+    border: 1px dashed var(--omo-line-3); border-radius: var(--omo-r-pill); }
+.omo-focus-pane-label small.is-keys { color: var(--omo-accent); border: 1px solid var(--omo-accent-line); background: var(--omo-accent-soft); }
+.omo-focus-pane.is-active .omo-focus-pane-label { border-color: transparent; background: transparent; }
 
 /* The screen box fills its pane; the terminal sits in it as one calm card. Padding, card padding and
    border match FRAME in focus-terminal-view.tsx. */
@@ -131,12 +134,16 @@
 .omo-focus-pane-idle {
     align-self: center; justify-self: center; display: flex; flex-direction: column; align-items: center; gap: var(--omo-sp-2); max-width: 340px;
     padding: var(--omo-sp-6) var(--omo-sp-8); text-align: center; color: var(--omo-text-3); font: var(--omo-fs-md)/1.45 var(--omo-font);
-    border: 1px dashed var(--omo-line-3); border-radius: var(--omo-r-lg); background: rgba(255, 255, 255, .015);
+    border: 1px dashed var(--omo-line-3); border-radius: var(--omo-r-lg); background: var(--omo-surface-1);
     transition: border-color var(--omo-dur-1) var(--omo-ease), background var(--omo-dur-1) var(--omo-ease);
 }
 .omo-focus-pane-idle strong { color: var(--omo-text); font-weight: 600; }
-.omo-focus-pane-idle-action { display: inline-flex; align-items: center; gap: 6px; color: var(--omo-accent); }
-.omo-focus-pane-idle small { font-size: var(--omo-fs-xs); }
+.omo-focus-pane-idle-action {
+    display: inline-flex; align-items: center; gap: 6px; height: var(--omo-control-h); margin-top: var(--omo-sp-1); padding: 0 var(--omo-sp-3);
+    color: var(--omo-accent-ink); background: var(--omo-accent); border-radius: var(--omo-r-sm); font-weight: 600;
+}
+.omo-focus-screen:hover .omo-focus-pane-idle-action { background: var(--omo-accent-strong); }
+.omo-focus-pane-idle small { font-size: var(--omo-fs-xs); color: var(--omo-text-3); }
 .omo-focus-screen:hover .omo-focus-pane-idle { border-color: var(--omo-accent-line); background: var(--omo-accent-soft); }
 .omo-focus-layer.is-split .omo-focus-pane.is-passive .omo-focus-screen:has(.omo-focus-pane-idle) { opacity: 1; }
 
@@ -156,7 +163,9 @@
 .omo-focus-tab.state-interrupted, .omo-focus-tab.state-exited { border-style: dashed; }
 .omo-focus-tab small { color: var(--omo-danger); font-size: var(--omo-fs-xs); }
 .omo-focus-tab-busy { width: 6px; height: 6px; border-radius: 50%; background: var(--omo-accent); }
-.omo-focus-bar .omo-focus-tab-new, .omo-focus-tab-new { color: var(--omo-text-3); gap: 5px; }
+.omo-focus-bar .omo-focus-tab-new, .omo-focus-tab-new { color: var(--omo-text-3); gap: 5px; padding: 0 8px; }
+/* The tab strip keeps its full width before the keys chip gives way. */
+.omo-focus-bar > .omo-focus-tabs { flex-shrink: 0; max-width: 60%; }
 /* Add buttons: a small plus, then the agent's own glyph, then its name. Same height as a tab. */
 .omo-focus-tab-new .omo-tab-plus { color: var(--omo-text-3); margin-right: -1px; }
 .omo-focus-tab-new .omo-agent-glyph { margin-right: 0 !important; }
@@ -164,6 +173,13 @@
 .omo-focus-tab-new:not(:hover):not(:focus-visible) .omo-agent-glyph[data-glyph="hermes"] path { fill: currentColor; }
 .omo-focus-tab-new:not(:hover):not(:focus-visible) .omo-agent-glyph:not([data-glyph="hermes"]) path { stroke: currentColor; }
 .omo-focus-tab-new:hover .omo-tab-plus { color: var(--omo-text-2); }
+.omo-tab-shell { color: var(--omo-text-3); }
+.omo-focus-tab.is-active .omo-tab-shell, .omo-focus-tab-new:hover .omo-tab-shell { color: var(--omo-text-2); }
+.omo-focus-desk-short { display: none; }
+/* A hairline between the open tabs and the add buttons, so '+ Shell' never reads as a second Shell tab. */
+.omo-focus-tab + .omo-focus-tab-new { margin-left: 9px; }
+.omo-focus-tab + .omo-focus-tab-new::before { content: ''; position: absolute; left: -6px; top: 7px; bottom: 7px; width: 1px; background: var(--omo-line-2); }
+.omo-focus-tab-new { position: relative; }
 .omo-focus-tab:disabled, .omo-focus-tab-new:disabled { opacity: .45; cursor: default; }
 .omo-focus-tab:focus-visible, .omo-focus-tab-new:focus-visible, .omo-focus-pane-label:focus-visible { outline: none; box-shadow: var(--omo-focus); }
 
@@ -212,12 +228,19 @@
     .omo-focus-layer.is-screen, .omo-focus-layer.is-full { transition: none; animation: none; }
 }
 /* Narrow windows: drop the hint text first, then stack split panes. */
-/* Narrow: agent add buttons and Full screen / Walk keep only their icons (names stay in title and aria-label). */
-@media (max-width: 1100px) {
+/* The bar never clips: as the work area narrows it sheds text in steps. Names stay in title and aria-label.
+   1: shortcut hints go.  2: add buttons, Full screen and Walk keep only their icons.  3: desks show 1 / 2, keys chip only the desk. */
+@container omo-focus (max-width: 1420px) { .omo-focus-bar .omo-focus-desks kbd { display: none; } }
+@container omo-focus (max-width: 1260px) {
+    .omo-focus-tab-new .omo-focus-tab-label, .omo-focus-bar .omo-focus-label { display: none; }
+    .omo-focus-bar .omo-focus-tab-new { padding: 0 6px; }
     .omo-focus-keys:not(.is-on) { display: none; }
-    .omo-focus-keys { flex-shrink: 0; }
-    .omo-focus-tab-new.is-agent .omo-focus-tab-label, .omo-focus-bar .omo-focus-label { display: none; }
 }
-@media (max-width: 900px) { .omo-focus-desks kbd { display: none; } .omo-focus-layer.is-split .omo-focus-panes { flex-direction: column; } }
+@container omo-focus (max-width: 1000px) {
+    .omo-focus-desk-name, .omo-focus-keys-lead, .omo-focus-bar [data-testid="focus-exit"] kbd { display: none; }
+    .omo-focus-desk-short { display: inline; min-width: 10px; text-align: center; }
+    .omo-focus-bar .omo-focus-desks button { padding: 0 8px; }
+}
+@container omo-focus (max-width: 900px) { .omo-focus-layer.is-split .omo-focus-panes { flex-direction: column; } }
 /* Overview camera: attaching needs first person, so the launcher hides. */
 .omo-scene-wrap:not(.omo-walking) .omo-focus-launch { display: none; }
