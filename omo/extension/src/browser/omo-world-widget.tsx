@@ -33,7 +33,8 @@ import { TaskWorkspacePanel } from './task-workspace-panel';
 import { scopeTaskWorkspaceService } from './task-workspace-controller';
 import { AgentWorkflowPanel } from './agent-workflow-panel';
 import type { TaskWorkspaceAuthority } from './task-handoff';
-import { readStationRecipes, writeStationRecipes, makeStationRecipe } from './station-recipe';
+import { readStationRecipes, writeStationRecipes, makeStationRecipe, readStationLocks, writeStationLocks } from './station-recipe';
+import type { StationLocks } from './station-recipe';
 import type { StationRecipe } from './station-recipe';
 import { StationRecipePanel } from './station-recipe-panel';
 import { defaultStationLink, readStationLink, writeStationLink, webWallDistance } from './station-link';
@@ -151,6 +152,16 @@ export class OmoWorldWidget extends ReactWidget {
     private taskWorkflowOpen=false;
     private recipeOpen=false;
     private recipes: StationRecipe[]=[];
+    private stationLocks: StationLocks={ terminal: false, 'terminal-2': false };
+    private get anyStationLocked(): boolean { return this.stationLocks.terminal || this.stationLocks['terminal-2']; }
+    private pushStationLocks(): void { for (const station of TERMINAL_STATIONS) this.consoles.get(station)?.setStationLocked(this.stationLocks[station]); }
+    private setStationLock = (station: 'terminal' | 'terminal-2', locked: boolean): void => {
+        if (!this.project) return;
+        const next = { ...this.stationLocks, [station]: locked };
+        if (!writeStationLocks(safeStorage(), this.project.toString(), next)) { this.error = 'The lock could not be saved: browser storage is unavailable.'; this.update(); return; }
+        this.stationLocks = next; this.pushStationLocks();
+        this.feedback = locked ? `${station === 'terminal' ? 'Desk one' : 'Desk two'} is locked. Nothing running was stopped.` : `${station === 'terminal' ? 'Desk one' : 'Desk two'} is unlocked.`; this.update();
+    };
     private stationLink: StationLink=defaultStationLink();
     private taskWorkspaceUiService!:TaskWorkspaceService;
     private reviewRequest=0;
@@ -272,6 +283,8 @@ export class OmoWorldWidget extends ReactWidget {
     }
     private readStationSettings(): void {
         this.recipes = this.project ? readStationRecipes(safeStorage(), this.project.toString()) : [];
+        this.stationLocks = this.project ? readStationLocks(safeStorage(), this.project.toString()) : { terminal: false, 'terminal-2': false };
+        this.pushStationLocks();
         this.stationLink = this.project ? (readStationLink(safeStorage(), this.project.toString()) ?? defaultStationLink()) : defaultStationLink();
     }
     private readWebBinding(): void {
@@ -335,6 +348,7 @@ export class OmoWorldWidget extends ReactWidget {
     }
     private createRoom = (): void => {
         if (!this.project || !this.draftName.trim() || this.presetLoading) return;
+        if (this.anyStationLocked && this.room && this.draftLayout !== (this.room.layout ?? 'classic')) { this.error = 'A desk is locked, so the room layout was not changed. Unlock it in Station recipes first.'; this.update(); return; }
         this.invalidatePresetRead();
         const next: RoomState = { version: 1, theme: this.draftTheme, layout: this.draftLayout, kit: this.draftKit, projectUri: this.project.toString(),
             projectName: this.draftName.trim().slice(0, 120), camera: { ...(this.draftCamera ?? this.room?.camera ?? CAMERA) } };
@@ -354,6 +368,7 @@ export class OmoWorldWidget extends ReactWidget {
     };
     private saveStationRecipe = (input: Omit<StationRecipe, 'version' | 'id'>): void => {
         if (!this.project) return;
+        if (this.stationLocks[input.stationId]) { this.error = 'This desk is locked, so the recipe was not saved.'; this.update(); return; }
         try {
             const recipe = makeStationRecipe(input);
             const next = [...this.recipes.filter(existing => existing.id !== recipe.id), recipe];
@@ -361,7 +376,7 @@ export class OmoWorldWidget extends ReactWidget {
             this.recipes = next; this.feedback = 'Recipe saved. Saving did not launch a tab.'; this.update();
         } catch (error) { this.error = error instanceof Error ? error.message : String(error); this.update(); }
     };
-    private deleteStationRecipe = (recipe: StationRecipe): void => { if (!this.project) return; const next = this.recipes.filter(item => item.id !== recipe.id); if (writeStationRecipes(safeStorage(), this.project.toString(), next)) { this.recipes = next; this.update(); } };
+    private deleteStationRecipe = (recipe: StationRecipe): void => { if (!this.project || this.stationLocks[recipe.stationId]) return; const next = this.recipes.filter(item => item.id !== recipe.id); if (writeStationRecipes(safeStorage(), this.project.toString(), next)) { this.recipes = next; this.update(); } };
     private applyStationRecipe = (recipe: StationRecipe): void => { this.chooseStation(recipe.stationId); this.consoles.get(recipe.stationId)?.requestRecipeApply(recipe); this.recipeOpen = false; this.update(); };
     private linkMirror = (targetStationId: 'terminal' | 'terminal-2'): void => {
         if (!this.project) return;
@@ -563,9 +578,9 @@ export class OmoWorldWidget extends ReactWidget {
                         <span className="omo-theme-symbol">{THEMES[key].symbol}</span><span><strong>{THEMES[key].title}</strong><small>{THEMES[key].eyebrow}</small></span><span className="omo-radio"/>
                     </button>)}</div>
                     <div className="omo-step-title"><span>02</span> Make it yours</div>
-                    <label className="omo-field">Room layout<select data-testid="room-layout" aria-label="Room layout" value={layout} disabled={this.presetLoading || this.busy} onChange={event => { this.draftLayout = event.target.value as RoomLayoutId; this.update(); }}>
+                    <label className="omo-field">Room layout<select data-testid="room-layout" aria-label="Room layout" value={layout} disabled={this.presetLoading || this.busy || this.anyStationLocked} onChange={event => { this.draftLayout = event.target.value as RoomLayoutId; this.update(); }}>
                         {(Object.keys(ROOM_LAYOUTS) as RoomLayoutId[]).map(key => <option key={key} value={key}>{ROOM_LAYOUTS[key].label}</option>)}
-                    </select><small>{ROOM_LAYOUTS[layout].description}</small></label>
+                    </select><small>{ROOM_LAYOUTS[layout].description}</small>{this.anyStationLocked && <small data-testid="room-layout-locked" role="note">🔒 A desk is locked, so the room layout cannot change. Unlock it in Station recipes.</small>}</label>
                     <label className="omo-field">Room kit<select data-testid="room-kit" aria-label="Room kit" value={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} disabled={this.presetLoading || this.busy} onChange={event => { this.draftKit = event.target.value as RoomKitId; this.update(); }}>
                         {(Object.keys(ROOM_KITS) as RoomKitId[]).map(key => <option key={key} value={key}>{ROOM_KITS[key].label}</option>)}
                     </select><small>{ROOM_KITS[this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'].description}</small></label>
@@ -591,7 +606,7 @@ export class OmoWorldWidget extends ReactWidget {
                         <PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>
                         {/* omo voice lane (mount hook) */}{this.voiceHub&&<VoicePanel hub={this.voiceHub} view={this.voiceHub.state}/>}
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button>{ROOM_KITS[this.room?.kit ?? 'hermes-desk'].webWall && <button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button>}<button data-testid="station-mirror-controls" onClick={()=>this.selectStation('mirror')}>Mirror · {this.stationLink.targetStationId === 'terminal' ? 'Desk one' : 'Desk two'}</button><button data-testid="station-recipe-toggle" aria-expanded={this.recipeOpen} onClick={()=>{this.recipeOpen=!this.recipeOpen;this.update();}}>Station recipes</button></nav>
-                        {this.recipeOpen&&<StationRecipePanel recipes={this.recipes} stationId={this.activeStation} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)}/>}
+                        {this.recipeOpen&&<StationRecipePanel recipes={this.recipes} stationId={this.activeStation} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} locked={this.stationLocks[this.activeStation]} onLock={locked=>this.setStationLock(this.activeStation,locked)} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)}/>}
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.activeStation==='terminal-2'?'Desk two':'Desk one'} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>}
                     </div>}
                     <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}/>

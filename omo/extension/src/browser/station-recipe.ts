@@ -68,6 +68,26 @@ export function writeStationRecipes(storage: RecipeStorage | undefined, projectU
     try { storage.setItem(stationRecipeKey(projectUri), raw); return true; } catch { return false; }
 }
 
+/**
+ * Station Lock (mod-pack parity): a client flag kept with this project's station recipes.
+ * A locked desk refuses recipe/layout edits and tab close. It never stops or starts anything.
+ */
+export type StationLocks = Record<RecipeStationId, boolean>;
+const LOCK_PREFIX = 'omo.station-locks.v1:';
+export function stationLockKey(projectUri: string): string { return `${LOCK_PREFIX}${JSON.stringify(projectUri)}`; }
+export function readStationLocks(storage: RecipeStorage | undefined, projectUri: string): StationLocks {
+    const none: StationLocks = { terminal: false, 'terminal-2': false };
+    if (!storage || !text(projectUri, 2048)) return none;
+    try {
+        const value = JSON.parse(storage.getItem(stationLockKey(projectUri)) ?? '{}');
+        return { terminal: value?.terminal === true, 'terminal-2': value?.['terminal-2'] === true };
+    } catch { return none; }
+}
+export function writeStationLocks(storage: RecipeStorage | undefined, projectUri: string, locks: StationLocks): boolean {
+    if (!storage || !text(projectUri, 2048)) return false;
+    try { storage.setItem(stationLockKey(projectUri), JSON.stringify({ terminal: locks.terminal === true, 'terminal-2': locks['terminal-2'] === true })); return true; } catch { return false; }
+}
+
 export function makeStationRecipe(input: { name: string; stationId: RecipeStationId; profile: string; tabs: StationRecipeTab[]; id?: string }): StationRecipe {
     const recipe: StationRecipe = {
         version: STATION_RECIPE_VERSION,

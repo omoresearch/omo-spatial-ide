@@ -71,7 +71,7 @@ at the end.
 | Per-wall sound: volume, mute, distance fade (6 → 40) | Same, saved per project | done | `station-link.ts` (`distanceGain`), `web-surface-strip.tsx` |
 | Web-wall tabs (target=_blank → up to 6 tabs) | Popups fold into the one surface; no tab strip because the web service has no page list (needs a backend call first) | partial (no tab strip) | `node/web-runtime-service.ts`, note in `web-surface-strip.tsx` |
 | 12 live pages, leak guard | Max 4 surfaces, closes hidden pages | partial | `node/web-runtime-service.ts` (`MAX_SURFACES`) |
-| Station Setup: name, kind, profile, starting tabs, Lock | Station recipes (name, profile, tabs) | partial (no Lock) | `station-recipe.ts`, `station-recipe-panel.tsx` |
+| Station Setup: name, kind, profile, starting tabs, Lock | Station recipes (name, profile, tabs) + per-desk Lock saved with the project's recipes; a locked desk blocks recipe save/apply/delete, room-layout change and tab close, with a visible 🔒 note (nothing running is stopped) | partial → **done (this branch)** | `station-recipe.ts` (`readStationLocks`), `station-recipe-panel.tsx` (`station-lock-toggle`), `runtime-console-controller.ts` (`stationLocked`), `omo-world-widget.tsx` |
 | Map presets / share-safe export check | Room appearance preset (no ids, paths, sessions) | done | `common/room-preset.ts` |
 | Room kits (`hermes_desk`, `terminal_nook`, `web_gallery`) | Same three kits | done | `common/player-state.ts` (`ROOM_KITS`) |
 | Name Plate (workspace name + state dot) | Desk label shows workspace name | done | `room-scene.ts` (`deskLabels`) |

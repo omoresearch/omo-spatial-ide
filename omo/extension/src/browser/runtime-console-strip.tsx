@@ -195,9 +195,10 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
                 </button>
                 {(tab.state === 'interrupted' || tab.state === 'exited') && <button className="omo-console-mini" disabled={locked} data-testid={`runtime-revive-${tab.id}`} onClick={() => controller?.requestRevive(tab.id)} title="Start this tab again">↻</button>}
                 <button className="omo-console-mini" aria-label={`Rename ${tab.name}`} disabled={locked} data-testid={`runtime-rename-${tab.id}`} onClick={() => setEditing({ tabId: tab.id, name: tab.name })} title="Rename tab">✎</button>
-                <button className="omo-console-mini" aria-label={`Close ${tab.name}`} disabled={locked} data-testid={`runtime-close-${tab.id}`} onClick={() => controller?.requestClose(tab.id)} title="Close tab">×</button>
+                <button className="omo-console-mini" aria-label={`Close ${tab.name}`} disabled={locked || !!state.stationLocked} data-testid={`runtime-close-${tab.id}`} onClick={() => controller?.requestClose(tab.id)} title={state.stationLocked ? 'Desk is locked: unlock it in Station recipes to close tabs' : 'Close tab'}>×</button>
             </span>)}
         </div>}
+        {ws && state.stationLocked && <p className="omo-console-hint" data-testid="runtime-station-locked" role="note">🔒 This desk is locked: tabs cannot be closed and its recipe and room layout cannot change. Unlock in Station recipes.</p>}
         {ws && editing && <form className="omo-console-row" data-testid="runtime-rename-form" onSubmit={event => { event.preventDefault(); void controller?.renameTab(editing.tabId, editing.name).then(saved => { if (saved) setEditing(undefined); }); }}>
             <label>Tab name <input autoFocus aria-label="Tab name" data-testid="runtime-rename-name" maxLength={TAB_NAME_MAX} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
             <button data-testid="runtime-rename-save" disabled={locked || !editing.name.trim()}>Save name</button>

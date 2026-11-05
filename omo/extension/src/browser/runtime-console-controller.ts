@@ -56,6 +56,8 @@ export interface RuntimeConsoleState {
     /** Workspace board (read-only list from live metadata), loaded on request. */
     board?: WorkspaceSummary[];
     find?: FindResult;
+    /** Station Lock: this desk refuses tab close and recipe changes (client flag, see station-recipe.ts). */
+    stationLocked?: boolean;
 }
 export interface LauncherOption { kind: AgentKind; label: string; available: boolean; reason: string; installHint?: string }
 export interface StorageLike { getItem(key: string): string | null; setItem(key: string, value: string): void }
@@ -403,7 +405,7 @@ export class RuntimeConsoleController {
         const stored = this.readStored(binding);
         if (!stored) {
             this.epoch++; this.releaseView(); this.binding = binding;
-            this.current = { ...RuntimeConsoleController.initial(), host: this.current.host };
+            this.current = { ...RuntimeConsoleController.initial(), stationLocked: this.current.stationLocked, host: this.current.host };
             this.set({});
             return;
         }
@@ -415,7 +417,7 @@ export class RuntimeConsoleController {
         const epoch = ++this.epoch;
         this.releaseView();
         this.binding = binding;
-        this.current = { ...RuntimeConsoleController.initial(), host: this.current.host, profile: this.current.profile };
+        this.current = { ...RuntimeConsoleController.initial(), stationLocked: this.current.stationLocked, host: this.current.host, profile: this.current.profile };
         this.set({ phase: 'checking', statusText: 'Checking this computer for tmux and agents…' });
         let host: HostStatus;
         try { host = await this.service.status(); } catch (error) {
@@ -543,6 +545,7 @@ export class RuntimeConsoleController {
     requestRecipeApply(recipe: StationRecipe): void {
         const workspace = this.current.workspace;
         if (!workspace || this.current.acting || !recipe || !recipe.tabs.length) return;
+        if (this.current.stationLocked) { this.set({ pending: undefined, notice: '', error: 'This desk is locked, so the recipe was not applied. Unlock it in Station recipes first.' }); return; }
         const kinds = recipe.tabs.map(tab => tab.kind === 'shell' ? 'Shell' : tab.kind === 'hermes' ? 'Hermes' : tab.kind === 'claude' ? 'Claude Code' : 'Codex').join(', ');
         this.set({ error: '', notice: '', pending: { type: 'recipe', recipe, confirmLabel: 'Start recipe tabs',
             message: `Apply “${recipe.name}” to ${workspace.name}? It will save profile “${recipe.profile}” and start exactly these requested tabs: ${kinds}. Nothing launches until you confirm.` } });
@@ -617,9 +620,13 @@ export class RuntimeConsoleController {
         this.set({ error: '', notice: '', pending: { type: 'new', kind, confirmLabel: `Start ${option.label}`,
             message: `Start ${option.label}${profile} in a new tab? It runs on this computer under your own account and may use your plan or API credits. It keeps running when you walk away.` } });
     }
+    /** Station Lock flag from the widget. Changing it never touches a tab. */
+    setStationLocked(locked: boolean): void { if (!!this.current.stationLocked !== locked) this.set({ stationLocked: locked }); }
+
     requestClose(tabId: string): void {
         const tab = this.current.workspace?.tabs.find(t => t.id === tabId);
         if (!tab || this.current.acting) return;
+        if (this.current.stationLocked) { this.set({ pending: undefined, notice: '', error: `This desk is locked, so “${tab.name}” was not closed. Unlock it in Station recipes first.` }); return; }
         this.set({ error: '', notice: '', pending: { type: 'close', tabId, confirmLabel: 'Close tab',
             message: `Close “${tab.name}”? This ends what is running in it${tab.busy ? ', and Process active right now' : ''}.` } });
     }
@@ -637,6 +644,7 @@ export class RuntimeConsoleController {
     async confirmPending(): Promise<void> {
         const pending = this.current.pending;
         if (!pending || this.current.acting) return;
+        if (this.current.stationLocked && (pending.type === 'close' || pending.type === 'recipe')) { this.set({ pending: undefined, error: 'This desk is locked. Nothing was changed.' }); return; }
         if (EXTRA_ACTIONS.includes(pending.type)) await this.runExtra(pending);
         else await this.run(pending);
     }
@@ -826,7 +834,7 @@ export class RuntimeConsoleController {
                 if (this.current.workspace?.id === workspaceId) {
                     this.epoch++; this.releaseView();
                     if (this.binding) { try { this.options.storage?.setItem(bindingKey(this.binding), ''); } catch { /* optional */ } }
-                    this.current = { ...RuntimeConsoleController.initial(), host: this.current.host, board: this.current.board };
+                    this.current = { ...RuntimeConsoleController.initial(), stationLocked: this.current.stationLocked, host: this.current.host, board: this.current.board };
                 }
                 this.set({ acting: false, notice: result.detail || 'Workspace deleted.' });
                 await this.refreshBoard();
@@ -896,7 +904,7 @@ export class RuntimeConsoleController {
     release(): void {
         if (this.disposed) return;
         this.epoch++; this.releaseView(); this.binding = undefined;
-        this.current = { ...RuntimeConsoleController.initial(), host: this.current.host };
+        this.current = { ...RuntimeConsoleController.initial(), stationLocked: this.current.stationLocked, host: this.current.host };
         this.set({});
     }
 
