@@ -169,6 +169,10 @@ export class FirstPersonControls {
     setEnabled(enabled:boolean):void{this.enabled=enabled;this.keys.clear();this.typing=false;this.selecting=false;this.selection?.clear();this.dropFocus();if(enabled)this.apply();}
     get focus(): FocusState { return this.focusState; }
     get element(): HTMLCanvasElement { return this.canvas; }
+    /** True while focus mode owns the camera (flying to, attached to, or returning from a screen). */
+    get cameraOwned(): boolean { return !!this.flight || this.focusState.phase !== 'walk'; }
+    /** True while an eased camera flight is still running, so the render loop keeps drawing. */
+    get flying(): boolean { return !!this.flight; }
     get attached(): boolean { return this.focusState.phase === 'attaching' || this.focusState.phase === 'attached'; }
     onFocusChange(listener: (state: FocusState) => void): () => void { this.focusListeners.add(listener); return () => this.focusListeners.delete(listener); }
     /** Fly the camera to frame a screen and lock the body. The walking pose is kept untouched for the way back. */

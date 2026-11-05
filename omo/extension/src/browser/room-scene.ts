@@ -95,6 +95,7 @@ export class RoomScene {
     private scheduled = false;
     private idle = true;
     private needsRender = true;
+    private focusDrawn = false;
     private lastPose = '';
     private lastView = '';
     private peerVersion = 0;
@@ -757,8 +758,16 @@ export class RoomScene {
             this.walker.step(delta);
             const pose=this.walker.pose;
             moving=pose.x!==bx||pose.z!==bz||pose.yaw!==byaw||pose.pitch!==bpitch;
-            const view=this.smoother.step(pose,delta);
-            this.camera.position.set(view.x,1.75,view.z);this.camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
+            if(this.walker.cameraOwned){
+                // Focus mode drives the camera (eased flight to/from a screen); keep drawing while it flies.
+                this.smoother.snap(pose);
+                if(this.walker.flying)moving=true;
+                if(this.walker.cameraOwned!==this.focusDrawn){this.focusDrawn=this.walker.cameraOwned;moving=true;}
+            }else{
+                if(this.focusDrawn){this.focusDrawn=false;moving=true;}
+                const view=this.smoother.step(pose,delta);
+                this.camera.position.set(view.x,1.75,view.z);this.camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
+            }
             const key=`${pose.x},${pose.z},${pose.yaw},${pose.pitch}`;
             if(key!==this.lastPose){this.lastPose=key;this.options.onPose?.(pose);}
             if(!this.smoother.settled(pose))moving=true;
