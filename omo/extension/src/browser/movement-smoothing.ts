@@ -25,7 +25,42 @@ export interface SmoothingTimes {
     look: number;
 }
 
-export const DEFAULT_SMOOTHING: SmoothingTimes = { move: 0.07, look: 0.035 };
+/** Position lag is short: WalkVelocity already eases starts and stops, so a long lag here would feel floaty. */
+export const DEFAULT_SMOOTHING: SmoothingTimes = { move: 0.04, look: 0.035 };
+
+/**
+ * WASD acceleration. The input direction is a target velocity; the actual velocity approaches it
+ * exponentially (frame-rate independent), faster when stopping than when starting. Values are in
+ * the player's local frame (forward/right), as a fraction of full walking speed.
+ */
+export interface WalkAcceleration {
+    /** Seconds to close ~63% of the gap when a key is held. */
+    accelerate: number;
+    /** Seconds to close ~63% of the gap when keys are released. */
+    decelerate: number;
+}
+export const DEFAULT_WALK_ACCELERATION: WalkAcceleration = { accelerate: 0.09, decelerate: 0.065 };
+const STOP_SPEED = 0.02;
+
+export class WalkVelocity {
+    forward = 0;
+    right = 0;
+    constructor(private readonly times: WalkAcceleration = DEFAULT_WALK_ACCELERATION) {}
+    /** Advance toward the input direction. Returns the current speed (0..1); 0 means at rest. Allocation-free. */
+    step(inputForward: number, inputRight: number, seconds: number): number {
+        const length = Math.hypot(inputForward, inputRight);
+        const tf = length ? inputForward / length : 0, tr = length ? inputRight / length : 0;
+        const dt = Math.min(Math.max(seconds, 0), 0.1);
+        const tau = length ? this.times.accelerate : this.times.decelerate;
+        this.forward = damp(this.forward, tf, tau, dt);
+        this.right = damp(this.right, tr, tau, dt);
+        const speed = Math.hypot(this.forward, this.right);
+        if (!length && speed < STOP_SPEED) { this.forward = 0; this.right = 0; return 0; }
+        return speed;
+    }
+    stop(): void { this.forward = 0; this.right = 0; }
+    get moving(): boolean { return this.forward !== 0 || this.right !== 0; }
+}
 /** Below these the view is treated as arrived; the render loop may go idle. */
 const SETTLE_DISTANCE = 0.0005, SETTLE_ANGLE = 0.0002;
 
@@ -55,9 +90,9 @@ export class PoseSmoother {
 }
 
 /**
- * Pointer-lock mouse look for FirstPersonControls (integration point for the controls owner; not wired yet).
+ * Pointer-lock mouse look, used by FirstPersonControls.
  * Call `request()` from a user gesture; `onLook(dx, dy)` then receives raw movement deltas with no cursor
- * edge limits. Esc or `exit()` releases it. Clicking monitors needs the crosshair centre while locked.
+ * edge limits. Esc or `exit()` releases it. While locked, clicks act at the crosshair (canvas centre).
  */
 export class PointerLockLook {
     private readonly listeners: Array<() => void> = [];
