@@ -246,7 +246,8 @@ def agents():
     bash = shutil.which("bash")
     out = [{"kind": "shell", "available": bool(bash),
             "detail": "bash" if bash else "bash was not found on PATH",
-            **({} if bash else {"installHint": "Install bash (for example: sudo apt install bash)"})}]
+            **({} if bash else {"installHint": "Install bash (for example: brew install bash)" if sys.platform == "darwin"
+                                else "Install bash (for example: sudo apt install bash)"})}]
     labels = {"hermes": "Hermes", "claude": "Claude Code", "codex": "Codex"}
     for kind in ("hermes", "claude", "codex"):
         found = bool(info.get(kind, {}).get("found"))

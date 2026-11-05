@@ -88,6 +88,10 @@ export class RuntimeHost {
             PYTHONDONTWRITEBYTECODE: '1',
             PYTHONUNBUFFERED: '1'
         };
+        if (this.locations.searchPath !== undefined) {
+            // macOS: the host, tmux and every tab shell resolve bash/python/git from Homebrew first.
+            env.PATH = this.locations.searchPath;
+        }
         for (const key of ['OMO_HERMES_BIN', 'OMO_CLAUDE_BIN', 'OMO_CODEX_BIN', 'OMO_HERMES_ROOT']) {
             const pinned = this.env[`OMO_SPATIAL_${key.slice(4)}`];
             if (pinned) {

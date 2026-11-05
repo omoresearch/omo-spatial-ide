@@ -68,11 +68,41 @@ function isExecutableFile(file: string | undefined): file is string {
     }
 }
 
+/** A macOS app-bundle executable: `<X>.app/Contents/MacOS/<name>`. */
+const MAC_APP_EXECUTABLE = /\.app\/Contents\/MacOS\/[^/]+$/;
+
+/**
+ * Homebrew cask links (`brew install --cask chromium` links /opt/homebrew/bin/chromium). Accepted only
+ * when the link resolves into a real .app bundle executable, so a user wrapper script of the same name
+ * (which may add flags or a personal profile) is never picked up. Returns the resolved executable.
+ */
+export function homebrewChromeLinks(brewBins: string[] = ['/opt/homebrew/bin', '/usr/local/bin'],
+    realpath: (file: string) => string = fs.realpathSync): string[] {
+    const out: string[] = [];
+    for (const dir of brewBins) {
+        for (const name of ['google-chrome', 'chromium']) {
+            try {
+                const target = realpath(path.join(dir, name));
+                if (MAC_APP_EXECUTABLE.test(target) && !out.includes(target)) {
+                    out.push(target);
+                }
+            } catch {
+                // not linked
+            }
+        }
+    }
+    return out;
+}
+
 export function defaultChromeCandidates(platform: NodeJS.Platform, home: string = os.homedir()): string[] {
     if (platform === 'darwin') {
+        // Homebrew casks install the .app into /Applications (or ~/Applications with --appdir), so the
+        // bundle paths cover them; the cask bin links are a last resort for a custom --appdir.
         const apps = ['Google Chrome.app/Contents/MacOS/Google Chrome', 'Chromium.app/Contents/MacOS/Chromium',
+            'Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta', 'Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev',
             'Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'];
-        return [...apps.map(a => path.join('/Applications', a)), ...apps.map(a => path.join(home, 'Applications', a))];
+        return [...apps.map(a => path.join('/Applications', a)), ...apps.map(a => path.join(home, 'Applications', a)),
+            ...homebrewChromeLinks()];
     }
     if (platform === 'linux') {
         return ['/opt/google/chrome/chrome', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome', '/usr/bin/chromium',
@@ -103,7 +133,9 @@ function isInside(child: string, parent: string): boolean {
 function personalBrowserDirs(home: string): string[] {
     return ['.config/google-chrome', '.config/google-chrome-beta', '.config/google-chrome-unstable', '.config/chromium',
         '.config/BraveSoftware', '.config/microsoft-edge', 'snap/chromium', 'Library/Application Support/Google/Chrome',
-        'Library/Application Support/Chromium'].map(d => path.join(home, d));
+        'Library/Application Support/Google/Chrome Beta', 'Library/Application Support/Google/Chrome Dev',
+        'Library/Application Support/Google/Chrome Canary', 'Library/Application Support/Chromium',
+        'Library/Application Support/BraveSoftware', 'Library/Application Support/Microsoft Edge'].map(d => path.join(home, d));
 }
 
 /** Omo's own browser profile directory. Never a personal Chrome profile and never the Minecraft Omo data. */
