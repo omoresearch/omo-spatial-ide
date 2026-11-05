@@ -4,7 +4,7 @@ import type { MonitorFrame, TerminalWorkstation } from './room-scene';
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';
 import { FocusMode } from './focus-mode';
 import { FOCUS_STATIONS } from './focus-screen';
-import { FocusTerminalView, fitFont, fitSpacing } from './focus-terminal-view';
+import { FocusTerminalView, termFont, useCellRatio } from './focus-terminal-view';
 import { ConsoleAlerts, FocusTabs } from './runtime-console-strip';
 import '../../src/browser/focus-mode.css';
 
@@ -89,9 +89,8 @@ function FocusPane(props: { station: TerminalWorkstation; frame: MonitorFrame; d
     const { station, desk, active } = props;
     const screen = React.useRef<HTMLDivElement>(null);
     const size = useSize(screen);
-    const fontSize = size ? Math.max(6, fitFont(size.width, size.height) * props.comfort) : 14;
-    // Columns follow the width: the view's column pitch widens to the pane (DOM only; tmux keeps its size).
-    const spacing = size ? fitSpacing(size.width, fontSize) : 0;
+    const ratio = useCellRatio(screen);
+    const fontSize = size ? termFont(size.width, size.height, ratio, props.comfort) : 16;
     const [menu, setMenu] = React.useState<{ x: number; y: number }>();
     const closeMenu = React.useCallback(() => setMenu(undefined), []);
     const idle = desk.state.phase === 'idle' && !props.frame.lines.length;
@@ -112,7 +111,7 @@ function FocusPane(props: { station: TerminalWorkstation; frame: MonitorFrame; d
         <div ref={screen} className="omo-focus-screen" data-testid={active ? 'focus-screen-active' : undefined}
             onPointerUp={event => { if (event.button === 0) (active ? props.refocus : props.activate)(); }} onWheel={wheel} onContextMenu={contextMenu}>
             {idle ? <div className="omo-focus-pane-idle">Click to use {DESK_LABEL[station]} here · same as clicking its monitor. No agent starts.</div>
-                : <FocusTerminalView frame={props.frame} fontSize={fontSize} spacing={spacing} />}
+                : <FocusTerminalView frame={props.frame} fontSize={fontSize} />}
             {menu && <TerminalMenu at={menu} screen={screen.current} controller={desk.controller} close={closeMenu} refocus={props.refocus} />}
         </div>
         <ConsoleAlerts state={desk.state} controller={desk.controller} onDone={back} />
@@ -214,21 +213,25 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
     const split = state.full && focus.split;
     const panes = split ? FOCUS_STATIONS : [station];
     const desk = props.desk(station);
-    // The tab already shows "busy" and the terminal title its status, so the bar only speaks when not live.
-    const status = desk.state.phase === 'live' ? '' : desk.state.statusText;
+    // One bar says it all: project, desk, tabs, live state and bell. Text only when not plainly live.
+    const live = desk.state.phase === 'live';
+    const status = live ? '' : desk.state.statusText;
+    const bells = props.frames[station].unreadBells ?? 0;
     // A click on the layer's own margin must not take focus away from the terminal.
     const keepFocus = (event: React.MouseEvent): void => { if (event.target === event.currentTarget) event.preventDefault(); };
     const layer = <div ref={box} className={`omo-focus-layer ${state.full ? 'is-full' : 'is-screen'} ${settled ? 'is-settled' : ''} ${split ? 'is-split' : ''}`}
         data-testid="focus-layer" data-station={station} data-phase={state.phase} data-full={String(state.full)} data-split={String(split)}
         data-comfort={String(focus.comfort)} onMouseDown={keepFocus}>
         <div className="omo-focus-bar" role="toolbar" aria-label="Attached screen" onMouseDown={keepFocus}>
-            <span className="omo-focus-dot" aria-hidden="true" />
+            <span className={`omo-focus-dot ${live ? 'is-live' : ''}`} title={live ? 'Live' : status} aria-hidden="true" />
+            <strong className="omo-focus-project" data-testid="focus-project">{desk.state.workspace?.name ?? 'Omo'}</strong>
             <span className="omo-focus-desks" role="group" aria-label="Switch desk">
                 {FOCUS_STATIONS.map((s, i) => <button key={s} type="button" data-testid={`focus-desk-${s}`} aria-pressed={s === station}
                     title={`${DESK_LABEL[s]} (Ctrl+${i + 1})`} onClick={() => focus.switchTo(s)}>{DESK_LABEL[s]}<kbd>⌃{i + 1}</kbd></button>)}
             </span>
             {!split && <><span className="omo-focus-sep" aria-hidden="true" /><FocusTabs state={desk.state} controller={desk.controller} onPicked={refocus} /></>}
             <span className="omo-focus-fill" />
+            {bells > 0 && <span className="omo-focus-bell" data-testid="focus-bell">Bell · {bells}</span>}
             {status && <span className="omo-focus-status" role="status" data-testid="focus-status">{status}</span>}
             <span className="omo-focus-keys" data-testid="focus-keys">{controls.typing ? 'Typing here' : 'Click the screen to type'}</span>
             <span className="omo-focus-comfort" role="group" aria-label="Text size">

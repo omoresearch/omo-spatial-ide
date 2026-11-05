@@ -4,32 +4,41 @@ import { cellRuns, dominantKey, MONITOR_COLS, MONITOR_ROWS } from './runtime-con
 import { visibleMonitorCells } from '../common/monitor-selection';
 
 const BASE = '#091119';
-export const FOCUS_FONT = `'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace`;
-const LINE = 1.3;
-let glyphRatio = 0;
-/** Width of one monospace cell per 1px of font size, measured once for the real font. */
-function cellRatio(): number {
-    if (glyphRatio) return glyphRatio;
-    const c = document.createElement('canvas').getContext('2d');
-    if (c) { c.font = `100px ${FOCUS_FONT}`; glyphRatio = (c.measureText('M').width || 60) / 100; }
-    return glyphRatio || 0.6;
-}
-/** Inner padding of the attached screen, in CSS pixels (matches .omo-focus-screen). */
-export const SCREEN_PAD = { x: 16, y: 10 };
-/** Largest font that fits the 80 x 22 grid plus the title row into a box. */
-export function fitFont(width: number, height: number): number {
-    const byWidth = Math.max(0, width - SCREEN_PAD.x * 2) / (MONITOR_COLS * cellRatio());
-    const byHeight = Math.max(0, height - SCREEN_PAD.y * 2) / ((MONITOR_ROWS + 1.6) * LINE);
-    return Math.max(6, Math.min(byWidth, byHeight));
-}
+/** Terminal text size in CSS px at 100%. A− / A+ scale it; it never grows past what fits the pane. */
+export const TERM_FONT = 16;
+/** Row height in em. Matches .omo-focus-term-row in focus-mode.css. */
+const LINE = 1.4;
+/** Screen padding + card padding + card border on both sides, in px (focus-mode.css). */
+const FRAME = { x: 2 * (24 + 20 + 1), y: 2 * (20 + 14 + 1) };
+
 /**
- * Extra space per column so the 80-column grid spans the whole width. The tmux grid itself
- * stays the runtime's size (no resize is sent); only the DOM view's column pitch widens,
- * capped so wide screens never look stretched.
+ * Advance of one cell per 1px of font size, measured with the font the element really renders
+ * (its computed font-family), again once web fonts settle. Only used to cap the size so the
+ * 80 columns fit; the column pitch itself is the font's own advance, never a guess.
  */
-export function fitSpacing(width: number, fontSize: number): number {
-    const free = Math.max(0, width - SCREEN_PAD.x * 2) / MONITOR_COLS - fontSize * cellRatio();
-    return Math.max(0, Math.min(fontSize * 0.32, free));
+export function useCellRatio(ref: React.RefObject<HTMLElement>): number {
+    const [ratio, setRatio] = React.useState(0.6);
+    React.useEffect(() => {
+        let live = true;
+        const measure = (): void => {
+            const el = ref.current, ctx = document.createElement('canvas').getContext('2d');
+            if (!live || !el || !ctx) return;
+            ctx.font = `100px ${getComputedStyle(el).fontFamily}`;
+            const width = ctx.measureText('0'.repeat(10)).width / 1000;
+            if (width > 0.3 && width < 1) setRatio(width);
+        };
+        measure();
+        void document.fonts?.ready.then(measure);
+        document.fonts?.addEventListener?.('loadingdone', measure);
+        return () => { live = false; document.fonts?.removeEventListener?.('loadingdone', measure); };
+    }, [ref]);
+    return ratio;
+}
+
+/** Terminal text size: the default scaled by comfort, capped so the whole 80 x 22 grid fits the box. */
+export function termFont(width: number, height: number, ratio: number, comfort: number): number {
+    const fits = Math.min((width - FRAME.x) / (MONITOR_COLS * ratio), (height - FRAME.y) / (MONITOR_ROWS * LINE));
+    return Math.max(8, Math.floor(Math.min(TERM_FONT * comfort, fits)));
 }
 
 function hex(value: string | undefined): string | undefined {
@@ -38,43 +47,51 @@ function hex(value: string | undefined): string | undefined {
     return /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : undefined;
 }
 
+/** Text of one colour. `fixed`: a wide or combined glyph whose box is pinned to its terminal columns. */
+interface Segment { x: number; text: string; fg: string; bg: string; cols: number; fixed: boolean }
+
+/** Merge a row's cells into plain monospace runs. Only glyphs whose width differs from their columns get a box. */
+function segments(runs: ReturnType<typeof cellRuns>, grid: boolean): Segment[] {
+    const out: Segment[] = [];
+    for (const run of runs) {
+        if (grid && run.text === '') continue;
+        // Non-ASCII glyphs may come from a fallback font with another advance: pin them to their columns.
+        const chars = Array.from(run.text).length, cols = run.glyphColumns ?? chars, fixed = grid && (cols !== chars || /[^\x20-\x7e]/.test(run.text));
+        const last = out[out.length - 1];
+        if (last && !fixed && !last.fixed && last.fg === run.fg && last.bg === run.bg && last.x + last.cols === run.x) { last.text += run.text; last.cols += cols; }
+        else out.push({ x: run.x, text: run.text, fg: run.fg, bg: run.bg, cols, fixed });
+    }
+    return out;
+}
+
 /**
- * Crisp DOM rendering of the same live frame the monitor texture shows. Read-only:
- * keys still go to the world canvas, so all input rules stay in one place.
+ * Crisp DOM rendering of the same live frame the monitor texture shows. Rows are plain monospace
+ * text (no letter spacing, no per-cell boxes), so letters sit at the font's natural pitch.
+ * Read-only: keys still go to the world canvas, so all input rules stay in one place.
  */
-export const FocusTerminalView = React.memo(function FocusTerminalView(props: { frame: MonitorFrame; fontSize: number; spacing?: number }): React.ReactElement {
+export const FocusTerminalView = React.memo(function FocusTerminalView(props: { frame: MonitorFrame; fontSize: number }): React.ReactElement {
     const { frame } = props;
     const rows = visibleMonitorCells(frame.lines, frame.cells);
     const offset = frame.lines.length - rows.length;
+    const grid = frame.cells !== undefined;
     const tc = frame.truecolor && frame.truecolor.foreground.length === frame.truecolor.background.length ? frame.truecolor : undefined;
     const skip = hex(frame.background ? frame.palette?.[dominantKey(frame.background) ?? ''] : undefined) ?? BASE;
     const cursor = frame.cursor?.visible ? { x: frame.cursor.x, y: frame.cursor.y - offset } : undefined;
-    const spacing = Math.round((props.spacing ?? 0) * 100) / 100;
-    const termStyle = { fontSize: props.fontSize, fontFamily: FOCUS_FONT, lineHeight: LINE, letterSpacing: spacing ? `${spacing}px` : undefined, '--omo-cell': `calc(1ch + ${spacing}px)` } as React.CSSProperties;
-    return <div className="omo-focus-term" style={termStyle} data-testid="focus-terminal" data-spacing={String(spacing)}>
-        <div className="omo-focus-term-title">
-            <span>{frame.title ?? 'OMO / LIVE PROJECT TERMINAL'}</span>
-            <span className={frame.unreadBells ? 'is-bell' : ''}>{frame.unreadBells ? `BELL (${frame.unreadBells})` : frame.status ?? ''}</span>
-        </div>
+    return <div className="omo-focus-term" style={{ fontSize: props.fontSize }} data-testid="focus-terminal" data-font-size={String(props.fontSize)}>
         <div className="omo-focus-term-grid" role="log" aria-label="Attached terminal" aria-live="off">
             {!rows.length && <div className="omo-focus-term-empty">{frame.status || 'Connecting to this desk…'}</div>}
             {rows.map((row, i) => {
-                const fallback = { fg: '#e0e8eb', bg: BASE };
                 const direct = tc ? { fg: tc.foreground[offset + i], bg: tc.background[offset + i] } : undefined;
-                const runs = cellRuns(row.join(''), frame.foreground?.[offset + i], frame.background?.[offset + i], frame.palette, fallback, frame.cells === undefined ? undefined : row, direct);
-                return <div key={i} className="omo-focus-term-row">{runs.map(run => {
-                    if (frame.cells !== undefined && run.text === '') return null;
-                    const span = run.glyphColumns ?? Array.from(run.text).length;
-                    const isCursor = cursor?.y === i && cursor.x >= run.x && cursor.x < run.x + span;
-                    const bg = run.bg.toLowerCase() !== skip && run.bg !== BASE ? run.bg : undefined;
-                    const style: React.CSSProperties = { color: run.fg, background: bg, width: frame.cells !== undefined ? `calc(${span} * var(--omo-cell))` : undefined };
-                    if (isCursor && frame.cells !== undefined) return <span key={run.x} className="omo-focus-cell is-cursor" style={style}>{run.text}</span>;
-                    if (isCursor) {
-                        const chars = Array.from(run.text), at = cursor!.x - run.x;
-                        return <span key={run.x} style={style}>{chars.slice(0, at).join('')}<span className="is-cursor">{chars[at] ?? ' '}</span>{chars.slice(at + 1).join('')}</span>;
-                    }
-                    return <span key={run.x} className={frame.cells !== undefined ? 'omo-focus-cell' : undefined} style={style}>{run.text}</span>;
-                })}{cursor?.y === i && cursor.x >= Array.from(row).length && <span className="is-cursor" style={{ marginLeft: `calc(${cursor.x - row.length} * var(--omo-cell))` }}> </span>}</div>;
+                const runs = cellRuns(row.join(''), frame.foreground?.[offset + i], frame.background?.[offset + i], frame.palette, { fg: '#e0e8eb', bg: BASE }, grid ? row : undefined, direct);
+                const at = cursor?.y === i ? cursor.x : -1;
+                return <div key={i} className="omo-focus-term-row">{segments(runs, grid).map(seg => {
+                    const bg = seg.bg.toLowerCase() !== skip && seg.bg !== BASE ? seg.bg : undefined;
+                    const style: React.CSSProperties = { color: seg.fg, background: bg, width: seg.fixed ? `${seg.cols}ch` : undefined };
+                    if (at < seg.x || at >= seg.x + seg.cols) return <span key={seg.x} className={seg.fixed ? 'omo-focus-cell' : undefined} style={style}>{seg.text}</span>;
+                    if (seg.fixed) return <span key={seg.x} className="omo-focus-cell is-cursor" style={style}>{seg.text}</span>;
+                    const chars = Array.from(seg.text), c = at - seg.x;
+                    return <span key={seg.x} style={style}>{chars.slice(0, c).join('')}<span className="is-cursor">{chars[c] ?? ' '}</span>{chars.slice(c + 1).join('')}</span>;
+                })}{at >= row.length && <span className="is-cursor" style={{ marginLeft: `${at - row.length}ch` }}> </span>}</div>;
             })}
         </div>
     </div>;
