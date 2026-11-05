@@ -12,6 +12,7 @@ import type { RuntimeColorMetadata } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
 import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-preview';
 import { workstationLabelVisible } from './workstation-label-visibility';
+import { PoseSmoother } from './movement-smoothing';
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -60,8 +61,6 @@ interface ScreenSurface {
     truecolor?: RuntimeColorMetadata;
 }
 const SURFACE_W = 1024, SURFACE_H = 576;
-/** Rows tile in 22px bands from y=53; glyphs bleed ~4px up and 1px down into neighbours. */
-const rowBand = (row: number): [number, number] => [row === 0 ? 48 : 53 + row * 22, row === MONITOR_ROWS - 1 ? 540 : 75 + row * 22];
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
 const MAX_PIXEL_RATIO = 1.5;
 
@@ -95,12 +94,18 @@ export class RoomScene {
     /** Render on demand: one rAF at most is ever pending; idle rooms render nothing. */
     private scheduled = false;
     private idle = true;
-    private size = { width: 0, height: 0 };
+    private needsRender = true;
     private lastPose = '';
+    private lastView = '';
+    private peerVersion = 0;
+    private ambientKey = 0;
+    private ambientLayout = 0;
+    private readonly smoother = new PoseSmoother();
     private data = new Map<string, string>();
     private labelPos = new WeakMap<HTMLElement, string>();
     private readonly tmp = { a: new THREE.Vector3(), b: new THREE.Vector3(), region: new THREE.Box2(), at: new THREE.Vector2() };
-    private renders = 0;
+    /** Frames actually rendered (diagnostics). */
+    renders = 0;
     private observer?: ResizeObserver;
     private disposed = false;
     private roots: THREE.Object3D[] = [];
@@ -183,17 +188,23 @@ export class RoomScene {
         for (const node of nodes) { node.updateMatrixWorld(true); node.traverse(child => { child.matrixAutoUpdate = false; child.matrixWorldAutoUpdate = false; }); }
     }
     /** Request one frame. Safe to call many times per frame. */
-    invalidate(): void {
+    invalidate(render = true): void {
+        if (render) this.needsRender = true;
         if (this.disposed || this.scheduled || !this.renderer) return;
         this.scheduled = true; this.frame = requestAnimationFrame(this.draw);
     }
     /** Input on the room wakes the loop. Registered before the walker, which stops propagation. */
     private bindWake(canvas: HTMLCanvasElement): void {
-        const wake = (): void => this.invalidate();
-        const key = (event: Event): void => { if (event.target === canvas || document.activeElement === canvas) this.invalidate(); };
+        // Wake only: the tick renders if the pose or view actually changed.
+        const wake = (): void => this.invalidate(false);
+        const key = (event: Event): void => { if (event.target === canvas || document.activeElement === canvas) this.invalidate(false); };
         for (const name of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'blur'] as const) canvas.addEventListener(name, wake, true);
         for (const name of ['keydown', 'keyup'] as const) window.addEventListener(name, key, true);
         window.addEventListener('blur', wake);
+        // Agent avatars are added by another module without telling the room. While the loop is stopped,
+        // a cheap 4 Hz check notices them appear (once present, the loop itself keeps watching them).
+        const watch = window.setInterval(() => { if (!this.scheduled && this.ambient().key !== this.ambientKey) this.invalidate(false); }, 250);
+        this.cleanup.push(() => window.clearInterval(watch));
         this.cleanup.push(() => {
             for (const name of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'blur'] as const) canvas.removeEventListener(name, wake, true);
             for (const name of ['keydown', 'keyup'] as const) window.removeEventListener(name, key, true);
@@ -228,6 +239,7 @@ export class RoomScene {
             }
             avatar.member=member;avatar.root.position.set(member.pose.x,0,member.pose.z);avatar.root.rotation.y=member.pose.yaw;
         }
+        this.peerVersion++;
         if (this.renderer) { this.renderer.shadowMap.needsUpdate = true; this.invalidate(); }
     }
     private material(color: THREE.ColorRepresentation, metalness = 0.1): THREE.MeshStandardMaterial {
@@ -488,6 +500,7 @@ export class RoomScene {
     setNavigation(mode: 'walk' | 'overview'): void {
         this.navigation = mode; this.camera.fov = mode === 'walk' ? 65 : 38; this.camera.updateProjectionMatrix();
         this.walker?.setEnabled(mode === 'walk');
+        if (this.walker) this.smoother.snap(this.walker.pose);
         if (this.renderer) { this.renderer.domElement.dataset.navigation = mode; }
         this.labels.forEach(label => label.classList.toggle('is-walk', mode === 'walk'));
         this.positionCamera(); this.invalidate();
@@ -632,7 +645,7 @@ export class RoomScene {
             const dirty = surface.dirty; if (!dirty || !surface.source) continue;
             surface.dirty = undefined;
             // A full upload is already queued and will include these pixels.
-            if (surface.texture.version === 0 || this.renderer.properties.get(surface.texture).__version !== surface.texture.version) continue;
+            if (surface.texture.version === 0 || (this.renderer.properties.get(surface.texture) as { __version?: number }).__version !== surface.texture.version) continue;
             const { region, at } = this.tmp;
             region.min.set(0, dirty.from); region.max.set(SURFACE_W, dirty.to); at.set(0, dirty.from);
             this.renderer.copyTextureToTexture(surface.source, surface.texture, region, at);
@@ -712,6 +725,7 @@ export class RoomScene {
         return undefined;
     }
     private positionCamera(): void {
+        this.invalidate();
         if (this.navigation === 'walk') { this.walker?.step(0); return; }
         const {azimuth:a,elevation:e,distance:d}=this.state;
         const fit = Math.max(1, 1.28 / this.camera.aspect);
@@ -720,53 +734,100 @@ export class RoomScene {
     }
     private resize():void {
         const w=this.host.clientWidth,h=this.host.clientHeight;if(!w||!h)return;
-        this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.positionCamera();
+        this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.lastView='';this.positionCamera();
     }
+    /**
+     * The only animation loop. Each tick advances the walker and the view smoothing, then renders only
+     * when something visible changed. It reschedules itself while the player moves, the view is still
+     * settling, or agent avatars are present (their ambient motion is checked cheaply each tick and
+     * rendered only when it changes). Otherwise it stops; input, resize and content updates restart it.
+     */
     private draw=():void=>{
-        if(this.disposed)return;
-        const now=performance.now();const delta=(now-this.lastFrame)/1000;this.lastFrame=now;
-        if(this.host.clientWidth&&this.host.clientHeight){
-            this.walker?.step(delta);
-            this.options.onPose?.(this.walker?.pose ?? PLAYER_HOME);
-            this.renderer.render(this.scene,this.camera);
-            this.renderer.domElement.dataset.peerPositions=JSON.stringify(Object.fromEntries([...this.peerAvatars].map(([id,avatar])=>{
-                const p=avatar.root.localToWorld(new THREE.Vector3(0,1.55,0)).project(this.camera);
-                return [id,{name:avatar.member.name,...avatar.member.pose,screenX:(p.x*.5+.5)*this.host.clientWidth,screenY:(-p.y*.5+.5)*this.host.clientHeight,visible:p.z>=-1&&p.z<=1&&Math.abs(p.x)<1&&Math.abs(p.y)<1}];
-            })));
-            const targets: Record<string, { x: number; y: number; visible: boolean }> = {};
-            this.labels.forEach((label)=>{
-                const action = label.dataset.workstation as Workstation;
-                const root = this.roots.find(candidate => candidate.userData.workstation === action);
-                if (!root) return;
-                const p=new THREE.Vector3().copy(root.position).add(new THREE.Vector3(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3)).project(this.camera);
-                label.style.left=`${(p.x*0.5+0.5)*this.host.clientWidth}px`;label.style.top=`${(-p.y*0.5+0.5)*this.host.clientHeight}px`;
-                const mesh = this.screens.get(action);
-                const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(new THREE.Vector3())) : undefined;
-                label.style.visibility = workstationLabelVisible(this.navigation, p.z, distance) ? 'visible' : 'hidden';
-                if (mesh) {
-                    const projected = mesh.getWorldPosition(new THREE.Vector3()).project(this.camera);
-                    const point = { x: (projected.x*.5+.5)*this.host.clientWidth, y: (-projected.y*.5+.5)*this.host.clientHeight, visible: projected.z >= -1 && projected.z <= 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 };
-                    targets[action] = point;
-                    if (action === 'terminal') { this.renderer.domElement.dataset.terminalX = String(point.x); this.renderer.domElement.dataset.terminalY = String(point.y); }
-                }
-            });
-            this.renderer.domElement.dataset.stationTargets = JSON.stringify(targets);
-            this.renderer.domElement.dataset.terminalQuads = JSON.stringify(Object.fromEntries((['terminal','terminal-2'] as const).map(id => {
-                const screen = this.screens.get(id)!;
-                return [id,[[-.79,.45],[.79,.45],[.79,-.45],[-.79,-.45]].map(([x,y]) => { const p=screen.localToWorld(new THREE.Vector3(x,y,0)).project(this.camera); return {x:(p.x*.5+.5)*this.host.clientWidth,y:(-p.y*.5+.5)*this.host.clientHeight}; })];
-            })));
-            const web = this.screens.get('web');
-            const code=this.screens.get('code');
-            if(code)this.renderer.domElement.dataset.codeReviewQuad=JSON.stringify([[-.99,.54],[.99,.54],[.99,-.54],[-.99,-.54]].map(([x,y])=>{const p=code.localToWorld(new THREE.Vector3(x,y,0)).project(this.camera);return{x:(p.x*.5+.5)*this.host.clientWidth,y:(-p.y*.5+.5)*this.host.clientHeight};}));
-            if (web) this.renderer.domElement.dataset.webQuad = JSON.stringify([[-1.95,1.22],[1.95,1.22],[1.95,-1.22],[-1.95,-1.22]].map(([x,y]) => { const p = web.localToWorld(new THREE.Vector3(x,y,0)).project(this.camera); return { x: (p.x*.5+.5)*this.host.clientWidth, y: (-p.y*.5+.5)*this.host.clientHeight }; }));
-            this.renderer.domElement.dataset.stationLamps = JSON.stringify(Object.fromEntries([...this.lamps].map(([id,mesh]) => [id,(mesh.material as THREE.MeshStandardMaterial).color.getHexString()])));
+        if(this.scheduled){cancelAnimationFrame(this.frame);this.scheduled=false;}
+        this.frame=0;
+        if(this.disposed||!this.renderer)return;
+        const now=performance.now();
+        // After an idle gap the elapsed time is not motion time: advance one nominal frame.
+        const delta=this.idle?1/60:Math.min((now-this.lastFrame)/1000,0.1);this.lastFrame=now;this.idle=false;
+        const w=this.host.clientWidth,h=this.host.clientHeight;
+        if(!w||!h){this.idle=true;return;}
+        let moving=false;
+        if(this.navigation==='walk'&&this.walker){
+            const before=this.walker.pose;const bx=before.x,bz=before.z,byaw=before.yaw,bpitch=before.pitch;
+            this.walker.step(delta);
+            const pose=this.walker.pose;
+            moving=pose.x!==bx||pose.z!==bz||pose.yaw!==byaw||pose.pitch!==bpitch;
+            const view=this.smoother.step(pose,delta);
+            this.camera.position.set(view.x,1.75,view.z);this.camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
+            const key=`${pose.x},${pose.z},${pose.yaw},${pose.pitch}`;
+            if(key!==this.lastPose){this.lastPose=key;this.options.onPose?.(pose);}
+            if(!this.smoother.settled(pose))moving=true;
         }
-        this.frame=requestAnimationFrame(this.draw);
+        const ambient=this.ambient();
+        if(ambient.key!==this.ambientKey){this.ambientKey=ambient.key;this.needsRender=true;}
+        if(ambient.layout!==this.ambientLayout){this.ambientLayout=ambient.layout;this.renderer.shadowMap.needsUpdate=true;}
+        if(moving||this.needsRender){
+            this.needsRender=false;
+            this.uploadDirty();
+            this.renderer.render(this.scene,this.camera);this.renders++;
+            this.updateOverlays(w,h);
+        }
+        if(moving||ambient.present)this.invalidate(false);else this.idle=true;
     };
-    resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();return;}this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
+    /** Agent avatars (owned by agent-avatars.ts) animate themselves; fingerprint them so idle rooms skip rendering. */
+    private ambient():{present:boolean;key:number;layout:number}{
+        const group=this.scene.children.find(child=>child.name==='omo-agent-avatars');
+        if(!group||!group.children.length)return{present:false,key:0,layout:0};
+        let key=17,layout=group.children.length;
+        const mix=(h:number,v:number):number=>(Math.imul(h,31)+Math.round(v*1000))|0;
+        group.traverse(node=>{
+            layout=mix(mix(mix(layout,node.position.x),node.position.z),node.visible?1:0);
+            key=mix(mix(mix(mix(mix(key,node.position.y),node.rotation.x),node.rotation.y),node.scale.x),node.visible?1:0);
+            if(node instanceof THREE.Sprite)key=mix(key,node.material.map?.id??-1);
+        });
+        return{present:true,key:mix(key,layout),layout};
+    }
+    /** Screen-space labels and test/inspection data. Recomputed only when the view or the peers changed. */
+    private updateOverlays(w:number,h:number):void{
+        const e=this.camera.matrixWorld.elements;
+        const view=`${w},${h},${this.navigation},${this.peerVersion},${e[0]},${e[1]},${e[2]},${e[4]},${e[5]},${e[6]},${e[8]},${e[9]},${e[10]},${e[12]},${e[13]},${e[14]}`;
+        if(view===this.lastView)return;
+        this.lastView=view;
+        const {a,b}=this.tmp;
+        const toScreen=(v:THREE.Vector3):{x:number;y:number}=>({x:(v.x*.5+.5)*w,y:(-v.y*.5+.5)*h});
+        this.setData('peerPositions',JSON.stringify(Object.fromEntries([...this.peerAvatars].map(([id,avatar])=>{
+            const p=avatar.root.localToWorld(a.set(0,1.55,0)).project(this.camera);
+            return [id,{name:avatar.member.name,...avatar.member.pose,screenX:(p.x*.5+.5)*w,screenY:(-p.y*.5+.5)*h,visible:p.z>=-1&&p.z<=1&&Math.abs(p.x)<1&&Math.abs(p.y)<1}];
+        }))));
+        const targets: Record<string, { x: number; y: number; visible: boolean }> = {};
+        for(const label of this.labels){
+            const action = label.dataset.workstation as Workstation;
+            const root = this.roots.find(candidate => candidate.userData.workstation === action);
+            if (!root) continue;
+            const p=a.copy(root.position).add(b.set(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3)).project(this.camera);
+            const mesh = this.screens.get(action);
+            const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(b)) : undefined;
+            const left=`${Math.round((p.x*0.5+0.5)*w*2)/2}px`,top=`${Math.round((-p.y*0.5+0.5)*h*2)/2}px`;
+            const visibility=workstationLabelVisible(this.navigation, p.z, distance) ? 'visible' : 'hidden';
+            const placed=`${left} ${top} ${visibility}`;
+            // Only touch the style when it changed: every write invalidates style and layout for the page.
+            if(this.labelPos.get(label)!==placed){this.labelPos.set(label,placed);label.style.left=left;label.style.top=top;label.style.visibility=visibility;}
+            if (mesh) {
+                const projected = mesh.getWorldPosition(a).project(this.camera);
+                targets[action] = { ...toScreen(projected), visible: projected.z >= -1 && projected.z <= 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 };
+            }
+        }
+        if(targets.terminal){this.setData('terminalX',String(targets.terminal.x));this.setData('terminalY',String(targets.terminal.y));}
+        this.setData('stationTargets',JSON.stringify(targets));
+        const quad=(mesh:THREE.Mesh,x:number,y:number)=>[[-x,y],[x,y],[x,-y],[-x,-y]].map(([qx,qy])=>toScreen(mesh.localToWorld(a.set(qx,qy,0)).project(this.camera)));
+        this.setData('terminalQuads',JSON.stringify(Object.fromEntries((['terminal','terminal-2'] as const).map(id => [id,quad(this.screens.get(id)!,.79,.45)]))));
+        const code=this.screens.get('code');if(code)this.setData('codeReviewQuad',JSON.stringify(quad(code,.99,.54)));
+        const web=this.screens.get('web');if(web)this.setData('webQuad',JSON.stringify(quad(web,1.95,1.22)));
+    }
+    resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();this.invalidate();return;}this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
     dispose():void{
         this.setPeers([]);
-        this.disposed=true;this.walker?.dispose();cancelAnimationFrame(this.frame);this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
+        this.disposed=true;this.walker?.dispose();cancelAnimationFrame(this.frame);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
     }
