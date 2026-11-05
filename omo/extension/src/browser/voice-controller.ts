@@ -32,7 +32,7 @@ export interface VoiceMediaApi {
     getUserMedia(constraints: MediaStreamConstraints): Promise<MediaStream>;
     createPeer(config: RTCConfiguration): RTCPeerConnection;
     createAudio(stream: MediaStream): { volume: number; muted: boolean; play(): Promise<void> | void; remove(): void };
-    createAnalyser?(stream: MediaStream): { level(): number; close(): void } | undefined;
+    createAnalyser?(stream: MediaStream): { level(): number; resume?(): void; close(): void } | undefined;
 }
 
 interface Options {
@@ -58,7 +58,8 @@ interface Peer {
 
 const POLL_MS = 250;
 const CONNECT_TIMEOUT_MS = 12000;
-const SPEAK_THRESHOLD = 0.035;
+const SPEAK_THRESHOLD = 0.02;
+const SPEAK_HOLD_MS = 900;
 /** Full volume within NEAR metres, fading linearly to FLOOR at FAR metres. A room is small; never fully silent. */
 export const PROXIMITY = { near: 2.5, far: 10, floor: 0.12 };
 
@@ -99,7 +100,9 @@ export function browserVoiceMedia(): VoiceMediaApi | undefined {
             const source = ctx.createMediaStreamSource(stream);
             const analyser = ctx.createAnalyser(); analyser.fftSize = 512; source.connect(analyser);
             const data = new Float32Array(analyser.fftSize);
+            void ctx.resume().catch(() => undefined);
             return {
+                resume: () => { if (ctx.state !== 'running') void ctx.resume().catch(() => undefined); },
                 level: () => { analyser.getFloatTimeDomainData(data); let sum = 0; for (const v of data) sum += v * v; return Math.sqrt(sum / data.length); },
                 close: () => { source.disconnect(); void ctx.close().catch(() => undefined); }
             };
@@ -110,7 +113,7 @@ export function browserVoiceMedia(): VoiceMediaApi | undefined {
 export class RoomVoiceController {
     state: RoomVoiceState = { phase: 'off', mode: 'push', muted: false, transmitting: false, pushHeld: false, speaking: false, level: 0, proximity: true, peers: [], error: '', notice: '' };
     private stream?: MediaStream;
-    private analyser?: { level(): number; close(): void };
+    private analyser?: { level(): number; resume?(): void; close(): void };
     private session = '';
     private peers = new Map<string, Peer>();
     private members: RoomMember[] = [];
@@ -120,6 +123,7 @@ export class RoomVoiceController {
     private published?: string;
     private polling = false;
     private republishedAt = 0;
+    private loudAt = 0;
     private disposed = false;
 
     constructor(private options: Options) {}
@@ -167,12 +171,12 @@ export class RoomVoiceController {
         if (wasOn) await this.options.service.setVoice(null).catch(() => undefined);
     }
 
-    setMode(mode: VoiceMode): void { this.emit({ mode }); this.applyTrack(); }
+    setMode(mode: VoiceMode): void { this.analyser?.resume?.(); this.emit({ mode }); this.applyTrack(); }
     setMuted(muted: boolean): void { this.emit({ muted }); this.applyTrack(); }
     toggleMuted(): void { this.setMuted(!this.state.muted); }
     setProximity(proximity: boolean): void { this.emit({ proximity }); this.applyVolumes(); }
     /** Push-to-talk key state. Only meaningful in push mode; never opens the microphone by itself. */
-    setPushHeld(held: boolean): void { if (held === this.state.pushHeld) return; this.emit({ pushHeld: held }); this.applyTrack(); }
+    setPushHeld(held: boolean): void { if (held === this.state.pushHeld) return; if (held) this.analyser?.resume?.(); this.emit({ pushHeld: held }); this.applyTrack(); }
 
     /** Presence snapshot update (every ~200 ms while joined). Leaving the room turns voice off. */
     roomChanged(snapshot: RoomSnapshot | undefined): void {
@@ -217,7 +221,9 @@ export class RoomVoiceController {
         this.polling = true;
         try {
             const level = this.analyser && this.state.transmitting ? this.analyser.level() : 0;
-            const speaking = this.state.transmitting && level > SPEAK_THRESHOLD;
+            if (this.state.transmitting && level > SPEAK_THRESHOLD) this.loudAt = Date.now();
+            // Hold the indicator briefly so short words do not flicker it off between samples.
+            const speaking = this.state.transmitting && Date.now() - this.loudAt < SPEAK_HOLD_MS;
             if (speaking !== this.state.speaking || Math.abs(level - this.state.level) > 0.01) this.emit({ level, speaking });
             void this.publish();
             const signals = await this.options.service.takeSignals();

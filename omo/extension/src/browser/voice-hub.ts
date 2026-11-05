@@ -37,7 +37,7 @@ const DESKS: DeskId[] = ['terminal', 'terminal-2'];
 const DESK_NAME: Record<DeskId, string> = { terminal: 'Desk one', 'terminal-2': 'Desk two' };
 
 /** armedUntil: read-aloud waits for the reply to a dictated draft on this desk, until this time. */
-interface DeskWatch { sequence: number; changedAt: number; tabId?: string; quietLines: string[]; working: boolean; armedUntil: number; draft: string }
+interface DeskWatch { screen: string; changedAt: number; tabId?: string; quietLines: string[]; working: boolean; armedUntil: number; draft: string }
 
 /**
  * Voice and agent presence for the Omo world.
@@ -54,7 +54,7 @@ export class VoiceHub {
     private timer = 0;
     private sceneRef?: unknown;
     private layoutRef?: RoomLayoutId;
-    private watch: Record<DeskId, DeskWatch> = { terminal: { sequence: 0, changedAt: 0, quietLines: [], working: false, armedUntil: 0, draft: '' }, 'terminal-2': { sequence: 0, changedAt: 0, quietLines: [], working: false, armedUntil: 0, draft: '' } };
+    private watch: Record<DeskId, DeskWatch> = { terminal: { screen: '', changedAt: 0, quietLines: [], working: false, armedUntil: 0, draft: '' }, 'terminal-2': { screen: '', changedAt: 0, quietLines: [], working: false, armedUntil: 0, draft: '' } };
     private listeners: Array<() => void> = [];
     private dictating?: DeskId;
     private version = '';
@@ -196,14 +196,18 @@ export class VoiceHub {
             const { state } = this.host.desk(desk);
             const w = this.watch[desk];
             const tab = state.workspace?.tabs.find(t => t.id === state.activeTabId);
-            if (!tab || tab.id !== w.tabId || state.phase !== 'live') { w.tabId = tab?.id; w.sequence = state.sequence; w.quietLines = [...state.lines]; w.working = false; w.changedAt = 0; w.armedUntil = 0; continue; }
-            if (state.sequence !== w.sequence) { w.sequence = state.sequence; w.changedAt = now; w.working = true; continue; }
+            // Screen content, not the frame counter: a re-attached view restarts its sequence.
+            const screen = state.lines.join('\n');
+            // A different tab resets everything. A brief re-attach (clicking the monitor) only pauses.
+            if (!tab || tab.id !== w.tabId) { w.tabId = tab?.id; w.screen = screen; w.quietLines = [...state.lines]; w.working = false; w.changedAt = 0; w.armedUntil = 0; continue; }
+            if (state.phase !== 'live' || !state.lines.length) continue;
+            if (screen !== w.screen) { if (!w.working) w.quietLines = w.screen ? w.screen.split('\n') : w.quietLines; w.screen = screen; w.changedAt = now; w.working = true; continue; }
             if (w.working && now - w.changedAt >= QUIET_MS) {
                 w.working = false;
                 // Read only the reply to a dictated message, never what the user types by hand.
                 if (tab.kind !== 'shell' && this.readAloud.enabled && !this.dictating && now < w.armedUntil) {
                     const text = replyText(w.quietLines, state.lines, [w.draft]);
-                    if (text.length >= 2) { this.readAloud.speak(`${desk}:${tab.id}`, text); w.armedUntil = 0; }
+                    if (text.length >= 2) { try { this.readAloud.speak(`${desk}:${tab.id}`, text); } catch (error) { this.host.message(`Read-aloud failed: ${String(error)}`); } w.armedUntil = 0; }
                 }
                 w.quietLines = [...state.lines];
             }
