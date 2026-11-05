@@ -42,6 +42,29 @@ export type Workstation = 'terminal' | 'terminal-2' | 'code' | 'web' | 'mirror';
 export type TerminalWorkstation = 'terminal' | 'terminal-2';
 export interface ScreenPoint { x: number; y: number }
 
+/** A canvas-backed screen texture. Changed rows are re-uploaded as one sub-rectangle, never the whole canvas. */
+interface ScreenSurface {
+    canvas: HTMLCanvasElement;
+    texture: THREE.CanvasTexture;
+    cellWidth?: number;
+    ctx?: CanvasRenderingContext2D;
+    /** Same canvas, never rendered: the source for partial uploads. */
+    source?: THREE.CanvasTexture;
+    dirty?: { from: number; to: number };
+    rows?: string[];
+    header?: string;
+    layout?: string;
+    frame?: MonitorFrame;
+    selection?: unknown;
+    truecolorSource?: RuntimeColorMetadata;
+    truecolor?: RuntimeColorMetadata;
+}
+const SURFACE_W = 1024, SURFACE_H = 576;
+/** Rows tile in 22px bands from y=53; glyphs bleed ~4px up and 1px down into neighbours. */
+const rowBand = (row: number): [number, number] => [row === 0 ? 48 : 53 + row * 22, row === MONITOR_ROWS - 1 ? 540 : 75 + row * 22];
+/** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
+const MAX_PIXEL_RATIO = 1.5;
+
 export interface RoomSceneOptions {
     theme: RoomTheme;
     layout?: RoomLayoutId;
@@ -69,6 +92,15 @@ export class RoomScene {
     private camera = new THREE.PerspectiveCamera(38, 1, 0.1, 150);
     private state: RoomState['camera'];
     private frame = 0;
+    /** Render on demand: one rAF at most is ever pending; idle rooms render nothing. */
+    private scheduled = false;
+    private idle = true;
+    private size = { width: 0, height: 0 };
+    private lastPose = '';
+    private data = new Map<string, string>();
+    private labelPos = new WeakMap<HTMLElement, string>();
+    private readonly tmp = { a: new THREE.Vector3(), b: new THREE.Vector3(), region: new THREE.Box2(), at: new THREE.Vector2() };
+    private renders = 0;
     private observer?: ResizeObserver;
     private disposed = false;
     private roots: THREE.Object3D[] = [];
@@ -76,7 +108,7 @@ export class RoomScene {
     private walker?: FirstPersonControls;
     private navigation: 'walk' | 'overview' = 'overview';
     private lastFrame = performance.now();
-    private terminalSurfaces = new Map<TerminalWorkstation, { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; cellWidth?: number }>();
+    private terminalSurfaces = new Map<TerminalWorkstation, ScreenSurface>();
     private terminalSelection?: { station: TerminalWorkstation; model: MonitorSelection };
     private terminalFrames: Record<TerminalWorkstation, MonitorFrame> = { terminal: { lines: [] }, 'terminal-2': { lines: [] } };
     private screens = new Map<Workstation, THREE.Mesh>();
@@ -106,9 +138,11 @@ export class RoomScene {
         this.scene.background = new THREE.Color(jungle ? '#101c1a' : '#101622');
         this.scene.fog = new THREE.Fog(jungle ? '#101c1a' : '#101622', 33, 65);
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // The room is static: draw the shadow map once, and again only when something that casts moves.
+        this.renderer.shadowMap.autoUpdate = false; this.renderer.shadowMap.needsUpdate = true;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1.25;
@@ -127,12 +161,14 @@ export class RoomScene {
         const accent = new THREE.PointLight(jungle ? 0xc3ff9b : 0x70c9ff, 25, 18);
         accent.position.set(0, 4, -2); this.scene.add(accent);
         this.buildRoom(jungle);
+        this.freeze(this.scene.children);
         canvas.dataset.roomLayout = this.options.layout ?? 'classic';
         canvas.dataset.deskPositions = JSON.stringify(Object.fromEntries(this.roots.filter(root => root.userData.workstation === 'terminal' || root.userData.workstation === 'terminal-2').map(root => {
             const point = root.getWorldPosition(new THREE.Vector3());
             return [root.userData.workstation, { x: point.x, z: point.z }];
         })));
         this.bindControls(canvas);
+        this.bindWake(canvas);
         this.walker = new FirstPersonControls(canvas, this.camera, (x,y,modifiers)=>this.interactAt(x,y,modifiers), text=>this.options.onInput(text), text=>this.options.onMessage(text), this.options.onPaste, {
             start: (x,y,unit) => this.startTerminalSelection(x,y,unit), move: (x,y) => this.extendTerminalSelection(x,y),
             end: () => this.options.onMessage('Selected visible terminal text · Ctrl+Shift+C to copy.'),
@@ -141,6 +177,32 @@ export class RoomScene {
         this.setNavigation(this.options.walk ? 'walk' : 'overview');
         this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(this.host);
         this.resize(); this.positionCamera(); this.draw(); this.options.onReady();
+    }
+    /** Static room geometry never moves: skip its per-frame matrix work. */
+    private freeze(nodes: THREE.Object3D[]): void {
+        for (const node of nodes) { node.updateMatrixWorld(true); node.traverse(child => { child.matrixAutoUpdate = false; child.matrixWorldAutoUpdate = false; }); }
+    }
+    /** Request one frame. Safe to call many times per frame. */
+    invalidate(): void {
+        if (this.disposed || this.scheduled || !this.renderer) return;
+        this.scheduled = true; this.frame = requestAnimationFrame(this.draw);
+    }
+    /** Input on the room wakes the loop. Registered before the walker, which stops propagation. */
+    private bindWake(canvas: HTMLCanvasElement): void {
+        const wake = (): void => this.invalidate();
+        const key = (event: Event): void => { if (event.target === canvas || document.activeElement === canvas) this.invalidate(); };
+        for (const name of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'blur'] as const) canvas.addEventListener(name, wake, true);
+        for (const name of ['keydown', 'keyup'] as const) window.addEventListener(name, key, true);
+        window.addEventListener('blur', wake);
+        this.cleanup.push(() => {
+            for (const name of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'blur'] as const) canvas.removeEventListener(name, wake, true);
+            for (const name of ['keydown', 'keyup'] as const) window.removeEventListener(name, key, true);
+            window.removeEventListener('blur', wake);
+        });
+    }
+    private setData(key: string, value: string): void {
+        if (this.data.get(key) === value) return;
+        this.data.set(key, value); this.renderer.domElement.dataset[key] = value;
     }
     getPlayerPose():PlayerPose { return {...(this.walker?.pose ?? PLAYER_HOME)}; }
     setPeers(members:RoomMember[]):void {
@@ -166,6 +228,7 @@ export class RoomScene {
             }
             avatar.member=member;avatar.root.position.set(member.pose.x,0,member.pose.z);avatar.root.rotation.y=member.pose.yaw;
         }
+        if (this.renderer) { this.renderer.shadowMap.needsUpdate = true; this.invalidate(); }
     }
     private material(color: THREE.ColorRepresentation, metalness = 0.1): THREE.MeshStandardMaterial {
         return new THREE.MeshStandardMaterial({ color, roughness: 0.68, metalness });
@@ -249,7 +312,7 @@ export class RoomScene {
         const surface=this.codeSurface;if(!surface)return;
         frame=codeReviewPreview(frame);
         const ctx=surface.canvas.getContext('2d')!;ctx.fillStyle='#101c27';ctx.fillRect(0,0,1024,576);ctx.font='bold 22px monospace';ctx.fillStyle='#b9e3d5';ctx.fillText(frame.title.slice(0,75),24,32);ctx.font='17px monospace';
-        frame.lines.forEach((line,i)=>{ctx.fillStyle=line.startsWith('+')?'#91e4ac':line.startsWith('-')?'#f1a49c':'#d7e3df';ctx.fillText(line,24,70+i*21,976);});ctx.fillStyle='#8ea5aa';ctx.font='14px monospace';ctx.fillText(frame.status.slice(0,110),24,564,976);surface.texture.needsUpdate=true;
+        frame.lines.forEach((line,i)=>{ctx.fillStyle=line.startsWith('+')?'#91e4ac':line.startsWith('-')?'#f1a49c':'#d7e3df';ctx.fillText(line,24,70+i*21,976);});ctx.fillStyle='#8ea5aa';ctx.font='14px monospace';ctx.fillText(frame.status.slice(0,110),24,564,976);surface.texture.needsUpdate=true;this.invalidate();
         this.renderer.domElement.dataset.codeReviewText=frame.lines.join('\n');
         this.renderer.domElement.dataset.codeReviewStatus=frame.status;
     }
@@ -286,7 +349,10 @@ export class RoomScene {
         if(action==='terminal' || action==='terminal-2'){
             const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=576;
             const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
-            this.terminalSurfaces.set(action, { canvas, texture });
+            // Unflipped upload so a changed row band maps 1:1 to a sub-rectangle; flip in the UV transform instead.
+            texture.flipY=false;texture.repeat.set(1,-1);texture.offset.set(0,1);
+            const source=new THREE.CanvasTexture(canvas);source.flipY=false;
+            this.terminalSurfaces.set(action, { canvas, texture, source, ctx: canvas.getContext('2d') ?? undefined });
             this.setTerminalFrame(this.terminalFrames[action], action);return texture;
         }
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
@@ -312,9 +378,13 @@ export class RoomScene {
         this.host.appendChild(label); this.labels.push(label); this.mirrorLabel = label;
         this.setMirrorFrame({ lines: [], title: 'LINKED MONITOR', status: 'Link this screen to a desk above.' });
     }
+    private mirrorKey = '';
     setMirrorFrame(frame: MonitorFrame | undefined): void {
         this.mirrorFrame = frame ?? { lines: [], title: 'LINKED MONITOR', status: 'No mirror attached.' };
         if (!this.mirrorSurface || !this.mirrorTexture) return;
+        const key = `${this.mirrorFrame.title}\u0000${this.mirrorFrame.status}\u0000${this.mirrorFrame.lines.slice(-22).join('\n')}`;
+        if (key === this.mirrorKey) return;
+        this.mirrorKey = key;
         const c = this.mirrorSurface.getContext('2d')!; c.fillStyle = '#091119'; c.fillRect(0, 0, 1024, 576);
         c.fillStyle = '#87cdb4'; c.font = '17px monospace'; c.fillText((this.mirrorFrame.title ?? 'LINKED MONITOR').slice(0, 52), 24, 29);
         c.fillStyle = '#283e48'; c.fillRect(20, 42, 984, 1); c.font = '20px monospace';
@@ -322,7 +392,7 @@ export class RoomScene {
         lines.forEach((line, i) => { c.fillStyle = line.includes('$') ? '#b8e6ca' : '#e0e8eb'; c.fillText(line.slice(0, 80), 24, 70 + i * 22); });
         if (!lines.length) { c.fillStyle = '#c7ded4'; c.fillText((this.mirrorFrame.status ?? 'Link this monitor to a desk.').slice(0, 80), 24, 105); }
         this.mirrorTexture.needsUpdate = true;
-        if (this.renderer) this.renderer.domElement.dataset.mirrorText = this.mirrorFrame.lines.join('\\n');
+        if (this.renderer) { this.renderer.domElement.dataset.mirrorText = this.mirrorFrame.lines.join('\\n'); this.invalidate(); }
     }
     private webWall(parent: THREE.Object3D): void {
         const group = new THREE.Group(); group.position.set(0, 0, -4.12); group.userData.workstation = 'web'; group.userData.labelHeight = 3.43;
@@ -348,7 +418,7 @@ export class RoomScene {
         c.fillStyle = '#091119'; c.fillRect(0, 0, this.webSurface.width, this.webSurface.height);
         c.fillStyle = '#87cdb4'; c.font = '30px monospace'; c.fillText('OMO / WEB WALL', 40, 75);
         c.fillStyle = '#c7ded4'; c.font = '24px monospace'; c.fillText(message.slice(0, 62), 40, 140);
-        this.webTexture.needsUpdate = true;
+        this.webTexture.needsUpdate = true; this.invalidate();
     }
     setWebFrame(frame: WebSurfaceFrame): void {
         const epoch = ++this.webEpoch;
@@ -358,7 +428,7 @@ export class RoomScene {
             if (this.disposed || epoch !== this.webEpoch || !this.webSurface || !this.webTexture) return;
             const c = this.webSurface.getContext('2d')!;
             c.drawImage(image, 0, 0, this.webSurface.width, this.webSurface.height);
-            this.webTexture.needsUpdate = true;
+            this.webTexture.needsUpdate = true; this.invalidate();
             this.renderer.domElement.dataset.webFrameSequence = String(frame.sequence);
         };
         image.onerror = () => { if (epoch === this.webEpoch) this.options.onMessage('The browser frame could not be decoded.'); };
@@ -420,7 +490,7 @@ export class RoomScene {
         this.walker?.setEnabled(mode === 'walk');
         if (this.renderer) { this.renderer.domElement.dataset.navigation = mode; }
         this.labels.forEach(label => label.classList.toggle('is-walk', mode === 'walk'));
-        this.positionCamera();
+        this.positionCamera(); this.invalidate();
     }
     setTerminalLines(lines: string[]): void { this.setTerminalFrame({ ...this.terminalFrames.terminal, lines, cells: undefined, foreground: undefined, background: undefined, cursor: undefined }); }
     setTerminalFrames(frames: Record<TerminalWorkstation, MonitorFrame>): void {
@@ -432,33 +502,97 @@ export class RoomScene {
         this.terminalFrames[station] = frame;
         const workspaceName = frame.title?.split(' / ')[0]?.trim();
         const deskLabel = this.deskLabels.get(station);
-        if (workspaceName && deskLabel) deskLabel.textContent = `${station === 'terminal' ? '01' : '02'}  ${workspaceName.slice(0, 36)} ↗`;
+        const deskText = workspaceName ? `${station === 'terminal' ? '01' : '02'}  ${workspaceName.slice(0, 36)} ↗` : undefined;
+        if (deskText && deskLabel && deskLabel.textContent !== deskText) deskLabel.textContent = deskText;
         const surface = this.terminalSurfaces.get(station);
         if (!surface) return;
-        const c = surface.canvas.getContext('2d')!;
+        const selection = this.terminalSelection?.station === station ? this.terminalSelection.model : undefined;
+        const spans = selection ? selection.spans() : [];
+        const selectionKey = selection ? JSON.stringify(spans) : '';
+        // Same frame object and same selection: the monitor already shows it (the other desk on every update).
+        if (surface.frame === frame && surface.selection === selectionKey) return;
+        const frameChanged = surface.frame !== frame;
+        surface.frame = frame; surface.selection = selectionKey;
+        if (this.paintTerminal(surface, frame, spans)) this.invalidate();
+        const lamp = this.lamps.get(station);
+        if (lamp) {
+            const color = /interrupted|exited|error/i.test(frame.status ?? '') ? 0xd26464 : frame.unreadBells ? 0xff9e4a : /process active|working/i.test(frame.status ?? '') ? 0xe8bd60 : /live|running|idle/i.test(frame.status ?? '') ? 0x87cdb4 : 0x6d7c86;
+            const material = lamp.material as THREE.MeshStandardMaterial;
+            if (material.color.getHex() !== color || material.emissive.getHex() !== color) { material.color.setHex(color); material.emissive.setHex(color); this.invalidate(); }
+        }
+        if (!this.renderer) return;
+        this.setData('terminalSelection', this.terminalSelection?.model.text() ?? '');
+        this.setData('terminalSelectionStation', this.terminalSelection?.station ?? '');
+        this.setData('stationLamps', JSON.stringify(Object.fromEntries([...this.lamps].map(([id,mesh]) => [id,(mesh.material as THREE.MeshStandardMaterial).color.getHexString()]))));
+        if (!frameChanged) return;
+        this.setData('terminalMetrics', JSON.stringify(Object.fromEntries([...this.terminalSurfaces].map(([id,s]) => [id,{ cellWidth:s.cellWidth ?? 12 }]))));
+        if (station === 'terminal') { this.setData('terminalText', frame.lines.join('\n')); this.setData('terminalCursor', frame.cursor?`${frame.cursor.x},${frame.cursor.y},${frame.cursor.visible}`:''); }
+        this.setData('stationText', JSON.stringify({ terminal: this.terminalFrames.terminal.lines, 'terminal-2': this.terminalFrames['terminal-2'].lines }));
+        this.setData('stationCells', JSON.stringify({ terminal:this.terminalFrames.terminal.cells,'terminal-2':this.terminalFrames['terminal-2'].cells }));
+        this.setData('stationBells', JSON.stringify({ terminal: this.terminalFrames.terminal.unreadBells ?? 0, 'terminal-2': this.terminalFrames['terminal-2'].unreadBells ?? 0 }));
+    }
+    /**
+     * Paint a terminal frame into its canvas. Only the header and the rows whose content changed are
+     * repainted, clipped to their band; the band is then the only part uploaded to the GPU.
+     * Returns whether any pixel changed.
+     */
+    private paintTerminal(surface: ScreenSurface, frame: MonitorFrame, spans: Array<{ row: number; from: number; to: number }>): boolean {
+        const c = surface.ctx ?? surface.canvas.getContext('2d')!;
         const base = '#091119';
-        c.fillStyle = base; c.fillRect(0,0,1024,576);
-        c.fillStyle = '#87cdb4'; c.font = '17px monospace'; c.fillText((frame.title ?? 'OMO / LIVE PROJECT TERMINAL').slice(0,52),24,29);
-        if (frame.status || frame.unreadBells) { c.fillStyle = frame.unreadBells ? '#ff9e4a' : '#7e9a9e'; c.textAlign = 'right'; c.fillText((frame.unreadBells ? `BELL (${frame.unreadBells})` : frame.status ?? '').slice(0,38),1000,29); c.textAlign = 'left'; }
-        c.fillStyle = '#283e48'; c.fillRect(20,42,984,1);
-        c.font = '20px monospace'; c.textBaseline = 'alphabetic';
         const rows = visibleMonitorCells(frame.lines,frame.cells), lines = rows.map(row=>row.join(''));
+        const offset = frame.lines.length - lines.length;
+        if (frame.truecolor !== surface.truecolorSource) { surface.truecolorSource = frame.truecolor; surface.truecolor = safeTruecolor(frame.truecolor); }
+        const truecolor = surface.truecolor;
+        // The frame's most common background is the terminal's own background; the monitor keeps its accepted base colour for it.
+        const plainBg = lines.length && frame.background ? frame.palette?.[dominantKey(frame.background) ?? ''] : undefined;
+        const skip = plainBg ? (plainBg.startsWith('#') ? plainBg : `#${plainBg}`).toLowerCase() : base;
+        const header = `${frame.title ?? ''}\u0000${frame.status ?? ''}\u0000${frame.unreadBells ?? 0}`;
+        const layout = lines.length ? `${skip}\u0000${!!frame.foreground}\u0000${frame.cells !== undefined}\u0000${JSON.stringify(frame.palette ?? null)}` : `empty\u0000${frame.status ?? ''}`;
+        const cursor = frame.cursor?.visible && frame.cursor.y - offset >= 0 && frame.cursor.y - offset < MONITOR_ROWS && frame.cursor.x >= 0 && frame.cursor.x < MONITOR_COLS ? frame.cursor : undefined;
+        const keys: string[] = [];
+        for (let i = 0; i < MONITOR_ROWS; i++) {
+            if (i >= lines.length) { keys.push(''); continue; }
+            let key = lines[i];
+            if (frame.cells !== undefined) key += `\u0001${rows[i].join('\u0002')}`;
+            key += `\u0001${frame.foreground?.[offset+i] ?? ''}\u0001${frame.background?.[offset+i] ?? ''}`;
+            if (truecolor) key += `\u0001${truecolor.foreground[offset+i]?.join('')}${truecolor.background[offset+i]?.join('')}`;
+            if (cursor && cursor.y - offset === i) key += `\u0001C${cursor.x}`;
+            for (const span of spans) if (span.row === i) key += `\u0001S${span.from}:${span.to}`;
+            keys.push(key);
+        }
+        const full = !surface.rows || surface.layout !== layout || typeof c.save !== 'function';
+        const headerDirty = full || surface.header !== header;
+        let from = -1, to = -1;
+        if (!full && lines.length) for (let i = 0; i < MONITOR_ROWS; i++) if (keys[i] !== surface.rows![i]) { if (from < 0) from = i; to = i; }
+        surface.rows = keys; surface.header = header; surface.layout = layout;
+        if (!full && !headerDirty && from < 0) return false;
+        if (full) { c.fillStyle = base; c.fillRect(0,0,SURFACE_W,SURFACE_H); }
+        if (headerDirty) {
+            if (!full) { c.fillStyle = base; c.fillRect(0,0,SURFACE_W,49); }
+            c.fillStyle = '#87cdb4'; c.font = '17px monospace'; c.fillText((frame.title ?? 'OMO / LIVE PROJECT TERMINAL').slice(0,52),24,29);
+            if (frame.status || frame.unreadBells) { c.fillStyle = frame.unreadBells ? '#ff9e4a' : '#7e9a9e'; c.textAlign = 'right'; c.fillText((frame.unreadBells ? `BELL (${frame.unreadBells})` : frame.status ?? '').slice(0,38),1000,29); c.textAlign = 'left'; }
+            c.fillStyle = '#283e48'; c.fillRect(20,42,984,1);
+        }
+        c.font = '20px monospace'; c.textBaseline = 'alphabetic';
         if (!lines.length) {
-            c.fillStyle='#c7ded4';c.fillText('Walk up and click this screen.',24,104);
-            c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140);
-        } else {
-            const offset = frame.lines.length - lines.length;
-            const truecolor = safeTruecolor(frame.truecolor);
-            const cell = Math.min(12.3, c.measureText('M').width || 12);
-            surface.cellWidth = cell;
-            // The frame's most common background is the terminal's own background; the monitor keeps its accepted base colour for it.
-            const plainBg = frame.background ? frame.palette?.[dominantKey(frame.background) ?? ''] : undefined;
-            const skip = plainBg ? (plainBg.startsWith('#') ? plainBg : `#${plainBg}`).toLowerCase() : base;
-            lines.forEach((line,i) => {
-                const y = 70 + i*22; const text = line;
+            if (full) { c.fillStyle='#c7ded4';c.fillText('Walk up and click this screen.',24,104); c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140); }
+            this.markDirty(surface, full, 0, headerDirty ? 49 : 0);
+            return true;
+        }
+        const cell = Math.min(12.3, c.measureText('M').width || 12);
+        surface.cellWidth = cell;
+        // Rows tile in 22px bands from y=53. Glyphs reach 4px into the row above and 1px into the row below,
+        // so a changed band repaints its neighbours too, clipped to the band, in the full-paint order.
+        const top = full ? 49 : from === 0 ? 49 : 53 + from*22, bottom = full ? SURFACE_H : to === MONITOR_ROWS-1 ? SURFACE_H : 75 + to*22;
+        if (from >= 0 || full) {
+            const first = full ? 0 : Math.max(0, from-1), last = full ? lines.length-1 : Math.min(lines.length-1, to+1);
+            c.save(); c.beginPath(); c.rect(0, top, SURFACE_W, bottom-top); c.clip();
+            if (!full) { c.fillStyle = base; c.fillRect(0, top, SURFACE_W, bottom-top); }
+            for (let i = first; i <= last; i++) {
+                const y = 70 + i*22, line = lines[i];
                 const fallback = { fg: frame.foreground ? '#e0e8eb' : line.includes('$') ? '#b8e6ca' : '#e0e8eb', bg: base };
                 const direct = truecolor ? { fg: truecolor.foreground[offset+i], bg: truecolor.background[offset+i] } : undefined;
-                const runs = cellRuns(text, frame.foreground?.[offset+i], frame.background?.[offset+i], frame.palette, fallback, frame.cells === undefined ? undefined : rows[i], direct);
+                const runs = cellRuns(line, frame.foreground?.[offset+i], frame.background?.[offset+i], frame.palette, fallback, frame.cells === undefined ? undefined : rows[i], direct);
                 // Paint all cell backgrounds BEFORE glyphs, so a continuation does not erase its leading glyph.
                 for (const run of runs) {
                     const x = 24 + run.x*cell;
@@ -470,34 +604,38 @@ export class RoomScene {
                     c.save(); c.beginPath(); c.rect(x,y-21,width,27); c.clip();
                     c.fillStyle = run.fg; c.fillText(run.text,x,y,width); c.restore();
                 }
-            });
-            const cursor = frame.cursor;
-            if (cursor?.visible && cursor.y - offset >= 0 && cursor.y - offset < MONITOR_ROWS && cursor.x >= 0 && cursor.x < MONITOR_COLS) {
+            }
+            if (cursor) {
                 const row = rows[cursor.y-offset] ?? [], span = monitorCellSpan(row,cursor.x);
                 const x = 24+span.from*cell, y = 70+(cursor.y-offset)*22, width = (span.to-span.from)*cell;
                 c.fillStyle = '#b8e6ca'; c.fillRect(x,y-17,width,22);
                 const ch = row[span.from];
                 if (ch && ch !== ' ') { c.fillStyle = base; c.fillText(ch,x,y,width); }
             }
-            if (this.terminalSelection?.station === station) {
+            if (spans.length) {
                 c.fillStyle = 'rgba(65,150,240,0.45)';
-                for (const span of this.terminalSelection.model.spans()) c.fillRect(24 + span.from*cell, 53 + span.row*22, (span.to-span.from)*cell, 22);
+                for (const span of spans) c.fillRect(24 + span.from*cell, 53 + span.row*22, (span.to-span.from)*cell, 22);
             }
+            c.restore();
         }
-        surface.texture.needsUpdate = true;
-        const lamp = this.lamps.get(station);
-        if (lamp) {
-            const color = /interrupted|exited|error/i.test(frame.status ?? '') ? 0xd26464 : frame.unreadBells ? 0xff9e4a : /process active|working/i.test(frame.status ?? '') ? 0xe8bd60 : /live|running|idle/i.test(frame.status ?? '') ? 0x87cdb4 : 0x6d7c86;
-            const material = lamp.material as THREE.MeshStandardMaterial; material.color.setHex(color); material.emissive.setHex(color);
-        }
-        if(this.renderer){
-            this.renderer.domElement.dataset.terminalSelection = this.terminalSelection?.model.text() ?? '';
-            this.renderer.domElement.dataset.terminalSelectionStation = this.terminalSelection?.station ?? '';
-            this.renderer.domElement.dataset.terminalMetrics = JSON.stringify(Object.fromEntries([...this.terminalSurfaces].map(([id,s]) => [id,{ cellWidth:s.cellWidth ?? 12 }])));
-            if (station === 'terminal') { this.renderer.domElement.dataset.terminalText=frame.lines.join('\n');this.renderer.domElement.dataset.terminalCursor=frame.cursor?`${frame.cursor.x},${frame.cursor.y},${frame.cursor.visible}`:''; }
-            this.renderer.domElement.dataset.stationText = JSON.stringify({ terminal: this.terminalFrames.terminal.lines, 'terminal-2': this.terminalFrames['terminal-2'].lines });
-            this.renderer.domElement.dataset.stationCells = JSON.stringify({ terminal:this.terminalFrames.terminal.cells,'terminal-2':this.terminalFrames['terminal-2'].cells });
-            this.renderer.domElement.dataset.stationBells = JSON.stringify({ terminal: this.terminalFrames.terminal.unreadBells ?? 0, 'terminal-2': this.terminalFrames['terminal-2'].unreadBells ?? 0 });
+        this.markDirty(surface, full, headerDirty ? 0 : top, from >= 0 ? bottom : 49);
+        return true;
+    }
+    /** Queue a GPU upload: the whole canvas, or the union of changed pixel bands (flushed once per rendered frame). */
+    private markDirty(surface: ScreenSurface, full: boolean, top: number, bottom: number): void {
+        if (full || !surface.source) { surface.texture.needsUpdate = true; surface.dirty = undefined; return; }
+        if (bottom <= top) return;
+        surface.dirty = surface.dirty ? { from: Math.min(surface.dirty.from, top), to: Math.max(surface.dirty.to, bottom) } : { from: top, to: bottom };
+    }
+    private uploadDirty(): void {
+        for (const surface of this.terminalSurfaces.values()) {
+            const dirty = surface.dirty; if (!dirty || !surface.source) continue;
+            surface.dirty = undefined;
+            // A full upload is already queued and will include these pixels.
+            if (surface.texture.version === 0 || this.renderer.properties.get(surface.texture).__version !== surface.texture.version) continue;
+            const { region, at } = this.tmp;
+            region.min.set(0, dirty.from); region.max.set(SURFACE_W, dirty.to); at.set(0, dirty.from);
+            this.renderer.copyTextureToTexture(surface.source, surface.texture, region, at);
         }
     }
     /** Pointer moved to an overlay control: stop typing into the monitor so keys go to that control. */
