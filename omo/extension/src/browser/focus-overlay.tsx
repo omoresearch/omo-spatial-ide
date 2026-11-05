@@ -75,6 +75,7 @@ function TerminalMenu(props: { at: { x: number; y: number }; screen: HTMLElement
         onMouseDown={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>
         {item('copy', 'Copy', 'Ctrl+Shift+C', copy, !selected)}
         {item('paste', 'Paste', 'Ctrl+V', () => void paste(), !controller)}
+        {/* omo keys6 lane */}{item('find', 'Find…', '', () => { props.close(); window.dispatchEvent(new CustomEvent('omo:find-open', { detail: { query: selected } })); }, !controller)}
         <hr />
         {item('select-all', 'Select all', '', selectAll)}
         {item('clear', 'Clear selection', '', clear, !selected)}

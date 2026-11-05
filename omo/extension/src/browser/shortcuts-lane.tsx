@@ -7,6 +7,7 @@ import type { DeskShortcut, DeskShortcutDetail } from './first-person-controls';
 import type { FocusMode } from './focus-mode';
 import { ShortcutsSheet } from './shortcuts-sheet';
 import { CoachMark, coachSeen, markCoachSeen } from './coach-mark';
+import { Icon } from './icons';
 
 /**
  * omo keys6 lane: desk keys (Ctrl+Shift+W / N / E / R, or Alt+Shift+…), sent by first-person-controls.ts
@@ -18,6 +19,7 @@ import { CoachMark, coachSeen, markCoachSeen } from './coach-mark';
  * Nothing here starts an agent, sends input or presses Enter.
  */
 export const CLOSE_CONFIRM_MS = 5000;
+/** Right-click ▸ Find (focus-overlay.tsx) sends 'omo:find-open' with the selection; the find box opens for the attached desk. */
 const DESK_LABEL: Record<TerminalWorkstation, string> = { terminal: 'Desk one', 'terminal-2': 'Desk two' };
 const isDesk = (station: Workstation | undefined): station is TerminalWorkstation => station === 'terminal' || station === 'terminal-2';
 
@@ -29,6 +31,30 @@ export interface ShortcutsLaneProps {
     desk: (station: TerminalWorkstation) => Desk;
     /** Same path as clicking the desk's monitor: open or reattach its workspace. Never starts an agent. */
     reconnect: (station: TerminalWorkstation) => void;
+}
+
+/**
+ * Find box over the attached screen. Reuses controller.find (whole history, the same as Manage ▸ Find).
+ * Enter finds the next older match, Shift+Enter the newer one; nothing reaches the shell. Esc closes and clears.
+ */
+function FindBox(props: { station: TerminalWorkstation; desk: Desk; initial: string; onClose: () => void }): React.ReactElement {
+    const { desk } = props;
+    const [query, setQuery] = React.useState(props.initial);
+    const input = React.useRef<HTMLInputElement>(null);
+    React.useEffect(() => { input.current?.focus({ preventScroll: true }); input.current?.select(); if (props.initial) void desk.controller?.find(props.initial, 0); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const find = desk.state.find;
+    const go = (step: number): void => { if (query.trim()) void desk.controller?.find(query, step); };
+    const close = (): void => { void desk.controller?.find('', 0); props.onClose(); };
+    return <form className="omo-keys-find" role="search" aria-label={`Find in ${DESK_LABEL[props.station]} history`} data-testid="keys-find"
+        onSubmit={event => { event.preventDefault(); go(find?.query === query ? 1 : 0); }}
+        onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape') { event.preventDefault(); close(); } else if (event.key === 'Enter' && event.shiftKey) { event.preventDefault(); go(-1); } }}>
+        <Icon name="type" size={14} />
+        <input ref={input} data-testid="keys-find-input" aria-label="Find in history" maxLength={200} placeholder="Find in history" value={query} onChange={event => setQuery(event.target.value)} />
+        <output data-testid="keys-find-count" aria-live="polite">{find && find.query === query ? (find.count ? `${find.index} of ${find.count}` : 'No match') : ''}</output>
+        <button type="button" data-testid="keys-find-older" disabled={!query.trim()} onClick={() => go(1)} title="Older match (Enter)" aria-label="Older match"><Icon name="chevron-up" size={14} /></button>
+        <button type="button" data-testid="keys-find-newer" disabled={!query.trim()} onClick={() => go(-1)} title="Newer match (Shift+Enter)" aria-label="Newer match"><Icon name="chevron-down" size={14} /></button>
+        <button type="button" data-testid="keys-find-close" onClick={close} title="Close (Esc)" aria-label="Close find"><Icon name="x" size={14} /></button>
+    </form>;
 }
 
 interface RenameBox { kind: 'workspace' | 'tab'; station: TerminalWorkstation; id: string; name: string; was: string }
@@ -70,6 +96,7 @@ export function ShortcutsLane(props: ShortcutsLaneProps): React.ReactElement | n
     // F1 (or ? when not typing): the key sheet. First room on this device: the coach mark, once.
     const [sheet, setSheet] = React.useState(false);
     const [coach, setCoach] = React.useState(() => !coachSeen());
+    const [finding, setFinding] = React.useState<{ station: TerminalWorkstation; query: string; id: number }>();
 
     const say = React.useCallback((text: string, tone: 'info' | 'warn' = 'info') => setToast({ text, tone, id: Date.now() }), []);
     React.useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(undefined), CLOSE_CONFIRM_MS); return () => window.clearTimeout(id); }, [toast]);
@@ -127,6 +154,20 @@ export function ShortcutsLane(props: ShortcutsLaneProps): React.ReactElement | n
         window.addEventListener('omo:keys-help', toggle);
         return () => window.removeEventListener('omo:keys-help', toggle);
     }, []);
+    React.useEffect(() => {
+        const open = (event: Event): void => {
+            const p = latest.current, screen = p.focus.state.screen?.id as Workstation | undefined;
+            const station = isDesk(screen) ? screen : p.activeDesk();
+            if (!isDesk(station)) return;
+            setFinding({ station, query: String((event as CustomEvent<{ query?: string }>).detail?.query ?? '').split('\n')[0].slice(0, 200), id: Date.now() });
+        };
+        window.addEventListener('omo:find-open', open);
+        return () => window.removeEventListener('omo:find-open', open);
+    }, []);
+    // Leaving the screen (or moving to the other desk) closes the find box.
+    const screenId = focus.state.screen?.id, isAttached = !!focus.controls?.attached;
+    React.useEffect(() => { if (finding && (!isAttached || screenId !== finding.station)) setFinding(undefined); }, [finding, isAttached, screenId]);
+    const closeFind = (): void => { setFinding(undefined); refocus(); };
     const closeSheet = (): void => { setSheet(false); refocus(); };
     const coachDone = (): void => { markCoachSeen(); setCoach(false); refocus(); };
 
@@ -145,6 +186,7 @@ export function ShortcutsLane(props: ShortcutsLaneProps): React.ReactElement | n
     return createPortal(<div className="omo-keys-lane" data-testid="keys-lane">
         {toast && <div key={toast.id} className={`omo-keys-toast is-${toast.tone}`} role="status" data-testid="keys-toast">{toast.text}</div>}
         {rename && <RenameDialog box={rename} desk={props.desk(rename.station)} onChange={name => setRename({ ...rename, name })} onSave={() => void saveRename()} onCancel={cancelRename} />}
+        {finding && <FindBox key={finding.id} station={finding.station} desk={props.desk(finding.station)} initial={finding.query} onClose={closeFind} />}
         {sheet && <ShortcutsSheet attached={!!controls?.attached} onClose={closeSheet} />}
         {coach && !sheet && !controls?.attached && <CoachMark onDone={coachDone} refocus={refocus} />}
     </div>, root);
