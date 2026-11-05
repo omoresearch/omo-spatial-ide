@@ -49,14 +49,14 @@ at the end.
 | Attach to a screen / full-window terminal | Focus mode (camera flight, F full screen) | done | `focus-mode.ts`, `focus-overlay.tsx` |
 | Colour + cursor on the in-world monitor (truecolour) | Truecolour frames on the texture | done | `room-scene.ts`, `PARITY-ADVANCED.md` |
 | Ctrl keys reach the terminal; Ctrl+Shift+T new shell; Alt+2 tab 2; Ctrl+Shift+P picker | Same | done | `first-person-controls.ts` |
-| Ctrl+Tab / Alt+1..9 / Ctrl+Shift+W / N / E / R shortcuts | Only T, P, Alt+2 | partial | `first-person-controls.ts` |
+| Ctrl+Tab / Alt+1..9 / Ctrl+Shift+W / N / E / R shortcuts | Ctrl+Tab, Ctrl+Shift+Tab, Alt+1..9 (explicit select-tab), T, P; no W/N/E/R | partial | `first-person-controls.ts`, `focus-overlay.tsx` |
 | Safe multi-line paste (bracketed, 256 KiB cap) | Same rules in browser, service and host | done | `PARITY-ADVANCED.md` |
 | Select / double / triple-click, copy (Ctrl+Shift+C) | Shift+drag/double/triple, Ctrl+Shift+C | done | `room-scene.ts`, `common/monitor-selection.ts` |
 | Scrollback (wheel, Shift+PgUp), find across history, clear | Manage ▸ Scroll / Find / Clear | done | `PARITY-ADVANCED.md` |
 | OSC 52 app copy (write only) | Pending-copy button, user click writes | done | `runtime-console-strip.tsx` (`runtime-copy-osc52`) |
 | Ctrl+click opens a link | Links list ▸ opens in managed web wall | done | `common/terminal-links.ts`, `runtime-console-strip.tsx` |
-| Right-click menu (Copy/Paste/Select all/Find/Clear) | Buttons in Manage, no context menu | partial | `runtime-console-strip.tsx` |
-| Bigger / smaller text on a wall (Ctrl+Shift+= / -) | Focus view fits font to window | partial | `focus-overlay.tsx` |
+| Right-click menu (Copy/Paste/Select all/Find/Clear) | Attached screen: Copy, Paste (same paste rules), Select all, Clear selection; Find stays in Manage | partial (no Find in menu) | `focus-overlay.tsx` (`TerminalMenu`) |
+| Bigger / smaller text on a wall (Ctrl+Shift+= / -) | Ctrl+Shift+= / - steps the attached view's text size (saved per device) | done | `first-person-controls.ts`, `focus-mode.ts` |
 | Bell reaches the screen | Orange lamp, desk badge, acknowledge | done | `room-scene.ts`, `runtime-console-controller.ts` (`unreadBells`) |
 
 ## 3. Monitor walls, web walls, linker and setup
@@ -69,7 +69,7 @@ at the end.
 | URL safety (http/https only, loopback gets http) | Same normaliser | done | `common/web-url.ts` |
 | Pinned page survives reload | Saved per project | done | `omo-world-widget.tsx` (`readWebBinding`) |
 | Per-wall sound: volume, mute, distance fade (6 → 40) | Same, saved per project | done | `station-link.ts` (`distanceGain`), `web-surface-strip.tsx` |
-| Web-wall tabs (target=_blank → up to 6 tabs) | Popups fold into the one surface | partial (no tab strip) | `node/web-runtime-service.ts` |
+| Web-wall tabs (target=_blank → up to 6 tabs) | Popups fold into the one surface; no tab strip because the web service has no page list (needs a backend call first) | partial (no tab strip) | `node/web-runtime-service.ts`, note in `web-surface-strip.tsx` |
 | 12 live pages, leak guard | Max 4 surfaces, closes hidden pages | partial | `node/web-runtime-service.ts` (`MAX_SURFACES`) |
 | Station Setup: name, kind, profile, starting tabs, Lock | Station recipes (name, profile, tabs) | partial (no Lock) | `station-recipe.ts`, `station-recipe-panel.tsx` |
 | Map presets / share-safe export check | Room appearance preset (no ids, paths, sessions) | done | `common/room-preset.ts` |
