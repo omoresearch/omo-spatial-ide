@@ -12,6 +12,17 @@ export interface SelectionGestures {
     copy(): void;
 }
 export type MonitorShortcut = 'new-shell' | 'select-tab-2' | 'workspace-picker';
+// --- omo keys6 lane: desk keys (mod pack meanings). Ctrl+Shift+letter, or Alt+Shift+letter where Chrome keeps the Ctrl chord. ---
+export type DeskShortcut = 'close-tab' | 'rename-workspace' | 'rename-tab' | 'reconnect';
+const DESK_KEYS: Record<string, DeskShortcut> = { KeyW: 'close-tab', KeyN: 'rename-workspace', KeyE: 'rename-tab', KeyR: 'reconnect' };
+/** Ctrl+Shift+W/N/E/R or Alt+Shift+W/N/E/R (not both, never Cmd). Physical key, so layouts agree. */
+export function deskShortcutFor(e: { ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean; code: string }): DeskShortcut | undefined {
+    if (!e.shiftKey || e.metaKey || e.ctrlKey === e.altKey) return undefined;
+    return DESK_KEYS[e.code];
+}
+/** Detail of the 'omo:desk-shortcut' window event. The listener (shortcuts-lane.tsx) sets handled. */
+export interface DeskShortcutDetail { action: DeskShortcut; chord: 'ctrl' | 'alt'; handled: boolean }
+// --- end omo keys6 lane ---
 
 /** Attach-to-screen focus. 'attaching'/'returning' are the eased camera flights. */
 export type FocusPhase = 'walk' | 'attaching' | 'attached' | 'returning';
@@ -144,6 +155,16 @@ export class FirstPersonControls {
                 event.preventDefault(); if (!this.copyOverride?.()) this.selection?.copy(); return;
             }
             const attached = this.attached;
+            // omo keys6 lane: Ctrl+Shift+W / N / E / R (or Alt+Shift+…) on the desk in use. Each only opens the desk's
+            // existing explicit action: close asks first (Station Lock refuses), rename opens a prompt, reconnect re-attaches.
+            // Walking (no desk in use): Ctrl+Shift+R stays the browser's reload; Alt+Shift+… only explains.
+            const deskKey = deskShortcutFor(event);
+            if (deskKey && (attached || this.typing)) { event.preventDefault(); if (!event.repeat) this.deskShortcut(deskKey, event.ctrlKey ? 'ctrl' : 'alt'); return; }
+            if (deskKey && event.altKey) { event.preventDefault(); this.message('Click a desk monitor first. Desk keys act on the screen you are using. Nothing was changed.'); return; }
+            // omo keys6 lane: F1 anywhere, ? when not typing: the key sheet. Nothing reaches the shell.
+            if (!event.ctrlKey && !event.altKey && !event.metaKey && (event.key === 'F1' || (event.key === '?' && !this.typing))) {
+                event.preventDefault(); if (!event.repeat) window.dispatchEvent(new CustomEvent('omo:keys-help')); return;
+            }
             // Ctrl+Shift+M: room chat as a drawer over the work area. Keys stay here until the chat box is clicked.
             if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.code === 'KeyM') {
                 event.preventDefault(); if (attached && this.focusState.full) this.setFull(false);
@@ -165,7 +186,7 @@ export class FirstPersonControls {
             if (attached && (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
                 event.preventDefault(); this.setFull(!this.focusState.full); return;
             }
-            if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 't') {
+            if ((event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 't') || (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyT')) { // omo keys6 lane: Alt+Shift+T too
                 event.preventDefault(); this.releaseTyping(); this.shortcut?.('new-shell'); return;
             }
             if (event.altKey && event.key === '2') {
@@ -219,6 +240,12 @@ export class FirstPersonControls {
         on('pointercancel', release);
         window.addEventListener('blur',release);canvas.addEventListener('blur',release);
         this.listeners.push(()=>{window.removeEventListener('blur',release);canvas.removeEventListener('blur',release);});
+    }
+    /** omo keys6 lane: hand a desk key to the shortcuts lane. Only while a desk screen is in use. */
+    private deskShortcut(action: DeskShortcut, chord: 'ctrl' | 'alt'): void {
+        const detail: DeskShortcutDetail = { action, chord, handled: false };
+        window.dispatchEvent(new CustomEvent<DeskShortcutDetail>('omo:desk-shortcut', { detail }));
+        if (!detail.handled) this.message('Desk keys are not ready yet. Nothing was changed.');
     }
     releaseTyping():void{this.selecting=false;this.selection?.clear();if(!this.typing)return;this.typing=false;this.keys.clear();this.apply();}
     focusTerminal():void {this.look?.exit();this.typing=true;this.keys.clear();this.velocity.stop();this.canvas.focus({preventScroll:true});this.apply();this.message(this.attached?'Attached · Typing on this screen · Ctrl+Shift+F full screen · Esc to walk.':'Typing on the in-world monitor · Esc to walk away.');}
