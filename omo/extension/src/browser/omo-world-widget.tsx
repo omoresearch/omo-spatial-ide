@@ -42,6 +42,10 @@ import type { StationLink } from './station-link';
 import { VoiceHub } from './voice-hub';
 import { VoicePanel } from './voice-panel';
 // --- end omo voice lane ---
+// --- omo focus lane (mount hook): attach-to-screen + full-screen terminal ---
+import { FocusMode } from './focus-mode';
+import { FocusOverlay } from './focus-overlay';
+// --- end omo focus lane ---
 
 export const TERMINAL_STATION_ID = 'terminal-1';
 const TERMINAL_STATIONS: TerminalWorkstation[] = ['terminal', 'terminal-2'];
@@ -150,6 +154,10 @@ export class OmoWorldWidget extends ReactWidget {
     // --- omo voice lane (mount hook) ---
     private voiceHub?: VoiceHub;
     // --- end omo voice lane ---
+    // --- omo focus lane (mount hook) ---
+    private focusMode = new FocusMode({ scene: () => this.worldScene, activeStation: () => this.activeMode,
+        select: station => this.selectStation(station), message: text => { this.feedback = text; this.update(); } });
+    // --- end omo focus lane ---
 
     @postConstruct()
     protected init(): void {
@@ -167,6 +175,7 @@ export class OmoWorldWidget extends ReactWidget {
             onChange:()=>this.update(),message:text=>{this.feedback=text;this.update();}});
         this.toDispose.push({dispose:()=>{this.voiceHub?.dispose();this.voiceHub=undefined;}});
         // --- end omo voice lane ---
+        this.toDispose.push({ dispose: () => this.focusMode.dispose() }); // omo focus lane
         this.review=new GitReviewController(this.gitReviewService,state=>{
             this.reviewState=state;
             if(state.phase!=='idle'){
@@ -575,6 +584,7 @@ export class OmoWorldWidget extends ReactWidget {
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.activeStation==='terminal-2'?'Desk two':'Desk one'} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>}
                     </div>}
                     <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}/>
+                    {/* omo focus lane (mount hook) */}{this.room && !this.configuring && <FocusOverlay focus={this.focusMode} frames={this.monitors} desk={station => ({ state: this.consoleStates[station], controller: this.consoles.get(station) })}/>}
                     <pre className="omo-accessible-terminal" role="log" aria-label="Live in-world terminal" data-testid="in-world-terminal-output" data-ready={String(this.consoleState.phase === 'live')} data-phase={this.consoleState.phase}>{this.consoleState.lines.join('\n')}</pre>
                     {!this.configuring && <aside className="omo-tool-dock" aria-label="Project tools"><span>YOUR WORKSTATIONS</span><button disabled={this.busy} data-testid="terminal-action" onClick={() => this.selectStation('terminal')}><b>01</b><div><strong>Terminal</strong><small>A real shell. Your project folder.</small></div><span>↗</span></button><button disabled={this.busy} data-testid="code-action" onClick={() => this.selectStation('code')}><b>02</b><div><strong>Code</strong><small>Files, editing and your next change.</small></div><span>↗</span></button><p>Nothing starts unless you choose it.</p></aside>}
                     {this.configuring && <div className="omo-preview-badge"><i/> LIVE ROOM PREVIEW</div>}
