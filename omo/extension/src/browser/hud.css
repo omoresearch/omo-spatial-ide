@@ -72,6 +72,25 @@
 .omo-chat-emotes button:disabled { opacity: .4; }
 .omo-chat-panel > small { color: var(--omo-text-3); font-size: 10px; }
 .omo-chat-panel .omo-error { margin: 0; }
-/* Not over a screen: hide the HUD while a screen is attached or in full screen. */
-.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-chat, .omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-toasts { opacity: .25; }
+/* Attached to a screen: the HUD sits over the work area, fully usable. Bell and chat live in the right
+   end of the focus bar (focus-mode.css keeps that space free); chat opens as a right-side drawer over
+   the terminal and takes the keys only when its box is clicked (Ctrl+Shift+M toggles it). */
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-layer { z-index: 7; }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-notices { top: 8px; right: var(--omo-sp-3); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-bell { height: var(--omo-control-h-sm); min-width: var(--omo-control-h-sm); padding: 0 6px; border-radius: var(--omo-r-sm); border-color: var(--omo-line-2); box-shadow: none; background: transparent; backdrop-filter: none; font-size: var(--omo-fs-xs); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-notice-list { margin-top: 4px; }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-toasts { top: 52px; }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-speaking { top: 48px; }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-chat { left: auto; bottom: auto; top: 8px; right: calc(var(--omo-sp-3) + 32px); max-width: none; }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-chat-toggle { height: var(--omo-control-h-sm); padding: 0 10px; border-radius: var(--omo-r-sm); border-color: var(--omo-line-2); box-shadow: none; background: transparent; color: var(--omo-text-2); backdrop-filter: none; font: 500 var(--omo-fs-xs)/1 var(--omo-font); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-hud-chat:has(.omo-chat-panel) { top: 40px; right: 0; bottom: 0; width: min(360px, 42%); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-chat-panel {
+    width: 100%; height: 100%; box-sizing: border-box; padding: var(--omo-sp-3); gap: var(--omo-sp-2); border-radius: 0; border-width: 0 0 0 1px;
+    background: var(--omo-glass-strong); box-shadow: -18px 0 40px rgba(0, 0, 0, .35); animation: omo-hud-drawer var(--omo-dur-2, 200ms) var(--omo-ease, ease-out);
+}
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-chat-log { flex: 1 1 auto; max-height: none; }
+.omo-chat-drawer-hint { display: none; color: var(--omo-text-3); font-size: var(--omo-fs-2xs); }
+.omo-scene-wrap:has(.omo-focus-layer.is-screen) .omo-chat-drawer-hint { display: inline; }
+@keyframes omo-hud-drawer { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .omo-chat-panel { animation: none !important; } }
 .omo-scene-wrap:not(.omo-walking) .omo-hud-follow { display: none; }

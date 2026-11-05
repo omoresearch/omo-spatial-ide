@@ -17,6 +17,10 @@ function Line(props: { line: ChatLine }): React.ReactElement {
     </li>;
 }
 
+const CANVAS = 'canvas[data-testid="omo-world-canvas"]';
+/** True while a desk screen is attached: chat then opens as a drawer and leaves the keys on the terminal. */
+const attachedNow = (): boolean => !!document.querySelector('[data-testid="focus-layer"].is-screen');
+
 /** Room chat: log, one-line input, colour picker and the member list with Go to / Follow. */
 export function ChatPanel(props: { hub: HudHub; view: HudView; chat: ChatState }): React.ReactElement {
     const { hub, view, chat } = props;
@@ -28,19 +32,31 @@ export function ChatPanel(props: { hub: HudHub; view: HudView; chat: ChatState }
         return () => { hub.focusChat = undefined; };
     }, [hub]);
     React.useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [chat.lines.length, chat.open]);
-    // Opening the panel means the user wants to type: focus the box once it exists.
-    React.useEffect(() => { if (chat.open) input.current?.focus(); }, [chat.open]);
+    // Attached: open/close without taking the keys; the drawer takes them only when its box is clicked.
+    const quiet = React.useRef(false);
+    const toggleQuiet = React.useCallback((): void => { quiet.current = true; hub.chat.setOpen(!hub.chat.state.open); }, [hub]);
+    React.useEffect(() => {
+        const listener = (): void => toggleQuiet();
+        window.addEventListener('omo:chat-toggle', listener);
+        return () => window.removeEventListener('omo:chat-toggle', listener);
+    }, [toggleQuiet]);
+    // Opening the panel means the user wants to type: focus the box once it exists (not for a quiet drawer open).
+    React.useEffect(() => { if (chat.open && !quiet.current) input.current?.focus(); quiet.current = false; }, [chat.open]);
+    const keepKeys = (event: React.MouseEvent): void => { if (attachedNow()) event.preventDefault(); };
     const self = view.members.find(m => m.id === view.selfId);
     const submit = (event: React.FormEvent): void => { event.preventDefault(); void hub.chat.submit(text).then(ok => { if (ok) setText(''); }); };
     const others = view.members.filter(m => m.id !== view.selfId);
-    if (!chat.open) return <button type="button" className="omo-chat-toggle" data-testid="chat-open" onClick={() => { hub.chat.setOpen(true); hub.focusChat?.(); }} title="Room chat (Enter)">
+    if (!chat.open) return <button type="button" className="omo-chat-toggle" data-testid="chat-open" onMouseDown={keepKeys}
+        onClick={() => { if (attachedNow()) { toggleQuiet(); return; } hub.chat.setOpen(true); hub.focusChat?.(); }} title="Room chat (Enter · Ctrl+Shift+M over a screen)">
         💬 Chat{chat.unread > 0 && <strong data-testid="chat-unread"> {chat.unread}</strong>}
     </button>;
     return <section className="omo-chat-panel" data-testid="chat-panel" aria-label="Room chat">
         <header>
             <strong>Room chat</strong>
+            <small className="omo-chat-drawer-hint">Ctrl+Shift+M</small>
             {view.joined && <span className="omo-chat-colours" role="group" aria-label="Your name colour">{PRESENCE_COLOURS.map((c: PresenceColour) => <button type="button" key={c} data-testid={`chat-colour-${c}`} aria-pressed={self?.colour === c} title={c} style={{ background: colourHex(c) }} onClick={() => void hub.chat.setColour(c)} />)}</span>}
-            <button type="button" data-testid="chat-close" aria-label="Close chat" onClick={() => hub.chat.setOpen(false)}>×</button>
+            <button type="button" data-testid="chat-close" aria-label="Close chat" onMouseDown={keepKeys}
+                onClick={() => { const back = attachedNow() && document.activeElement === input.current; hub.chat.setOpen(false); if (back) (document.querySelector(CANVAS) as HTMLElement | null)?.focus(); }}>×</button>
         </header>
         {others.length > 0 && <ul className="omo-chat-members" data-testid="chat-members">{others.map(m => <li key={m.id} data-member-id={m.id}>
             <i style={{ background: colourHex(m.colour) }} />{m.name}{m.voice?.speaking ? ' ♪' : ''}
@@ -54,7 +70,7 @@ export function ChatPanel(props: { hub: HudHub; view: HudView; chat: ChatState }
         <form onSubmit={submit} className="omo-chat-form">
             <input ref={input} data-testid="chat-input" aria-label="Chat message" maxLength={500} value={text} placeholder={view.joined ? 'Say something · @desk1 to draft for your agent · /wave' : '@desk1 … drafts for your agent · join a room to chat'}
                 onChange={event => setText(event.target.value)}
-                onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape') { event.preventDefault(); hub.chat.setOpen(false); (document.querySelector('canvas[data-testid="omo-world-canvas"]') as HTMLElement | null)?.focus(); } }} />
+                onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape' || (event.ctrlKey && event.shiftKey && event.code === 'KeyM')) { event.preventDefault(); hub.chat.setOpen(false); (document.querySelector(CANVAS) as HTMLElement | null)?.focus(); } }} />
             <button data-testid="chat-send" disabled={chat.sending || !text.trim()}>{text.trim().startsWith('@') ? 'Draft' : 'Send'}</button>
             <span className="omo-chat-emotes">{(['wave', 'cheer', 'thumbsup', 'clap'] as const).map(e => <button type="button" key={e} data-testid={`chat-emote-${e}`} disabled={!view.joined || chat.sending} title={`/${e}`} onClick={() => void hub.chat.submit(`/${e}`)}>{{ wave: '👋', cheer: '🎉', thumbsup: '👍', clap: '👏' }[e]}</button>)}</span>
         </form>
