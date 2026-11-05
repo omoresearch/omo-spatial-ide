@@ -109,7 +109,7 @@ The mod pack is singleplayer / trusted LAN. Multiplayer UI comes from Minecraft 
 | Who is speaking (Simple Voice Chat icon) | Speaker ring over avatar, chip | partial → **done (this branch)**: on-canvas speaking HUD | `hud-speaking.tsx` |
 | Talk to an agent out loud | On-device dictation → draft (hold T) | done | `voice-dictation.ts`, `voice-hub.ts` |
 | Agent answers out loud | Opt-in on-device read-aloud | done | `voice-readaloud.ts` |
-| Agent bodies with `ChatGPT - <name>` tags walking in | Agent avatars stand at their desk with "Hermes · tab" tags | partial (stand at desk, do not walk) | `agent-avatars.ts` |
+| Agent bodies with `ChatGPT - <name>` tags walking in | Agent avatars walk in from the door to their desk when a tab appears or wakes, idle there, walk out when the tab closes or sleeps; driven by the room's one render loop | partial → **done (this branch)** | `agent-avatars.ts` (`tick`, `AGENT_DOOR`) |
 | Twitch chat in game | — | n/a (not released in the mod pack) | — |
 | Only world owner/op may use stations | Personal desks per room member; local trusted clients | done | `common/presence-protocol.ts` (`presenceStation`), `SHARED-ROOMS.md` |
 

@@ -102,7 +102,20 @@ function disposeTree(root: THREE.Object3D): void {
     });
 }
 
-interface AgentBody { root: THREE.Group; body: THREE.Group; tag: THREE.Sprite; ring: THREE.Mesh; tagKey: string; presence: AgentPresence; baseY: number; slot: string }
+/** Where agents enter and leave the room: the doorway in the back corner by the player's start. */
+export const AGENT_DOOR = { x: 4.6, z: 4.25 };
+/** Walking speed in metres per second. */
+const WALK_SPEED = 1.5;
+/** Agents that appear this soon after attach (page load, scene rebuilt) are placed at the desk, not walked in. */
+const ATTACH_GRACE_MS = 1500;
+
+type WalkMode = 'desk' | 'entering' | 'leaving' | 'away';
+interface AgentBody {
+    root: THREE.Group; body: THREE.Group; tag: THREE.Sprite; ring: THREE.Mesh; legs: [THREE.Mesh, THREE.Mesh];
+    tagKey: string; presence: AgentPresence; baseY: number; slot: string;
+    /** Walk state: 'entering' walks door → desk; 'leaving' walks to the door, then is removed (closed tab) or hidden as 'away' (asleep). */
+    mode: WalkMode; target: { x: number; z: number; yaw: number }; stride: number;
+}
 
 /**
  * Optional hooks a host scene puts on `scene.userData.omoAmbient` so ambient modules join its single
@@ -120,6 +133,9 @@ export function ambientHost(scene: THREE.Scene | undefined): AmbientHost | undef
 }
 interface PeerMark { root: THREE.Group; ring: THREE.Mesh; icon: THREE.Sprite; state: string }
 
+/** Asleep agents wait outside the room; they walk back in when the tab wakes. */
+function asleep(activity: AgentActivity): boolean { return activity === 'sleeping'; }
+
 /** Owns agent avatars and voice rings. Attach to a RoomScene's THREE.Scene; re-attach after the scene is rebuilt. */
 export class AgentAvatars {
     private scene?: THREE.Scene;
@@ -134,6 +150,10 @@ export class AgentAvatars {
     private host?: AmbientHost;
     private untick?: () => void;
     private published = { agents: '', peers: '' };
+    /** Bodies of closed tabs walking out of the room; removed when they reach the door. */
+    private leaving = new Set<AgentBody>();
+    private attachedAt = 0;
+    private lastTick = 0;
 
     constructor() { this.group.name = 'omo-agent-avatars'; }
 
@@ -145,6 +165,7 @@ export class AgentAvatars {
         this.group = new THREE.Group(); this.group.name = 'omo-agent-avatars';
         scene.add(this.group);
         this.host = ambientHost(scene);
+        this.attachedAt = performance.now(); this.lastTick = 0;
         this.setAgents(this.agentList); this.setPeers(this.peerList);
         // Join the host's single render loop. Without a host, fall back to an own loop.
         if (this.host) this.untick = this.host.add(seconds => this.tick(seconds));
@@ -156,6 +177,8 @@ export class AgentAvatars {
         const host = this.host; this.host = undefined;
         for (const agent of this.agents.values()) disposeTree(agent.root);
         for (const peer of this.peers.values()) disposeTree(peer.root);
+        for (const agent of this.leaving) disposeTree(agent.root);
+        this.leaving.clear();
         const had = this.group.children.length > 0;
         this.agents.clear(); this.peers.clear();
         this.scene?.remove(this.group); this.scene = undefined;
@@ -169,7 +192,9 @@ export class AgentAvatars {
         if (!this.scene) return;
         let moved = false, redraw = false;
         const keep = new Set(list.map(a => a.key));
-        for (const [key, agent] of this.agents) if (!keep.has(key)) { this.group.remove(agent.root); disposeTree(agent.root); this.agents.delete(key); moved = true; }
+        // A closed tab's agent walks out of the door (removed in tick when it gets there).
+        for (const [key, agent] of this.agents) if (!keep.has(key)) { this.agents.delete(key); this.walkOut(agent); moved = true; }
+        const placeDirect = performance.now() - this.attachedAt < ATTACH_GRACE_MS;
         const perDesk: Record<DeskId, number> = { terminal: 0, 'terminal-2': 0 };
         for (const presence of list) {
             const slot = perDesk[presence.desk]++;
@@ -177,6 +202,17 @@ export class AgentAvatars {
             if (!agent || agent.presence.kind !== presence.kind) {
                 if (agent) { this.group.remove(agent.root); disposeTree(agent.root); }
                 agent = this.build(presence); this.agents.set(presence.key, agent); this.group.add(agent.root); moved = true;
+                if (placeDirect && asleep(presence.activity)) { agent.mode = 'away'; agent.root.visible = false; }
+                else if (!placeDirect && !asleep(presence.activity)) this.walkIn(agent);
+                else if (!placeDirect) { agent.mode = 'away'; agent.root.visible = false; }
+            } else if (!placeDirect && asleep(agent.presence.activity) !== asleep(presence.activity)) {
+                // Falls asleep: walks out and waits outside. Wakes: walks back in from the door.
+                if (asleep(presence.activity)) this.walkOut(agent, false); else this.walkIn(agent);
+                moved = true;
+            } else if (placeDirect && asleep(presence.activity) && agent.mode === 'desk') {
+                agent.mode = 'away'; agent.root.visible = false;
+            } else if (placeDirect && !asleep(presence.activity) && agent.mode === 'away') {
+                agent.mode = 'desk'; agent.root.visible = true;
             }
             const was = agent.presence;
             agent.presence = presence;
@@ -184,8 +220,8 @@ export class AgentAvatars {
             if (slotKey !== agent.slot) {
                 agent.slot = slotKey; moved = true;
                 const at = agentSpot(this.layout, presence.desk, slot);
-                agent.root.position.set(at.x, 0, at.z); agent.baseY = 0;
-                agent.root.rotation.y = at.yaw;
+                agent.target = at; agent.baseY = 0;
+                if (agent.mode === 'desk' || agent.mode === 'away') { agent.root.position.set(at.x, 0, at.z); agent.root.rotation.y = at.yaw; }
             }
             if (was.activity !== presence.activity || !!was.speaking !== !!presence.speaking) redraw = true;
             const tagKey = `${presence.label}|${presence.activity}|${presence.speaking ? 1 : 0}`;
@@ -245,27 +281,83 @@ export class AgentAvatars {
         box([0.42, 0.62, 0.28], [0, 1.0, 0], mat(color));
         box([0.36, 0.36, 0.36], [0, 1.52, 0], mat(0xd9d4c7));
         box([0.28, 0.08, 0.02], [0, 1.55, -0.19], mat(0x111111, color)); // visor faces the monitor (-z)
-        box([0.14, 0.5, 0.16], [-0.12, 0.45, 0], mat(0x2b3442));
-        box([0.14, 0.5, 0.16], [0.12, 0.45, 0], mat(0x2b3442));
+        const legs: [THREE.Mesh, THREE.Mesh] = [box([0.14, 0.5, 0.16], [-0.12, 0.45, 0], mat(0x2b3442)), box([0.14, 0.5, 0.16], [0.12, 0.45, 0], mat(0x2b3442))];
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.03, 8, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 }));
         ring.rotation.x = Math.PI / 2; ring.position.y = 1.86; ring.visible = false; body.add(ring);
         const tag = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: true }));
         tag.position.y = 2.25; tag.scale.set(1.5, 0.375, 1); root.add(tag);
-        return { root, body, tag, ring, tagKey: '', presence, baseY: 0, slot: '' };
+        return { root, body, tag, ring, legs, tagKey: '', presence, baseY: 0, slot: '', mode: 'desk', target: { x: 0, z: 0, yaw: 0 }, stride: 0 };
+    }
+
+    /** Start at the door and walk to the desk spot. */
+    private walkIn(agent: AgentBody): void {
+        if (agent.mode !== 'leaving') agent.root.position.set(AGENT_DOOR.x, 0, AGENT_DOOR.z); // turning back mid-walk keeps its place
+        agent.mode = 'entering'; agent.root.visible = true;
+        const slot = Number(agent.slot.split(':').pop() ?? 0);
+        agent.target = agentSpot(this.layout, agent.presence.desk, Number.isFinite(slot) ? slot : 0);
+        if (!this.host) this.arrive(agent);
+    }
+    /** Walk from wherever the agent is to the door. A closed tab (`remove`) is disposed there; a sleeping one is hidden. */
+    private walkOut(agent: AgentBody, remove = true): void {
+        agent.mode = 'leaving';
+        agent.target = { x: AGENT_DOOR.x, z: AGENT_DOOR.z, yaw: agent.root.rotation.y };
+        if (remove) { agent.presence = { ...agent.presence, speaking: false }; this.leaving.add(agent); }
+        if (!this.host || !agent.root.visible) this.arrive(agent);
+    }
+    /** Finish a walk: settle at the desk, or vanish at the door. */
+    private arrive(agent: AgentBody): void {
+        const p = agent.root.position;
+        p.set(agent.target.x, 0, agent.target.z);
+        agent.root.rotation.y = agent.target.yaw;
+        agent.legs[0].rotation.x = 0; agent.legs[1].rotation.x = 0; agent.stride = 0;
+        if (agent.mode === 'leaving') {
+            if (this.leaving.delete(agent)) { this.group.remove(agent.root); disposeTree(agent.root); return; }
+            agent.mode = 'away'; agent.root.visible = false;
+            const at = agentSpot(this.layout, agent.presence.desk, Number(agent.slot.split(':').pop() ?? 0) || 0);
+            agent.target = at; p.set(at.x, 0, at.z); agent.root.rotation.y = at.yaw;
+            return;
+        }
+        agent.mode = 'desk';
+    }
+    /** Move one walking agent by `delta` seconds. Returns true while it still walks. */
+    private stepWalk(agent: AgentBody, delta: number): boolean {
+        if (agent.mode !== 'entering' && agent.mode !== 'leaving') return false;
+        const p = agent.root.position, dx = agent.target.x - p.x, dz = agent.target.z - p.z;
+        const distance = Math.hypot(dx, dz), step = WALK_SPEED * delta;
+        if (distance <= step || distance < 0.01) { this.arrive(agent); return false; }
+        p.x += dx / distance * step; p.z += dz / distance * step;
+        agent.root.rotation.y = Math.atan2(-dx, -dz); // body's front is -z
+        agent.stride += delta * 9;
+        const swing = Math.sin(agent.stride) * 0.5;
+        agent.legs[0].rotation.x = swing; agent.legs[1].rotation.x = -swing;
+        return true;
     }
 
     /**
      * One frame of ambient motion, driven by the host's render loop (`t` in seconds). Returns true while
      * anything still animates (a working agent bobs, a speaker's ring pulses); otherwise the host may idle.
      */
-    tick(t: number): boolean { return this.pose(t); }
+    tick(t: number): boolean {
+        const delta = this.lastTick ? Math.min(0.1, Math.max(0, t - this.lastTick)) : 1 / 60;
+        this.lastTick = t;
+        let walking = false;
+        for (const agent of this.agents.values()) if (this.stepWalk(agent, delta)) walking = true;
+        for (const agent of [...this.leaving]) if (this.stepWalk(agent, delta)) walking = true;
+        // Walking bodies cast moving shadows: refresh the shadow map while anyone walks (and once on arrival).
+        if (walking || this.wasWalking) this.host?.invalidate(true);
+        this.wasWalking = walking;
+        if (this.canvas) this.canvas.dataset.agentsWalking = String(walking);
+        return this.pose(t) || walking;
+    }
+    private wasWalking = false;
     private pose(t: number): boolean {
         let animating = false;
+        for (const agent of this.leaving) { agent.ring.visible = false; agent.body.rotation.x = 0; agent.body.position.y = agent.baseY; }
         for (const agent of this.agents.values()) {
-            const working = agent.presence.activity === 'working';
-            const asleep = agent.presence.activity === 'sleeping' || agent.presence.activity === 'exited';
+            const working = agent.mode === 'desk' && agent.presence.activity === 'working';
+            const slumped = agent.mode === 'desk' && agent.presence.activity === 'exited';
             agent.body.position.y = agent.baseY + (working ? Math.abs(Math.sin(t * 6)) * 0.04 : 0);
-            agent.body.rotation.x = asleep ? 0.28 : 0;
+            agent.body.rotation.x = slumped ? 0.28 : 0;
             agent.ring.visible = !!agent.presence.speaking;
             if (agent.ring.visible) agent.ring.scale.setScalar(1 + Math.sin(t * 9) * 0.12);
             if (working || agent.ring.visible) animating = true;
