@@ -107,12 +107,17 @@ function FocusPane(props: { station: TerminalWorkstation; frame: MonitorFrame; d
         {props.split && <div className="omo-focus-pane-head">
             <button type="button" className="omo-focus-pane-label" data-testid={`focus-pane-label-${station}`} aria-pressed={active} onClick={back}
                 title={active ? 'Keys go to this desk' : `Move the keys to ${DESK_LABEL[station]}`}>{DESK_LABEL[station]}{active && props.typing
-                    ? <small className="is-keys"><Icon name="keyboard" size={13} />Keys here</small> : <small>{active ? 'Click to type' : 'Click to type here'}</small>}</button>
+                    ? <small className="is-keys"><Icon name="keyboard" size={13} />Keys here</small> : <small>{active ? 'Click to type' : 'Click to move keys here'}</small>}</button>
             <FocusTabs state={desk.state} controller={desk.controller} agents={active} onPicked={back} />
         </div>}
         <div ref={screen} className="omo-focus-screen" data-testid={active ? 'focus-screen-active' : undefined}
             onPointerUp={event => { if (event.button === 0) (active ? props.refocus : props.activate)(); }} onWheel={wheel} onContextMenu={contextMenu}>
-            {idle ? <div className="omo-focus-pane-idle">Click to use {DESK_LABEL[station]} here · same as clicking its monitor. No agent starts.</div>
+            {idle ? <div className="omo-focus-pane-idle" data-testid={`focus-pane-idle-${station}`}>
+                    <Icon name="monitor" size={28} />
+                    <strong>{DESK_LABEL[station]} is not open yet</strong>
+                    <span className="omo-focus-pane-idle-action"><Icon name="keyboard" size={14} />Open {DESK_LABEL[station]} and move the keys here</span>
+                    <small>Same as clicking its monitor in the room. No agent starts.</small>
+                </div>
                 : <FocusTerminalView frame={props.frame} fontSize={fontSize} />}
             {menu && <TerminalMenu at={menu} screen={screen.current} controller={desk.controller} close={closeMenu} refocus={props.refocus} />}
         </div>
@@ -281,9 +286,10 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
                 title={controls.typing ? `Your keystrokes go to the terminal on ${DESK_LABEL[station]}` : 'Click the screen to send keys to this terminal'}>
                 <Icon name="keyboard" size={15} />{controls.typing ? <>Keys <span aria-hidden="true">→</span><span className="omo-sr"> to</span> {DESK_LABEL[station]}</> : 'Click to type'}</span>
             <button type="button" data-testid="focus-full-toggle" aria-pressed={state.full} onClick={() => focus.setFull(!state.full)}
-                title={state.full ? 'Back to the desk screen (Esc)' : 'Full-window terminal (Ctrl+Shift+F)'}><Icon name={state.full ? 'minimize' : 'maximize'} size={15} />{state.full ? 'Desk view' : 'Full screen'}</button>
-            <button type="button" data-testid="focus-exit" onClick={() => focus.exit()} title="Walk away (Esc)"><Icon name="walk" size={15} />Walk<kbd>Esc</kbd></button>
+                title={state.full ? 'Back to the desk screen (Esc)' : 'Full-window terminal (Ctrl+Shift+F)'} aria-label={state.full ? 'Desk view' : 'Full screen'}><Icon name={state.full ? 'minimize' : 'maximize'} size={15} /><span className="omo-focus-label">{state.full ? 'Desk view' : 'Full screen'}</span></button>
+            <button type="button" data-testid="focus-exit" onClick={() => focus.exit()} title="Walk away (Esc)" aria-label="Walk away (Esc)"><Icon name="walk" size={15} /><span className="omo-focus-label">Walk</span><kbd>Esc</kbd></button>
             <BarMenu focus={focus} full={state.full} split={split} toggleWindow={toggleWindow} refocus={refocus} />
+            <span className="omo-focus-sep is-end" aria-hidden="true" />
         </div>
         <div className="omo-focus-panes" onMouseDown={keepFocus}>
             {panes.map(s => <FocusPane key={s} station={s} frame={props.frames[s]} desk={props.desk(s)} active={s === station} split={split}

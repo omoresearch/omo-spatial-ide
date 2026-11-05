@@ -3,7 +3,6 @@ import { PRESENCE_COLOURS } from '../common/presence-protocol';
 import type { PresenceColour } from '../common/presence-protocol';
 import type { HudHub, HudView } from './hud-hub';
 import type { ChatLine, ChatState } from './chat-controller';
-import { CHAT_HELP } from './chat-controller';
 import { colourHex } from './hud-peers';
 import { EMOTE_TEXT } from './chat-controller';
 import { Icon } from './icons';
@@ -50,7 +49,7 @@ export function ChatPanel(props: { hub: HudHub; view: HudView; chat: ChatState }
     const others = view.members.filter(m => m.id !== view.selfId);
     if (!chat.open) return <button type="button" className="omo-chat-toggle" data-testid="chat-open" onMouseDown={keepKeys}
         onClick={() => { if (attachedNow()) { toggleQuiet(); return; } hub.chat.setOpen(true); hub.focusChat?.(); }} title="Room chat (Enter · Ctrl+Shift+M over a screen)">
-        <Icon name="chat" size={15} />Chat{chat.unread > 0 && <strong data-testid="chat-unread">{chat.unread}</strong>}
+        <Icon name="chat" size={15} /><span className="omo-chat-toggle-label">Chat</span>{chat.unread > 0 && <strong data-testid="chat-unread">{chat.unread}</strong>}
     </button>;
     return <section className="omo-chat-panel" data-testid="chat-panel" aria-label="Room chat">
         <header>
@@ -67,7 +66,8 @@ export function ChatPanel(props: { hub: HudHub; view: HudView; chat: ChatState }
             <button type="button" data-testid="chat-mention" title={`Mention ${m.name}`} onClick={() => { setText(t => `${t}@${m.name.replace(/\s+/g, '-')} `); input.current?.focus(); }}>@</button>
         </li>)}</ul>}
         <ol className="omo-chat-log" ref={log} data-testid="chat-log" aria-live="polite">
-            {chat.lines.length ? chat.lines.map(line => <Line key={line.id} line={line} />) : <li className="omo-chat-line is-system"><span>{view.joined ? 'No messages yet.' : 'Join a shared room to chat with people.'} {CHAT_HELP}</span></li>}
+            {chat.lines.length ? chat.lines.map(line => <Line key={line.id} line={line} />) : <li className="omo-chat-empty" data-testid="chat-empty"><Icon name="chat" size={20} /><strong>{view.joined ? 'No messages yet' : 'Join a shared room to chat with people'}</strong>
+                <span>Enter sends · <code>@desk1</code> drafts for your own agent · <code>/help</code> lists commands</span></li>}
         </ol>
         <form onSubmit={submit} className="omo-chat-form">
             <input ref={input} data-testid="chat-input" aria-label="Chat message" maxLength={500} value={text} placeholder={view.joined ? 'Say something · @desk1 to draft for your agent · /wave' : '@desk1 … drafts for your agent · join a room to chat'}

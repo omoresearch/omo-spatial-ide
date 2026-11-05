@@ -7,7 +7,7 @@ const BASE = '#091119';
 /** Smallest default terminal text size in CSS px at 100%: small panes never go below it (they scroll). */
 export const TERM_FONT = 16;
 /** Largest default size at 100%: on big screens the text stops here and the card still fills the pane. */
-export const TERM_FONT_MAX = 22;
+export const TERM_FONT_MAX = 24;
 /** Row height in em. Matches .omo-focus-term-row in focus-mode.css. */
 const LINE = 1.4;
 /** Screen padding + card padding + card border on both sides, in px (focus-mode.css). */
