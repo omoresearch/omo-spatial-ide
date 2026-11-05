@@ -26,7 +26,7 @@ export interface OmoPresenceService {
     takeChat(): Promise<ChatMessage[]>;
 }
 /** A small fixed palette. Colours are never free text, so a tag cannot carry markup or tracking. */
-export const PRESENCE_COLOURS = ['coral', 'amber', 'lime', 'mint', 'sky', 'violet', 'rose', 'sand'] as const;
+export const PRESENCE_COLOURS = ['rose', 'sky', 'amber', 'mint', 'coral', 'violet', 'lime', 'sand'] as const;
 export type PresenceColour = typeof PRESENCE_COLOURS[number];
 export const PRESENCE_COLOUR_HEX: Record<PresenceColour, string> = {
     coral: '#ff7a6b', amber: '#ffc04d', lime: '#a6e35a', mint: '#5fe0b5', sky: '#5fb4ff', violet: '#b48cff', rose: '#ff6fc4', sand: '#e0c9a0'
