@@ -43,7 +43,7 @@ const chrome = chromeArg || process.env.CHROME_PATH || (process.platform === 'da
         console.log('PASS first-person room renders in a real browser');
         // Walk to desk one (left desk): A then W, like the repo's world driver.
         const axis = async (key, field, goal, dir) => { await page.focus(CANVAS); await page.keyboard.down(key); try { await page.waitForFunction((f, g, d) => { const n = Number(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset[f]); return d > 0 ? n >= g : n <= g; }, { timeout: 25000 }, field, goal, dir); } finally { await page.keyboard.up(key); } };
-        await axis('a', 'playerX', -2.64, -1); await axis('w', 'playerZ', 1.78, -1);
+        await axis('a', 'playerX', -2.5, -1); await axis('w', 'playerZ', 1.9, -1);
         const pt = await page.$eval(CANVAS, (e) => { const r = e.getBoundingClientRect(), t = JSON.parse(e.dataset.stationTargets || '{}').terminal; return t && { x: r.left + t.x, y: r.top + t.y }; });
         if (!pt) throw new Error('desk monitor has no projected target');
         await page.mouse.click(pt.x, pt.y);
