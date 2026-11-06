@@ -209,7 +209,7 @@ export class FirstPersonControls {
                 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') return;
                 event.preventDefault();
                 this.selection?.clear();
-                const special:Record<string,string>={Enter:'\r',Backspace:'\x7f',Tab:'\t',ArrowUp:'\x1b[A',ArrowDown:'\x1b[B',ArrowRight:'\x1b[C',ArrowLeft:'\x1b[D',Home:'\x1b[H',End:'\x1b[F',Delete:'\x1b[3~'};
+                const special:Record<string,string>={Enter:'\r',Backspace:'\x7f',Tab:'\t',ArrowUp:'\x1b[A',ArrowDown:'\x1b[B',ArrowRight:'\x1b[C',ArrowLeft:'\x1b[D',Home:'\x1b[H',End:'\x1b[F',Delete:'\x1b[3~',PageUp:'\x1b[5~',PageDown:'\x1b[6~'}; // omo webscroll lane: PageUp/PageDown
                 if(event.ctrlKey&&event.key.length===1){const c=event.key.toLowerCase().charCodeAt(0);if(c>=97&&c<=122)this.input(String.fromCharCode(c-96));}
                 else if(special[event.key])this.input(special[event.key]);
                 else if(event.key.length===1&&!event.metaKey&&!event.altKey)this.input(event.key);

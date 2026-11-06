@@ -32,7 +32,7 @@ export interface WebSurfaceFrame {
     mime: 'image/jpeg';
     data: string;
 }
-export type WebKey = 'Enter' | 'Backspace' | 'Tab' | 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End' | 'Delete' | 'PageUp' | 'PageDown' | 'Escape' | 'Control+a' | 'Control+c' | 'Control+x' | 'Control+z';
+export type WebKey = 'Enter' | 'Backspace' | 'Tab' | 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End' | 'Delete' | 'PageUp' | 'PageDown' | 'Space' | 'Escape' | 'Control+a' | 'Control+c' | 'Control+x' | 'Control+z';
 /** A separate, sandboxed Chrome profile. No access to the user's ordinary Chrome sessions. */
 export interface OmoWebService {
     status(): Promise<WebRuntimeStatus>;

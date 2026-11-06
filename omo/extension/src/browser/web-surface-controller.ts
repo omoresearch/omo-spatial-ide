@@ -83,7 +83,7 @@ export class WebSurfaceController {
         }
     }
     async sendInput(text: string): Promise<void> {
-        const keys: Record<string, WebKey> = { '\r': 'Enter', '\n': 'Enter', '\x7f': 'Backspace', '\t': 'Tab', '\x1b[A': 'ArrowUp', '\x1b[B': 'ArrowDown', '\x1b[C': 'ArrowRight', '\x1b[D': 'ArrowLeft', '\x1b[H': 'Home', '\x1b[F': 'End', '\x1b[3~': 'Delete', '\x01': 'Control+a', '\x03': 'Control+c', '\x18': 'Control+x', '\x1a': 'Control+z' };
+        const keys: Record<string, WebKey> = { '\r': 'Enter', '\n': 'Enter', '\x7f': 'Backspace', '\t': 'Tab', '\x1b[A': 'ArrowUp', '\x1b[B': 'ArrowDown', '\x1b[C': 'ArrowRight', '\x1b[D': 'ArrowLeft', '\x1b[H': 'Home', '\x1b[F': 'End', '\x1b[3~': 'Delete', '\x1b[5~': 'PageUp', '\x1b[6~': 'PageDown', ' ': 'Space', '\x01': 'Control+a', '\x03': 'Control+c', '\x18': 'Control+x', '\x1a': 'Control+z' };
         const key = keys[text];
         if (key) await this.action(surface => this.service.key({ id: surface.id, key }));
         else if (text && !/[\u0000-\u001f\u007f]/.test(text)) await this.action(surface => this.service.typeText({ id: surface.id, text }));

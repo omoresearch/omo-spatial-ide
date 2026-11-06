@@ -38,7 +38,7 @@ export const MAX_HEIGHT = 1200;
 export const MAX_TEXT_BYTES = 64 * 1024;
 export const MAX_SCROLL_DELTA = 5000;
 export const ALLOWED_KEYS: readonly WebKey[] = ['Enter', 'Backspace', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home',
-    'End', 'Delete', 'PageUp', 'PageDown', 'Escape', 'Control+a', 'Control+c', 'Control+x', 'Control+z'];
+    'End', 'Delete', 'PageUp', 'PageDown', 'Space', 'Escape', 'Control+a', 'Control+c', 'Control+x', 'Control+z'];
 const ID_RE = /^web-[a-f0-9]{12}$/;
 const TAB_ID_RE = /^tab-[a-f0-9]{12}$/;
 function newTabId(): string {
