@@ -8,7 +8,8 @@ const readline = require('node:readline');
 const { pathToFileURL } = require('node:url');
 
 const PYTHON = '/usr/bin/python3';
-const TMUX = '/home/harry/.local/share/omo/bin/tmux';
+// CI provides a checksum-pinned tmux via OMO_SPATIAL_TEST_TMUX; locally fall back to the private Omo tmux, then PATH.
+const TMUX = process.env.OMO_SPATIAL_TEST_TMUX || process.env.OMO_SPATIAL_TMUX || (require('node:fs').existsSync('/home/harry/.local/share/omo/bin/tmux') ? '/home/harry/.local/share/omo/bin/tmux' : (require('node:child_process').spawnSync('sh', ['-c', 'command -v tmux'], { encoding: 'utf8' }).stdout.trim() || 'tmux'));
 const root = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'omo-r2-real-'));
 const home = path.join(root, 'home');
 const data = path.join(root, 'data');
