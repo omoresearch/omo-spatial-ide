@@ -185,14 +185,16 @@
 
 /* ---------- Crisp terminal text ---------- */
 /* Plain monospace rows at the font's own pitch: no letter spacing, no per-cell boxes (only wide glyphs get one). */
-/* The card always fills the pane height; termFont sizes the 22 rows to fill it. */
+/* The card always fills the pane height. The text stays a normal size (termFont); the terminal grid
+   itself follows the box (termGrid + the view resize), so a big window gets more columns, not bigger letters. */
 .omo-focus-term {
     box-sizing: border-box; min-height: 100%; padding: 14px 20px; color: #e0e8eb; background: rgba(255, 255, 255, .018);
     border: 1px solid var(--omo-line); border-radius: var(--omo-r-lg); box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
     font-weight: 400; letter-spacing: 0; font-variant-ligatures: none; font-kerning: none;
     font-feature-settings: "liga" 0, "calt" 0; -webkit-font-smoothing: antialiased; text-rendering: optimizeSpeed;
 }
-.omo-focus-term-grid { white-space: pre; min-width: 80ch; }
+/* min-width (in ch) is set inline to the frame's own column count. */
+.omo-focus-term-grid { white-space: pre; min-width: 40ch; }
 .omo-focus-term-row { height: 1.4em; line-height: 1.4em; overflow: hidden; }
 .omo-focus-cell { display: inline-block; overflow: hidden; vertical-align: top; text-align: center; }
 .omo-focus-term-empty { color: var(--omo-text-3); font-family: var(--omo-font); font-size: var(--omo-fs-md); }

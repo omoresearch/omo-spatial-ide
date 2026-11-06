@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { createPortal } from '@theia/core/shared/react-dom';
 import type { MonitorFrame, TerminalWorkstation } from './room-scene';
+import { MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';
 import { FocusMode } from './focus-mode';
 import { FOCUS_STATIONS } from './focus-screen';
-import { FocusTerminalView, termFont, useCellRatio } from './focus-terminal-view';
+import { FocusTerminalView, termFont, termGrid, useCellRatio } from './focus-terminal-view';
 import { ConsoleAlerts, FocusTabs } from './runtime-console-strip';
 import { Icon } from './icons';
 import '../../src/browser/focus-mode.css';
@@ -32,6 +33,34 @@ function useSize(ref: React.RefObject<HTMLElement>): { width: number; height: nu
         return () => observer.disconnect();
     }, [ref]);
     return size;
+}
+
+/** Pause after the last box change before the terminal grid follows it (window drags send many). */
+export const GRID_DEBOUNCE_MS = 150;
+
+/**
+ * The desk's real terminal grid follows its screen box while this pane is shown: debounced resize
+ * of the attached view (the tmux pane gets e.g. 160 x 45). When the pane goes away (walk, other
+ * desk, split off) the view goes straight back to the desk monitor's 80 x 22.
+ */
+/** Desk-monitor restores waiting for the end of this commit (a pane that only moves remounts at once). */
+const restores = new WeakMap<RuntimeConsoleController, number>();
+function useGridFollow(controller: RuntimeConsoleController | undefined, grid: { cols: number; rows: number } | undefined): void {
+    const cols = grid?.cols, rows = grid?.rows;
+    React.useEffect(() => {
+        if (!controller || cols === undefined || rows === undefined) return;
+        const id = window.setTimeout(() => void controller.resizeView(cols, rows), GRID_DEBOUNCE_MS);
+        return () => window.clearTimeout(id);
+    }, [controller, cols, rows]);
+    React.useEffect(() => {
+        if (!controller) return;
+        // Desk view <-> full window remounts the pane (new portal host): keep the grid, do not bounce to 80 x 22.
+        const pending = restores.get(controller);
+        if (pending !== undefined) { window.clearTimeout(pending); restores.delete(controller); }
+        return () => {
+            restores.set(controller, window.setTimeout(() => { restores.delete(controller); void controller.resizeView(MONITOR_COLS, MONITOR_ROWS); }, 0));
+        };
+    }, [controller]);
 }
 
 /** The DOM text selection, when it lies inside this element. */
@@ -92,7 +121,10 @@ function FocusPane(props: { station: TerminalWorkstation; frame: MonitorFrame; d
     const screen = React.useRef<HTMLDivElement>(null);
     const size = useSize(screen);
     const ratio = useCellRatio(screen);
-    const fontSize = size ? termFont(size.width, size.height, ratio, props.comfort) : 16;
+    // Normal text size (A− / A+ comfort). The grid, not the font, follows the box.
+    const fontSize = termFont(props.comfort);
+    const grid = size && size.width > 0 && size.height > 0 ? termGrid(size.width, size.height, ratio, fontSize) : undefined;
+    useGridFollow(desk.controller, grid);
     const [menu, setMenu] = React.useState<{ x: number; y: number }>();
     const closeMenu = React.useCallback(() => setMenu(undefined), []);
     const idle = desk.state.phase === 'idle' && !props.frame.lines.length;
@@ -119,7 +151,7 @@ function FocusPane(props: { station: TerminalWorkstation; frame: MonitorFrame; d
                     <span className="omo-focus-pane-idle-action" role="button" aria-label={`Open ${DESK_LABEL[station]} here`}><Icon name="keyboard" size={14} />Open {DESK_LABEL[station]} here</span>
                     <small>The keys move here too. Same as clicking its monitor in the room. No agent starts.</small>
                 </div>
-                : <FocusTerminalView frame={props.frame} fontSize={fontSize} />}
+                : <FocusTerminalView frame={props.frame} fontSize={fontSize} cols={desk.state.cols} rows={desk.state.rows} />}
             {menu && <TerminalMenu at={menu} screen={screen.current} controller={desk.controller} close={closeMenu} refocus={props.refocus} />}
         </div>
         <ConsoleAlerts state={desk.state} controller={desk.controller} onDone={back} />

@@ -11,6 +11,18 @@ export type { AgentTaskTarget } from './agent-task-draft';
  */
 export const MONITOR_COLS = 80;
 export const MONITOR_ROWS = 22;
+/**
+ * Grid limits for a view that follows its box (attached / full-window terminal). Narrow boxes keep
+ * a sane minimum (they scroll); the top matches the host's own clamp (op_resize / termcore).
+ */
+export const GRID_MIN_COLS = 40;
+export const GRID_MIN_ROWS = 10;
+export const GRID_MAX_COLS = 400;
+export const GRID_MAX_ROWS = 200;
+export function clampGrid(cols: number, rows: number): { cols: number; rows: number } {
+    const fit = (n: number, min: number, max: number, fallback: number): number => Number.isFinite(n) ? Math.max(min, Math.min(max, Math.floor(n))) : fallback;
+    return { cols: fit(cols, GRID_MIN_COLS, GRID_MAX_COLS, MONITOR_COLS), rows: fit(rows, GRID_MIN_ROWS, GRID_MAX_ROWS, MONITOR_ROWS) };
+}
 export const TAB_NAME_MAX = 24;
 export const POLL_MS = 200;
 export const RETRY_MS = 1500;
@@ -42,6 +54,9 @@ export interface RuntimeConsoleState {
     truecolor?: RuntimeFrame['truecolor'];
     palette?: Record<string, string>;
     cursor?: RuntimeFrame['cursor'];
+    /** Grid size of the latest frame (80 x 22 on the desk monitor; larger when a focus view follows its box). */
+    cols?: number;
+    rows?: number;
     sequence: number;
     pending?: PendingAction;
     acting: boolean;
@@ -152,8 +167,8 @@ export function dominantKey(rows: string[] | undefined): string | undefined {
 
 export interface CellRun { x: number; text: string; fg: string; bg: string; columns?: number; glyphColumns?: number }
 /** Split one monitor row into runs of equal colour. fg/bg hold one palette key per cell. */
-export function cellRuns(line: string, fg: string | undefined, bg: string | undefined, palette: Record<string, string> | undefined, defaults: { fg: string; bg: string }, grid?: readonly string[], direct?: { fg?: readonly string[]; bg?: readonly string[] }): CellRun[] {
-    const cells = grid ? grid.slice(0,MONITOR_COLS) : Array.from(line);
+export function cellRuns(line: string, fg: string | undefined, bg: string | undefined, palette: Record<string, string> | undefined, defaults: { fg: string; bg: string }, grid?: readonly string[], direct?: { fg?: readonly string[]; bg?: readonly string[] }, maxCols = MONITOR_COLS): CellRun[] {
+    const cells = grid ? grid.slice(0,maxCols) : Array.from(line);
     const colour = (codes: string | undefined, i: number, fallback: string, exact: readonly string[] | undefined): string => {
         const exactValue = exact?.[i];
         if (typeof exactValue === 'string' && /^#[0-9a-fA-F]{6}$/.test(exactValue)) return exactValue;
@@ -228,6 +243,11 @@ export class RuntimeConsoleController {
     private viewGen = 0;
     private pollInFlight = -1;
     private clipboardCheckedAt = 0;
+    /** Grid the attached view should have. The desk monitor is 80 x 22; a focus view may ask for its box size. */
+    private size = { cols: MONITOR_COLS, rows: MONITOR_ROWS };
+    /** Last size the current view really has (attach or a confirmed resize). */
+    private sentSize?: { viewId: string; cols: number; rows: number };
+    private resizing: Promise<void> = Promise.resolve();
     private timer: unknown;
     private disposed = false;
     private current: RuntimeConsoleState = RuntimeConsoleController.initial();
@@ -452,13 +472,14 @@ export class RuntimeConsoleController {
         this.releaseView();
         const gen = this.viewGen;
         const workspace = this.current.workspace; const tab = this.activeTab();
-        this.set({ lines: [], cells: undefined, foreground: undefined, background: undefined, truecolor: undefined, cursor: undefined, sequence: 0, history: undefined, scrollOffset: undefined, bell: undefined, bracketedPaste: undefined, find: undefined });
+        this.set({ lines: [], cells: undefined, cols: undefined, rows: undefined, foreground: undefined, background: undefined, truecolor: undefined, cursor: undefined, sequence: 0, history: undefined, scrollOffset: undefined, bell: undefined, bracketedPaste: undefined, find: undefined });
         if (!workspace || !tab) { this.set({ phase: 'idle', statusText: 'This workspace has no tabs. Start a shell from the console strip.' }); return; }
         if (tab.state === 'interrupted' || tab.state === 'exited') { this.set({ phase: 'interrupted', statusText: describeTab(tab) }); return; }
         this.set({ phase: 'attaching', statusText: `Connecting the monitor to ${tab.name}…` });
         let viewId: string;
+        const size = { ...this.size };
         try {            const attach = this.service.attach.bind(this.service) as unknown as (input: { workspaceId: string; tabId: string; cols: number; rows: number; stationId?: string }) => Promise<{ viewId: string }>;
-            ({ viewId } = await attach({ workspaceId: workspace.id, tabId: tab.id, cols: MONITOR_COLS, rows: MONITOR_ROWS, stationId: this.binding?.stationId })); } catch (error) {
+            ({ viewId } = await attach({ workspaceId: workspace.id, tabId: tab.id, cols: size.cols, rows: size.rows, stationId: this.binding?.stationId })); } catch (error) {
             if (epoch !== this.epoch || gen !== this.viewGen) return;
             this.set({ phase: 'reconnecting', error: `Could not attach to ${tab.name}: ${message(error)}`, statusText: 'Reconnecting…' });
             this.later(() => void this.attachActive(epoch), this.options.retryMs ?? RETRY_MS);
@@ -466,6 +487,9 @@ export class RuntimeConsoleController {
         }
         if (epoch !== this.epoch || gen !== this.viewGen || this.disposed) { this.service.detach(viewId).catch(() => undefined); return; }
         this.viewId = viewId;
+        this.sentSize = { viewId, ...size };
+        // The focus view asked for another grid while this attach was in flight (or walked away): apply it now.
+        if (size.cols !== this.size.cols || size.rows !== this.size.rows) void this.flushSize();
         await this.pollOnce(epoch, gen);
     }
 
@@ -519,6 +543,7 @@ export class RuntimeConsoleController {
                 patch.unreadBells = Math.min(Number.MAX_SAFE_INTEGER, this.current.unreadBells + delta);
                 patch.bell = frame.bell;
             }
+            if (Number.isSafeInteger(frame.cols) && Number.isSafeInteger(frame.rows) && frame.cols > 0 && frame.rows > 0) Object.assign(patch, { cols: frame.cols, rows: frame.rows });
             Object.assign(patch, { sequence: frame.sequence, lines: frame.lines, cells: frame.cells, foreground: frame.foreground, background: frame.background, truecolor: validTruecolor(frame.truecolor, frame.rows, frame.cols), cursor: frame.cursor, palette: frame.palette ?? this.current.palette });
             for (const key of ['history', 'scrollOffset', 'bracketedPaste'] as const) if (frame[key] !== undefined) Object.assign(patch, { [key]: frame[key] });
         }
@@ -535,6 +560,31 @@ export class RuntimeConsoleController {
             if (copy) this.set({ pendingClipboard: copy });
         }
         this.later(() => void this.pollOnce(epoch, gen), this.options.pollMs ?? POLL_MS);
+    }
+
+    /** The grid this desk's view is asked to have. */
+    get viewSize(): { cols: number; rows: number } { return { ...this.size }; }
+    /**
+     * Give the attached view a real terminal grid (tmux pane size), e.g. the attached / full-window
+     * box. Clamped to GRID_MIN..GRID_MAX. Walking away restores MONITOR_COLS x MONITOR_ROWS so the
+     * physical monitor keeps its layout. Resizes run in order; only the latest size is sent.
+     * Sends no input and starts nothing.
+     */
+    resizeView(cols: number, rows: number): Promise<void> {
+        if (this.disposed) return this.resizing;
+        this.size = clampGrid(cols, rows);
+        return this.flushSize();
+    }
+    private flushSize(): Promise<void> {
+        this.resizing = this.resizing.then(async () => {
+            const viewId = this.viewId, { cols, rows } = this.size, sent = this.sentSize;
+            if (this.disposed || !viewId || (sent && sent.viewId === viewId && sent.cols === cols && sent.rows === rows)) return;
+            try {
+                await this.service.resize({ viewId, cols, rows });
+                if (viewId === this.viewId) this.sentSize = { viewId, cols, rows };
+            } catch { /* The view keeps its last size; the next resize (or reattach) tries again. */ }
+        });
+        return this.resizing;
     }
 
     /** Acknowledge this desk's signal only. Never sends a key or starts/resumes an agent. */
@@ -877,7 +927,7 @@ export class RuntimeConsoleController {
     }
     /** Every row on the monitor now. */
     copyScreen(): Promise<string> {
-        return this.copySelection({ x1: 0, y1: 0, x2: MONITOR_COLS - 1, y2: Math.max(0, (this.current.lines.length || MONITOR_ROWS) - 1) });
+        return this.copySelection({ x1: 0, y1: 0, x2: (this.current.cols ?? MONITOR_COLS) - 1, y2: Math.max(0, (this.current.lines.length || MONITOR_ROWS) - 1) });
     }
     /**
      * Safe paste of text the browser already holds (never read from a device clipboard here).
