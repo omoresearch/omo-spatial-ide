@@ -16,6 +16,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
         { keys: [['L']], what: 'Mouse look on or off', note: 'Esc gives the mouse back' },
         { keys: [['Click a screen']], what: 'Attach to that desk screen' },
         { keys: [['F']], what: 'Full-screen terminal on the nearest desk' },
+        { keys: [['G'], ['Alt', 'Shift', 'G']], what: 'Immersive world: the room fills the window', note: 'G again brings the panels back · Esc keeps it' },
         { keys: [['Enter'], ['/']], what: 'Room chat' },
         { keys: [['Ctrl', 'Shift', 'M']], what: 'Room chat drawer' },
         { keys: [['V']], what: 'Hold to talk', note: 'when voice is on' },
@@ -23,7 +24,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
         { keys: [['T']], what: 'Hold to dictate a draft', note: 'never presses Enter' },
     ] },
     { id: 'screen', title: 'On a screen', when: 'Attached or typing on a monitor', rows: [
-        { keys: [['Esc']], what: 'Leave full screen, then walk away' },
+        { keys: [['Esc']], what: 'Leave full screen, then walk away', note: 'immersive world stays on' },
         { keys: [['Ctrl', 'Shift', 'F']], what: 'Full screen on or off' },
         { keys: [['Ctrl', '1'], ['Ctrl', '2']], what: 'Go to Desk one or Desk two' },
         { keys: [['Ctrl', 'Shift', '='], ['Ctrl', 'Shift', '−']], what: 'Bigger or smaller text', note: 'saved on this device' },

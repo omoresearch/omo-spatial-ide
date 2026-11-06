@@ -3,6 +3,7 @@ import { advancePlayer, PLAYER_HOME, PlayerPose } from '../common/player-state';
 import type { RoomLayoutId } from '../common/player-state';
 import type { SelectionUnit } from '../common/monitor-selection';
 import { PointerLockLook, WalkVelocity } from './movement-smoothing';
+import { IMMERSIVE_TOGGLE_EVENT } from './immersive-mode';
 
 export interface SelectionGestures {
     start(x: number, y: number, unit?: SelectionUnit): boolean;
@@ -165,6 +166,11 @@ export class FirstPersonControls {
             if (!event.ctrlKey && !event.altKey && !event.metaKey && (event.key === 'F1' || (event.key === '?' && !this.typing))) {
                 event.preventDefault(); if (!event.repeat) window.dispatchEvent(new CustomEvent('omo:keys-help')); return;
             }
+            // omo immersive lane: Alt+Shift+G anywhere on the world (also while typing or attached) toggles the
+            // immersive world. Nothing reaches the shell.
+            if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyG') {
+                event.preventDefault(); if (!event.repeat) window.dispatchEvent(new CustomEvent(IMMERSIVE_TOGGLE_EVENT)); return;
+            }
             // Ctrl+Shift+M: room chat as a drawer over the work area. Keys stay here until the chat box is clicked.
             if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.code === 'KeyM') {
                 event.preventDefault(); if (attached && this.focusState.full) this.setFull(false);
@@ -221,6 +227,8 @@ export class FirstPersonControls {
                 else if(key==='tab'&&this.deskRequest&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();this.deskRequest(event.shiftKey?'previous':'next');} // omo focus lane
                 return;}
             if(key==='f'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&this.fullRequest){event.preventDefault();this.keys.clear();this.fullRequest();return;}
+            // omo immersive lane: G while walking. Esc never leaves immersive, so walking away from a screen keeps it.
+            if(key==='g'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();this.keys.clear();if(!event.repeat)window.dispatchEvent(new CustomEvent(IMMERSIVE_TOGGLE_EVENT));return;}
             if(key==='l'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.repeat){event.preventDefault();this.setPointerLook(!this.lookEnabled);return;}
             if(['w','a','s','d'].includes(key)){event.preventDefault();this.keys.add(key);}
             if(event.key==='ArrowLeft'){event.preventDefault();this.pose.yaw+=0.07;}

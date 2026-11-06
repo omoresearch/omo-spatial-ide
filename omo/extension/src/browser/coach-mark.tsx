@@ -3,7 +3,7 @@ import { Icon } from './icons';
 import type { IconName } from './icons';
 
 /**
- * omo keys6 lane: first-run coach mark. Three short steps, shown once after a room exists.
+ * omo keys6 lane: first-run coach mark. Four short steps, shown once after a room exists.
  * "Seen" is saved on this device. It never takes the keys: WASD keeps working while it shows.
  */
 export const COACH_KEY = 'omo.coach.v1';
@@ -15,6 +15,7 @@ export const COACH_STEPS: readonly CoachStep[] = [
     { title: 'Walk around', body: 'Use W A S D to walk. Drag to look.', keys: ['W', 'A', 'S', 'D'], icon: 'walk' },
     { title: 'Use a screen', body: 'Click a desk screen to attach to it. Your keys go to that terminal.', keys: ['Click'], icon: 'monitor' },
     { title: 'Full screen and back', body: 'Press F for full screen. Esc goes back, one step at a time. F1 shows every key.', keys: ['F', 'Esc'], icon: 'maximize' },
+    { title: 'Immersive world', body: 'Press G and the room fills the whole window. Press G again to bring the panels back.', keys: ['G'], icon: 'expand' },
 ];
 
 export function CoachMark(props: { onDone: () => void; refocus: () => void }): React.ReactElement {

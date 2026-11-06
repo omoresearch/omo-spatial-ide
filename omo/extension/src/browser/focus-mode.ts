@@ -87,6 +87,13 @@ export class FocusMode {
         const active = this.options.activeStation();
         this.open(isDesk(active) ? active : 'terminal', true);
     };
+    /** omo immersive lane: desk switcher in the immersive HUD. Same path as clicking that desk's monitor; starts no agent. */
+    attachTo(station: TerminalWorkstation): void {
+        this.sync();
+        const c = this.bound?.controls; if (!c) return;
+        if (c.attached) { this.switchTo(station); return; }
+        this.open(station, false);
+    }
     /** F while walking: the desk monitor in front of the player. */
     fullScreenNearest(): void {
         const c = this.bound?.controls; if (!c || !this.bound) return;
