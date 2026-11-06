@@ -125,6 +125,28 @@ export class WebSurfaceController {
         if (!Number.isFinite(deltaY)) return;
         await this.action(surface => this.service.scroll({ id: surface.id, ...this.point, deltaX: 0, deltaY: Math.max(-1000, Math.min(1000, deltaY)) }));
     }
+    // --- omo webscroll lane: wheel over the wall scrolls the page at the pixel under the pointer. ---
+    private wheelQueue?: { point: { x: number; y: number }; deltaX: number; deltaY: number };
+    private wheeling?: Promise<void>;
+    /** Wheel at a page point. No click needed. A burst of wheel events merges into one request at a time. */
+    scrollAt(point: { x: number; y: number }, deltaY: number, deltaX = 0): Promise<void> {
+        const surface = this.current.surface;
+        // An empty wall has nothing to scroll; stay quiet rather than show an error for every wheel notch.
+        if (!surface || this.disposed || !Number.isFinite(point?.x) || !Number.isFinite(point?.y) || !Number.isFinite(deltaY) || !Number.isFinite(deltaX)) return Promise.resolve();
+        if (point.x < 0 || point.y < 0 || point.x >= surface.width || point.y >= surface.height || (deltaY === 0 && deltaX === 0)) return Promise.resolve();
+        const q = this.wheelQueue;
+        this.wheelQueue = { point: { x: point.x, y: point.y }, deltaX: (q?.deltaX ?? 0) + deltaX, deltaY: (q?.deltaY ?? 0) + deltaY };
+        if (!this.wheeling) this.wheeling = this.flushWheel().finally(() => { this.wheeling = undefined; });
+        return this.wheeling;
+    }
+    private async flushWheel(): Promise<void> {
+        for (let next = this.wheelQueue; next; next = this.wheelQueue) {
+            this.wheelQueue = undefined;
+            const clamp = (v: number) => Math.max(-1000, Math.min(1000, v));
+            await this.action(surface => this.service.scroll({ id: surface.id, x: next!.point.x, y: next!.point.y, deltaX: clamp(next!.deltaX), deltaY: clamp(next!.deltaY) }));
+        }
+    }
+    // --- end omo webscroll lane ---
     /** Show another page tab on the wall. The wall texture follows the active tab's frames. */
     async selectTab(tabId: string): Promise<void> {
         const surface = this.current.surface;

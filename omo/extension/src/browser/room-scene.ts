@@ -95,6 +95,8 @@ export interface RoomSceneOptions {
     onInput: (text: string) => void;
     onPaste?: (text: string) => void;
     onScroll?: (deltaY: number) => void;
+    /** omo webscroll lane: wheel over the web wall, at the page pixel under the pointer. */
+    onWebScroll?: (point: ScreenPoint, deltaY: number, deltaX: number) => void;
     onMessage: (text: string) => void;
     onError: (message: string) => void;
     onShortcut?: (shortcut: 'new-shell' | 'select-tab-2' | 'workspace-picker') => void;
@@ -520,7 +522,13 @@ export class RoomScene {
             const ray=new THREE.Raycaster();ray.setFromCamera(p,this.camera);const hits=ray.intersectObjects(this.roots,true);
             for(const hit of hits){let node:THREE.Object3D|null=hit.object;while(node&&!node.userData.workstation)node=node.parent;if(node?.userData.workstation){this.options.onSelect(node.userData.workstation);break;}}
         };
-        const wheel=(event:WheelEvent)=>{event.preventDefault();if(this.navigation==='walk'){if(this.walker?.typing)this.options.onScroll?.(event.deltaY);return;}this.state.distance=Math.max(10,Math.min(30,this.state.distance+event.deltaY*0.01));this.positionCamera();this.options.onCameraChange({...this.state});};
+        // omo webscroll lane: in walk mode the wheel scrolls the web page under the pointer (within reach), clicked or not.
+        const wheel=(event:WheelEvent)=>{event.preventDefault();if(this.navigation==='walk'){
+            const unit=event.deltaMode===1?40:event.deltaMode===2?600:1, dy=event.deltaY*unit, dx=event.deltaX*unit;
+            const at=this.walker?.locked?this.canvasCentre():{x:event.clientX,y:event.clientY};
+            const web=this.options.onWebScroll?this.webPointAt(at.x,at.y):undefined;
+            if(web){this.options.onWebScroll!(web,dy,dx);return;}
+            if(this.walker?.typing)this.options.onScroll?.(dy);return;}this.state.distance=Math.max(10,Math.min(30,this.state.distance+event.deltaY*0.01));this.positionCamera();this.options.onCameraChange({...this.state});};
         const key=(event:KeyboardEvent)=>{
             if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','-'].includes(event.key))return;event.preventDefault();
             if(event.key==='ArrowLeft')this.state.azimuth-=0.12;if(event.key==='ArrowRight')this.state.azimuth+=0.12;
@@ -738,6 +746,17 @@ export class RoomScene {
         }
         return undefined;
     }
+    /** omo webscroll lane: the web page pixel under a canvas point, when the web wall is the frontmost hit and within reach. */
+    private webPointAt(x: number, y: number): ScreenPoint | undefined {
+        const screen = this.screens.get('web'); if (!screen || !this.renderer) return undefined;
+        const rect = this.renderer.domElement.getBoundingClientRect(); if (!rect.width || !rect.height) return undefined;
+        const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1), this.camera);
+        const hit = ray.intersectObjects(this.roots,true)[0];
+        if (!hit?.uv || hit.object !== screen || this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3())) > 3.2) return undefined;
+        const { width, height } = this.webSize;
+        return { x: Math.min(width-1, Math.max(0, hit.uv.x*width)), y: Math.min(height-1, Math.max(0, (1-hit.uv.y)*height)) };
+    }
+    private canvasCentre(): { x: number; y: number } { const r = this.renderer.domElement.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2 }; }
     private interactAt(x: number, y: number, modifiers?: { ctrlKey: boolean; metaKey: boolean }): 'terminal' | 'code' | undefined {
         const rect=this.renderer.domElement.getBoundingClientRect();
         const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1),this.camera);
