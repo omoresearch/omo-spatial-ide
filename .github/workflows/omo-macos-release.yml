@@ -1,0 +1,103 @@
+name: Omo spatial IDE macOS release
+
+# Builds, packages and smoke-tests a self-contained macOS tarball of the Omo app on
+# GitHub-hosted Apple Silicon, then attaches it to an existing omo-v* release.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to attach the macOS build to (e.g. omo-v0.1.0); empty = artifact only'
+        required: false
+        default: ''
+  pull_request:
+    branches: ['master', 'omo/**']
+    paths: ['omo/scripts/package-release.cjs', 'omo/scripts/release-smoke.cjs', '.github/workflows/omo-macos-release.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omo-macos-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-arm64:
+    if: github.repository == 'omoresearch/theia'
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: omo
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NODE_OPTIONS: '--max-old-space-size=4096'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Install macOS prerequisites (tmux, bash)
+        run: |
+          brew install tmux bash
+          tmux -V; bash --version | head -1; node --version; python3 --version; uname -m
+      - name: Install locked dependencies (no lifecycle hooks)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build native modules for macOS
+        run: npm rebuild drivelist node-pty --foreground-scripts
+      - name: Type-check and compile
+        run: npm run compile
+      - name: Cache checksum-verified IDE extension downloads
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: omo/.cache
+          key: omo-ide-extensions-macos-${{ hashFiles('omo/ide-extensions.lock.json') }}
+      - name: Prepare the pinned, sha256-verified IDE extension bundle (darwin-arm64)
+        run: npm run prepare:ide
+      - name: Build the real Theia browser application
+        run: npm run build --workspace=omo-browser
+      - name: Read-only doctor (macOS warnings expected)
+        run: npm run --silent doctor -- --json || true
+      - name: Package the self-contained macOS release
+        run: node scripts/package-release.cjs "$RUNNER_TEMP/omo-dist"
+      - name: Smoke-test the UNPACKED package (no repo, no node_modules) in real Chrome
+        run: |
+          mkdir -p "$RUNNER_TEMP/omo-unpacked"
+          tar -xzf "$RUNNER_TEMP"/omo-dist/omo-spatial-ide-*-darwin-arm64.tar.gz -C "$RUNNER_TEMP/omo-unpacked"
+          D=$(ls -d "$RUNNER_TEMP"/omo-unpacked/omo-spatial-ide-*)
+          CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+          test -x "$CHROME" || brew install --cask google-chrome
+          node scripts/release-smoke.cjs "$D" "$PWD/node_modules/puppeteer-core" "$CHROME"
+      - name: Upload macOS package artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: omo-spatial-ide-macos-arm64
+          path: |
+            ${{ runner.temp }}/omo-dist/*.tar.gz
+            ${{ runner.temp }}/omo-dist/*.sha256
+          if-no-files-found: error
+
+  attach:
+    needs: macos-arm64
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: omo-spatial-ide-macos-arm64
+          path: dist
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          case "$TAG" in omo-v*) ;; *) echo "Refusing non-Omo tag $TAG"; exit 1;; esac
+          gh release upload "$TAG" dist/*.tar.gz dist/*.sha256 --clobber -R "$GITHUB_REPOSITORY"
