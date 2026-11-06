@@ -87,8 +87,10 @@ function inspectTree(dir, manifest, expectedMarker) {
 }
 function ensureConfigDir(configDir) {
     if (typeof configDir !== 'string' || !configDir) throw Error('THEIA_CONFIG_DIR must be a non-empty path');
-    const absolute = path.resolve(configDir);
-    fs.mkdirSync(absolute, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(path.resolve(configDir), { recursive: true, mode: 0o700 });
+    // The configured root may sit under a symlinked system path (macOS /var -> /private/var); use its
+    // canonical form. Everything created below it is still checked strictly.
+    const absolute = fs.realpathSync(path.resolve(configDir));
     canonicalDirectory(absolute);
     return absolute;
 }
@@ -121,7 +123,7 @@ function cleanupPrivatePluginDir(pluginDir) {
     } catch { return false; }
 }
 function createPrivatePluginCopy(appRoot, configDir, manifest) {
-    const sourceRoot = path.resolve(appRoot);
+    const sourceRoot = fs.realpathSync(path.resolve(appRoot));
     const source = path.join(sourceRoot, 'plugins');
     const sourceResult = inspectPrepared(sourceRoot, manifest);
     if (!sourceResult.ready) throw Error(sourceResult.reason || 'Pinned IDE extension bundle is not verified');

@@ -45,6 +45,7 @@ function applicationEnvironment(source = process.env) {
         if (source[key] !== undefined) env[key] = source[key];
     }
     env.THEIA_CONFIG_DIR = source.THEIA_CONFIG_DIR || path.join(os.homedir(), '.config', 'omo-spatial-ide');
+    try { fs.mkdirSync(env.THEIA_CONFIG_DIR, { recursive: true, mode: 0o700 }); env.THEIA_CONFIG_DIR = fs.realpathSync(env.THEIA_CONFIG_DIR); } catch { /* validated again when the private plugin copy is made */ }
     // Pinned Python plugin files must not be mutated by debugger bytecode output.
     env.PYTHONDONTWRITEBYTECODE = '1';
     return env;
@@ -57,7 +58,9 @@ function main(args = process.argv.slice(2)) {
         return;
     }
     if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Omo requires Node.js 22 or newer.');
-    const appRoot = path.resolve(__dirname, '..');
+    // Canonical roots: macOS /var, /tmp and some install paths are symlinks to /private/...; the strict
+    // per-entry symlink checks below then apply inside the canonical tree.
+    const appRoot = fs.realpathSync(path.resolve(__dirname, '..'));
     const backend = path.join(appRoot, 'browser-app/lib/backend/main.js');
     if (!fs.existsSync(backend)) throw new Error('Build the application first: npm run build');
     const manifest = JSON.parse(fs.readFileSync(path.join(appRoot, 'ide-extensions.lock.json'), 'utf8'));
