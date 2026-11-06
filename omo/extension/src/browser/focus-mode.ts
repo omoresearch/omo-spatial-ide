@@ -14,7 +14,7 @@ export interface FocusModeOptions {
 
 const isDesk = (station: Workstation): station is TerminalWorkstation => (FOCUS_STATIONS as readonly string[]).includes(station);
 
-/** Comfort text sizes, as a share of the 16 px default (12 to 24 px). Index 4 is 100%. */
+/** Comfort text sizes, as a share of the 14 px terminal default (TERM_FONT: 10.5 to 21 px). Index 4 is 100%. */
 export const COMFORT_STEPS: readonly number[] = [0.75, 0.8125, 0.875, 0.9375, 1, 1.125, 1.25, 1.375, 1.5];
 const COMFORT_KEY = 'omo.focus.comfort.v1', SPLIT_KEY = 'omo.focus.split.v1';
 function readPref(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
