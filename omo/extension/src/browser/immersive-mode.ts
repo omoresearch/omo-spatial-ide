@@ -16,6 +16,8 @@ export const IMMERSIVE_RESTORE_KEY = 'omo.immersive.restore';
 export const IMMERSIVE_BODY_CLASS = 'omo-immersive-world';
 /** Window event that toggles immersive (G while walking, Alt+Shift+G anywhere on the world). */
 export const IMMERSIVE_TOGGLE_EVENT = 'omo:immersive-toggle';
+/** Window event: the immersive pill's bell opens or closes the HUD notification list (hud-overlay.tsx). */
+export const NOTICES_TOGGLE_EVENT = 'omo:notices-toggle';
 
 export type ShellArea = 'left' | 'right' | 'bottom';
 export const SHELL_AREAS: readonly ShellArea[] = ['left', 'right', 'bottom'];

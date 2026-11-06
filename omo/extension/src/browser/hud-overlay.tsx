@@ -6,6 +6,7 @@ import { ChatPanel } from './chat-panel';
 import { colourHex } from './hud-peers';
 import { DESK_NAME } from './chat-mentions';
 import { Icon, IconName } from './icons';
+import { NOTICES_TOGGLE_EVENT } from './immersive-mode';
 import '../../src/browser/hud.css';
 
 const NOTICE_ICON: Record<'finished' | 'approval' | 'bell' | 'interrupted' | 'ended', IconName> = { finished: 'check', approval: 'alert', bell: 'bell', interrupted: 'x', ended: 'stop' };
@@ -18,6 +19,12 @@ const NOTICE_ICON: Record<'finished' | 'approval' | 'bell' | 'interrupted' | 'en
 export function HudOverlay(props: { hub: HudHub; view: HudView; chat: ChatState; host?: HTMLElement | null }): React.ReactElement | null {
     const { hub, view, chat } = props;
     const [open, setOpen] = React.useState(false);
+    // omo immersive lane: the immersive pill's bell opens the same list.
+    React.useEffect(() => {
+        const toggle = (): void => setOpen(was => !was);
+        window.addEventListener(NOTICES_TOGGLE_EVENT, toggle);
+        return () => window.removeEventListener(NOTICES_TOGGLE_EVENT, toggle);
+    }, []);
     const marker = React.useRef<HTMLSpanElement>(null);
     const [found, setFound] = React.useState<HTMLElement | null>(null);
     // The scene wrapper is a sibling that is rebuilt with the room; find it after each commit.
