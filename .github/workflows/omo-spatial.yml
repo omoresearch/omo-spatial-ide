@@ -52,6 +52,13 @@ jobs:
         run: |
           npm run compile
           npm test
+      - name: Cache checksum-verified IDE extension downloads
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: omo/.cache
+          key: omo-ide-extensions-${{ hashFiles('omo/ide-extensions.lock.json') }}
+      - name: Prepare the pinned, sha256-verified IDE extension bundle
+        run: npm run prepare:ide
       - name: Build the real Theia browser application
         run: npm run build --workspace=omo-browser
       - name: Check read-only developer setup preflight
