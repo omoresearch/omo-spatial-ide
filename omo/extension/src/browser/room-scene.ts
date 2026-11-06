@@ -25,6 +25,28 @@ function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMet
         ? { foreground: value.foreground.map(row => row.slice()), background: value.background.map(row => row.slice()) }
         : undefined;
 }
+/**
+ * The physical monitor's 80 x 22 window of a frame. A desk attached in focus mode can have a larger
+ * real grid (e.g. 160 x 45); the monitor then shows the first 80 columns of the 22 rows around the
+ * cursor (the last 22 when there is no cursor). A frame that already fits is returned as is.
+ * Malformed metadata is dropped, never trusted: the monitor only crops, it never crashes.
+ */
+export function monitorWindow(frame: MonitorFrame): MonitorFrame {
+    const lines = Array.isArray(frame.lines) ? frame.lines : [];
+    const wide = (row: unknown): boolean => typeof row === 'string' ? Array.from(row).length > MONITOR_COLS : Array.isArray(row) && row.length > MONITOR_COLS;
+    if (lines === frame.lines && lines.length <= MONITOR_ROWS && !lines.some(wide) && !frame.cells?.some(wide)
+        && !frame.truecolor?.foreground.some(wide) && !frame.truecolor?.background.some(wide)) return frame;
+    const cursorY = frame.cursor && Number.isSafeInteger(frame.cursor.y) ? frame.cursor.y : lines.length - 1;
+    const end = Math.max(Math.min(MONITOR_ROWS, lines.length), Math.min(lines.length, cursorY + 1)), start = Math.max(0, end - MONITOR_ROWS);
+    const rows = <T,>(list: readonly T[] | undefined): T[] | undefined => Array.isArray(list) ? list.slice(start, end) : undefined;
+    const cut = (row: unknown): string => typeof row === 'string' ? Array.from(row).slice(0, MONITOR_COLS).join('') : '';
+    const cells = frame.cells === undefined ? undefined : rows(frame.cells)!.map(row => Array.isArray(row) ? row.slice(0, MONITOR_COLS) : []);
+    const truecolor = frame.truecolor && Array.isArray(frame.truecolor.foreground) && Array.isArray(frame.truecolor.background)
+        ? { foreground: rows(frame.truecolor.foreground)!.map(row => Array.isArray(row) ? row.slice(0, MONITOR_COLS) : []), background: rows(frame.truecolor.background)!.map(row => Array.isArray(row) ? row.slice(0, MONITOR_COLS) : []) }
+        : undefined;
+    const cursor = frame.cursor ? { ...frame.cursor, y: frame.cursor.y - start, visible: frame.cursor.visible && frame.cursor.y >= start && frame.cursor.y < end && frame.cursor.x < MONITOR_COLS } : undefined;
+    return { ...frame, lines: lines.slice(start, end).map(cut), cells, foreground: rows(frame.foreground)?.map(cut), background: rows(frame.background)?.map(cut), truecolor, cursor };
+}
 /** What the physical terminal monitor shows: runtime frame rows plus optional per-cell colour keys and cursor. */
 export interface MonitorFrame {
     lines: string[];
@@ -153,6 +175,8 @@ export class RoomScene {
     private mirrorSurface?: HTMLCanvasElement;
     private mirrorTexture?: THREE.CanvasTexture;
     private mirrorFrame: MonitorFrame = { lines: [] };
+    /** Last full-size frame per desk and its 80 x 22 monitor window, so a re-render reuses the same object. */
+    private terminalSources?: Map<TerminalWorkstation, { input: MonitorFrame; frame: MonitorFrame }>;
     private mirrorLabel?: HTMLButtonElement;
     private deskLabels = new Map<TerminalWorkstation, HTMLButtonElement>();
     private codeSurface?: {canvas:HTMLCanvasElement;texture:THREE.CanvasTexture};
@@ -543,8 +567,12 @@ export class RoomScene {
     setTerminalFrames(frames: Record<TerminalWorkstation, MonitorFrame>): void {
         this.setTerminalFrame(frames.terminal, 'terminal'); this.setTerminalFrame(frames['terminal-2'], 'terminal-2');
     }
-    setTerminalFrame(frame: MonitorFrame, station: TerminalWorkstation = 'terminal'): void {
-        const previous = this.terminalFrames[station];
+    setTerminalFrame(input: MonitorFrame, station: TerminalWorkstation = 'terminal'): void {
+        // Larger focus-mode grids are cropped to the monitor's 80 x 22 (the same object when it already fits).
+        const previous = this.terminalFrames[station], sources = this.terminalSources ??= new Map();
+        const cached = sources.get(station);
+        const frame = input === previous ? previous : cached?.input === input ? cached.frame : monitorWindow(input);
+        if (input !== previous) { if (frame !== input) sources.set(station, { input, frame }); else sources.delete(station); }
         if (this.terminalSelection?.station === station && (!this.terminalSelection.model.refresh(frame.lines,frame.cells) || previous.title !== frame.title || previous.status !== frame.status)) this.terminalSelection = undefined;
         this.terminalFrames[station] = frame;
         const workspaceName = frame.title?.split(' / ')[0]?.trim();
