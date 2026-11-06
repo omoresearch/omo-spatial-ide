@@ -56,7 +56,7 @@ const chrome = chromeArg || process.env.CHROME_PATH || (process.platform === 'da
         ok = true;
     } catch (error) {
         console.error('FAIL', error.message);
-        try { console.error(fs.readFileSync(path.join(scratch, 'server.log'), 'utf8').split('\n').filter(l => /ERROR|Error|error/.test(l)).slice(-15).join('\n')); } catch {}
+        try { console.error('--- server.log (tail) ---\n' + fs.readFileSync(path.join(scratch, 'server.log'), 'utf8').split('\n').slice(-40).join('\n')); } catch {}
     } finally {
         if (browser) await browser.close().catch(() => {});
         try { process.kill(-server.pid, 'SIGTERM'); } catch {}
