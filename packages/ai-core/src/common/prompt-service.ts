@@ -15,7 +15,7 @@
 // *****************************************************************************
 
 import { Event, Emitter, URI, ILogger, DisposableCollection } from '@theia/core';
-import { inject, injectable, optional, postConstruct } from '@theia/core/shared/inversify';
+import { inject, injectable, optional, postConstruct, named } from '@theia/core/shared/inversify';
 import { AIVariableArg, AIVariableContext, AIVariableService, createAIResolveVariableCache, ResolvedAIVariable } from './variable-service';
 import { ToolInvocationRegistry } from './tool-invocation-registry';
 import { toolRequestToPromptText } from './language-model-util';
@@ -247,6 +247,13 @@ export interface CustomAgentsLocation {
     kind: 'agents-dir' | 'legacy-yaml';
 }
 
+/** A loaded customization file, including files hidden by a higher-priority override. */
+export interface PromptFragmentCustomizationSource {
+    uri: URI;
+    template: string;
+    active: boolean;
+}
+
 /**
  * Service responsible for customizing prompt fragments
  */
@@ -268,6 +275,13 @@ export interface PromptFragmentCustomizationService {
      * @returns Whether the fragment has any customizations
      */
     isPromptFragmentCustomized(fragmentId: string): boolean;
+
+    /**
+     * Gets every loaded customization file of a prompt fragment, including the ones hidden by a
+     * higher-priority customization, regardless of whether they are active.
+     * @param fragmentId The prompt fragment ID
+     */
+    getPromptFragmentCustomizationSources?(fragmentId: string): PromptFragmentCustomizationSource[];
 
     /**
      * Gets the active customized prompt fragment for a given ID
@@ -607,7 +621,7 @@ export interface PromptService {
 
 @injectable()
 export class PromptServiceImpl implements PromptService {
-    @inject(ILogger)
+    @inject(ILogger) @named('ai-core:PromptServiceImpl')
     protected readonly logger: ILogger;
 
     @inject(AISettingsService) @optional()
@@ -897,7 +911,7 @@ export class PromptServiceImpl implements PromptService {
         let resolvedTemplate = promptFragment.template;
         const variableAndArgResolutions = await this.resolveVariablesAndArgs(promptFragment.template, args, context);
         variableAndArgResolutions.replacements.forEach(replacement =>
-            resolvedTemplate = resolvedTemplate.replace(replacement.placeholder, replacement.value));
+            resolvedTemplate = resolvedTemplate.replace(replacement.placeholder, () => replacement.value));
 
         // Then resolve function references with already resolved variables and arguments
         // This allows to resolve function references contained in resolved variables (e.g. prompt fragments)
@@ -920,7 +934,7 @@ export class PromptServiceImpl implements PromptService {
             };
         });
         functionReplacements.forEach(replacement =>
-            resolvedTemplate = resolvedTemplate.replace(replacement.placeholder, replacement.value));
+            resolvedTemplate = resolvedTemplate.replace(replacement.placeholder, () => replacement.value));
 
         return {
             id: systemOrFragmentId,
@@ -945,7 +959,7 @@ export class PromptServiceImpl implements PromptService {
         const resolutions = await this.resolveVariablesAndArgs(promptFragment.template, args, context, resolveVariable);
         let resolvedTemplate = promptFragment.template;
         resolutions.replacements.forEach(replacement =>
-            resolvedTemplate = resolvedTemplate.replace(replacement.placeholder, replacement.value));
+            resolvedTemplate = resolvedTemplate.replace(replacement.placeholder, () => replacement.value));
 
         return {
             id: systemOrFragmentId,
@@ -983,10 +997,12 @@ export class PromptServiceImpl implements PromptService {
             let variableName = variableAndArg;
             let argument: string | undefined;
 
-            const parts = variableAndArg.split(':', 2);
-            if (parts.length > 1) {
-                variableName = parts[0];
-                argument = parts[1];
+            // First colon only, keeping the whole remainder: `split(':', 2)` truncates instead, which
+            // mangles every argument containing a colon, e.g. `{{file:C:\some\path}}`.
+            const separatorIndex = variableAndArg.indexOf(':');
+            if (separatorIndex >= 0) {
+                variableName = variableAndArg.substring(0, separatorIndex);
+                argument = variableAndArg.substring(separatorIndex + 1);
             }
 
             let replacementValue: string;

@@ -17,7 +17,8 @@ import {
     ChatResponseContent,
     CodeChatResponseContent,
 } from '@theia/ai-chat/lib/common';
-import { ContributionProvider, UntitledResourceResolver, URI } from '@theia/core';
+import { ContributionProvider, UNTITLED_SCHEME, UntitledResourceResolver, URI } from '@theia/core';
+import { generateUuid } from '@theia/core/lib/common/uuid';
 import { ContextMenuRenderer, TreeNode } from '@theia/core/lib/browser';
 import { ClipboardService } from '@theia/core/lib/browser/clipboard-service';
 import { inject, injectable, named } from '@theia/core/shared/inversify';
@@ -32,6 +33,7 @@ import { MonacoLanguages } from '@theia/monaco/lib/browser/monaco-languages';
 import { ChatResponsePartRenderer } from '../chat-response-part-renderer';
 import { ChatViewTreeWidget, ResponseNode } from '../chat-tree-view/chat-view-tree-widget';
 import { IMouseEvent } from '@theia/monaco-editor-core';
+import { CodeWrapperEditors } from './code-wrapper-editors';
 
 export const CodePartRendererAction = Symbol('CodePartRendererAction');
 /**
@@ -229,7 +231,10 @@ export const CodeWrapper = (props: {
     const editorRef = React.useRef<SimpleMonacoEditor | undefined>(undefined);
 
     const createInputElement = async () => {
-        const resource = await props.untitledResourceResolver.createUntitledResource(undefined, props.language);
+        // Use a unique URI so that a remounted code block cannot reuse the URI of a just disposed one,
+        // whose removal may not have reached the plugin host yet.
+        const uri = new URI().resolve(`Untitled-${generateUuid()}${props.language ?? ''}`).withScheme(UNTITLED_SCHEME);
+        const resource = await props.untitledResourceResolver.createUntitledResource(undefined, props.language, uri);
         const editor = await props.editorProvider.createSimpleInline(resource.uri, ref.current!, {
             readOnly: true,
             autoSizing: true,
@@ -249,11 +254,18 @@ export const CodeWrapper = (props: {
         editor.document.textEditorModel.setValue(props.content);
         editor.getControl().onContextMenu(e => props.contextMenuCallback(e.event));
         editorRef.current = editor;
+        if (ref.current) {
+            CodeWrapperEditors.set(ref.current, editor);
+        }
     };
 
     React.useEffect(() => {
         createInputElement();
+        const element = ref.current;
         return () => {
+            if (element) {
+                CodeWrapperEditors.remove(element);
+            }
             if (editorRef.current) {
                 editorRef.current.dispose();
             }
@@ -268,5 +280,5 @@ export const CodeWrapper = (props: {
 
     editorRef.current?.resizeToFit();
 
-    return <div className='theia-CodeWrapper' ref={ref}></div>;
+    return <div className={CodeWrapperEditors.CLASS} ref={ref}></div>;
 };

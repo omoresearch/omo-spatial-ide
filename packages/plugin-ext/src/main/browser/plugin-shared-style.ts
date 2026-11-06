@@ -21,6 +21,7 @@ import { Theme } from '@theia/core/lib/common/theme';
 import { IconUrl } from '../../common/plugin-protocol';
 import { Reference, SyncReferenceCollection } from '@theia/core/lib/common/reference';
 import { Endpoint } from '@theia/core/lib/browser/endpoint';
+import { PLUGINS_BASE_PATH } from '@theia/plugin-utils/lib/common/constants';
 
 export interface PluginIconKey {
     url: IconUrl;
@@ -86,12 +87,12 @@ export class PluginSharedStyle {
         selector: string;
         body: (theme: Theme) => string
     }): void {
-        const sheet = (<CSSStyleSheet>this.style.sheet);
+        const sheet = this.style.sheet as CSSStyleSheet;
         const cssBody = body(this.themeService.getCurrentTheme());
         sheet.insertRule(selector + ' {\n' + cssBody + '\n}', 0);
     }
     deleteRule(selector: string): void {
-        const sheet = (<CSSStyleSheet>this.style.sheet);
+        const sheet = this.style.sheet as CSSStyleSheet;
         const rules = sheet.rules || sheet.cssRules || [];
         for (let i = rules.length - 1; i >= 0; i--) {
             const rule = rules[i];
@@ -145,7 +146,7 @@ export class PluginSharedStyle {
     }
 
     static toExternalIconUrl(iconUrl: string): string {
-        if (iconUrl.startsWith('hostedPlugin/')) {
+        if (iconUrl.startsWith(`${PLUGINS_BASE_PATH}/`)) {
             return new Endpoint({ path: iconUrl }).getRestUrl().toString();
         }
         return iconUrl;

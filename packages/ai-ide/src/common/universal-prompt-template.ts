@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/tslint/config */
+/* eslint-disable @theia/file-header */
 // *****************************************************************************
 // Copyright (C) 2025 EclipseSource GmbH and others.
 //
@@ -11,6 +11,7 @@
 
 import { BasePromptFragment } from '@theia/ai-core/lib/common';
 import { CHAT_CONTEXT_DETAILS_VARIABLE_ID } from '@theia/ai-chat';
+import { OPEN_EDITORS_HINT_FRAGMENT_ID } from './open-editors-hint-fragment-id';
 
 export const universalTemplate: BasePromptFragment = {
    id: 'universal-system-default',
@@ -23,6 +24,8 @@ You are an assistant integrated into {{productName}}, designed to assist softwar
 ## Current Context
 Some files and other pieces of data may have been added by the user to the context of the chat. If any have, the details can be found below.
 {{${CHAT_CONTEXT_DETAILS_VARIABLE_ID}}}
+
+{{prompt:${OPEN_EDITORS_HINT_FRAGMENT_ID}}}
 `
 };
 

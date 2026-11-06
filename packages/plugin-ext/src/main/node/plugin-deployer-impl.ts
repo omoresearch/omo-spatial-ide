@@ -22,7 +22,8 @@ import {
     PluginDeployerResolver, PluginDeployerFileHandler, PluginDeployerDirectoryHandler,
     PluginDeployerEntry, PluginDeployer, PluginDeployerParticipant, PluginDeployerStartContext,
     PluginDeployerResolverInit,
-    PluginDeployerEntryType, PluginDeployerHandler, PluginType, UnresolvedPluginEntry, PluginIdentifiers, PluginDeployOptions
+    PluginDeployerEntryType, PluginDeployerHandler, PluginType, UnresolvedPluginEntry, PluginIdentifiers, PluginDeployOptions,
+    DuplicateExtensionError
 } from '../../common/plugin-protocol';
 import { PluginDeployerEntryImpl } from './plugin-deployer-entry-impl';
 import {
@@ -215,7 +216,11 @@ export class PluginDeployerImpl implements PluginDeployer {
                         }
                     }
                 } catch (e) {
-                    this.logger.error(`Failed to resolve plugins from '${entry.id}'`, e);
+                    if (DuplicateExtensionError.is(e)) {
+                        this.logger.info(`Skipping '${entry.id}': ${e.message}`);
+                    } else {
+                        this.logger.error(`Failed to resolve plugins from '${entry.id}'`, e);
+                    }
                     errors.push(e instanceof Error ? e : new Error(String(e)));
                 }
             }));
@@ -293,30 +298,36 @@ export class PluginDeployerImpl implements PluginDeployer {
      * deploy all plugins that have been accepted
      */
     async deployPlugins(pluginsToDeploy: PluginDeployerEntry[]): Promise<number> {
-        const acceptedPlugins = pluginsToDeploy.filter(pluginDeployerEntry => pluginDeployerEntry.isAccepted());
+        const acceptedPlugins = pluginsToDeploy.filter(pluginDeployerEntry =>
+            pluginDeployerEntry.isAccepted(PluginDeployerEntryType.FRONTEND, PluginDeployerEntryType.BACKEND, PluginDeployerEntryType.HEADLESS));
         const acceptedFrontendPlugins = pluginsToDeploy.filter(pluginDeployerEntry => pluginDeployerEntry.isAccepted(PluginDeployerEntryType.FRONTEND));
         const acceptedBackendPlugins = pluginsToDeploy.filter(pluginDeployerEntry => pluginDeployerEntry.isAccepted(PluginDeployerEntryType.BACKEND));
         const acceptedHeadlessPlugins = pluginsToDeploy.filter(pluginDeployerEntry => pluginDeployerEntry.isAccepted(PluginDeployerEntryType.HEADLESS));
 
-        this.logger.debug('the accepted plugins are', acceptedPlugins);
-        this.logger.debug('the acceptedFrontendPlugins plugins are', acceptedFrontendPlugins);
-        this.logger.debug('the acceptedBackendPlugins plugins are', acceptedBackendPlugins);
-        this.logger.debug('the acceptedHeadlessPlugins plugins are', acceptedHeadlessPlugins);
-
-        acceptedPlugins.forEach(plugin => {
-            this.logger.debug('will deploy plugin', plugin.id(), 'with changes', JSON.stringify(plugin.getChanges()), 'and this plugin has been resolved by', plugin.resolvedBy());
+        this.logger.debug(log => {
+            log('the accepted plugins are', acceptedPlugins);
+            log('the acceptedFrontendPlugins plugins are', acceptedFrontendPlugins);
+            log('the acceptedBackendPlugins plugins are', acceptedBackendPlugins);
+            log('the acceptedHeadlessPlugins plugins are', acceptedHeadlessPlugins);
+            acceptedPlugins.forEach(plugin => {
+                log(
+                    'will deploy plugin', plugin.id(), 'with changes', JSON.stringify(plugin.getChanges()),
+                    'and this plugin has been resolved by', plugin.resolvedBy()
+                );
+            });
         });
 
         // local path to launch
         const pluginPaths = [...acceptedBackendPlugins, ...acceptedHeadlessPlugins].map(pluginEntry => pluginEntry.path());
         this.logger.debug('local path to deploy on remote instance', pluginPaths);
 
-        const deployments = [];
-        // start the backend plugins
-        deployments.push(await this.pluginDeployerHandler.deployBackendPlugins(acceptedBackendPlugins));
-        // headless plugins are deployed like backend plugins
-        deployments.push(await this.pluginDeployerHandler.deployBackendPlugins(acceptedHeadlessPlugins));
-        deployments.push(await this.pluginDeployerHandler.deployFrontendPlugins(acceptedFrontendPlugins));
+        const deployPluginsMeasurement = this.measure('deployPluginsBatch');
+        const deployments = await Promise.all([
+            // start the backend and headless plugins
+            this.pluginDeployerHandler.deployBackendPlugins([...acceptedBackendPlugins, ...acceptedHeadlessPlugins]),
+            this.pluginDeployerHandler.deployFrontendPlugins(acceptedFrontendPlugins)
+        ]);
+        deployPluginsMeasurement.log(`Deploy batch of ${acceptedPlugins.length} accepted plugins`);
         this.onDidDeployEmitter.fire(undefined);
         return deployments.reduce<number>((accumulated, current) => accumulated += current ?? 0, 0);
     }

@@ -21,7 +21,7 @@ FrontendApplicationConfigProvider.set({});
 
 import { expect } from 'chai';
 import { Container } from '@theia/core/shared/inversify';
-import { URI, PreferenceService } from '@theia/core';
+import { URI, PreferenceService, ILogger } from '@theia/core';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { FileStat } from '@theia/filesystem/lib/common/files';
@@ -30,6 +30,8 @@ import { ContextFileValidationServiceImpl } from './context-file-validation-serv
 import { WorkspaceFunctionScope } from './workspace-functions';
 import { AiConfigurationService } from '@theia/ai-core';
 import { EnvVariablesServer } from '@theia/core/lib/common/env-variables';
+import { MockLogger } from '@theia/core/lib/common/test/mock-logger';
+import { withWorkspaceServiceDefaults } from '@theia/workspace/lib/browser/test/with-workspace-service-defaults';
 
 disableJSDOM();
 
@@ -68,7 +70,7 @@ describe('ContextFileValidationService', () => {
 
     beforeEach(async () => {
         container = new Container();
-
+        container.bind(ILogger).to(MockLogger).inSingletonScope();
         // Mock WorkspaceService
         mockWorkspaceService = {
             tryGetRoots: () => [{
@@ -111,7 +113,7 @@ describe('ContextFileValidationService', () => {
         } as unknown as PreferenceService;
 
         container.bind(FileService).toConstantValue(mockFileService);
-        container.bind(WorkspaceService).toConstantValue(mockWorkspaceService);
+        container.bind(WorkspaceService).toConstantValue(withWorkspaceServiceDefaults(mockWorkspaceService));
         container.bind(PreferenceService).toConstantValue(mockPreferenceService);
         container.bind(AiConfigurationService).toConstantValue({
             get: <T>(_name: string, fallback?: T) => fallback,

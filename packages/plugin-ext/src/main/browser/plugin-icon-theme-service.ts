@@ -25,6 +25,8 @@ import * as jsoncparser from 'jsonc-parser';
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { IconThemeService, IconTheme, IconThemeDefinition } from '@theia/core/lib/browser/icon-theme-service';
 import { IconThemeContribution, DeployedPlugin, UiTheme, getPluginId } from '../../common/plugin-protocol';
+import { PLUGINS_BASE_PATH } from '@theia/plugin-utils/lib/common/constants';
+import { encodePluginAssetPath } from '@theia/plugin-utils/lib/common/plugin-model';
 import URI from '@theia/core/lib/common/uri';
 import { Disposable, DisposableCollection } from '@theia/core/lib/common/disposable';
 import { Emitter } from '@theia/core/lib/common/event';
@@ -40,6 +42,7 @@ import { WorkspaceService } from '@theia/workspace/lib/browser';
 import { StandaloneServices } from '@theia/monaco-editor-core/esm/vs/editor/standalone/browser/standaloneServices';
 import { ILanguageService } from '@theia/monaco-editor-core/esm/vs/editor/common/languages/language';
 import { LanguageService } from '@theia/core/lib/browser/language-service';
+import { SecondaryWindowService } from '@theia/core/lib/browser/window/secondary-window-service';
 import { DEFAULT_ICON_SIZE, PLUGIN_FILE_ICON_CLASS } from './plugin-shared-style';
 
 export interface PluginIconDefinition {
@@ -125,6 +128,9 @@ export class PluginIconTheme extends PluginIconThemeDefinition implements IconTh
     @inject(LanguageService)
     protected readonly languageService: LanguageService;
 
+    @inject(SecondaryWindowService)
+    protected readonly secondaryWindowService: SecondaryWindowService;
+
     protected readonly onDidChangeEmitter = new Emitter<DidChangeLabelEvent>();
     readonly onDidChange = this.onDidChangeEmitter.event;
 
@@ -140,12 +146,17 @@ export class PluginIconTheme extends PluginIconThemeDefinition implements IconTh
 
     protected styleSheetContent: string | undefined;
     protected readonly icons = new Set<string>();
+    /** The style elements of the windows that show the icons of this theme, see {@link addStyleElement} */
+    protected readonly styleElements = new Map<Window, Disposable>();
 
     @postConstruct()
     protected init(): void {
         Object.assign(this, this.definition);
         this.packageRootUri = new URI(this.packageUri);
         this.locationUri = new URI(this.uri).parent;
+        this.toDispose.push(this.secondaryWindowService.onWindowLoaded(win => this.addStyleElement(win)));
+        // the style element of a closed window would keep its document from being garbage collected
+        this.toDispose.push(this.secondaryWindowService.onWindowClosed(win => this.styleElements.get(win)?.dispose()));
     }
 
     dispose(): void {
@@ -175,15 +186,31 @@ export class PluginIconTheme extends PluginIconThemeDefinition implements IconTh
         if (this.toDeactivate.disposed || !this.styleSheetContent) {
             return;
         }
-        const styleElement = document.createElement('style');
+        this.addStyleElement(window);
+        // icons are shown in secondary windows as well, e.g. on the tabs of the widgets moved there
+        this.secondaryWindowService.getWindows().forEach(win => this.addStyleElement(win));
+        this.fireDidChange();
+    }
+
+    protected addStyleElement(win: Window): void {
+        // a secondary window that has not been loaded yet when the theme is activated gets its style element once loaded,
+        // which replaces the one that has been added to its initial document
+        this.styleElements.get(win)?.dispose();
+        if (this.toDeactivate.disposed || !this.styleSheetContent) {
+            return;
+        }
+        const styleElement = win.document.createElement('style');
         styleElement.type = 'text/css';
         styleElement.className = 'theia-icon-theme';
         styleElement.innerText = this.styleSheetContent;
-        document.head.appendChild(styleElement);
-        const toRemoveStyleElement = Disposable.create(() => styleElement.remove());
+        win.document.head.appendChild(styleElement);
+        const toRemoveStyleElement = Disposable.create(() => {
+            styleElement.remove();
+            this.styleElements.delete(win);
+        });
+        this.styleElements.set(win, toRemoveStyleElement);
         this.toDisposeStyleElement.push(toRemoveStyleElement);
         this.toDeactivate.push(toRemoveStyleElement);
-        this.fireDidChange();
     }
 
     protected reload = debounce(() => {
@@ -363,7 +390,7 @@ export class PluginIconTheme extends PluginIconThemeDefinition implements IconTh
         const iconUri = this.locationUri.resolve(iconPath);
         const relativePath = this.packageRootUri.path.relative(iconUri.path.normalize());
         return relativePath && `url('${new Endpoint({
-            path: `hostedPlugin/${this.pluginId}/${encodeURIComponent(relativePath.normalize().toString())}`
+            path: `${PLUGINS_BASE_PATH}/${this.pluginId}/${encodePluginAssetPath(relativePath.normalize().toString())}`
         }).getRestUrl().toString()}')`;
     }
 

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/tslint/config */
+/* eslint-disable @theia/file-header */
 // *****************************************************************************
 // Copyright (C) 2025 EclipseSource GmbH and others.
 //
@@ -51,7 +51,7 @@ when the user want to pass arguments to the command.
 {
     "type": "theia-command",
     "commandId": "preferences:open",
-    "arguments": ["ai-features"]
+    "arguments": ["editor.fontSize"]
 }
 \`\`\`
 

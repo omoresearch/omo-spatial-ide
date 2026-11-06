@@ -52,7 +52,7 @@ import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { DebugContribution } from './debug-contribution';
 import { Deferred, waitForEvent } from '@theia/core/lib/common/promise-util';
 import { WorkspaceService } from '@theia/workspace/lib/browser';
-import { nls } from '@theia/core';
+import { nls, ILogger } from '@theia/core';
 import { TestService, TestServices } from '@theia/test/lib/browser/test-service';
 import { DebugSessionManager } from './debug-session-manager';
 
@@ -151,6 +151,9 @@ export class DebugSession implements CompositeTreeElement {
     @inject(CommandService)
     protected readonly commandService: CommandService;
 
+    @inject(ILogger) @named('debug:DebugSession')
+    protected readonly logger: ILogger;
+
     /**
      * Number of millis after a `stop` request times out. It's 5 seconds by default.
      */
@@ -189,6 +192,10 @@ export class DebugSession implements CompositeTreeElement {
     protected readonly onDidResolveLazyVariableEmitter = new Emitter<DebugVariable>();
     readonly onDidResolveLazyVariable: Event<DebugVariable> = this.onDidResolveLazyVariableEmitter.event;
 
+    protected readonly onDidChangeCapabilitiesEmitter = new Emitter<void>();
+    /** Fires when the capabilities of the session change, with the `initialize` response or a `capabilities` event. */
+    readonly onDidChangeCapabilities: Event<void> = this.onDidChangeCapabilitiesEmitter.event;
+
     protected readonly childSessions = new Map<string, DebugSession>();
     protected readonly toDispose = new DisposableCollection();
 
@@ -220,7 +227,7 @@ export class DebugSession implements CompositeTreeElement {
                     }
                 });
             } catch (err) {
-                console.error(err);
+                this.logger.error(err);
             }
         }
 
@@ -230,6 +237,7 @@ export class DebugSession implements CompositeTreeElement {
             this.onDidFocusStackFrameEmitter,
             this.onDidFocusThreadEmitter,
             this.onDidResolveLazyVariableEmitter,
+            this.onDidChangeCapabilitiesEmitter,
             Disposable.create(() => {
                 this.doUpdateThreads([]);
             }),
@@ -333,7 +341,7 @@ export class DebugSession implements CompositeTreeElement {
                 try {
                     await thread.pause();
                 } catch (e) {
-                    console.error('pauseAll failed:', e);
+                    this.logger.error('pauseAll failed:', e);
                 }
             })());
         }
@@ -347,7 +355,7 @@ export class DebugSession implements CompositeTreeElement {
                 try {
                     await thread.continue();
                 } catch (e) {
-                    console.error('continueAll failed:', e);
+                    this.logger.error('continueAll failed:', e);
                 }
             })());
         }
@@ -510,14 +518,14 @@ export class DebugSession implements CompositeTreeElement {
      * Invoked when sending the `terminate` request to the debugger is rejected or timed out.
      */
     protected handleTerminateError(err: unknown): void {
-        console.error('Did not receive terminated event in time', err);
+        this.logger.error('Did not receive terminated event in time', err);
     }
 
     /**
      * Invoked when sending the `disconnect` request to the debugger is rejected or timed out.
      */
     protected handleDisconnectError(err: unknown): void {
-        console.error('Error on disconnect', err);
+        this.logger.error('Error on disconnect', err);
     }
 
     async disconnect(isRestart: boolean, callback: () => void): Promise<void> {
@@ -586,9 +594,9 @@ export class DebugSession implements CompositeTreeElement {
                 }
             } catch (error) {
                 if (error instanceof CancellationError) {
-                    console.warn('Shell integration did not emit a prompt within the timeout; proceeding anyway.');
+                    this.logger.warn('Shell integration did not emit a prompt within the timeout; proceeding anyway.');
                 } else {
-                    console.error('Unexpected error while waiting for terminal prompt:', error);
+                    this.logger.error('Unexpected error while waiting for terminal prompt:', error);
                     throw error;
                 }
             }
@@ -623,7 +631,7 @@ export class DebugSession implements CompositeTreeElement {
                 const threads = response && response.body && response.body.threads || [];
                 this.doUpdateThreads(threads, stoppedDetails);
             } catch (e) {
-                console.error('updateThreads failed:', e);
+                this.logger.error('updateThreads failed:', e);
             }
         });
     }
@@ -679,6 +687,7 @@ export class DebugSession implements CompositeTreeElement {
     protected updateCapabilities(capabilities: DebugProtocol.Capabilities): void {
         Object.assign(this._capabilities, capabilities);
         this.deferredOnDidConfigureCapabilities.resolve();
+        this.onDidChangeCapabilitiesEmitter.fire();
     }
 
     protected updatingBreakpoints = false;
@@ -730,6 +739,12 @@ export class DebugSession implements CompositeTreeElement {
         const { uri, sourceModified } = options;
         await this.deferredOnDidConfigureCapabilities.promise;
         for (const affectedUri of this.getAffectedUris(uri)) {
+            if (this.connection.closed) {
+                // The session ended while the breakpoints were being sent, which happens because ending one session
+                // updates the breakpoints of all of them. There is nothing left to send them to, and reporting them
+                // as unverified would outlive the session they failed for.
+                return;
+            }
             if (affectedUri.toString() === BreakpointManager.EXCEPTION_URI.toString()) {
                 await this.sendExceptionBreakpoints();
             } else if (affectedUri.toString() === BreakpointManager.FUNCTION_URI.toString()) {
@@ -763,7 +778,7 @@ export class DebugSession implements CompositeTreeElement {
             const res = await this.sendRequest('setExceptionBreakpoints', { filters, filterOptions });
             res.body?.breakpoints?.forEach((bp, index) => toSend[index] && updates.set(toSend[index].id, bp));
         } catch (err) {
-            console.error('Failed to set exception breakpoints:', err);
+            this.logger.error('Failed to set exception breakpoints:', err);
             const message = (err as Error)?.message ? `${err.message}` : 'Failed to set exception breakpoints.';
             toSend.forEach(bp => updates.set(bp.id, { verified: false, message }));
         }
@@ -791,7 +806,7 @@ export class DebugSession implements CompositeTreeElement {
         } catch (error) {
             const genericMessage: string = 'Function breakpoint not valid for current debug session';
             const message: string = error.message ? `${error.message}` : genericMessage;
-            console.warn(`Could not handle function breakpoints: ${message}, disabling...`);
+            this.logger.warn(`Could not handle function breakpoints: ${message}, disabling...`);
             enabled.forEach(b => updates.set(b.id, { verified: false, message }));
         }
         this.breakpoints.updateSessionData(this.id, this.capabilities, updates);
@@ -819,12 +834,12 @@ export class DebugSession implements CompositeTreeElement {
         } catch (error) {
             // could be error or promise rejection of DebugProtocol.SetBreakpointsResponse
             if (error instanceof Error) {
-                console.error(`Error setting breakpoints: ${error.message}`);
+                this.logger.error(`Error setting breakpoints: ${error.message}`);
             } else {
                 // handle adapters that send failed DebugProtocol.SetBreakpointsResponse for invalid breakpoints
                 const genericMessage: string = 'Breakpoint not valid for current debug session';
                 const message: string = error.message ? `${error.message}` : genericMessage;
-                console.warn(`Could not handle breakpoints for ${affectedUri}: ${message}, disabling...`);
+                this.logger.warn(`Could not handle breakpoints for ${affectedUri}: ${message}, disabling...`);
                 enabled.forEach(b => updates.set(b.id, { verified: false, message }));
             }
         }

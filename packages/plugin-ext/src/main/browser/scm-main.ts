@@ -106,7 +106,9 @@ export class PluginScmResource implements ScmResource {
         readonly group: PluginScmResourceGroup,
         readonly decorations: ScmResourceDecorations,
         readonly contextValue: string | undefined,
-        readonly command: ScmCommand | undefined
+        readonly command: ScmCommand | undefined,
+        readonly multiDiffEditorOriginalUri?: URI,
+        readonly multiDiffEditorModifiedUri?: URI
     ) { }
 
     open(): Promise<void> {
@@ -138,7 +140,9 @@ function historyItemFromDto(dto: ScmHistoryItemDto): ScmHistoryItem {
             'light' in dto.authorIcon ? vscodeURI.revive(dto.authorIcon.light).toString() : vscodeURI.revive(dto.authorIcon as UriComponents).toString()) : undefined,
         displayId: dto.displayId,
         timestamp: dto.timestamp,
-        tooltip: typeof dto.tooltip === 'string' ? dto.tooltip : dto.tooltip?.value,
+        // Passed through as-is so that the provider's own links, commands and `isTrusted`
+        // declaration survive; flattening to `value` would strip the command allow-list.
+        tooltip: dto.tooltip,
         statistics: dto.statistics ? {
             files: dto.statistics.files,
             insertions: dto.statistics.insertions,
@@ -485,7 +489,9 @@ export class PluginScmProvider implements ScmProvider {
                         group,
                         decorations,
                         contextValue || undefined,
-                        command
+                        command,
+                        rawResource.multiDiffEditorOriginalUri ? new URI(vscodeURI.revive(rawResource.multiDiffEditorOriginalUri)) : undefined,
+                        rawResource.multiDiffEditorModifiedUri ? new URI(vscodeURI.revive(rawResource.multiDiffEditorModifiedUri)) : undefined
                     );
                 });
 

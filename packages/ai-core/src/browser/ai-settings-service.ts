@@ -14,13 +14,14 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 import { DisposableCollection, Emitter, Event, ILogger, RecursiveReadonly } from '@theia/core';
-import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
-import { AiConfigurationService, AISettings, AISettingsService, AgentSettings } from '../common';
+import { inject, injectable, postConstruct, named } from '@theia/core/shared/inversify';
+import { JSONValue } from '@theia/core/shared/@lumino/coreutils';
+import { AiConfigurationInspection, AiConfigurationService, AISettings, AISettingsService, AgentSettings } from '../common';
 
 @injectable()
 export class AISettingsServiceImpl implements AISettingsService {
 
-    @inject(ILogger)
+    @inject(ILogger) @named('ai-core:AISettingsServiceImpl')
     protected readonly logger: ILogger;
 
     @inject(AiConfigurationService)
@@ -45,7 +46,12 @@ export class AISettingsServiceImpl implements AISettingsService {
     }
 
     async updateAgentSettings(agent: string, agentSettings: Partial<AgentSettings>): Promise<void> {
-        const settings = await this.getSettings();
+        await this.aiConfigurationService.ready;
+        // Start from the settings without the session value, which writing them back would save to a settings file.
+        // This covers other agents and the fields not in `agentSettings`. A field value that the caller built from
+        // `getAgentSettings` can still hold session entries.
+        const inspection = this.aiConfigurationService.inspect<JSONValue>(AISettingsServiceImpl.PREFERENCE_NAME);
+        const settings = (AiConfigurationInspection.valueWithoutSession(inspection) ?? {}) as AISettings;
         const toSet = { ...settings, [agent]: { ...settings[agent], ...agentSettings } };
         try {
             await this.aiConfigurationService.update(AISettingsServiceImpl.PREFERENCE_NAME, toSet);

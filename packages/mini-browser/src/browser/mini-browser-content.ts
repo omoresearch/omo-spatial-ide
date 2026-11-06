@@ -15,10 +15,10 @@
 // *****************************************************************************
 
 import * as PDFObject from 'pdfobject';
-import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
+import { inject, injectable, postConstruct, named } from '@theia/core/shared/inversify';
 import { Message } from '@theia/core/shared/@lumino/messaging';
 import URI from '@theia/core/lib/common/uri';
-import { ILogger } from '@theia/core/lib/common/logger';
+import { ILogger } from '@theia/core';
 import { Emitter } from '@theia/core/lib/common/event';
 import { KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
 import { WindowService } from '@theia/core/lib/browser/window/window-service';
@@ -162,7 +162,7 @@ export type MiniBrowserContentFactory = (props: MiniBrowserProps) => MiniBrowser
 @injectable()
 export class MiniBrowserContent extends BaseWidget {
 
-    @inject(ILogger)
+    @inject(ILogger) @named('mini-browser:MiniBrowserContent')
     protected readonly logger: ILogger;
 
     @inject(WindowService)
@@ -583,7 +583,7 @@ export class MiniBrowserContent extends BaseWidget {
                     this.pdfContainer.style.display = 'block';
                     this.frame.style.display = 'none';
                     PDFObject.embed(url, this.pdfContainer, {
-                        // eslint-disable-next-line max-len, @typescript-eslint/quotes
+                        // eslint-disable-next-line max-len, @stylistic/quotes
                         fallbackLink: `<p style="padding: 0px 15px 0px 15px">Your browser does not support inline PDFs. Click on this <a href='[url]' target="_blank">link</a> to open the PDF in a new tab.</p>`
                     });
                     clearTimeout(this.frameLoadTimeout);
@@ -622,7 +622,7 @@ export class MiniBrowserContent extends BaseWidget {
                 clearTimeout(this.frameLoadTimeout);
                 this.hideLoadIndicator();
                 this.showErrorBar(String(e));
-                console.log(e);
+                this.logger.info(e);
             }
         }
     }

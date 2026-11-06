@@ -60,11 +60,12 @@ export class ShellProcess extends TerminalProcess {
     protected static defaultCols = 80;
     protected static defaultRows = 24;
 
-    constructor( // eslint-disable-next-line @typescript-eslint/indent
+    constructor( // eslint-disable-next-line @stylistic/indent
         @inject(ShellProcessOptions) options: ShellProcessOptions,
         @inject(ProcessManager) processManager: ProcessManager,
         @inject(MultiRingBuffer) ringBuffer: MultiRingBuffer,
-        @inject(ILogger) @named('terminal') logger: ILogger,
+        @inject(ILogger) @named('terminal:ShellProcess')
+        protected override readonly logger: ILogger,
         @inject(EnvironmentUtils) environmentUtils: EnvironmentUtils,
     ) {
         const env = { 'COLORTERM': 'truecolor' };

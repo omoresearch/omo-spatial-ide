@@ -14,11 +14,13 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
-import { KeybindingContribution, KeybindingRegistry, KeybindingScope, KeyCode } from '@theia/core/lib/browser';
+import { injectable, inject, postConstruct, named } from '@theia/core/shared/inversify';
+import {
+    KeybindingContribution, KeybindingRegistry, KeybindingScope, KeyCode, layoutModifiersIncludeAltGraph, layoutModifiersIncludeShift
+} from '@theia/core/lib/browser';
 import { MonacoCommands } from './monaco-command';
 import { MonacoCommandRegistry } from './monaco-command-registry';
-import { CommandRegistry, DisposableCollection, environment, isOSX } from '@theia/core';
+import { CommandRegistry, DisposableCollection, environment, isOSX, ILogger } from '@theia/core';
 import { MonacoResolvedKeybinding } from './monaco-resolved-keybinding';
 import { KeybindingsRegistry } from '@theia/monaco-editor-core/esm/vs/platform/keybinding/common/keybindingsRegistry';
 import { StandaloneKeybindingService, StandaloneServices } from '@theia/monaco-editor-core/esm/vs/editor/standalone/browser/standaloneServices';
@@ -36,6 +38,9 @@ export class MonacoKeybindingContribution implements KeybindingContribution {
     @inject(KeybindingRegistry) protected readonly keybindings: KeybindingRegistry;
     @inject(CommandRegistry) protected readonly theiaCommandRegistry: CommandRegistry;
     @inject(MonacoContextKeyService) protected readonly contextKeyService: MonacoContextKeyService;
+
+    @inject(ILogger) @named('monaco:MonacoKeybindingContribution')
+    protected readonly logger: ILogger;
 
     @postConstruct()
     protected init(): void {
@@ -65,6 +70,9 @@ export class MonacoKeybindingContribution implements KeybindingContribution {
             this.toDisposeOnKeybindingChange.dispose();
             for (const binding of this.keybindings.getKeybindingsByScope(KeybindingScope.USER).concat(this.keybindings.getKeybindingsByScope(KeybindingScope.WORKSPACE))) {
                 const resolved = this.keybindings.resolveKeybinding(binding);
+                if (this.keybindings.isKeybindingInactive(binding) || !this.isMonacoRepresentable(resolved)) {
+                    continue;
+                }
                 const command = binding.command;
                 const when = binding.when
                     ? this.contextKeyService.parse(binding.when)
@@ -81,10 +89,15 @@ export class MonacoKeybindingContribution implements KeybindingContribution {
         }
     }
 
+    protected isMonacoRepresentable(codes: KeyCode[]): boolean {
+        return codes.length <= 2 && codes.every(code => code.key && KEY_CODE_MAP[code.key.keyCode] !== undefined
+            && !layoutModifiersIncludeAltGraph(code.layoutModifiers));
+    }
+
     protected toMonacoKeybindingNumber(codes: KeyCode[]): number {
         const [firstPart, secondPart] = codes;
         if (codes.length > 2) {
-            console.warn('Key chords should not consist of more than two parts; got ', codes);
+            this.logger.warn('Key chords should not consist of more than two parts; got ', codes);
         }
         const encodedFirstPart = this.toSingleMonacoKeybindingNumber(firstPart);
         const encodedSecondPart = secondPart ? this.toSingleMonacoKeybindingNumber(secondPart) << 16 : 0;
@@ -97,11 +110,11 @@ export class MonacoKeybindingContribution implements KeybindingContribution {
         if (code.alt) {
             encoded |= monaco.KeyMod.Alt;
         }
-        if (code.shift) {
+        if (code.shift || layoutModifiersIncludeShift(code.layoutModifiers)) {
             encoded |= monaco.KeyMod.Shift;
         }
         if (code.ctrl) {
-            encoded |= monaco.KeyMod.WinCtrl;
+            encoded |= isOSX ? monaco.KeyMod.WinCtrl : monaco.KeyMod.CtrlCmd;
         }
         if (code.meta && isOSX) {
             encoded |= monaco.KeyMod.CtrlCmd;

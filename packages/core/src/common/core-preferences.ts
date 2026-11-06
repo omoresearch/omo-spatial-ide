@@ -92,10 +92,11 @@ export const corePreferenceSchema: PreferenceSchema = {
         },
         'window.menuBarVisibility': {
             type: 'string',
-            enum: ['classic', 'visible', 'hidden', 'compact'],
+            enum: ['classic', 'visible', 'toggle', 'hidden', 'compact'],
             markdownEnumDescriptions: [
                 nls.localizeByDefault('Menu is displayed at the top of the window and only hidden in full screen mode.'),
                 nls.localizeByDefault('Menu is always visible at the top of the window even in full screen mode.'),
+                nls.localizeByDefault('Menu is hidden but can be displayed at the top of the window via the Alt key.'),
                 nls.localizeByDefault('Menu is always hidden.'),
                 environment.electron.is()
                     // we do not support the window.menuStyle setting yet, so we do not use the default string in this case yet
@@ -149,21 +150,38 @@ export const corePreferenceSchema: PreferenceSchema = {
             default: false,
             description: nls.localize('theia/core/secondaryWindow/alwaysOnTop', 'When enabled, the secondary window stays above all other windows, including those of different applications.'),
         },
+        'window.secondaryWindowCloseBehavior': {
+            type: 'string',
+            enum: ['close', 'moveToMainWindow'],
+            enumDescriptions: [
+                nls.localize('theia/core/secondaryWindow/closeBehavior/close',
+                    'The views of the secondary window are closed. Views that would lose state, e.g. editors with unsaved changes, are moved back to the main window.'),
+                nls.localize('theia/core/secondaryWindow/closeBehavior/moveToMainWindow', 'All views of the secondary window are moved back to the main window.'),
+            ],
+            default: 'close',
+            description: nls.localize('theia/core/secondaryWindow/closeBehavior', 'Controls what happens to the views of a secondary window when it is closed.'),
+        },
+        'window.restoreSecondaryWindows': {
+            type: 'boolean',
+            default: true,
+            description: nls.localize('theia/core/secondaryWindow/restore',
+                'Controls whether secondary windows are restored on startup. When disabled, their views are restored in the main window instead.'),
+        },
         'http.proxy': {
             type: 'string',
             pattern: '^https?://([^:]*(:[^@]*)?@)?([^:]+|\\[[:0-9a-fA-F]+\\])(:\\d+)?/?$|^$',
-            markdownDescription: nls.localizeByDefault('The proxy setting to use. If not set, will be inherited from the `http_proxy` and `https_proxy` environment variables. When during [remote development](https://aka.ms/vscode-remote) the {0} setting is disabled this setting can be configured in the local and the remote settings separately.'),
+            markdownDescription: nls.localize('theia/core/http/proxy', 'The proxy setting to use. If not set, will be inherited from the `http_proxy` and `https_proxy` environment variables.'),
             scope: PreferenceScope.User
         },
         'http.proxyStrictSSL': {
             type: 'boolean',
             default: true,
-            description: nls.localizeByDefault('Controls whether the proxy server certificate should be verified against the list of supplied CAs. When during [remote development](https://aka.ms/vscode-remote) the {0} setting is disabled this setting can be configured in the local and the remote settings separately.'),
+            description: nls.localize('theia/core/http/proxyStrictSSL', 'Controls whether the proxy server certificate should be verified against the list of supplied CAs.'),
             scope: PreferenceScope.User
         },
         'http.proxyAuthorization': {
             type: 'string',
-            markdownDescription: nls.localizeByDefault('The value to send as the `Proxy-Authorization` header for every network request. When during [remote development](https://aka.ms/vscode-remote) the {0} setting is disabled this setting can be configured in the local and the remote settings separately.'),
+            markdownDescription: nls.localize('theia/core/http/proxyAuthorization', 'The value to send as the `Proxy-Authorization` header for every network request.'),
             scope: PreferenceScope.User
         },
         'http.proxySupport': {
@@ -176,13 +194,13 @@ export const corePreferenceSchema: PreferenceSchema = {
                 nls.localizeByDefault('Enable proxy support for extensions, override request options.'),
             ],
             default: 'override',
-            description: nls.localizeByDefault('Use the proxy support for extensions. When during [remote development](https://aka.ms/vscode-remote) the {0} setting is disabled this setting can be configured in the local and the remote settings separately.'),
+            description: nls.localize('theia/core/http/proxySupport', 'Use the proxy support for extensions.'),
             scope: PreferenceScope.User
         },
         'http.systemCertificates': {
             type: 'boolean',
             default: true,
-            description: nls.localizeByDefault('Controls whether CA certificates should be loaded from the OS. On Windows and macOS, a reload of the window is required after turning this off. When during [remote development](https://aka.ms/vscode-remote) the {0} setting is disabled this setting can be configured in the local and the remote settings separately.'),
+            description: nls.localize('theia/core/http/systemCertificates', 'Controls whether CA certificates should be loaded from the OS. On Windows and macOS, a reload of the window is required after turning this off.'),
             scope: PreferenceScope.User
         },
         'workbench.list.openMode': {
@@ -314,10 +332,12 @@ export interface CoreConfiguration {
     'files.encoding': string;
     'keyboard.dispatch': 'code' | 'keyCode';
     'window.tabbar.enhancedPreview': 'classic' | 'enhanced' | 'visual';
-    'window.menuBarVisibility': 'classic' | 'visible' | 'hidden' | 'compact';
+    'window.menuBarVisibility': 'classic' | 'visible' | 'toggle' | 'hidden' | 'compact';
     'window.title': string;
     'window.titleSeparator': string;
     'window.tabCloseIconPlacement': 'end' | 'start';
+    'window.secondaryWindowCloseBehavior': 'close' | 'moveToMainWindow';
+    'window.restoreSecondaryWindows': boolean;
     'workbench.list.openMode': 'singleClick' | 'doubleClick';
     'workbench.commandPalette.history': number;
     'workbench.editor.highlightModifiedTabs': boolean;

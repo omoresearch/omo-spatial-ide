@@ -26,12 +26,13 @@ import {
     PREFERENCE_NAME_REASONING, ReasoningPreferenceEntry, ServerToolDescriptor
 } from '@theia/ai-core';
 import { mergeReasoningSettings } from '@theia/ai-core/lib/browser/frontend-language-model-service';
+import { reasoningLevelDescription, reasoningLevelLabel } from '@theia/ai-core/lib/browser/reasoning-labels';
 import { ChangeSetDecoratorService } from '@theia/ai-chat/lib/browser/change-set-decorator-service';
 import { ImageContextVariable } from '@theia/ai-chat/lib/common/image-context-variable';
-import { FrontendVariableService, AIActivationService } from '@theia/ai-core/lib/browser';
-import { AISettingsService, PromptService } from '@theia/ai-core/lib/common';
+import { AI_SHOW_SETTINGS_COMMAND, AIActivationService, FavoriteModelsService, FrontendVariableService } from '@theia/ai-core/lib/browser';
+import { AISettingsService, groupModelsByProvider, LanguageModelAliasRegistry, PromptService } from '@theia/ai-core/lib/common';
 import { CommandService, DisposableCollection, Emitter, InMemoryResources, MessageService, URI, nls, Disposable, ILogger } from '@theia/core';
-import { CommonCommands, ContextMenuRenderer, HoverService, LabelProvider, Message, OpenerService, ReactWidget } from '@theia/core/lib/browser';
+import { ContextMenuRenderer, HoverService, LabelProvider, Message, OpenerService, ReactWidget } from '@theia/core/lib/browser';
 import { MarkdownString } from '@theia/core/lib/common/markdown-rendering';
 import { SelectComponent, SelectOption } from '@theia/core/lib/browser/widgets/select-component';
 import { ContextKey, ContextKeyService } from '@theia/core/lib/browser/context-key-service';
@@ -39,15 +40,15 @@ import { KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
 import { Deferred } from '@theia/core/lib/common/promise-util';
 import { inject, injectable, optional, postConstruct, named } from '@theia/core/shared/inversify';
 import * as React from '@theia/core/shared/react';
-import { IMouseEvent, Range } from '@theia/monaco-editor-core';
+import { IMouseEvent, IPosition } from '@theia/monaco-editor-core';
 import { MonacoEditorProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { SimpleMonacoEditor } from '@theia/monaco/lib/browser/simple-monaco-editor';
 import { ChangeSetActionRenderer, ChangeSetActionService } from './change-set-actions/change-set-action-service';
 import { ChatInputAgentSuggestions } from './chat-input-agent-suggestions';
+import { computeRevealScrollDelta } from './chat-input-scroll-util';
 import { CHAT_VIEW_LANGUAGE_EXTENSION } from './chat-view-language-contribution';
 import { ContextVariablePicker } from './context-variable-picker';
 import { TASK_CONTEXT_VARIABLE } from '@theia/ai-chat/lib/browser/task-context-variable';
-import { IModelDeltaDecoration } from '@theia/monaco-editor-core/esm/vs/editor/common/model';
 import { EditorOption } from '@theia/monaco-editor-core/esm/vs/editor/common/config/editorOptions';
 import { SuggestController } from '@theia/monaco-editor-core/esm/vs/editor/contrib/suggest/browser/suggestController';
 import { ChatInputHistoryService, ChatInputNavigationState } from './chat-input-history';
@@ -83,6 +84,13 @@ type Cancel = (requestModel: ChatRequestModel) => void;
 type DeleteChangeSet = (requestModel: ChatRequestModel) => void;
 type DeleteChangeSetElement = (requestModel: ChatRequestModel, index: number) => void;
 type OpenContextElement = (request: AIVariableResolutionRequest) => unknown;
+
+/**
+ * Id of the Models category of the AI Configuration view (`AiConfigurationCategoryId.MODELS`), used to
+ * open it from the model selector. Not imported: that id is declared in `@theia/ai-core-ui`, which this
+ * package does not depend on.
+ */
+const AI_CONFIGURATION_MODELS_CATEGORY_ID = 'models';
 
 export const AIChatInputConfiguration = Symbol('AIChatInputConfiguration');
 export interface AIChatInputConfiguration {
@@ -181,6 +189,12 @@ export class AIChatInputWidget extends ReactWidget {
 
     @inject(FrontendLanguageModelRegistry)
     protected readonly languageModelRegistry: FrontendLanguageModelRegistry;
+
+    @inject(FavoriteModelsService)
+    protected readonly favoriteModels: FavoriteModelsService;
+
+    @inject(LanguageModelAliasRegistry)
+    protected readonly aliasRegistry: LanguageModelAliasRegistry;
 
     @inject(PreferenceService) @optional()
     protected readonly preferenceService: PreferenceService | undefined;
@@ -302,7 +316,7 @@ export class AIChatInputWidget extends ReactWidget {
                 });
                 this.savedReasoning = { level };
             } catch (error) {
-                console.error('Failed to persist reasoning selection:', error);
+                this.logger.error('Failed to persist reasoning selection:', error);
             }
         }
 
@@ -313,21 +327,20 @@ export class AIChatInputWidget extends ReactWidget {
      * Resolves the reasoning level to display in the selector. Priority: session override →
      * persisted per-agent selection (from {@link AISettingsService}) →
      * `ai-features.reasoning.defaults` preference entry matching the current model/agent →
-     * model's declared default → `'off'`.
+     * model's declared default → `'off'`. The result is clamped to the model's supported levels, matching
+     * what the frontend language model service sends.
      */
     protected getCurrentReasoningLevel(): ReasoningLevel | undefined {
         if (!this.currentReasoningSupport) {
             return undefined;
         }
         const session = this.chatService.getSessions().find(s => s.model.id === this._chatModel?.id);
-        const sessionLevel = session?.model.settings?.commonSettings?.reasoning?.level;
-        if (sessionLevel) {
-            return sessionLevel;
-        }
-        if (this.savedReasoning?.level) {
-            return this.savedReasoning.level;
-        }
-        return this.resolvePreferenceReasoningLevel() ?? this.currentReasoningSupport.defaultLevel ?? 'off';
+        const level = session?.model.settings?.commonSettings?.reasoning?.level
+            ?? this.savedReasoning?.level
+            ?? this.resolvePreferenceReasoningLevel()
+            ?? this.currentReasoningSupport.defaultLevel
+            ?? 'off';
+        return ReasoningSupport.clampLevel(this.currentReasoningSupport, level);
     }
 
     protected resolvePreferenceReasoningLevel(): ReasoningLevel | undefined {
@@ -383,7 +396,7 @@ export class AIChatInputWidget extends ReactWidget {
                             break;
                         }
                     } catch (error) {
-                        console.warn('Failed to resolve language model for reasoning support:', error);
+                        this.logger.warn('Failed to resolve language model for reasoning support:', error);
                     }
                 }
             }
@@ -483,6 +496,84 @@ export class AIChatInputWidget extends ReactWidget {
     }
 
     /** Updates the active chat session's `commonSettings.reasoning`; pass `undefined` to clear. */
+    /**
+     * Re-reads the persisted per-agent reasoning selection and mirrors it into the session, so a change made
+     * outside this widget (the agent detail's Reasoning row, or its reset) shows up in the selector instead of
+     * only taking effect on the next session.
+     */
+    protected async refreshSavedReasoning(agentId: string | undefined): Promise<void> {
+        if (!agentId) {
+            return;
+        }
+        const savedReasoning = (await this.aiSettingsService.getAgentSettings(agentId))?.reasoning;
+        if ((savedReasoning?.level ?? undefined) === (this.savedReasoning?.level ?? undefined)) {
+            return;
+        }
+        this.savedReasoning = savedReasoning ? { ...savedReasoning } : undefined;
+        // Clearing the setting drops the session override too, so the selector falls back to the
+        // preference default or the model's own, matching a freshly opened session.
+        this.applyReasoningToSession(savedReasoning);
+        this.update();
+    }
+
+    /**
+     * Re-reads persisted capability overrides, adopting them only when there are no unsaved local edits.
+     * Always updates the saved baseline so change detection reflects the stored settings.
+     */
+    protected async refreshSavedCapabilityOverrides(agentId: string | undefined): Promise<void> {
+        if (!agentId || agentId !== this.receivingAgent?.agentId) {
+            return;
+        }
+        const receivingAgent = this.receivingAgent;
+        const chatModel = this._chatModel;
+        const saved = (await this.aiSettingsService.getAgentSettings(agentId))?.capabilityOverrides;
+        if (receivingAgent !== this.receivingAgent || chatModel !== this._chatModel) {
+            return;
+        }
+        const adoptable = !this.hasCapabilityChangesFromSaved();
+        this.savedCapabilityOverrides = saved ? { ...saved } : undefined;
+        if (adoptable) {
+            this.userCapabilityOverrides = new Map(Object.entries(saved ?? {}));
+        }
+        this.update();
+    }
+
+    /**
+     * Re-reads the persisted server tool selections, which the agent detail can change too. Adopts them into
+     * the live selection only while the user has none of their own pending here, so an external change never
+     * discards edits that are waiting to be saved; the baseline is updated either way, so the "unsaved
+     * changes" state stays measured against what is actually stored.
+     */
+    protected async refreshSavedServerTools(agentId: string | undefined): Promise<void> {
+        if (!agentId) {
+            return;
+        }
+        const saved = (await this.aiSettingsService.getAgentSettings(agentId))?.serverToolSelections;
+        const adoptable = !this.hasServerToolChangesFromSaved();
+        this.savedServerToolSelections = saved ? { ...saved } : undefined;
+        if (adoptable) {
+            this.serverToolSelections = saved ? { ...saved } : {};
+            this.update();
+        }
+    }
+
+    /**
+     * Re-reads the persisted generic capability selections, which the agent detail can change too, adopting
+     * them the same way {@link refreshSavedServerTools} does.
+     */
+    protected async refreshSavedGenericCapabilities(agentId: string | undefined): Promise<void> {
+        if (!agentId) {
+            return;
+        }
+        const saved = (await this.aiSettingsService.getAgentSettings(agentId))?.genericCapabilitySelections;
+        const adoptable = !this.hasGenericCapabilityChangesFromSaved();
+        this.savedGenericCapabilitySelections = saved ? { ...saved } : undefined;
+        if (adoptable) {
+            this.genericCapabilitySelections = saved ? { ...saved } : {};
+            this.update();
+        }
+    }
+
     protected applyReasoningToSession(reasoning: ReasoningSettings | undefined): void {
         const session = this.chatService.getSessions().find(s => s.model.id === this._chatModel?.id);
         if (!session) {
@@ -547,6 +638,17 @@ export class AIChatInputWidget extends ReactWidget {
         return session?.model.settings?.commonSettings?.modelId;
     }
 
+    /**
+     * Opens the Models page of the AI Configuration view, which is where the models this list shows are
+     * chosen. The target is the id of that view's Models category (`AiConfigurationCategoryId.MODELS`),
+     * passed as a string because this package does not depend on the package that declares it.
+     */
+    protected openModelConfiguration = (): void => {
+        this.commandService.executeCommand(AI_SHOW_SETTINGS_COMMAND.id, AI_CONFIGURATION_MODELS_CATEGORY_ID).catch(error => {
+            this.logger.error(`Failed to execute '${AI_SHOW_SETTINGS_COMMAND.id}' from the model selector`, error);
+        });
+    };
+
     /** Sets (or clears, with `undefined`) the per-session model override for the active session. */
     protected handleSessionModelChange = (modelId: string | undefined): void => {
         const session = this.chatService.getSessions().find(s => s.model.id === this._chatModel?.id);
@@ -570,16 +672,31 @@ export class AIChatInputWidget extends ReactWidget {
         this.update();
     };
 
+    /**
+     * The models the selector offers: the favorites, i.e. the newest models of each provider plus
+     * whatever the user starred, and the session's own model even when it is neither. Discovery
+     * registers every release a provider offers, which is a list far too long to pick from here; the
+     * provider's page in the AI Configuration view is where the rest can be browsed and starred.
+     */
+    protected getSelectableModels(currentModelId: string | undefined): LanguageModel[] {
+        return this.availableModels.filter(model => this.favoriteModels.isFavorite(model.id) || model.id === currentModelId);
+    }
+
     /** Builds the props for the per-session model selector. */
     protected getModelSelectorProps(): ModelSelectorWidgetProps {
+        const agent = this.receivingAgent
+            ? this.chatAgentService.getAgent(this.receivingAgent.agentId, true)
+            : undefined;
         const currentModelId = this.getSessionModelOverride();
         const defaultLabel = this.resolvedDefaultLabel
             ?? nls.localize('theia/ai/chat-ui/agentDefaultModel', 'agent default');
         return {
-            models: this.availableModels,
+            show: (agent?.languageModelRequirements?.length ?? 0) > 0,
+            models: this.getSelectableModels(currentModelId),
             currentModelId,
             defaultLabel,
             onModelChange: this.handleSessionModelChange,
+            onConfigure: this.openModelConfiguration,
         };
     }
 
@@ -588,17 +705,7 @@ export class AIChatInputWidget extends ReactWidget {
             return;
         }
 
-        const mcpFunctions = await this.genericCapabilitiesService.getAvailableMCPFunctions();
-
-        this.availableGenericCapabilities = {
-            skills: this.genericCapabilitiesService.getAvailableSkills(),
-            mcpFunctions,
-            functions: this.genericCapabilitiesService.getAvailableFunctions(),
-            promptFragments: this.genericCapabilitiesService.getAvailablePromptFragments(),
-            agentDelegation: this.genericCapabilitiesService.getAvailableAgents(this.receivingAgent?.agentId),
-            variables: this.genericCapabilitiesService.getAvailableVariables()
-        };
-
+        this.availableGenericCapabilities = await this.genericCapabilitiesService.getAvailableCapabilities(this.receivingAgent?.agentId);
         this.update();
     }
 
@@ -815,7 +922,7 @@ export class AIChatInputWidget extends ReactWidget {
 
             this.update();
         } catch (error) {
-            console.error('Failed to save capability selections to settings:', error);
+            this.logger.error('Failed to save capability selections to settings:', error);
         }
     }
 
@@ -1074,11 +1181,25 @@ export class AIChatInputWidget extends ReactWidget {
                 this.updateReasoningSupport(this.receivingAgent.agentId);
             }
         }));
+        this.toDispose.push(this.favoriteModels.onDidChange(() => this.update()));
+        // An agent's default is usually an alias, so editing which model the alias points at changes what
+        // "Default" resolves to and with it the model-dependent state. The registry's own change event
+        // does not cover this: the models it holds are the same ones, only the alias moved.
+        this.toDispose.push(this.aliasRegistry.onDidChange(() => {
+            this.updateResolvedDefaultModel();
+            this.updateReasoningSupport(this.receivingAgent?.agentId);
+        }));
         // When the agent's model is changed in the AI configuration, refresh the selector's resolved
         // default and the model-dependent state (reasoning support, context size, server tools, vendor).
         this.toDispose.push(this.aiSettingsService.onDidChange(() => {
             this.updateResolvedDefaultModel();
             this.updateReasoningSupport(this.receivingAgent?.agentId);
+            // The level itself is persisted per agent and also editable outside chat (the agent detail's
+            // Reasoning row), so re-read it rather than only refreshing which levels the model supports.
+            this.refreshSavedReasoning(this.receivingAgent?.agentId);
+            this.refreshSavedCapabilityOverrides(this.receivingAgent?.agentId);
+            this.refreshSavedServerTools(this.receivingAgent?.agentId);
+            this.refreshSavedGenericCapabilities(this.receivingAgent?.agentId);
         }));
         this.loadAvailableModels().then(() => this.update());
         this.updateResolvedDefaultModel();
@@ -1209,20 +1330,23 @@ export class AIChatInputWidget extends ReactWidget {
             percentage
         );
         const summarizeAction = nls.localize('theia/ai/chat-ui/tokenUsageWarningSummarizeAction', 'Summarize Current Session');
-        const newSessionAction = nls.localize('theia/ai/chat-ui/tokenUsageWarningNewSessionAction', 'Start New Chat');
+        const newSessionAction = nls.localizeByDefault('Start New Chat');
         const openSettingsAction = nls.localizeByDefault('Open Settings');
         const selected = await this.messageService.warn(message, summarizeAction, newSessionAction, openSettingsAction);
         if (selected === summarizeAction) {
             this.commandService.executeCommand(ChatCommands.AI_CHAT_NEW_WITH_TASK_CONTEXT.id).catch(error => {
-                console.error(`Failed to execute '${ChatCommands.AI_CHAT_NEW_WITH_TASK_CONTEXT.id}' from token usage warning`, error);
+                this.logger.error(`Failed to execute '${ChatCommands.AI_CHAT_NEW_WITH_TASK_CONTEXT.id}' from token usage warning`, error);
             });
         } else if (selected === newSessionAction) {
             this.commandService.executeCommand(AI_CHAT_HOME.id).catch(error => {
-                console.error(`Failed to execute '${AI_CHAT_HOME.id}' from token usage warning`, error);
+                this.logger.error(`Failed to execute '${AI_CHAT_HOME.id}' from token usage warning`, error);
             });
         } else if (selected === openSettingsAction) {
-            this.commandService.executeCommand(CommonCommands.OPEN_PREFERENCES.id, CHAT_VIEW_TOKEN_USAGE_WARNING_THRESHOLD_PERCENTAGE).catch(error => {
-                console.error(`Failed to execute '${CommonCommands.OPEN_PREFERENCES.id}' from token usage warning`, error);
+            // Deep-links to the threshold preference wherever AI settings live: `@theia/ai-ide` routes this
+            // to the AI Configuration view, and the `@theia/ai-core` default opens the Settings UI on it.
+            // Going through the command keeps this working in apps without @theia/ai-ide.
+            this.commandService.executeCommand(AI_SHOW_SETTINGS_COMMAND.id, CHAT_VIEW_TOKEN_USAGE_WARNING_THRESHOLD_PERCENTAGE).catch(error => {
+                this.logger.error(`Failed to execute '${AI_SHOW_SETTINGS_COMMAND.id}' from token usage warning`, error);
             });
         }
     }
@@ -1420,7 +1544,7 @@ export class AIChatInputWidget extends ReactWidget {
     protected override onActivateRequest(msg: Message): void {
         super.onActivateRequest(msg);
         this.editorReady.promise.then(() => {
-            if (this.editorRef) {
+            if (this.editorRef && this.isEnabled) {
                 this.editorRef.focus();
             }
         });
@@ -1795,6 +1919,7 @@ export class AIChatInputWidget extends ReactWidget {
 
 /** Props for the per-session language model selector. */
 interface ModelSelectorWidgetProps {
+    show: boolean;
     /** Models available to switch to. */
     models: LanguageModel[];
     /** The session's current model override id, if any (undefined = use the agent default). */
@@ -1803,6 +1928,8 @@ interface ModelSelectorWidgetProps {
     defaultLabel: string;
     /** Set the session override (or clear it with `undefined`). */
     onModelChange: (modelId: string | undefined) => void;
+    /** Opens the page that decides which models this list shows. */
+    onConfigure: () => void;
 }
 
 interface ChatInputProperties {
@@ -1892,6 +2019,32 @@ const hasTaskContext = (chatModel: ChatModel): boolean => chatModel.context.getV
     variable.variable?.id === TASK_CONTEXT_VARIABLE.id
 );
 
+const aiDisabledLabel = () => nls.localize('theia/ai/chat-ui/aiDisabled', 'AI features are disabled');
+
+/**
+ * Aligns the input editor with the enabled state of the widget. A disabled editor neither accepts text nor focus:
+ * it is read-only, removed from the tab order, and gives up the focus it may still hold from before being disabled.
+ * Should an edit still be attempted, Monaco reports why the input is disabled instead of its generic read-only wording.
+ */
+export const applyEditorEnabledState = (editor: SimpleMonacoEditor | undefined, isEnabled: boolean | undefined): void => {
+    const control = editor?.getControl();
+    if (!control) {
+        return;
+    }
+    control.updateOptions({
+        readOnly: !isEnabled,
+        domReadOnly: !isEnabled,
+        tabIndex: isEnabled ? 0 : -1,
+        readOnlyMessage: isEnabled ? undefined : { value: aiDisabledLabel() }
+    });
+    if (!isEnabled && control.hasTextFocus()) {
+        const focused = control.getDomNode()?.ownerDocument.activeElement;
+        if (focused instanceof HTMLElement) {
+            focused.blur();
+        }
+    }
+};
+
 const ChatInput: React.FunctionComponent<ChatInputProperties> = (props: ChatInputProperties) => {
     const onDeleteChangeSet = () => props.onDeleteChangeSet(props.chatModel.id);
     const onDeleteChangeSetElement = (uri: URI) => props.onDeleteChangeSetElement(props.chatModel.id, uri);
@@ -1916,6 +2069,7 @@ const ChatInput: React.FunctionComponent<ChatInputProperties> = (props: ChatInpu
     const editorRef = React.useRef<SimpleMonacoEditor | undefined>(undefined);
     // eslint-disable-next-line no-null/no-null
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const isEnabledRef = React.useRef(props.isEnabled);
 
     // On the first request of the chat, if the chat has a task context and a pinned
     // agent, show a "Perform this task." placeholder which is the message to send by default
@@ -1926,13 +2080,18 @@ const ChatInput: React.FunctionComponent<ChatInputProperties> = (props: ChatInpu
     // Update placeholder text when focus state or other dependencies change
     React.useEffect(() => {
         const newPlaceholderText = !props.isEnabled
-            ? nls.localize('theia/ai/chat-ui/aiDisabled', 'AI features are disabled')
+            ? aiDisabledLabel()
             : shouldUseTaskPlaceholder
                 ? taskPlaceholder
                 : nls.localize('theia/ai/chat-ui/askQuestion', 'Ask a question') +
                 (props.hasPromptHistory && isInputFocused ? nls.localizeByDefault(' ({0} for history)', '⇅') : '');
         setPlaceholderText(newPlaceholderText);
     }, [props.isEnabled, shouldUseTaskPlaceholder, taskPlaceholder, props.hasPromptHistory, isInputFocused]);
+
+    React.useEffect(() => {
+        isEnabledRef.current = props.isEnabled;
+        applyEditorEnabledState(editorRef.current, props.isEnabled);
+    }, [props.isEnabled]);
 
     // Handle paste events on the container
     const handlePaste = React.useCallback((event: ClipboardEvent) => {
@@ -2028,46 +2187,37 @@ const ChatInput: React.FunctionComponent<ChatInputProperties> = (props: ChatInpu
                 props.contextMenuCallback(e.event)
             );
 
-            const updateLineCounts = () => {
-                // We need the line numbers to allow scrolling by using the keyboard
-                const model = editor.getControl().getModel()!;
-                const lineCount = model.getLineCount();
-                const decorations: IModelDeltaDecoration[] = [];
-
-                for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
-                    decorations.push({
-                        range: new Range(lineNumber, 1, lineNumber, 1),
-                        options: {
-                            description: `line-number-${lineNumber}`,
-                            isWholeLine: false,
-                            className: `line-number-${lineNumber}`,
-                        }
-                    });
+            // The editor is laid out at its full content height and the surrounding container
+            // scrolls, so Monaco cannot reveal the cursor itself. Scroll the container to the
+            // visual row of the cursor; for wrapped lines this differs from the start of the model line.
+            // `getTopForPosition` is content-absolute, so subtract the editor's own scroll offset,
+            // which is non-zero while `automaticLayout` has the editor laid out at a clamped height.
+            const revealCursor = (position: IPosition) => {
+                const container = editorContainerRef.current;
+                const control = editor.getControl();
+                const editorNode = control.getDomNode();
+                if (!container || !editorNode) {
+                    return;
                 }
-
-                const lineNumbers = model.getAllDecorations().filter(predicate => predicate.options.description?.startsWith('line-number-'));
-                editor.getControl().removeDecorations(lineNumbers.map(d => d.id));
-                editor.getControl().createDecorationsCollection(decorations);
+                const rowTop = editorNode.getBoundingClientRect().top - container.getBoundingClientRect().top
+                    + control.getTopForPosition(position.lineNumber, position.column) - control.getScrollTop();
+                const rowBottom = rowTop + control.getOption(EditorOption.lineHeight);
+                const delta = computeRevealScrollDelta(rowTop, rowBottom, container.clientHeight);
+                if (delta !== 0) {
+                    container.scrollTop += delta;
+                }
             };
 
-            editor.getControl().getModel()?.onDidChangeContent(() => {
-                updateLineCounts();
-            });
-
-            editor.getControl().onDidChangeCursorPosition(e => {
-                const lineNumber = e.position.lineNumber;
-                const line = editor.getControl().getDomNode()?.querySelector(`.line-number-${lineNumber}`);
-                line?.scrollIntoView({ behavior: 'instant', block: 'nearest' });
-            });
+            editor.getControl().onDidChangeCursorPosition(e => revealCursor(e.position));
 
             editorRef.current = editor;
+            // The enabled state may have changed while the editor was being created asynchronously.
+            applyEditorEnabledState(editor, isEnabledRef.current);
             props.setEditorRef(editor);
 
             if (props.initialValue) {
                 setValue(props.initialValue);
             }
-
-            updateLineCounts();
         };
         createInputElement();
 
@@ -2158,7 +2308,7 @@ const ChatInput: React.FunctionComponent<ChatInputProperties> = (props: ChatInpu
     }, [props.genericCapabilitiesProps.serverToolSelections]);
 
     // Without user input, if we can default to "Perform this task.", do so
-    const submit = React.useCallback(function submit(value: string): void {
+    const submit = React.useCallback(function submitCallback(value: string): void {
         let effectiveValue = value;
         if ((!value || value.trim().length === 0) && shouldUseTaskPlaceholder) {
             effectiveValue = taskPlaceholder;
@@ -2557,12 +2707,13 @@ const ChatInputOptions: React.FunctionComponent<ChatInputOptionsProps> = ({
                         hoverService={hoverService}
                     />
                 )}
-                {(modelSelectorProps.models.length > 0 || modelSelectorProps.currentModelId) && (
+                {modelSelectorProps.show && (modelSelectorProps.models.length > 0 || modelSelectorProps.currentModelId) && (
                     <ChatModelSelector
                         models={modelSelectorProps.models}
                         currentModelId={modelSelectorProps.currentModelId}
                         defaultLabel={modelSelectorProps.defaultLabel}
                         onModelChange={modelSelectorProps.onModelChange}
+                        onConfigure={modelSelectorProps.onConfigure}
                         disabled={!isEnabled}
                         hoverService={hoverService}
                     />
@@ -2731,6 +2882,8 @@ interface ChatModelSelectorProps {
     currentModelId?: string;
     defaultLabel: string;
     onModelChange: (modelId: string | undefined) => void;
+    /** Opens the page that decides which models this list shows. */
+    onConfigure: () => void;
     disabled?: boolean;
     hoverService: HoverService;
 }
@@ -2738,33 +2891,51 @@ interface ChatModelSelectorProps {
 /**
  * Per-session model selector. The first option ("Default") reverts to the agent's configured
  * model that new sessions use; picking any other model overrides it for the current session only.
+ *
+ * It lists the models marked for it rather than every model a provider offers, and ends with the way
+ * to change that, so a list this short is not mistaken for all there is.
  */
 const ChatModelSelector: React.FunctionComponent<ChatModelSelectorProps> = React.memo(({
-    models, currentModelId, defaultLabel, onModelChange, disabled, hoverService
+    models, currentModelId, defaultLabel, onModelChange, onConfigure, disabled, hoverService
 }) => {
     // Sentinel value for the "use the agent default" option (SelectComponent needs a non-empty value).
     const defaultValueId = '__default__';
+    // …and for the entry that opens the configuration instead of selecting anything.
+    const configureValueId = '__configure__';
+    // Picking the configure entry leaves the model as it was, but the select has already taken it as its
+    // selection; remounting it puts the session's own model back in the field.
+    const [selectorGeneration, setSelectorGeneration] = React.useState(0);
     const isOverridden = !!currentModelId;
     // The override points at a model that is no longer ready/available. Guard on a loaded model list so
     // the override is not flagged as unavailable during the initial (still empty) load.
     const isUnavailable = isOverridden && models.length > 0
         && !models.some(model => model.id === currentModelId && model.status.status === 'ready');
     const options: SelectOption[] = React.useMemo(() => {
-        const readyModels = models.filter(model => model.status.status === 'ready')
-            // Stable, predictable order: the registry adds models as their async metadata resolves.
-            .sort((left, right) => left.id.localeCompare(right.id));
         const opts: SelectOption[] = [
             {
                 value: defaultValueId,
                 label: nls.localizeByDefault('Default'),
                 detail: defaultLabel
-            },
-            ...readyModels.map(model => ({
+            }
+        ];
+        // A rule between the providers, their models newest first: the models of one provider belong
+        // together, and the registry adds them in whatever order their metadata resolves. Models whose
+        // provider reports no release date fall back to alphabetical.
+        groupModelsByProvider(models.filter(model => model.status.status === 'ready')).forEach(({ models: providerModels }) => {
+            opts.push({ separator: true });
+            opts.push(...providerModels.map(model => ({
                 value: model.id,
                 label: model.id,
                 detail: model.name && model.name !== model.id ? model.name : undefined
-            }))
-        ];
+            })));
+        });
+        // The list is deliberately short — it holds the models marked for it, not every model a provider
+        // offers — so it says where the rest are rather than leaving the absence to be puzzled over.
+        opts.push({ separator: true });
+        opts.push({
+            value: configureValueId,
+            label: nls.localize('theia/ai/chat-ui/manageModels', 'Manage models…')
+        });
         // Keep the active override visible even if its model is no longer ready/available, so the
         // selector reflects the stored modelId instead of silently falling back to "Default". Once we
         // know it is unavailable, show it as a disabled (struck-through) entry that cannot be reselected.
@@ -2780,8 +2951,15 @@ const ChatModelSelector: React.FunctionComponent<ChatModelSelectorProps> = React
     }, [models, defaultLabel, currentModelId, isUnavailable]);
 
     const handleChange = React.useCallback(
-        (option: SelectOption) => onModelChange(!option.value || option.value === defaultValueId ? undefined : option.value),
-        [onModelChange]
+        (option: SelectOption) => {
+            if (option.value === configureValueId) {
+                setSelectorGeneration(generation => generation + 1);
+                onConfigure();
+                return;
+            }
+            onModelChange(!option.value || option.value === defaultValueId ? undefined : option.value);
+        },
+        [onModelChange, onConfigure]
     );
 
     const title = isUnavailable
@@ -2793,6 +2971,7 @@ const ChatModelSelector: React.FunctionComponent<ChatModelSelectorProps> = React
     return (
         <span className='theia-ChatInput-ModelSelector-container' onMouseEnter={hoverHandler(hoverService, title)}>
             <SelectComponent
+                key={selectorGeneration}
                 className={`theia-ChatInput-ModelSelector${isOverridden ? ' session-override' : ''}${disabled ? ' disabled' : ''}`}
                 options={options}
                 defaultValue={currentModelId ?? defaultValueId}
@@ -2810,22 +2989,13 @@ interface ReasoningSelectorProps {
     hoverService: HoverService;
 }
 
-const reasoningLevelLabel = (level: ReasoningLevel): string => {
-    switch (level) {
-        case 'off': return nls.localizeByDefault('Off');
-        case 'minimal': return nls.localizeByDefault('Minimal');
-        case 'low': return nls.localizeByDefault('Low');
-        case 'medium': return nls.localizeByDefault('Medium');
-        case 'high': return nls.localizeByDefault('High');
-        case 'auto': return nls.localizeByDefault('Auto');
-    }
-};
-
 const ReasoningSelector: React.FunctionComponent<ReasoningSelectorProps> = React.memo(({
     reasoningSupport, currentLevel, onReasoningChange, disabled, hoverService
 }) => {
     const options: SelectOption[] = React.useMemo(
-        () => reasoningSupport.supportedLevels.map(level => ({ value: level, label: reasoningLevelLabel(level) })),
+        () => reasoningSupport.supportedLevels.map(level => ({
+            value: level, label: reasoningLevelLabel(level), description: reasoningLevelDescription(level)
+        })),
         [reasoningSupport]
     );
 
@@ -2839,12 +3009,13 @@ const ReasoningSelector: React.FunctionComponent<ReasoningSelectorProps> = React
     );
 
     const title = nls.localizeByDefault('Reasoning');
-    const effectiveLevel = currentLevel ?? reasoningSupport.defaultLevel ?? reasoningSupport.supportedLevels[0] ?? 'off';
+    const effectiveLevel = ReasoningSupport.clampLevel(reasoningSupport, currentLevel ?? reasoningSupport.defaultLevel ?? 'off');
 
     return (
         <span onMouseEnter={hoverHandler(hoverService, title)}>
             <SelectComponent
-                className={`theia-ChatInput-ReasoningSelector reasoning-level-${effectiveLevel}${disabled ? ' disabled' : ''}`}
+                // `theia-ReasoningLevelSelector` carries the shared per-level glyphs; the ChatInput class the toolbar sizing.
+                className={`theia-ChatInput-ReasoningSelector theia-ReasoningLevelSelector reasoning-level-${effectiveLevel}${disabled ? ' disabled' : ''}`}
                 options={options}
                 defaultValue={effectiveLevel}
                 onChange={handleChange}
@@ -2983,7 +3154,7 @@ function toUiElement(element: ChangeSetElement,
 }
 
 const ChangeSetElement: React.FC<ChangeSetUIElement> = element => (
-    <li title={nls.localize('theia/ai/chat-ui/openDiff', 'Open Diff')} onClick={() => element.openChange?.()}>
+    <li title={nls.localizeByDefault('Open Diff')} onClick={() => element.openChange?.()}>
         <div className={`theia-ChatInput-ChangeSet-Icon ${element.iconClass}`}>
         </div>
         <div className='theia-ChatInput-ChangeSet-labelParts'>

@@ -14,7 +14,7 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { Command, CommandContribution, CommandRegistry, environment, isOSX, CancellationTokenSource, MessageService, isArray } from '@theia/core';
+import { Command, CommandContribution, CommandRegistry, environment, isOSX, CancellationTokenSource, MessageService, isArray, ILogger, MEMORY_TEXT_READONLY } from '@theia/core';
 import {
     ApplicationShell,
     CommonCommands,
@@ -50,10 +50,10 @@ import { ViewColumn } from '@theia/plugin-ext/lib/plugin/types-impl';
 import { WorkspaceCommands } from '@theia/workspace/lib/browser';
 import { WorkspaceService, WorkspaceInput } from '@theia/workspace/lib/browser/workspace-service';
 import { DiffService } from '@theia/workspace/lib/browser/diff-service';
-import { inject, injectable, optional } from '@theia/core/shared/inversify';
+import { inject, injectable, optional, named } from '@theia/core/shared/inversify';
 import { Position } from '@theia/plugin-ext/lib/common/plugin-api-rpc';
 import { URI } from '@theia/core/shared/vscode-uri';
-import { PluginDeployOptions, PluginIdentifiers, PluginServer } from '@theia/plugin-ext/lib/common/plugin-protocol';
+import { DuplicateExtensionError, PluginDeployOptions, PluginIdentifiers, PluginServer } from '@theia/plugin-ext/lib/common/plugin-protocol';
 import { TerminalFrontendContribution } from '@theia/terminal/lib/browser/terminal-frontend-contribution';
 import { QuickOpenWorkspace } from '@theia/workspace/lib/browser/quick-open-workspace';
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
@@ -84,7 +84,25 @@ import { OutlineViewContribution } from '@theia/outline-view/lib/browser/outline
 import { CompletionList, Range, Position as PluginPosition } from '@theia/plugin';
 import { MonacoLanguages } from '@theia/monaco/lib/browser/monaco-languages';
 import { ScmContribution } from '@theia/scm/lib/browser/scm-contribution';
+import { ScmService } from '@theia/scm/lib/browser/scm-service';
 import { MergeEditorOpenerOptions, MergeEditorUri } from '@theia/scm/lib/browser/merge-editor/merge-editor';
+import { MultiDiffEditorOpenerOptions, MultiDiffEditorUri } from '@theia/scm/lib/browser/multi-diff-editor/multi-diff-editor';
+
+/**
+ * Convert a VS Code {@link UriComponents} or a string URI into a Theia {@link TheiaURI}.
+ * Returns `undefined` when given `undefined`.
+ */
+function toTheiaUri(value: UriComponents | string): TheiaURI;
+function toTheiaUri(value: UriComponents | string | undefined): TheiaURI | undefined;
+function toTheiaUri(value: UriComponents | string | undefined): TheiaURI | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (typeof value === 'string') {
+        return new TheiaURI(value);
+    }
+    return TheiaURI.fromComponents(value);
+}
 
 export namespace VscodeCommands {
 
@@ -159,6 +177,88 @@ export interface HidDeviceData {
     readonly collections: [];
 }
 
+export type EditorGroupNavigationDirection = 'left' | 'right' | 'up' | 'down';
+
+export interface EditorGroupNavigationRect {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    width: number;
+    height: number;
+}
+
+type EditorGroupNavigationScore = [
+    orthogonalRank: number,
+    orthogonalGap: number,
+    primaryDistance: number,
+    orthogonalCenterDistance: number,
+    orthogonalStart: number
+];
+
+function isInDirection(source: EditorGroupNavigationRect, candidate: EditorGroupNavigationRect, direction: EditorGroupNavigationDirection): boolean {
+    const sourceCenter = rectCenter(source);
+    const candidateCenter = rectCenter(candidate);
+    switch (direction) {
+        case 'left':
+            return candidateCenter.x < sourceCenter.x;
+        case 'right':
+            return candidateCenter.x > sourceCenter.x;
+        case 'up':
+            return candidateCenter.y < sourceCenter.y;
+        case 'down':
+            return candidateCenter.y > sourceCenter.y;
+    }
+}
+
+function score(source: EditorGroupNavigationRect, candidate: EditorGroupNavigationRect, direction: EditorGroupNavigationDirection): EditorGroupNavigationScore {
+    const horizontal = direction === 'left' || direction === 'right';
+    const sourceCenter = rectCenter(source);
+    const candidateCenter = rectCenter(candidate);
+    const orthogonalOverlap = horizontal
+        ? intervalOverlap(source.top, source.bottom, candidate.top, candidate.bottom)
+        : intervalOverlap(source.left, source.right, candidate.left, candidate.right);
+    return [
+        orthogonalOverlap > 0 ? 0 : 1,
+        Math.max(0, -orthogonalOverlap),
+        directionalDistance(source, candidate, direction),
+        horizontal ? Math.abs(sourceCenter.y - candidateCenter.y) : Math.abs(sourceCenter.x - candidateCenter.x),
+        horizontal ? candidate.top : candidate.left
+    ];
+}
+
+function compareScore(left: EditorGroupNavigationScore, right: EditorGroupNavigationScore): number {
+    return left[0] - right[0]
+        || left[1] - right[1]
+        || left[2] - right[2]
+        || left[3] - right[3]
+        || left[4] - right[4];
+}
+
+function directionalDistance(source: EditorGroupNavigationRect, candidate: EditorGroupNavigationRect, direction: EditorGroupNavigationDirection): number {
+    switch (direction) {
+        case 'left':
+            return Math.max(0, source.left - candidate.right);
+        case 'right':
+            return Math.max(0, candidate.left - source.right);
+        case 'up':
+            return Math.max(0, source.top - candidate.bottom);
+        case 'down':
+            return Math.max(0, candidate.top - source.bottom);
+    }
+}
+
+function rectCenter(rect: EditorGroupNavigationRect): { x: number, y: number } {
+    return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+    };
+}
+
+function intervalOverlap(start: number, end: number, candidateStart: number, candidateEnd: number): number {
+    return Math.min(end, candidateEnd) - Math.max(start, candidateStart);
+}
+
 @injectable()
 export class PluginVscodeCommandsContribution implements CommandContribution {
     @inject(CommandService)
@@ -205,6 +305,11 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
     protected monacoLanguages: MonacoLanguages;
     @inject(ScmContribution)
     protected scmContribution: ScmContribution;
+    @inject(ScmService)
+    protected readonly scmService: ScmService;
+
+    @inject(ILogger) @named('plugin-ext-vscode:PluginVscodeCommandsContribution')
+    protected readonly logger: ILogger;
 
     private async openWith(commandId: string, resource: URI, columnOrOptions?: ViewColumn | TextDocumentShowOptions, openerId?: string): Promise<boolean> {
         if (!resource) {
@@ -251,6 +356,105 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         return false;
     }
 
+    protected navigateEditorGroup(direction: EditorGroupNavigationDirection): boolean {
+        const current = this.currentMainAreaTabBar();
+        const currentRect = current && this.getEditorGroupRect(current);
+        if (!current || current.titles.length === 0 || !currentRect) {
+            return false;
+        }
+
+        const candidates: TabBar<Widget>[] = [];
+        const candidateRects: EditorGroupNavigationRect[] = [];
+        for (const tabBar of this.shell.mainAreaTabBars) {
+            if (tabBar === current || tabBar.titles.length === 0) {
+                continue;
+            }
+            const candidateRect = this.getEditorGroupRect(tabBar);
+            if (candidateRect) {
+                candidates.push(tabBar);
+                candidateRects.push(candidateRect);
+            }
+        }
+        const index = this.findClosestEditorGroup(currentRect, candidateRects, direction);
+        return index === -1 ? false : this.activateEditorGroup(candidates[index]);
+    }
+
+    protected findClosestEditorGroup(source: EditorGroupNavigationRect, candidates: ReadonlyArray<EditorGroupNavigationRect>, direction: EditorGroupNavigationDirection): number {
+        let bestIndex = -1;
+        let bestScore: EditorGroupNavigationScore | undefined;
+        for (let index = 0; index < candidates.length; index++) {
+            const candidate = candidates[index];
+            if (!isInDirection(source, candidate, direction)) {
+                continue;
+            }
+            const candidateScore = score(source, candidate, direction);
+            if (!bestScore || compareScore(candidateScore, bestScore) < 0) {
+                bestIndex = index;
+                bestScore = candidateScore;
+            }
+        }
+        return bestIndex;
+    }
+
+    protected navigateEditorGroups(): boolean {
+        const current = this.currentMainAreaTabBar();
+        const tabBars = this.shell.mainAreaTabBars.filter(tabBar => tabBar.titles.length > 0);
+        if (!current || tabBars.length < 2) {
+            return false;
+        }
+        const currentIndex = tabBars.indexOf(current);
+        if (currentIndex === -1) {
+            return false;
+        }
+        const target = tabBars[(currentIndex + 1) % tabBars.length];
+        return this.activateEditorGroup(target);
+    }
+
+    protected currentMainAreaTabBar(): TabBar<Widget> | undefined {
+        const mainAreaTabBars = this.shell.mainAreaTabBars;
+        const currentTabBar = this.shell.currentTabBar;
+        if (currentTabBar && mainAreaTabBars.includes(currentTabBar)) {
+            return currentTabBar;
+        }
+        const currentEditor = this.editorManager.currentEditor || this.editorManager.activeEditor;
+        if (currentEditor) {
+            const tabBar = this.shell.getTabBarFor(currentEditor);
+            if (tabBar && mainAreaTabBars.includes(tabBar)) {
+                return tabBar;
+            }
+        }
+        return undefined;
+    }
+
+    protected getEditorGroupRect(tabBar: TabBar<Widget>): EditorGroupNavigationRect | undefined {
+        const title = tabBar.currentTitle || tabBar.titles[0];
+        const rects = [
+            tabBar.node.getBoundingClientRect(),
+            title?.owner.node.getBoundingClientRect()
+        ].filter((rect): rect is DOMRect => !!rect && rect.width > 0 && rect.height > 0);
+        if (rects.length === 0) {
+            return undefined;
+        }
+        const left = Math.min(...rects.map(rect => rect.left));
+        const right = Math.max(...rects.map(rect => rect.right));
+        const top = Math.min(...rects.map(rect => rect.top));
+        const bottom = Math.max(...rects.map(rect => rect.bottom));
+        return { left, right, top, bottom, width: right - left, height: bottom - top };
+    }
+
+    protected activateEditorGroup(tabBar: TabBar<Widget>): boolean {
+        let title = tabBar.currentTitle;
+        if (!title && tabBar.titles.length > 0) {
+            tabBar.currentIndex = 0;
+            title = tabBar.currentTitle;
+        }
+        if (!title) {
+            return false;
+        }
+        this.shell.activateWidget(title.owner.id);
+        return true;
+    }
+
     registerCommands(commands: CommandRegistry): void {
         commands.registerCommand(VscodeCommands.GET_CODE_EXCHANGE_ENDPOINTS, {
             execute: () => undefined // this is a dummy implementation: only used in the case of web apps, which is not supported yet.
@@ -268,7 +472,7 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
                     const message = nls.localizeByDefault("Unable to open '{0}'", resource.path);
                     const reason = nls.localizeByDefault('Error: {0}', error.message);
                     this.messageService.error(`${message}\n${reason}`);
-                    console.warn(error);
+                    this.logger.warn(error);
                 }
             }
         });
@@ -353,46 +557,48 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
             commands.registerCommand({ id: 'workbench.action.files.openFileFolder' }, {
                 execute: () => commands.executeCommand(WorkspaceCommands.OPEN.id)
             });
+            commands.registerAlias('workbench.action.files.openFileFolder', WorkspaceCommands.OPEN.id);
         }
 
         commands.registerCommand({ id: 'workbench.action.files.openFile' }, {
             execute: () => commands.executeCommand(WorkspaceCommands.OPEN_FILE.id)
         });
+        commands.registerAlias('workbench.action.files.openFile', WorkspaceCommands.OPEN_FILE.id);
         commands.registerCommand({ id: 'workbench.action.files.openFolder' }, {
             execute: () => commands.executeCommand(WorkspaceCommands.OPEN_FOLDER.id)
         });
+        commands.registerAlias('workbench.action.files.openFolder', WorkspaceCommands.OPEN_FOLDER.id);
         commands.registerCommand({ id: 'workbench.action.addRootFolder' }, {
             execute: () => commands.executeCommand(WorkspaceCommands.ADD_FOLDER.id)
         });
+        commands.registerAlias('workbench.action.addRootFolder', WorkspaceCommands.ADD_FOLDER.id);
         commands.registerCommand({ id: 'workbench.action.saveWorkspaceAs' }, {
             execute: () => commands.executeCommand(WorkspaceCommands.SAVE_WORKSPACE_AS.id)
         });
+        commands.registerAlias('workbench.action.saveWorkspaceAs', WorkspaceCommands.SAVE_WORKSPACE_AS.id);
         commands.registerCommand({ id: 'workbench.action.gotoLine' }, {
             execute: () => commands.executeCommand(EditorCommands.GOTO_LINE_COLUMN.id)
         });
+        commands.registerAlias('workbench.action.gotoLine', EditorCommands.GOTO_LINE_COLUMN.id);
         commands.registerCommand({ id: 'workbench.action.quickOpen' }, {
             execute: (prefix?: unknown) => this.quickInput.open(typeof prefix === 'string' ? prefix : '')
         });
         commands.registerCommand({ id: 'workbench.action.openSettings' }, {
             execute: (query?: string) => commands.executeCommand(CommonCommands.OPEN_PREFERENCES.id, query)
         });
+        commands.registerAlias('workbench.action.openSettings', CommonCommands.OPEN_PREFERENCES.id);
         commands.registerCommand({ id: 'workbench.action.openWorkspaceConfigFile' }, {
             execute: () => commands.executeCommand(WorkspaceCommands.OPEN_WORKSPACE_FILE.id)
         });
+        commands.registerAlias('workbench.action.openWorkspaceConfigFile', WorkspaceCommands.OPEN_WORKSPACE_FILE.id);
         commands.registerCommand({ id: 'workbench.files.action.refreshFilesExplorer' }, {
             execute: () => commands.executeCommand(FileNavigatorCommands.REFRESH_NAVIGATOR.id)
         });
+        commands.registerAlias('workbench.files.action.refreshFilesExplorer', FileNavigatorCommands.REFRESH_NAVIGATOR.id);
         commands.registerCommand(VscodeCommands.INSTALL_EXTENSION_FROM_ID_OR_URI, {
             execute: async (vsixUriOrExtensionId: TheiaURI | UriComponents | string) => {
                 if (typeof vsixUriOrExtensionId === 'string') {
-                    let extensionId = vsixUriOrExtensionId;
-                    let opts: PluginDeployOptions | undefined;
-                    const versionedId = PluginIdentifiers.idAndVersionFromVersionedId(vsixUriOrExtensionId);
-                    if (versionedId) {
-                        extensionId = versionedId.id;
-                        opts = { version: versionedId.version, ignoreOtherVersions: true };
-                    }
-                    await this.pluginServer.install(VSCodeExtensionUri.fromId(extensionId).toString(), undefined, opts);
+                    await this.installExtensionFromId(vsixUriOrExtensionId);
                 } else {
                     await this.deployPlugin(vsixUriOrExtensionId);
                 }
@@ -443,6 +649,7 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         commands.registerCommand({ id: 'workbench.action.closeActiveEditor' }, {
             execute: () => commands.executeCommand(CommonCommands.CLOSE_MAIN_TAB.id)
         });
+        commands.registerAlias('workbench.action.closeActiveEditor', CommonCommands.CLOSE_MAIN_TAB.id);
         commands.registerCommand({ id: 'workbench.action.closeOtherEditors' }, {
             execute: async (uri?: monaco.Uri) => {
                 let editor = this.editorManager.currentEditor || this.shell.currentWidget;
@@ -453,7 +660,7 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
                         return (resourceUri && resourceUri.toString()) === uriString;
                     });
                 }
-                const toClose = this.shell.widgets.filter(widget => widget !== editor && CodeEditorWidgetUtil.is(widget));
+                const toClose = this.shell.widgets.filter(widget => widget !== editor && CodeEditorWidgetUtil.is(widget) && widget.title.closable);
                 await this.shell.closeMany(toClose);
             }
         });
@@ -461,7 +668,7 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         const performActionOnGroup = (
             cb: (
                 tabBarOrArea: TabBar<Widget> | ApplicationShell.Area,
-                filter?: ((title: Title<Widget>, index: number) => boolean) | undefined
+                filter: (title: Title<Widget>, index: number) => boolean
             ) => void,
             uri?: monaco.Uri
         ): void => {
@@ -485,13 +692,16 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
             id: 'workbench.action.closeEditorsInGroup',
             label: nls.localizeByDefault('Close All Editors in Group')
         }, {
-            execute: (uri?: monaco.Uri) => performActionOnGroup(this.shell.closeTabs, uri)
+            execute: (uri?: monaco.Uri) => performActionOnGroup(
+                (tabBar, filter) => this.shell.closeTabs(tabBar, (title, index) => title.closable && filter(title, index)),
+                uri
+            )
         });
         commands.registerCommand({
             id: 'workbench.files.saveAllInGroup',
             label: nls.localizeByDefault('Save All in Group')
         }, {
-            execute: (uri?: monaco.Uri) => performActionOnGroup(this.shell.saveTabs, uri)
+            execute: (uri?: monaco.Uri) => performActionOnGroup((tabBar, filter) => this.shell.saveTabs(tabBar, filter), uri)
         });
         commands.registerCommand({ id: 'workbench.action.closeEditorsInOtherGroups' }, {
             execute: () => {
@@ -501,7 +711,7 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
                     for (const tabBar of this.shell.allTabBars) {
                         if (tabBar !== editorTabBar) {
                             this.shell.closeTabs(tabBar,
-                                ({ owner }) => CodeEditorWidgetUtil.is(owner)
+                                ({ owner, closable }) => closable && CodeEditorWidgetUtil.is(owner)
                             );
                         }
                     }
@@ -516,12 +726,12 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
                     if (tabBar) {
                         let left = true;
                         this.shell.closeTabs(tabBar,
-                            ({ owner }) => {
+                            ({ owner, closable }) => {
                                 if (owner === editor) {
                                     left = false;
                                     return false;
                                 }
-                                return left && CodeEditorWidgetUtil.is(owner);
+                                return left && closable && CodeEditorWidgetUtil.is(owner);
                             }
                         );
                     }
@@ -536,12 +746,12 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
                     if (tabBar) {
                         let left = true;
                         this.shell.closeTabs(tabBar,
-                            ({ owner }) => {
+                            ({ owner, closable }) => {
                                 if (owner === editor) {
                                     left = false;
                                     return false;
                                 }
-                                return !left && CodeEditorWidgetUtil.is(owner);
+                                return !left && closable && CodeEditorWidgetUtil.is(owner);
                             }
                         );
                     }
@@ -550,7 +760,7 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         });
         commands.registerCommand({ id: 'workbench.action.closeAllEditors' }, {
             execute: async () => {
-                const toClose = this.shell.widgets.filter(widget => CodeEditorWidgetUtil.is(widget));
+                const toClose = this.shell.widgets.filter(widget => CodeEditorWidgetUtil.is(widget) && widget.title.closable);
                 await this.shell.closeMany(toClose);
             }
         });
@@ -560,15 +770,53 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         commands.registerCommand({ id: 'workbench.action.previousEditor' }, {
             execute: () => this.shell.activatePreviousTab()
         });
+        commands.registerCommand({
+            id: 'workbench.action.navigateLeft',
+            label: nls.localizeByDefault('Navigate to the View on the Left'),
+            category: nls.localizeByDefault('View')
+        }, {
+            execute: () => this.navigateEditorGroup('left')
+        });
+        commands.registerCommand({
+            id: 'workbench.action.navigateRight',
+            label: nls.localizeByDefault('Navigate to the View on the Right'),
+            category: nls.localizeByDefault('View')
+        }, {
+            execute: () => this.navigateEditorGroup('right')
+        });
+        commands.registerCommand({
+            id: 'workbench.action.navigateUp',
+            label: nls.localizeByDefault('Navigate to the View Above'),
+            category: nls.localizeByDefault('View')
+        }, {
+            execute: () => this.navigateEditorGroup('up')
+        });
+        commands.registerCommand({
+            id: 'workbench.action.navigateDown',
+            label: nls.localizeByDefault('Navigate to the View Below'),
+            category: nls.localizeByDefault('View')
+        }, {
+            execute: () => this.navigateEditorGroup('down')
+        });
+        commands.registerCommand({
+            id: 'workbench.action.navigateEditorGroups',
+            label: nls.localizeByDefault('Navigate Between Editor Groups'),
+            category: nls.localizeByDefault('View')
+        }, {
+            execute: () => this.navigateEditorGroups()
+        });
         commands.registerCommand({ id: 'workbench.action.navigateBack' }, {
             execute: () => commands.executeCommand(EditorCommands.GO_BACK.id)
         });
+        commands.registerAlias('workbench.action.navigateBack', EditorCommands.GO_BACK.id);
         commands.registerCommand({ id: 'workbench.action.navigateForward' }, {
             execute: () => commands.executeCommand(EditorCommands.GO_FORWARD.id)
         });
+        commands.registerAlias('workbench.action.navigateForward', EditorCommands.GO_FORWARD.id);
         commands.registerCommand({ id: 'workbench.action.navigateToLastEditLocation' }, {
             execute: () => commands.executeCommand(EditorCommands.GO_LAST_EDIT.id)
         });
+        commands.registerAlias('workbench.action.navigateToLastEditLocation', EditorCommands.GO_LAST_EDIT.id);
 
         commands.registerCommand({ id: 'openInTerminal' }, {
             execute: (resource: URI) => this.terminalContribution.openInTerminal(new TheiaURI(resource.toString()))
@@ -872,6 +1120,7 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         }, {
             execute: () => commands.executeCommand(WorkspaceCommands.NEW_FOLDER.id)
         });
+        commands.registerAlias('explorer.newFolder', WorkspaceCommands.NEW_FOLDER.id);
         commands.registerCommand({
             id: 'workbench.action.terminal.sendSequence'
         }, {
@@ -907,16 +1156,19 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         }, {
             execute: () => commands.executeCommand(FileNavigatorCommands.FOCUS.id)
         });
+        commands.registerAlias('workbench.view.explorer', FileNavigatorCommands.FOCUS.id);
         commands.registerCommand({
             id: 'copyFilePath'
         }, {
             execute: () => commands.executeCommand(CommonCommands.COPY_PATH.id)
         });
+        commands.registerAlias('copyFilePath', CommonCommands.COPY_PATH.id);
         commands.registerCommand({
             id: 'copyRelativeFilePath'
         }, {
             execute: () => commands.executeCommand(WorkspaceCommands.COPY_RELATIVE_FILE_PATH.id)
         });
+        commands.registerAlias('copyRelativeFilePath', WorkspaceCommands.COPY_RELATIVE_FILE_PATH.id);
         commands.registerCommand({
             id: 'revealInExplorer'
         }, {
@@ -1047,13 +1299,6 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
 
         commands.registerCommand({ id: '_open.mergeEditor' }, {
             execute: async (arg: OpenMergeEditorCommandArg): Promise<void> => {
-                const toTheiaUri = (o: UriComponents | string): TheiaURI => {
-                    if (typeof o === 'string') {
-                        return new TheiaURI(o);
-                    }
-                    return TheiaURI.fromComponents(o);
-                };
-
                 const baseUri = toTheiaUri(arg.base);
                 const resultUri = toTheiaUri(arg.output);
                 const side1Uri = typeof arg.input1 === 'string' ? toTheiaUri(arg.input1) : toTheiaUri(arg.input1.uri);
@@ -1076,34 +1321,77 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
             }
         });
 
-        // Temporary workaround: opens a single diff editor for the revealed resource.
-        // TODO: GH-16280 implement a proper MultiDiffEditor widget.
+        commands.registerCommand({ id: '_workbench.openScmMultiDiffEditor' }, {
+            execute: async (options: { title: string; repositoryUri: UriComponents; resourceGroupId: string }): Promise<void> => {
+                const repositoryUri = toTheiaUri(options.repositoryUri);
+                if (!repositoryUri) {
+                    return;
+                }
+                const repository = this.scmService.repositories.find(repo => new TheiaURI(repo.provider.rootUri).isEqual(repositoryUri));
+                const group = repository?.provider.groups.find(candidate => candidate.id === options.resourceGroupId);
+                if (!group) {
+                    return;
+                }
+                await commands.executeCommand('_workbench.openMultiDiffEditor', {
+                    title: options.title,
+                    resources: group.resources.map(resource => ({
+                        originalUri: resource.multiDiffEditorOriginalUri?.toComponents(),
+                        modifiedUri: resource.multiDiffEditorModifiedUri?.toComponents()
+                    }))
+                });
+            }
+        });
+
         commands.registerCommand({ id: '_workbench.openMultiDiffEditor' }, {
             execute: async (options: {
                 title: string;
-                resources?: { originalUri: UriComponents; modifiedUri: UriComponents }[];
+                resources?: { originalUri?: UriComponents; modifiedUri?: UriComponents }[];
                 reveal?: { modifiedUri: UriComponents };
             }): Promise<void> => {
                 if (!options.resources?.length) {
                     return;
                 }
-                const revealModified = options.reveal?.modifiedUri;
-                const revealStr = revealModified ? URI.revive(revealModified)?.toString() : undefined;
-                const target = revealStr
-                    ? options.resources.find(r => URI.revive(r.modifiedUri)?.toString() === revealStr)
-                    : undefined;
-                const resource = target ?? options.resources[0];
-                const left = URI.revive(resource.originalUri);
-                const right = URI.revive(resource.modifiedUri);
-                if (left && right) {
-                    await commands.executeCommand(VscodeCommands.DIFF.id, left, right, options.title);
-                } else if (right) {
-                    await commands.executeCommand(VscodeCommands.OPEN.id, right);
-                } else if (left) {
-                    await commands.executeCommand(VscodeCommands.OPEN.id, left);
+                const resources = options.resources
+                    .map(r => {
+                        const originalUri = toTheiaUri(r.originalUri);
+                        const modifiedUri = toTheiaUri(r.modifiedUri);
+                        const resourceUri = modifiedUri ?? originalUri;
+                        if (!resourceUri) {
+                            return undefined;
+                        }
+                        const emptyUri = new TheiaURI().withScheme(MEMORY_TEXT_READONLY).withPath(resourceUri.path);
+                        return { originalUri: originalUri ?? emptyUri, modifiedUri: modifiedUri ?? emptyUri };
+                    })
+                    .filter((r): r is { originalUri: TheiaURI; modifiedUri: TheiaURI } => r !== undefined);
+                if (!resources.length) {
+                    return;
                 }
+                const uri = MultiDiffEditorUri.encode({ title: options.title, resources });
+                const reveal = toTheiaUri(options.reveal?.modifiedUri);
+                const openerOptions: MultiDiffEditorOpenerOptions = { reveal };
+                await open(this.openerService, uri, openerOptions);
             },
         });
+    }
+
+    /**
+     * Installs an extension by its (optionally versioned) ID. Installing an extension that is already installed is a noop.
+     */
+    protected async installExtensionFromId(extensionIdOrVersionedId: string): Promise<void> {
+        let extensionId = extensionIdOrVersionedId;
+        let opts: PluginDeployOptions | undefined;
+        const versionedId = PluginIdentifiers.idAndVersionFromVersionedId(extensionIdOrVersionedId);
+        if (versionedId) {
+            extensionId = versionedId.id;
+            opts = { version: versionedId.version, ignoreOtherVersions: true };
+        }
+        try {
+            await this.pluginServer.install(VSCodeExtensionUri.fromId(extensionId).toString(), undefined, opts);
+        } catch (e) {
+            if (!DuplicateExtensionError.is(e)) {
+                throw e;
+            }
+        }
     }
 
     private async deployPlugin(uri: TheiaURI | UriComponents): Promise<void> {

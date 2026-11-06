@@ -69,6 +69,7 @@ import {
     DebugEditorContextCommands, DebugBreakpointWidgetCommands, nlsEnableBreakpoint, nlsDisableBreakpoint
 } from './debug-commands';
 import { ILogger } from '@theia/core';
+import { ClipboardService } from '@theia/core/lib/browser/clipboard-service';
 
 @injectable()
 export class DebugFrontendApplicationContribution extends AbstractViewContribution<DebugWidget>
@@ -118,6 +119,9 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
 
     @inject(ILogger) @named('debug:DebugFrontendApplicationContribution')
     protected readonly logger: ILogger;
+
+    @inject(ClipboardService)
+    protected readonly clipboardService: ClipboardService;
 
     constructor() {
         super({
@@ -271,10 +275,11 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
             { ...DebugCommands.STOP, ...DebugSessionContextCommands.STOP },
             { ...DebugThreadContextCommands.TERMINATE, label: nls.localizeByDefault('Terminate Thread') }
         );
-        registerMenuActions(DebugThreadsWidget.OPEN_MENU, { ...DebugSessionContextCommands.REVEAL, label: nls.localize('theia/debug/reveal', 'Reveal') });
+        registerMenuActions(DebugThreadsWidget.OPEN_MENU, { ...DebugSessionContextCommands.REVEAL, label: nls.localizeByDefault('Reveal') });
 
         registerMenuActions(DebugStackFramesWidget.CONTEXT_MENU,
-            DebugCommands.RESTART_FRAME,
+            // As in VS Code, only offered in the context menu if the debug adapter supports restarting frames
+            { ...DebugCommands.RESTART_FRAME, when: 'restartFrameSupported' },
             DebugCommands.COPY_CALL_STACK
         );
 
@@ -675,8 +680,15 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
         });
 
         registry.registerCommand(DebugCommands.RESTART_FRAME, {
-            execute: () => this.selectedFrame && this.selectedFrame.restart(),
-            isEnabled: () => !!this.selectedFrame
+            execute: async () => {
+                try {
+                    await this.selectedFrame?.restart();
+                } catch (error) {
+                    // a failed request rejects with the response of the debug adapter, not an `Error`
+                    this.messageService.error(error?.message || nls.localize('theia/debug/restartFrameFailed', 'Failed to restart the frame.'));
+                }
+            },
+            isEnabled: () => !!this.selectedFrame && this.selectedFrame.isRestartable
         });
         registry.registerCommand(DebugCommands.COPY_CALL_STACK, {
             execute: () => {
@@ -697,7 +709,7 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
             isVisible: () => !!this.selectedVariable && this.selectedVariable.supportSetVariable
         });
         registry.registerCommand(DebugCommands.COPY_VARIABLE_VALUE, {
-            execute: () => this.selectedVariable && this.selectedVariable.copyValue(),
+            execute: () => this.copyValue(this.selectedVariable),
             isEnabled: () => !!this.selectedVariable && this.selectedVariable.supportCopyValue,
             isVisible: () => !!this.selectedVariable && this.selectedVariable.supportCopyValue
         });
@@ -826,7 +838,7 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
             isVisible: () => !!this.watchExpression
         });
         registry.registerCommand(DebugCommands.COPY_WATCH_EXPRESSION_VALUE, {
-            execute: () => this.watchExpression && this.watchExpression.copyValue(),
+            execute: () => this.copyValue(this.watchExpression),
             isEnabled: () => !!this.watchExpression && this.watchExpression.supportCopyValue,
             isVisible: () => !!this.watchExpression && this.watchExpression.supportCopyValue
         });
@@ -863,6 +875,12 @@ export class DebugFrontendApplicationContribution extends AbstractViewContributi
             isEnabled: widget => widget instanceof Widget ? widget instanceof DebugWatchWidget : !!this.watch,
             isVisible: widget => widget instanceof Widget ? widget instanceof DebugWatchWidget : !!this.watch
         });
+    }
+
+    protected async copyValue(item: { getValueToCopy(): Promise<string> } | undefined): Promise<void> {
+        if (item) {
+            await this.clipboardService.writeText(await item.getValueToCopy());
+        }
     }
 
     override registerKeybindings(keybindings: KeybindingRegistry): void {

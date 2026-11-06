@@ -14,11 +14,11 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { injectable, inject } from '@theia/core/shared/inversify';
+import { injectable, inject, named } from '@theia/core/shared/inversify';
 import URI from '@theia/core/lib/common/uri';
 import { Deferred } from '@theia/core/lib/common/promise-util';
 import { Resource, ResourceResolver } from '@theia/core/lib/common/resource';
-import { Emitter, Event, Disposable, DisposableCollection } from '@theia/core';
+import { Emitter, Event, Disposable, DisposableCollection, ILogger } from '@theia/core';
 import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
 import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-model-service';
 import { OutputUri } from '../common/output-uri';
@@ -37,6 +37,9 @@ export class OutputChannelManager implements Disposable, ResourceResolver {
 
     @inject(OutputPreferences)
     protected readonly preferences: OutputPreferences;
+
+    @inject(ILogger) @named('output:OutputChannelManager')
+    protected readonly logger: ILogger;
 
     protected readonly channels = new Map<string, OutputChannel>();
     protected readonly resources = new Map<string, OutputResource>();
@@ -104,13 +107,13 @@ export class OutputChannelManager implements Disposable, ResourceResolver {
                     resource.dispose();
                     this.resources.delete(name);
                 } else {
-                    console.warn(`Could not dispose. No resource was for output channel: '${name}'.`);
+                    this.logger.warn(`Could not dispose. No resource was for output channel: '${name}'.`);
                 }
             }),
             Disposable.create(() => {
                 const toDispose = this.channels.get(name);
                 if (!toDispose) {
-                    console.warn(`Could not dispose. No channel exist with name: '${name}'.`);
+                    this.logger.warn(`Could not dispose. No channel exist with name: '${name}'.`);
                     return;
                 }
                 this.channels.delete(name);
@@ -199,7 +202,7 @@ export class OutputChannel implements Disposable {
     protected readonly contentChangeEmitter = new Emitter<void>();
     protected readonly visibilityChangeEmitter = new Emitter<{ isVisible: boolean, preserveFocus?: boolean }>();
     protected readonly disposedEmitter = new Emitter<void>();
-    protected readonly textModifyQueue = new PQueue({ autoStart: true, concurrency: 1 });
+    protected readonly textModifyQueue: PQueue = new PQueue({ autoStart: true, concurrency: 1 });
     protected readonly toDispose = new DisposableCollection(
         Disposable.create(() => this.textModifyQueue.clear()),
         this.contentChangeEmitter,

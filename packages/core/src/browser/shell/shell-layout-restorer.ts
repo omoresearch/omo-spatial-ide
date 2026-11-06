@@ -19,6 +19,7 @@ import { Widget } from '@lumino/widgets';
 import { FrontendApplication } from '../frontend-application';
 import { WidgetManager, WidgetConstructionOptions } from '../widget-manager';
 import { StorageService } from '../storage-service';
+import { SidePanelItemVisibility } from './side-panel-item-visibility';
 import { ILogger } from '../../common/logger';
 import { CommandContribution, CommandRegistry, Command } from '../../common/command';
 import { ThemeService } from '../theming';
@@ -29,6 +30,7 @@ import { WindowService } from '../window/window-service';
 import { StopReason } from '../../common/frontend-application-state';
 import { isFunction, isObject, MaybePromise } from '../../common';
 import { PerspectiveServiceInternal } from '../perspective-service';
+import { SecondaryWindowHandler } from '../secondary-window-handler';
 
 /**
  * A contract for widgets that want to store and restore their inner state, between sessions.
@@ -152,9 +154,16 @@ export class ShellLayoutRestorer implements CommandContribution {
     @inject(PerspectiveServiceInternal)
     protected readonly perspectiveService: PerspectiveServiceInternal;
 
+    @inject(SidePanelItemVisibility)
+    protected readonly sidePanelItemVisibility: SidePanelItemVisibility;
+
+    @inject(SecondaryWindowHandler)
+    protected readonly secondaryWindowHandler: SecondaryWindowHandler;
+
     constructor(
         @inject(WidgetManager) protected widgetManager: WidgetManager,
-        @inject(ILogger) protected logger: ILogger,
+        @inject(ILogger) @named('core:ShellLayoutRestorer')
+        protected readonly logger: ILogger,
         @inject(StorageService) protected storageService: StorageService) { }
 
     registerCommands(commands: CommandRegistry): void {
@@ -171,6 +180,7 @@ export class ShellLayoutRestorer implements CommandContribution {
             this.perspectiveService.clearSavedLayouts();
             this.storageService.setData(PERSPECTIVE_LAYOUTS_STORAGE_KEY, undefined);
             this.themeService.reset();
+            this.sidePanelItemVisibility.reset();
             this.logger.info('<<< The layout has been successfully reset.');
             this.windowService.reload();
         }
@@ -196,6 +206,10 @@ export class ShellLayoutRestorer implements CommandContribution {
         // Snapshot current shell as the active perspective's layout
         try {
             const currentLayout = app.shell.getLayoutData();
+            const secondaryWindows = this.secondaryWindowHandler.getLayoutData();
+            if (secondaryWindows.length) {
+                currentLayout.secondaryWindows = secondaryWindows;
+            }
             layouts[activeId] = this.deflate(currentLayout);
         } catch (error) {
             this.logger.warn(`Could not deflate layout for active perspective '${activeId}'`, error);
@@ -301,6 +315,7 @@ export class ShellLayoutRestorer implements CommandContribution {
 
         if (activeLayout) {
             await app.shell.setLayoutData(activeLayout);
+            this.restoreSecondaryWindows(activeLayout);
             const restoredId = this.perspectiveService.getActivePerspectiveId();
             this.perspectiveService.onLayoutRestored(restoredId);
             this.logger.info('<<< The layout has been successfully restored.');
@@ -311,6 +326,17 @@ export class ShellLayoutRestorer implements CommandContribution {
         this.perspectiveService.onLayoutRestored(this.perspectiveService.getActivePerspectiveId());
         this.logger.info('<<< Nothing to restore.');
         return false;
+    }
+
+    protected restoreSecondaryWindows(layout: ApplicationShell.LayoutData): void {
+        const { secondaryWindows } = layout;
+        if (secondaryWindows) {
+            // the windows are restored on startup only, not when switching to the perspective later on
+            delete layout.secondaryWindows;
+            this.secondaryWindowHandler.setLayoutData(secondaryWindows).catch(error => {
+                this.logger.warn('Could not restore the secondary windows', error);
+            });
+        }
     }
 
     protected isWidgetProperty(propertyName: string): boolean {
@@ -374,18 +400,18 @@ export class ShellLayoutRestorer implements CommandContribution {
         }
         if (layoutVersion !== applicationShellLayoutVersion) {
             if (layoutVersion < applicationShellLayoutVersion) {
-                console.warn(`Layout version ${layoutVersion} is behind current layout version ${applicationShellLayoutVersion}, trying to migrate...`);
+                this.logger.warn(`Layout version ${layoutVersion} is behind current layout version ${applicationShellLayoutVersion}, trying to migrate...`);
             } else {
-                console.warn(`Layout version ${layoutVersion} is ahead current layout version ${applicationShellLayoutVersion}, trying to load anyway...`);
+                this.logger.warn(`Layout version ${layoutVersion} is ahead current layout version ${applicationShellLayoutVersion}, trying to load anyway...`);
             }
-            console.info(`Please use '${RESET_LAYOUT.label}' command if the layout looks bogus.`);
+            this.logger.info(`Please use '${RESET_LAYOUT.label}' command if the layout looks bogus.`);
         }
 
         const migrations = this.migrations.getContributions()
             .filter(m => m.layoutVersion > layoutVersion && m.layoutVersion <= applicationShellLayoutVersion)
             .sort((m, m2) => m.layoutVersion - m2.layoutVersion);
         if (migrations.length) {
-            console.info(`Found ${migrations.length} migrations from layout version ${layoutVersion} to version ${applicationShellLayoutVersion}, migrating...`);
+            this.logger.info(`Found ${migrations.length} migrations from layout version ${layoutVersion} to version ${applicationShellLayoutVersion}, migrating...`);
         }
 
         const context = { layout, layoutVersion, migrations };

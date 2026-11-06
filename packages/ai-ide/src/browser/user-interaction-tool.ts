@@ -15,14 +15,14 @@
 // *****************************************************************************
 
 import { ToolProvider, ToolRequest, ToolRequestParameterProperty, ToolRequestParameters } from '@theia/ai-core';
-import { ToolInvocationContext } from '@theia/ai-core/lib/common/language-model';
-import { ChatToolContext } from '@theia/ai-chat';
+import { AutoActionResult, ToolInvocationContext } from '@theia/ai-core/lib/common/language-model';
+import { ChatToolContext, ToolCallChatResponseContent } from '@theia/ai-chat';
 import { DiffUris } from '@theia/core/lib/browser/diff-uris';
 import { open, OpenerService } from '@theia/core/lib/browser';
 import { Deferred } from '@theia/core/lib/common/promise-util';
 import { MEMORY_TEXT, MEMORY_TEXT_READONLY, ResourceProvider } from '@theia/core/lib/common/resource';
 import URI from '@theia/core/lib/common/uri';
-import { inject, injectable } from '@theia/core/shared/inversify';
+import { inject, injectable, named } from '@theia/core/shared/inversify';
 import { EditorManager } from '@theia/editor/lib/browser';
 import { ScmService } from '@theia/scm/lib/browser/scm-service';
 import { WorkspaceFunctionScope } from './workspace-functions';
@@ -39,6 +39,7 @@ import {
     parseUserInteractionArgs,
     resolveContentRef
 } from '../common/user-interaction-tool';
+import { ILogger } from '@theia/core';
 
 interface PendingInteraction {
     deferred: Deferred<string>;
@@ -50,6 +51,13 @@ interface PendingInteraction {
      * is canceled. If absent (no renderer mounted) the tool resolves with all steps skipped.
      */
     latestPartial?: UserInteractionResult;
+    /**
+     * Step the user is currently viewing, pushed by the renderer via
+     * {@link UserInteractionTool.recordCurrentStep}. Lets another mount of the same
+     * interaction (e.g. the collapsed delegation summary and the expanded details)
+     * resume at that step instead of restarting at the first one.
+     */
+    currentStep?: number;
 }
 
 // Schemas are module-level constants so they are built once at load time
@@ -62,7 +70,8 @@ const CONTENT_REF_SCHEMA: ToolRequestParameterProperty = {
     properties: {
         path: {
             type: 'string',
-            description: 'Workspace-relative file path. Required unless "empty" is true.'
+            description: 'File path, in the format of the workspace tools: workspace-relative (\'rootName/path\') or absolute. ' +
+                'Required unless "empty" is true.'
         },
         gitRef: {
             type: 'string',
@@ -102,8 +111,9 @@ const STEP_SCHEMA: ToolRequestParameterProperty = {
                 },
                 required: ['text', 'value']
             },
-            description: 'Optional buttons offered to the user for this step. Omit for purely informational steps; '
-                + 'a hardcoded "Next"/"Finish" button is always shown to advance.'
+            description: 'Buttons offered to the user for this step. '
+                + 'Omit it (or pass an empty array) only for purely informational steps: a step without options is never a confirmation, '
+                + 'so never use one to ask for approval. In a multi-step interaction a hardcoded "Next"/"Finish" button is always shown to advance.'
         },
         links: {
             type: 'array',
@@ -160,7 +170,8 @@ const TOOL_DESCRIPTION = 'Present an interactive user interaction. Each step has
     + 'The tool returns a JSON string with { "completed": boolean, "steps": [{ "title", "value"?, "comments"?, "skipped"? }] }. '
     + 'If the user cancels mid-interaction, the tool returns whatever has been collected so far with "completed": false. '
     + 'Use this to walk users through a series of pre-determined findings or decisions in a single tool call, '
-    + 'or to surface a single message/diff that should be shown inline in the chat.';
+    + 'or to surface a single message/diff that should be shown inline in the chat. '
+    + 'Pass nested values as real JSON arrays and objects, never as JSON-encoded strings.';
 
 @injectable()
 export class UserInteractionTool implements ToolProvider {
@@ -181,6 +192,9 @@ export class UserInteractionTool implements ToolProvider {
     @inject(ResourceProvider)
     protected readonly resourceProvider: ResourceProvider;
 
+    @inject(ILogger) @named('ai-ide:UserInteractionTool')
+    protected readonly logger: ILogger;
+
     protected readonly pendingInteractions = new Map<string, PendingInteraction>();
 
     getTool(): ToolRequest {
@@ -190,8 +204,20 @@ export class UserInteractionTool implements ToolProvider {
             providerName: 'ai-ide',
             description: TOOL_DESCRIPTION,
             parameters: TOOL_PARAMETERS,
-            handler: (argString: string, ctx) => this.handleInteraction(argString, ctx)
+            handler: (argString: string, ctx) => this.handleInteraction(argString, ctx),
+            checkAutoAction: (argString: string) => this.checkArguments(argString)
         };
+    }
+
+    /**
+     * Auto-deny invocations whose arguments do not validate, handing the validation error back to
+     * the model. Without this the confirmation flow would stall: the renderer refuses to mount the
+     * interaction (and with it the Allow/Deny buttons) for arguments it cannot render, so a
+     * confirmation that nobody can give would be awaited indefinitely.
+     */
+    protected checkArguments(argString: string): AutoActionResult | undefined {
+        const validation = parseUserInteractionArgs(argString);
+        return validation.ok ? undefined : { action: 'deny', reason: validation.error };
     }
 
     /**
@@ -214,6 +240,25 @@ export class UserInteractionTool implements ToolProvider {
             return;
         }
         pending.latestPartial = partial;
+    }
+
+    /**
+     * Remember the step the user is currently viewing so another mount of the same
+     * interaction resumes there. Calls for an unknown or already-resolved interaction
+     * are silently ignored.
+     */
+    recordCurrentStep(toolCallId: string, step: number): void {
+        const pending = this.pendingInteractions.get(toolCallId);
+        if (!pending || pending.resolved) {
+            return;
+        }
+        pending.currentStep = step;
+    }
+
+    /** The step last recorded via {@link recordCurrentStep}, or undefined if nothing is pending. */
+    getCurrentStep(toolCallId: string): number | undefined {
+        const pending = this.pendingInteractions.get(toolCallId);
+        return pending && !pending.resolved ? pending.currentStep : undefined;
     }
 
     protected resolveInteraction(toolCallId: string, result: UserInteractionResult): void {
@@ -264,9 +309,11 @@ export class UserInteractionTool implements ToolProvider {
             }
             const left = resolveContentRef(link.ref) as PathContentRef;
             if (left.gitRef) {
-                const uri = this.resolveUri(left);
+                const uri = await this.resolveUriOrNotFound(left);
                 let targetUri: URI;
-                if (uri === undefined) {
+                if (uri === 'notFound') {
+                    targetUri = this.fileNotFoundUri(left.path);
+                } else if (uri === undefined) {
                     targetUri = this.errorContentUri(left.path, left.gitRef);
                 } else if (await this.canResolveUri(uri)) {
                     targetUri = uri;
@@ -277,8 +324,8 @@ export class UserInteractionTool implements ToolProvider {
                 }
                 await open(this.openerService, targetUri);
             } else {
-                const fileUri = this.workspaceScope.resolveRelativePath(left.path);
-                if (!(await this.canResolveUri(fileUri))) {
+                const fileUri = await this.resolveUriOrNotFound(left);
+                if (fileUri === 'notFound' || fileUri === undefined || !(await this.canResolveUri(fileUri))) {
                     await open(this.openerService, this.fileNotFoundUri(left.path));
                     return;
                 }
@@ -290,34 +337,49 @@ export class UserInteractionTool implements ToolProvider {
         }
     }
 
-    protected resolveUri(
+    /**
+     * Resolves a content reference like {@link resolveUri}, or returns `'notFound'` if its path cannot
+     * be resolved, e.g. because it lacks the root name in a multi-root workspace.
+     */
+    protected async resolveUriOrNotFound(ref: PathContentRef): Promise<URI | undefined | 'notFound'> {
+        try {
+            return await this.resolveUri(ref);
+        } catch (error) {
+            this.logger.warn(`Could not resolve '${ref.path}': ${error.message}`);
+            return 'notFound';
+        }
+    }
+
+    /**
+     * Resolves a content reference with the same parsing and access checks as the workspace tools.
+     *
+     * @returns `undefined` if the reference has a git ref that no SCM repository can resolve.
+     * @throws if the path cannot be resolved or may not be accessed.
+     */
+    protected async resolveUri(
         ref: PathContentRef
-    ): URI | undefined {
-        const fileUri = this.workspaceScope.resolveRelativePath(ref.path);
+    ): Promise<URI | undefined> {
+        const fileUri = await this.workspaceScope.resolveAccessiblePath(ref.path);
         if (ref.gitRef) {
             const repo = this.scmService.findRepository(fileUri);
             if (repo) {
                 return repo.toUriAtRef(fileUri, ref.gitRef);
             }
-            console.warn(`No SCM repository found to resolve gitRef '${ref.gitRef}' for '${ref.path}'`);
+            this.logger.warn(`No SCM repository found to resolve gitRef '${ref.gitRef}' for '${ref.path}'`);
             return undefined;
         }
         return fileUri;
     }
 
     protected async handleInteraction(argString: string, ctx: ToolInvocationContext | undefined): Promise<string> {
-        try {
-            JSON.parse(argString);
-        } catch {
-            return JSON.stringify({ error: 'Invalid arguments' });
-        }
         // Validate via the shared parser so the tool only ever waits for steps that
-        // the renderer would actually render. Otherwise the agent could send a
-        // step the UI filters out, leaving the tool blocked on input forever.
-        const validated = parseUserInteractionArgs(argString);
-        if (!validated || validated.interactions.length === 0) {
-            return JSON.stringify({ error: 'No interactions provided' });
+        // the renderer would actually render, and so that anything the agent got
+        // wrong is reported back to it verbatim instead of being silently dropped.
+        const validation = parseUserInteractionArgs(argString);
+        if (!validation.ok) {
+            return JSON.stringify({ error: validation.error });
         }
+        const validated = validation.args;
 
         const toolCallId = ToolInvocationContext.getToolCallId(ctx);
         if (!toolCallId) {
@@ -349,12 +411,27 @@ export class UserInteractionTool implements ToolProvider {
 
         // Mark the response as waiting for input while the interaction is pending, so it is
         // surfaced consistently with agent questions and tool confirmations (e.g. in the
-        // session overview and notifications).
+        // session overview and notifications). Announce the interaction via
+        // interactionNeeded so UIs that track pending interactions (e.g. the collapsed
+        // delegation summary) surface it like tool confirmations (#17952).
         const response = ChatToolContext.is(ctx) ? ctx.response : undefined;
-        response?.waitForInput();
+        let contentPart: ToolCallChatResponseContent | undefined;
+        if (response) {
+            contentPart = response.response.content.findLast(
+                (part): part is ToolCallChatResponseContent => ToolCallChatResponseContent.is(part) && part.id === toolCallId
+            );
+            if (contentPart) {
+                contentPart.requestUserInput();
+                response.fireInteractionNeeded(contentPart);
+            } else {
+                this.logger.warn(`No tool call content found for '${toolCallId}'; the pending interaction cannot be announced to interaction trackers.`);
+            }
+            response.waitForInput();
+        }
         try {
             return await pending.deferred.promise;
         } finally {
+            contentPart?.userInputHandled();
             response?.stopWaitingForInput();
             cancellationListener?.dispose();
             this.pendingInteractions.delete(toolCallId);
@@ -366,7 +443,10 @@ export class UserInteractionTool implements ToolProvider {
             return this.emptyContentUri(ref.label || '');
         }
         const resolved = resolveContentRef(ref) as PathContentRef;
-        const uri = this.resolveUri(resolved);
+        const uri = await this.resolveUriOrNotFound(resolved);
+        if (uri === 'notFound') {
+            return this.fileNotFoundUri(resolved.path);
+        }
         if (uri === undefined) {
             // No SCM provider could resolve the gitRef — surface as an actionable error.
             return this.errorContentUri(resolved.path, resolved.gitRef!);
