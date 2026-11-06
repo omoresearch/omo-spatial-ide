@@ -5,7 +5,7 @@ on:
     branches: ['omo/**']
     paths: ['omo/**', '.github/workflows/omo-spatial.yml']
   pull_request:
-    branches: ['omo/**']
+    branches: ['omo/**', 'master']
     paths: ['omo/**', '.github/workflows/omo-spatial.yml']
   workflow_dispatch:
 
