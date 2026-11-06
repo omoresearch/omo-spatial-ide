@@ -1,0 +1,5 @@
+const{test}=require('node:test');const assert=require('node:assert/strict');const React=require('react');const{renderToStaticMarkup}=require('react-dom/server');const H=require('./frontend-runtime-helpers.cjs');
+const{RuntimeConsoleStrip}=require('../lib/browser/runtime-console-strip.js');const{RuntimeConsoleController}=require('../lib/browser/runtime-console-controller.js');
+function render(unreadBells){return renderToStaticMarkup(React.createElement(RuntimeConsoleStrip,{state:{...RuntimeConsoleController.initial(),phase:'live',host:H.hostStatus(),workspace:H.workspace([H.tab('t1')]),activeTabId:'t1',unreadBells}}));}
+test('a real unread bell count exposes a named acknowledge control, without claiming agent completion',()=>{const html=render(2);assert.match(html,/data-testid="runtime-bell-ack"/);assert.match(html,/Acknowledge bell \(2\)/);assert.doesNotMatch(html,/task complete|agent finished/i);});
+test('quiet or acknowledged desks do not show a fake bell alert',()=>{assert.doesNotMatch(render(0),/runtime-bell-ack/);});

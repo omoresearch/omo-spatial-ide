@@ -1,0 +1,357 @@
+[
+  {
+    "name": "before: Theia chrome visible, not immersive",
+    "ok": true,
+    "details": {
+      "bodyClass": false,
+      "immersive": "false",
+      "canvas": {
+        "w": 1117,
+        "h": 536,
+        "x": 275,
+        "y": 316,
+        "bufW": 1117,
+        "bufH": 536
+      },
+      "topPanel": true,
+      "statusBar": true,
+      "left": true,
+      "header": true,
+      "footer": true,
+      "stationRow": true,
+      "presence": true,
+      "pill": null,
+      "launch": true,
+      "fullLaunch": true,
+      "crosshair": true,
+      "hud": true,
+      "focus": "walk",
+      "navigation": "walk",
+      "pose": {
+        "x": "0.000",
+        "z": "4.100"
+      },
+      "stored": null,
+      "restore": null
+    }
+  },
+  {
+    "name": "before: Immersive world button shows next to Full-screen terminal",
+    "ok": true
+  },
+  {
+    "name": "G: immersive active (body class + data-immersive)",
+    "ok": true,
+    "details": {
+      "bodyClass": true,
+      "immersive": "true"
+    }
+  },
+  {
+    "name": "G: canvas fills the window (>= 1400x860)",
+    "ok": true,
+    "details": {
+      "w": 1440,
+      "h": 900,
+      "x": 0,
+      "y": 0,
+      "bufW": 1440,
+      "bufH": 900
+    }
+  },
+  {
+    "name": "G: Theia top panel, status bar and side panel hidden",
+    "ok": true,
+    "details": {
+      "top": false,
+      "status": false,
+      "left": false
+    }
+  },
+  {
+    "name": "G: Omo header, footer, station row and presence hidden",
+    "ok": true,
+    "details": {
+      "bodyClass": true,
+      "immersive": "true",
+      "canvas": {
+        "w": 1440,
+        "h": 900,
+        "x": 0,
+        "y": 0,
+        "bufW": 1440,
+        "bufH": 900
+      },
+      "topPanel": false,
+      "statusBar": false,
+      "left": false,
+      "header": false,
+      "footer": false,
+      "stationRow": false,
+      "presence": false,
+      "pill": true,
+      "launch": null,
+      "fullLaunch": true,
+      "crosshair": true,
+      "hud": true,
+      "focus": "walk",
+      "navigation": "walk",
+      "pose": {
+        "x": "0.000",
+        "z": "4.100"
+      },
+      "stored": "1",
+      "restore": "{\"left\":true}"
+    }
+  },
+  {
+    "name": "G: glass pill, crosshair and HUD shown",
+    "ok": true,
+    "details": {
+      "bodyClass": true,
+      "immersive": "true",
+      "canvas": {
+        "w": 1440,
+        "h": 900,
+        "x": 0,
+        "y": 0,
+        "bufW": 1440,
+        "bufH": 900
+      },
+      "topPanel": false,
+      "statusBar": false,
+      "left": false,
+      "header": false,
+      "footer": false,
+      "stationRow": false,
+      "presence": false,
+      "pill": true,
+      "launch": null,
+      "fullLaunch": true,
+      "crosshair": true,
+      "hud": true,
+      "focus": "walk",
+      "navigation": "walk",
+      "pose": {
+        "x": "0.000",
+        "z": "4.100"
+      },
+      "stored": "1",
+      "restore": "{\"left\":true}"
+    }
+  },
+  {
+    "name": "G: choice saved on this device",
+    "ok": true,
+    "details": "1"
+  },
+  {
+    "name": "desk one monitor is on screen",
+    "ok": true,
+    "details": {
+      "x": 213.22545883971958,
+      "y": 362.66000339226014
+    }
+  },
+  {
+    "name": "attached terminal still works in immersive (echo round trip)",
+    "ok": true,
+    "details": "IMMERSIVE_OK_1793930441737"
+  },
+  {
+    "name": "attached: still immersive, canvas full window",
+    "ok": true,
+    "details": {
+      "focus": "attached",
+      "canvas": {
+        "w": 1440,
+        "h": 900,
+        "x": 0,
+        "y": 0,
+        "bufW": 1440,
+        "bufH": 900
+      }
+    }
+  },
+  {
+    "name": "Esc twice: walking again (not attached)",
+    "ok": true,
+    "details": {
+      "focus": "walk",
+      "nav": "walk"
+    }
+  },
+  {
+    "name": "Esc twice: still immersive",
+    "ok": true
+  },
+  {
+    "name": "walking works after Esc (S moves the player)",
+    "ok": true,
+    "details": {
+      "before": 2.143,
+      "after": "3.922"
+    }
+  },
+  {
+    "name": "G again: immersive off, Theia chrome back",
+    "ok": true,
+    "details": {
+      "bodyClass": false,
+      "immersive": "false",
+      "canvas": {
+        "w": 1117,
+        "h": 474,
+        "x": 275,
+        "y": 378,
+        "bufW": 1117,
+        "bufH": 474
+      },
+      "topPanel": true,
+      "statusBar": true,
+      "left": true,
+      "header": true,
+      "footer": true,
+      "stationRow": true,
+      "presence": true,
+      "pill": null,
+      "launch": true,
+      "fullLaunch": true,
+      "crosshair": true,
+      "hud": true,
+      "focus": "walk",
+      "navigation": "walk",
+      "pose": {
+        "x": "-1.257",
+        "z": "3.922"
+      },
+      "stored": "0",
+      "restore": null
+    }
+  },
+  {
+    "name": "G again: Omo header, station row back",
+    "ok": true,
+    "details": {
+      "bodyClass": false,
+      "immersive": "false",
+      "canvas": {
+        "w": 1117,
+        "h": 474,
+        "x": 275,
+        "y": 378,
+        "bufW": 1117,
+        "bufH": 474
+      },
+      "topPanel": true,
+      "statusBar": true,
+      "left": true,
+      "header": true,
+      "footer": true,
+      "stationRow": true,
+      "presence": true,
+      "pill": null,
+      "launch": true,
+      "fullLaunch": true,
+      "crosshair": true,
+      "hud": true,
+      "focus": "walk",
+      "navigation": "walk",
+      "pose": {
+        "x": "-1.257",
+        "z": "3.922"
+      },
+      "stored": "0",
+      "restore": null
+    }
+  },
+  {
+    "name": "G again: side panel state as before",
+    "ok": true,
+    "details": {
+      "before": true,
+      "after": true
+    }
+  },
+  {
+    "name": "G again: canvas back inside the layout (smaller than window)",
+    "ok": true,
+    "details": {
+      "on": {
+        "w": 1440,
+        "h": 900,
+        "x": 0,
+        "y": 0,
+        "bufW": 1440,
+        "bufH": 900
+      },
+      "off": {
+        "w": 1117,
+        "h": 474,
+        "x": 275,
+        "y": 378,
+        "bufW": 1117,
+        "bufH": 474
+      }
+    }
+  },
+  {
+    "name": "G again: choice saved off, restore snapshot cleared",
+    "ok": true,
+    "details": {
+      "stored": "0",
+      "restore": null
+    }
+  },
+  {
+    "name": "Immersive world button enters immersive",
+    "ok": true,
+    "details": {
+      "w": 1440,
+      "h": 900,
+      "x": 0,
+      "y": 0,
+      "bufW": 1440,
+      "bufH": 900
+    }
+  },
+  {
+    "name": "pill Exit leaves immersive",
+    "ok": true,
+    "details": {
+      "body": false
+    }
+  },
+  {
+    "name": "Alt+Shift+G enters immersive",
+    "ok": true
+  },
+  {
+    "name": "Alt+Shift+G leaves immersive",
+    "ok": true
+  },
+  {
+    "name": "reload keeps immersive (saved choice) and fills the window",
+    "ok": true,
+    "details": {
+      "w": 1440,
+      "h": 900,
+      "x": 0,
+      "y": 0,
+      "bufW": 1440,
+      "bufH": 900
+    }
+  },
+  {
+    "name": "after reload G restores the side panel too",
+    "ok": true,
+    "details": {
+      "left": true
+    }
+  },
+  {
+    "name": "no page errors",
+    "ok": true,
+    "details": []
+  }
+]

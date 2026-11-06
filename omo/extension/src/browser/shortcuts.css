@@ -1,0 +1,129 @@
+/*
+ * omo keys6 lane: key sheet, coach mark, desk-key toast, rename box and find box.
+ * Design tokens only (design-tokens.css). Mounted on .omo-root, so position: fixed covers the window,
+ * above the full-window focus layer (z-index 1000).
+ */
+.omo-keys-lane { font-family: var(--omo-font); font-size: var(--omo-fs-md); line-height: var(--omo-lh); color: var(--omo-text); }
+.omo-keys-lane kbd {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 var(--omo-sp-1);
+    font: 600 var(--omo-fs-xs)/1 var(--omo-mono); color: var(--omo-text); background: var(--omo-surface-3);
+    border: 1px solid var(--omo-line-3); border-bottom-width: 2px; border-radius: var(--omo-r-xs);
+}
+.omo-keys-lane button {
+    display: inline-flex; align-items: center; gap: var(--omo-sp-1); height: var(--omo-control-h); padding: 0 var(--omo-sp-3);
+    font: 500 var(--omo-fs-sm)/1 var(--omo-font); color: var(--omo-text); background: var(--omo-surface-2);
+    border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-sm); cursor: pointer;
+    transition: background var(--omo-dur-1) var(--omo-ease), border-color var(--omo-dur-1) var(--omo-ease);
+}
+.omo-keys-lane button:hover:not(:disabled) { background: var(--omo-surface-hover); border-color: var(--omo-line-3); }
+.omo-keys-lane button:focus-visible, .omo-keys-lane input:focus-visible { outline: none; box-shadow: var(--omo-focus); }
+.omo-keys-lane button:disabled { color: var(--omo-text-3); cursor: default; opacity: .7; }
+.omo-keys-lane button.is-primary { background: var(--omo-accent); border-color: var(--omo-accent); color: var(--omo-accent-ink); font-weight: 600; }
+.omo-keys-lane button.is-primary:hover:not(:disabled) { background: var(--omo-accent-strong); border-color: var(--omo-accent-strong); }
+.omo-keys-lane button.is-primary kbd { background: transparent; border-color: currentColor; color: inherit; }
+.omo-keys-lane .omo-icon { flex: 0 0 auto; display: block; }
+.omo-keys-kicker { display: block; font-size: var(--omo-fs-2xs); font-weight: 600; letter-spacing: var(--omo-tracking-caps); text-transform: uppercase; color: var(--omo-accent); }
+
+/* ---------- Key sheet (F1 / ?) ---------- */
+.omo-keys-backdrop {
+    position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: var(--omo-sp-6);
+    background: rgba(0, 0, 0, .5); animation: omo-keys-in var(--omo-dur-2) var(--omo-ease);
+}
+.omo-keys-sheet {
+    width: min(920px, 100%); max-height: min(720px, 100%); overflow: auto; display: flex; flex-direction: column; gap: var(--omo-sp-4);
+    padding: var(--omo-sp-5) var(--omo-sp-6); background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur);
+    border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-lg); box-shadow: var(--omo-shadow-3);
+}
+.omo-keys-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--omo-sp-4); }
+.omo-keys-head h2 { margin: var(--omo-sp-1) 0; font-size: var(--omo-fs-xl); font-weight: 600; }
+.omo-keys-head p { margin: 0; color: var(--omo-text-2); font-size: var(--omo-fs-sm); }
+.omo-keys-close { flex: 0 0 auto; }
+.omo-keys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: var(--omo-sp-4) var(--omo-sp-6); }
+.omo-keys-group h3 {
+    display: flex; align-items: baseline; justify-content: space-between; gap: var(--omo-sp-2); margin: 0 0 var(--omo-sp-2);
+    padding-bottom: var(--omo-sp-2); border-bottom: 1px solid var(--omo-line-2); font-size: var(--omo-fs-md); font-weight: 600;
+}
+.omo-keys-group h3 small { font-size: var(--omo-fs-xs); font-weight: 400; color: var(--omo-text-3); }
+.omo-keys-group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.omo-keys-group li { display: grid; grid-template-columns: minmax(150px, auto) 1fr; align-items: center; gap: var(--omo-sp-3); min-height: 30px; padding: 2px var(--omo-sp-1); border-radius: var(--omo-r-xs); }
+.omo-keys-group li:hover { background: var(--omo-accent-soft); }
+.omo-keys-combo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--omo-sp-1); }
+.omo-keys-chord { display: inline-flex; align-items: center; gap: 2px; }
+.omo-keys-plus, .omo-keys-or { font-size: var(--omo-fs-2xs); color: var(--omo-text-3); }
+.omo-keys-or { padding: 0 2px; }
+.omo-keys-what { display: flex; flex-direction: column; color: var(--omo-text); font-size: var(--omo-fs-sm); }
+.omo-keys-what small { color: var(--omo-text-3); font-size: var(--omo-fs-xs); }
+.omo-keys-foot { display: flex; flex-direction: column; gap: var(--omo-sp-1); padding-top: var(--omo-sp-3); border-top: 1px solid var(--omo-line-2); }
+.omo-keys-foot p { margin: 0; color: var(--omo-text-2); font-size: var(--omo-fs-xs); }
+
+/* ---------- First-run coach mark ---------- */
+.omo-coach {
+    /* Top-left corner, clear of the desk monitors: the tips must never cover a screen the player clicks. */
+    position: fixed; z-index: 1050; left: 64px; top: 96px; width: min(320px, calc(100vw - 96px));
+    display: flex; flex-direction: column; gap: var(--omo-sp-3); padding: var(--omo-sp-4);
+    background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-accent-line);
+    border-radius: var(--omo-r-lg); box-shadow: var(--omo-shadow-3); animation: omo-keys-in var(--omo-dur-3) var(--omo-ease);
+}
+.omo-coach-top { display: flex; align-items: center; gap: var(--omo-sp-2); }
+.omo-coach-count { font-size: var(--omo-fs-2xs); font-weight: 600; letter-spacing: var(--omo-tracking-caps); text-transform: uppercase; color: var(--omo-accent); }
+.omo-coach-dots { display: inline-flex; gap: var(--omo-sp-1); flex: 1; }
+.omo-coach-dots i { width: 6px; height: 6px; border-radius: var(--omo-r-pill); background: var(--omo-line-3); }
+.omo-coach-dots i.is-done { background: var(--omo-accent-line); }
+.omo-coach-dots i.is-on { background: var(--omo-accent); width: 16px; }
+.omo-keys-lane .omo-coach-skip { height: var(--omo-control-h-sm); width: var(--omo-control-h-sm); padding: 0; justify-content: center; background: transparent; border-color: transparent; color: var(--omo-text-2); }
+.omo-coach-body { display: flex; align-items: flex-start; gap: var(--omo-sp-3); }
+.omo-coach-body strong { font-size: var(--omo-fs-lg); font-weight: 600; }
+.omo-coach-body p { margin: var(--omo-sp-1) 0 0; color: var(--omo-text-2); font-size: var(--omo-fs-sm); }
+.omo-coach-keys { display: inline-flex; flex-wrap: wrap; gap: 2px; max-width: 96px; padding-top: 2px; }
+.omo-coach-actions { display: flex; justify-content: flex-end; gap: var(--omo-sp-2); }
+
+/* ---------- Desk-key toast (W/N/E/R feedback) ---------- */
+.omo-keys-toast {
+    position: fixed; z-index: 1100; left: 50%; top: 64px; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px));
+    padding: var(--omo-sp-2) var(--omo-sp-4); font-size: var(--omo-fs-sm); color: var(--omo-text);
+    background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-3);
+    border-radius: var(--omo-r-md); box-shadow: var(--omo-shadow-2); pointer-events: none; animation: omo-keys-in var(--omo-dur-2) var(--omo-ease);
+}
+.omo-keys-toast.is-warn { border-color: var(--omo-warn); background: var(--omo-glass-strong); box-shadow: var(--omo-shadow-2), inset 3px 0 0 var(--omo-warn); }
+
+/* ---------- Rename box (N / E) ---------- */
+.omo-keys-rename-backdrop { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: var(--omo-sp-6); background: rgba(0, 0, 0, .4); }
+.omo-keys-rename {
+    width: min(420px, 100%); display: flex; flex-direction: column; gap: var(--omo-sp-3); padding: var(--omo-sp-5);
+    background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2);
+    border-radius: var(--omo-r-lg); box-shadow: var(--omo-shadow-3); animation: omo-keys-in var(--omo-dur-2) var(--omo-ease);
+}
+.omo-keys-rename label { display: flex; flex-direction: column; gap: var(--omo-sp-2); }
+.omo-keys-rename strong { font-size: var(--omo-fs-lg); font-weight: 600; }
+.omo-keys-rename input, .omo-keys-find input {
+    height: 32px; padding: 0 var(--omo-sp-3); font: 400 var(--omo-fs-md)/1 var(--omo-font); color: var(--omo-text);
+    background: var(--omo-bg-1); border: 1px solid var(--omo-line-3); border-radius: var(--omo-r-sm);
+}
+.omo-keys-rename small { color: var(--omo-text-3); font-size: var(--omo-fs-xs); }
+.omo-keys-rename-error { margin: 0; padding: var(--omo-sp-2) var(--omo-sp-3); color: var(--omo-danger); background: var(--omo-danger-soft); border-radius: var(--omo-r-sm); font-size: var(--omo-fs-sm); }
+.omo-keys-rename-actions { display: flex; justify-content: flex-end; gap: var(--omo-sp-2); }
+
+/* ---------- Find box (right-click ▸ Find…) ---------- */
+.omo-keys-find {
+    position: fixed; z-index: 1100; top: 64px; right: var(--omo-sp-6); display: flex; align-items: center; gap: var(--omo-sp-1);
+    padding: var(--omo-sp-1) var(--omo-sp-1) var(--omo-sp-1) var(--omo-sp-3); color: var(--omo-text-2);
+    background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-3);
+    border-radius: var(--omo-r-md); box-shadow: var(--omo-shadow-3); animation: omo-keys-in var(--omo-dur-1) var(--omo-ease);
+}
+.omo-keys-find input { width: 220px; height: var(--omo-control-h); }
+.omo-keys-find output { min-width: 64px; font-size: var(--omo-fs-xs); color: var(--omo-text-3); text-align: center; font-variant-numeric: tabular-nums; }
+.omo-keys-lane .omo-keys-find button { width: var(--omo-control-h); padding: 0; justify-content: center; background: transparent; border-color: transparent; }
+.omo-keys-lane .omo-keys-find button:hover:not(:disabled) { background: var(--omo-surface-hover); }
+
+@keyframes omo-keys-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+    .omo-keys-backdrop, .omo-keys-sheet, .omo-coach, .omo-keys-toast, .omo-keys-rename, .omo-keys-find { animation: none; }
+}
+@media (max-width: 720px) {
+    .omo-keys-grid { grid-template-columns: 1fr; }
+    .omo-keys-group li { grid-template-columns: 1fr; gap: 2px; }
+    .omo-keys-find { left: var(--omo-sp-3); right: var(--omo-sp-3); }
+    .omo-keys-find input { flex: 1; width: auto; min-width: 0; }
+}
+.omo-keys-kicker { display: inline-flex; align-items: center; gap: var(--omo-sp-1); }
+.omo-coach-icon { color: var(--omo-accent); margin-top: 2px; }

@@ -1,0 +1,86 @@
+# Omo · spatial IDE
+
+A local Theia application with first-person walking and real terminal output on physical monitors. Omo code lives in this additive directory; the upstream Theia source and fork history stay intact.
+
+## Implemented in this integration branch
+
+- Space-station and jungle onboarding, workspace-folder choice and per-project room preferences.
+- **Portable room appearance presets**: Customise room → Export saved room downloads `omo-room-preset.json` with only theme, layout and overview camera. Import JSON previews it before an explicit Save; Cancel keeps the current room. Names, project paths, terminals, profiles, room identities, web URLs and task text are not included or accepted. The destination keeps its own project/name and running shells. See `ROOM-PRESETS.md`.
+- **Classic / Wide aisle** physical room layouts, with live setup preview, save/cancel and project-scoped local persistence. The real desks, screens and movement collision boxes use the same layout data. Changing layouts resets the view to safe spawn but does not replace terminal bindings or stop/restart their processes. Existing saved rooms without a layout stay Classic. Shared-room participants must choose the same layout; see `ROOM-LAYOUTS.md`.
+- Local shared-room presence: explicitly join the same room code from two trusted browser clients using the same project/theme/layout. See named 3D players move in the world, with separate default persistent terminal bindings for each participant. Join/leave never starts an agent or kills a shell. This is visual collaboration, not terminal sharing or authenticated multi-user hosting; see `SHARED-ROOMS.md`.
+- Two physical computers. Each binds to its own persistent tmux workspace and independent shell processes. Walking away, reloading the browser and restarting the backend do not deliberately kill those jobs.
+- Shell, Hermes, Claude Code and Codex tab launch paths, installed-tool discovery, existing Hermes-profile selection and explicit start/revive confirmations. CLI authentication and approval settings remain CLI-owned; no bypass flags are added.
+- **Task → Paste draft (no Enter)** prepares text for the selected live non-shell tab. Drafts are separate by project, desk, workspace and tab, and stay in this browser tab's session storage across reload (not shared task storage). Text remains after pasting; inspect the actual screen and press Enter there yourself. An agent-labelled tab can still be at a shell, login or permission prompt. **Review project changes** opens the existing read-only Git review; it does not submit input or infer completion. No automatic agent launch or paid task submission is added. See `AGENT-TASKS.md`.
+- **Latest task → project review → your decision** keeps the exact successfully pasted task for its agent tab. “I submitted this in the terminal” records your report only; it sends no input. Open the real current project changes, inspect the patch, then record Accepted or Changes requested. These are your review notes, not Git operations, agent-completion detection, test results or proof that the agent owns every change. Records are separate by project/desk/workspace/tab in this browser tab's session storage; denied storage keeps the record in memory with a warning. See `TASK-REVIEW.md`.
+- Tab switching, rename and confirmed close; workspace board, rename, same-project station rebinding, profile defaults, keep-awake metadata and confirmed deletion.
+- Scrollback, find, clear, copy-screen and safe paste. Clipboard events use the safe paste operation, not raw terminal input. Multiline terminal paste is refused unless the actual application advertises bracketed paste. Enter remains an explicit action.
+- Physical-screen label reach: first-person workstation labels stay hidden until their actual screen is within the existing 3.2-unit interaction reach. Distant Web/Code/desk labels cannot cover a nearer terminal click or text selection. Nearby labels and overview discovery remain available; no camera, collision or runtime changes.
+- Physical-screen selection: **Shift+drag** terminal text, **Shift+double-click** a word/path token, or **Shift+triple-click** a visible line; then **Ctrl+Shift+C** (or Meta+Shift+C) to copy. Word characters follow the Minecraft bridge's path/token rules. The highlight is painted into that monitor's texture. A multi-click following a drag does not replace the drag range. Ctrl+C still interrupts; normal drag still looks around. Selection is local, never opens/revives a runtime, and never reads the clipboard. New visible output, context changes, Escape or focus loss clear it. A denied clipboard write is reported without a terminal-input fallback. This covers the visible 80 × 22 grid, not cross-history selection or soft-wrap reconstruction.
+- Parser-authoritative Unicode cells: CJK continuation columns and full combining sequences survive the adapter. Drawing, colours, cursor and selection use that same grid. Selecting either half of a wide glyph copies it once; combining marks stay with their base. Glyphs, palette keys and cursor are snapshotted under one parser lock. Legacy hosts without cell data retain plain-text fallback, without a Unicode-column guarantee. Non-ASCII legacy rows do not offer guessed URL actions; current frames check URL clipping against actual columns. Browser fonts and the pinned parser still determine glyph coverage; complex emoji shaping, Unicode input/IME and Unicode-aware find are not certified by this rendering/copy change.
+- Visual terminal bells: a real bell changes that physical desk's lamp/header and adds a desk-selector badge, even while another desk is selected. Acknowledge is local-only: no sound, command or automatic agent action. These are signals from attached views, not proof that an agent finished and not a durable notification inbox.
+- Terminal links: **Manage → Links on this screen → Open in web wall**. Complete visible plain-text HTTP(S) addresses use the existing managed browser, not the host browser. The full destination is shown first; extraction never fetches it. Credentials, unsafe schemes and clipped addresses are refused. Wrapped URLs and OSC hyperlinks are not reconstructed.
+- A physical web wall backed by real managed Chrome screenshots, with screen-coordinate clicks, typing, scrolling, navigation and page mute/volume controls. Its Chrome profile is separate from personal Chrome and Minecraft. Production keeps Chrome's sandbox enabled.
+- Project-scoped last-web-address persistence. Reload does not silently open a browser; the user opens the saved address explicitly.
+- Conventional file editing through Theia/Monaco. Session controls occupy their own row and do not replace the in-world displays.
+- A physical Code screen with project-scoped Git change review. Click it (or **Code**) to read the changed-file list, explicitly select a real unified patch, refresh saved edits, and open the actual file in Theia. Returning to the world keeps a bounded patch preview on that screen. Review has no stage, commit, revert or agent-start operation; it disables Git external diff, textconv, fsmonitor and clean/process filters. See `CHANGE-REVIEW.md` for limits and snapshot semantics.
+
+See `INTEGRATION.md`, `RUNTIME.md`, `PARITY-ADVANCED.md` and `WEB-RUNTIME.md` for contracts and limits. `MINECRAFT-PARITY.md` is the source-pinned inventory, not a claim of complete parity.
+
+## Local run
+
+Run `npm run doctor` for a read-only setup check and concrete missing-tool/build fixes. It does not install software, start agents, launch Chrome or check logins. `npm run --silent doctor -- --json` returns a machine-readable report. See `SETUP.md` for first-run steps, exit codes and limits. macOS: see `MAC-SETUP.md` (Homebrew steps; not yet executed on macOS).
+
+Prerequisites: Node 22, npm, Python 3, bash and tmux. Chrome is optional for terminals but required for the web wall. Native Theia dependencies can require build tools and libsecret on Linux. See the runtime docs for explicit tool-path overrides and missing-dependency messages.
+
+Stop any app using this build output before rebuilding: Theia writes native addons into `browser-app/lib/backend/native`. Do not overwrite native build assets under a running backend.
+
+```sh
+cd omo
+PUPPETEER_SKIP_DOWNLOAD=true ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --no-audit --no-fund
+npm run build
+npm start -- --workspace ./demo-project --port 3190
+```
+
+Open `http://127.0.0.1:3190` locally. The launcher accepts an existing workspace directory and binds to loopback. Trust only folders whose files you know. Do not use acceptance scripts on a customer project.
+
+The runtime owns a distinct data directory and tmux socket. It refuses Minecraft's data directory and reserved sockets. A process lock prevents two hosts overwriting the same runtime data. A custom Hermes root is passed to Hermes launches without changing the selected profile's files.
+
+## Checks (no recording)
+
+```sh
+npm run compile
+npm test
+# With the actual local app running:
+OMO_URL=http://127.0.0.1:3190 node extension/test/runtime-real-app.cjs
+OMO_URL=http://127.0.0.1:3190 node extension/test/multi-station-real-app.cjs
+OMO_URL=http://127.0.0.1:3190 node extension/test/web-wall-real-app.cjs
+OMO_URL=http://127.0.0.1:3190 node extension/test/terminal-link-real-app.cjs
+OMO_URL=http://127.0.0.1:3190 node extension/test/physical-selection-real-app.cjs
+OMO_URL=http://127.0.0.1:3190 node extension/test/unicode-real-app.cjs
+OMO_URL=http://127.0.0.1:3190 node extension/test/shared-room-real-app.cjs
+# Starts its own loopback app and owned temporary Git repository:
+node extension/test/git-review-real-app.cjs
+# Starts an owned app/project with fixture-only Hermes/Claude/Codex executables:
+node extension/test/agent-task-real-app.cjs
+# Owns an app/repository and all three deterministic, no-network fixture agents:
+node extension/test/task-review-real-app.cjs
+# Starts an owned app/project for physical layout, shell continuity and two-client layout gates:
+node extension/test/room-layout-real-app.cjs
+# Starts two owned app/project/browser fixtures for actual appearance download/import:
+node extension/test/room-preset-real-app.cjs
+```
+
+The application tests use owned fixture files and isolated QA browser profiles. They inspect actual shell PIDs, exported state, workspace bindings, physical-monitor output and real page effects. The web-wall test also checks rendered blue/green screen pixels against a localhost fixture; metadata alone is not acceptance. Backend tests use real tmux; agent executables in tests are clearly labelled fixtures, not fabricated provider responses. Live paid model execution is not part of these checks.
+
+The isolated shared-runner workflow installs locked dependencies, rebuilds the required native drive addon and uses a checksum-pinned tmux for full bracketed-paste coverage. Ubuntu's older tmux does not expose that mode flag; the product fails closed rather than assuming it is safe. Only the container test harness uses test-only sandbox exceptions; production DI does not read that test flag. Local Chrome tests exercise production sandbox defaults.
+
+Evidence is written under ignored `evidence/`. Historical orbit/flat-terminal and recording scripts remain in Git for provenance; they are not current acceptance and no new demo is required.
+
+## Boundaries and unfinished work
+
+- Local developer alpha with trusted-client shared visual presence. All clients still act as the same OS user. Separate default terminal bindings are not authorization: existing workspace tools can intentionally attach another workspace. Loopback binding is not a hosted multi-tenant security boundary. Do not expose this app to a network or public tunnel.
+- Authenticated multiplayer hosting, shared-room permissions, shared screen/control grants, arbitrary building/map kits, Minecraft embedding, hosted billing and universal installers are not implemented.
+- Local uncommitted Git change review is implemented; remote GitHub PR review, stage/accept/revert/merge actions, a language-plugin bundle and debugger setup are not.
+- One explicitly approved real Claude Code task was validated through the physical terminal, normal per-operation approvals, actual file edits, independent tests, Git review and same-process reload continuity. See `REAL-AGENT-VALIDATION.md` for evidence and a physical click-target issue found during the run. Real Hermes/Codex inference, broad task reliability and all account states remain unverified. Installed tools and reported logins alone do not prove execution; real model calls are not part of automated CI.
+- Browser speaker output is off by default. Page media controls are tested; actual host audio requires `OMO_SPATIAL_WEB_AUDIO=1` and has not been audibly verified. Camera, microphone, passkey and other native browser permission flows are not certified.
+- No automatic agent wake or auto-sleep. No paid provider calls, default-branch merge, deployment or release are implied by a feature-branch push.

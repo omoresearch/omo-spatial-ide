@@ -1,0 +1,110 @@
+/*
+ * omo immersive lane: the room fills the whole browser window.
+ *
+ * Two switches, both set only while immersive is active:
+ *   body.omo-immersive-world          (immersive-service.ts)  hides Theia's chrome
+ *   .omo-root[data-immersive="true"]  (omo-world-widget.tsx)  hides Omo's own rows
+ * Theia's Lumino layout is not rebuilt. The World widget covers the window (position: fixed) and
+ * the shell is asked to lay out again on enter and on leave, so leaving gives the same layout back.
+ * Kept: crosshair, HUD (chat, notifications, toasts, who is speaking), F1 sheet, focus overlay.
+ * Theia notifications (z-index 1111) and dialogs still show above the room.
+ */
+
+/* ---------- Theia chrome ---------- */
+body.omo-immersive-world #theia-top-panel,
+body.omo-immersive-world #theia-statusBar { display: none !important; }
+body.omo-immersive-world #theia-left-content-panel,
+body.omo-immersive-world #theia-right-content-panel,
+body.omo-immersive-world #theia-bottom-content-panel,
+body.omo-immersive-world #theia-main-content-panel > .lm-DockPanel > .lm-TabBar,
+body.omo-immersive-world #theia-main-content-panel .theia-app-centers > .lm-TabBar { visibility: hidden !important; }
+
+/* The World widget takes the whole window. Lumino sets inline top/left/width/height; these win. */
+body.omo-immersive-world .omo-world-widget {
+    position: fixed !important; inset: 0 !important; top: 0 !important; left: 0 !important;
+    width: 100vw !important; height: 100vh !important; z-index: 1000; min-width: 0;
+    background: var(--omo-bg-0);
+}
+
+/* ---------- Omo chrome ---------- */
+.omo-root[data-immersive="true"] .omo-header,
+.omo-root[data-immersive="true"] .omo-footer,
+.omo-root[data-immersive="true"] .omo-stage-heading,
+.omo-root[data-immersive="true"] .omo-console-dock,
+.omo-root[data-immersive="true"] .omo-tool-dock,
+.omo-root[data-immersive="true"] .omo-git-review,
+.omo-root[data-immersive="true"] .omo-task-overview-view,
+.omo-root[data-immersive="true"] .omo-scene-controls,
+.omo-root[data-immersive="true"] .omo-navigation-switch,
+.omo-root[data-immersive="true"] .omo-hud-notices > .omo-hud-bell,
+.omo-root[data-immersive="true"] .omo-hud-chat > .omo-chat-toggle { display: none !important; }
+.omo-root[data-immersive="true"] .omo-body { display: block !important; position: relative; flex: 1 1 auto; height: 100%; }
+.omo-root[data-immersive="true"] .omo-stage { position: absolute !important; inset: 0; display: block !important; }
+.omo-root[data-immersive="true"] .omo-scene-wrap { position: absolute !important; inset: 0 !important; width: auto !important; height: auto !important; border: 0 !important; }
+
+/* HUD placement under the pill (the pill owns the top centre, chat and the bell). */
+.omo-root[data-immersive="true"] .omo-hud-speaking { top: 64px; }
+.omo-root[data-immersive="true"] .omo-hud-follow { top: 104px; }
+.omo-root[data-immersive="true"] .omo-hud-notices { top: 64px; }
+.omo-root[data-immersive="true"] .omo-hud-toasts { top: 64px; }
+.omo-root[data-immersive="true"] .omo-hud-chat { bottom: var(--omo-sp-4); }
+
+/* ---------- Immersive world button (next to Full-screen terminal) ---------- */
+.omo-immersive-launch {
+    position: absolute; z-index: 3; right: var(--omo-sp-4); bottom: calc(98px + var(--omo-control-h) + var(--omo-sp-2));
+    height: var(--omo-control-h); padding: 0 var(--omo-sp-3);
+    display: inline-flex; align-items: center; gap: var(--omo-sp-2); color: var(--omo-text); background: var(--omo-glass);
+    backdrop-filter: var(--omo-glass-blur); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-pill);
+    box-shadow: var(--omo-shadow-2); font: 500 var(--omo-fs-xs) var(--omo-font); cursor: pointer;
+    transition: background var(--omo-dur-1) var(--omo-ease), border-color var(--omo-dur-1) var(--omo-ease);
+}
+.omo-immersive-launch:hover { background: var(--omo-surface-3); border-color: var(--omo-accent-line); }
+.omo-immersive-launch:focus-visible { outline: none; box-shadow: var(--omo-focus); }
+.omo-scene-wrap:not(.omo-walking) .omo-immersive-launch { display: none; }
+.omo-root[data-focus="attaching"] .omo-immersive-launch,
+.omo-root[data-focus="attached"] .omo-immersive-launch { display: none; }
+
+/* ---------- The floating glass pill ---------- */
+.omo-immersive-pill {
+    position: absolute; z-index: 8; top: var(--omo-sp-3); left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: var(--omo-sp-1); max-width: calc(100% - 2 * var(--omo-sp-4));
+    height: 40px; padding: 0 var(--omo-sp-1) 0 var(--omo-sp-3); white-space: nowrap;
+    color: var(--omo-text-2); background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur);
+    border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-pill); box-shadow: var(--omo-shadow-3);
+    font: 500 var(--omo-fs-sm)/1 var(--omo-font); animation: omo-immersive-in var(--omo-dur-3) var(--omo-ease);
+}
+@keyframes omo-immersive-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translateX(-50%); } }
+.omo-immersive-pill .omo-icon { flex: 0 0 auto; display: block; }
+.omo-immersive-room { display: inline-flex; align-items: center; gap: var(--omo-sp-2); min-width: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+    color: var(--omo-text); font-weight: 600; }
+.omo-immersive-room i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--omo-accent); box-shadow: 0 0 0 3px var(--omo-accent-soft); }
+.omo-immersive-sep { flex: 0 0 1px; align-self: stretch; margin: 10px var(--omo-sp-1); background: var(--omo-line-2); }
+.omo-immersive-desks { display: inline-flex; gap: 2px; }
+.omo-immersive-pill button {
+    position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: var(--omo-control-h); padding: 0 10px;
+    border: 1px solid transparent; border-radius: var(--omo-r-pill); background: transparent; color: var(--omo-text-2);
+    font: inherit; cursor: pointer; transition: background var(--omo-dur-1) var(--omo-ease), color var(--omo-dur-1) var(--omo-ease);
+}
+.omo-immersive-pill button:hover:not(:disabled) { background: var(--omo-surface-2); color: var(--omo-text); }
+.omo-immersive-pill button:focus-visible { outline: none; box-shadow: var(--omo-focus); }
+.omo-immersive-pill button:disabled { opacity: .45; cursor: not-allowed; }
+.omo-immersive-pill button[aria-pressed="true"] { color: var(--omo-text); background: var(--omo-accent-soft); border-color: var(--omo-accent-line); }
+.omo-immersive-icon { width: var(--omo-control-h); padding: 0 !important; justify-content: center; }
+.omo-immersive-icon.has-unread { color: var(--omo-warn) !important; }
+.omo-immersive-count {
+    min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: var(--omo-warn); color: var(--omo-accent-ink);
+    font: 700 var(--omo-fs-2xs)/16px var(--omo-font); text-align: center; font-variant-numeric: tabular-nums;
+}
+.omo-immersive-icon .omo-immersive-count { position: absolute; top: -4px; right: -4px; }
+.omo-immersive-pill .omo-immersive-exit { color: var(--omo-text); background: var(--omo-surface-2); border-color: var(--omo-line-2); }
+.omo-immersive-pill .omo-immersive-exit:hover { border-color: var(--omo-accent-line); }
+.omo-immersive-launch kbd, .omo-immersive-pill kbd {
+    font: 600 var(--omo-fs-2xs) var(--omo-mono); color: var(--omo-text-2); border: 1px solid var(--omo-line-3);
+    border-radius: var(--omo-r-xs); padding: 0 5px; line-height: 16px;
+}
+/* A screen in use has its own bar (desks, chat, bell): the pill steps aside. G or Alt+Shift+G still leave. */
+.omo-root[data-focus="attaching"] .omo-immersive-pill,
+.omo-root[data-focus="attached"] .omo-immersive-pill { display: none; }
+@container omo-stage (max-width: 760px) { .omo-immersive-room { max-width: 120px; } }
+@media (max-width: 760px) { .omo-immersive-desks button { font-size: 0; gap: 0; } .omo-immersive-room { max-width: 110px; } }
+@media (prefers-reduced-motion: reduce) { .omo-immersive-pill { animation: none; } }

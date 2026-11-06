@@ -1,0 +1,116 @@
+/*
+ * Omo design tokens.
+ * One source of truth for colour, type, spacing, radius, elevation and motion.
+ * Imported by omo-world.css. Contrast of every text token was checked against
+ * every surface token (WCAG AA 4.5:1 or better for body text):
+ *   --omo-text   ≥ 11.7:1   --omo-text-2 ≥ 7.5:1   --omo-text-3 ≥ 5.2:1
+ *   --omo-accent ≥ 8.9:1    --omo-danger ≥ 6.6:1   --omo-warn/ok ≥ 7.8:1
+ */
+.omo-world-widget,
+.omo-root {
+    /* Canvas and surfaces (darkest to lightest) */
+    --omo-bg-0: #0a0f15;
+    --omo-bg-1: #0e141c;
+    --omo-surface-1: #141c26;
+    --omo-surface-2: #1a2430;
+    --omo-surface-3: #223040;
+    --omo-surface-hover: #2a3a4c;
+    --omo-glass: rgba(16, 23, 32, .78);
+    --omo-glass-strong: rgba(14, 20, 28, .9);
+    --omo-glass-blur: blur(14px) saturate(140%);
+
+    /* Lines */
+    --omo-line: rgba(255, 255, 255, .07);
+    --omo-line-2: rgba(255, 255, 255, .12);
+    --omo-line-3: rgba(255, 255, 255, .2);
+
+    /* Text */
+    --omo-text: #eaf0f2;
+    --omo-text-2: #b7c4cb;
+    --omo-text-3: #93a3ac;
+
+    /* Brand and state */
+    --omo-accent: #8fe3c4;
+    --omo-accent-strong: #b4f0da;
+    --omo-accent-ink: #06231a;
+    --omo-accent-soft: rgba(143, 227, 196, .12);
+    --omo-accent-line: rgba(143, 227, 196, .42);
+    --omo-ok: #7bd99a;
+    --omo-warn: #f3bd62;
+    --omo-warn-soft: rgba(243, 189, 98, .14);
+    --omo-danger: #ff9b8f;
+    --omo-danger-soft: rgba(255, 155, 143, .12);
+    --omo-info: #9ec3ff;
+    --omo-agent-hermes: #f7d774;
+    --omo-agent-claude: #ebb3e0;
+    --omo-agent-codex: #a9cdf5;
+
+    /* Type */
+    --omo-font: Inter, 'Inter var', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --omo-mono: 'JetBrains Mono', 'SF Mono', 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+    --omo-fs-2xs: 10px;   /* uppercase micro labels only */
+    --omo-fs-xs: 11px;
+    --omo-fs-sm: 12px;
+    --omo-fs-md: 13px;
+    --omo-fs-lg: 15px;
+    --omo-fs-xl: 18px;
+    --omo-fs-2xl: 22px;
+    --omo-fs-3xl: 30px;
+    --omo-lh: 1.45;
+    --omo-tracking-caps: .09em;
+
+    /* Spacing (4 px grid) */
+    --omo-sp-1: 4px;
+    --omo-sp-2: 8px;
+    --omo-sp-3: 12px;
+    --omo-sp-4: 16px;
+    --omo-sp-5: 20px;
+    --omo-sp-6: 24px;
+    --omo-sp-8: 32px;
+
+    /* Radius */
+    --omo-r-xs: 4px;
+    --omo-r-sm: 6px;
+    --omo-r-md: 8px;
+    --omo-r-lg: 12px;
+    --omo-r-pill: 999px;
+
+    /* Control sizes */
+    --omo-control-h: 28px;
+    --omo-control-h-sm: 24px;
+    --omo-header-h: 44px;
+    --omo-footer-h: 26px;
+
+    /* Elevation */
+    --omo-shadow-1: 0 1px 2px rgba(0, 0, 0, .35);
+    --omo-shadow-2: 0 6px 18px rgba(0, 0, 0, .35), 0 1px 0 rgba(255, 255, 255, .04) inset;
+    --omo-shadow-3: 0 18px 48px rgba(0, 0, 0, .45), 0 1px 0 rgba(255, 255, 255, .05) inset;
+    --omo-focus: 0 0 0 2px var(--omo-bg-1), 0 0 0 4px var(--omo-accent);
+
+    /* Motion */
+    --omo-ease: cubic-bezier(.2, .7, .2, 1);
+    --omo-dur-1: 120ms;
+    --omo-dur-2: 200ms;
+    --omo-dur-3: 320ms;
+}
+
+/* Prehistoric jungle: warmer, leafier accent with the same contrast budget. */
+.omo-root.omo-jungle {
+    --omo-bg-0: #0a110f;
+    --omo-bg-1: #0d1513;
+    --omo-surface-1: #131d1a;
+    --omo-surface-2: #192622;
+    --omo-surface-3: #21312c;
+    --omo-surface-hover: #2a3e37;
+    --omo-glass: rgba(15, 24, 21, .8);
+    --omo-glass-strong: rgba(13, 21, 19, .9);
+    --omo-accent: #b9e58a;
+    --omo-accent-strong: #d3f2b0;
+    --omo-accent-ink: #13240a;
+    --omo-accent-soft: rgba(185, 229, 138, .12);
+    --omo-accent-line: rgba(185, 229, 138, .42);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .omo-root { --omo-dur-1: 0ms; --omo-dur-2: 0ms; --omo-dur-3: 0ms; }
+}

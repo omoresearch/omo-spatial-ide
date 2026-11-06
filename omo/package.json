@@ -1,0 +1,31 @@
+{
+  "name": "omo-spatial-ide",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "extension",
+    "browser-app"
+  ],
+  "scripts": {
+    "start": "node scripts/start.cjs",
+    "doctor": "node scripts/doctor.cjs",
+    "prepare:ide": "node scripts/prepare-ide.cjs",
+    "check:ide": "node scripts/prepare-ide.cjs --check --json",
+    "test:e2e": "node extension/test/runtime-real-app.cjs",
+    "test:ci-e2e": "node scripts/ci-e2e.cjs",
+    "compile": "tsc -p extension",
+    "build": "npm run prepare:ide && npm run compile && npm run build --workspace=omo-browser",
+    "test": "node --experimental-strip-types --test extension/test/*.test.cjs"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "@types/node": "22.15.30",
+    "@types/react": "18.3.23",
+    "@types/react-dom": "18.3.7",
+    "@types/three": "0.180.0"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

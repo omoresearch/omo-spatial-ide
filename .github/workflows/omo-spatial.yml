@@ -1,0 +1,67 @@
+name: Omo spatial IDE
+
+on:
+  push:
+    branches: ['omo/**']
+    paths: ['omo/**', '.github/workflows/omo-spatial.yml']
+  pull_request:
+    branches: ['omo/**', 'master']
+    paths: ['omo/**', '.github/workflows/omo-spatial.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omo-spatial-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-runtime:
+    if: github.repository == 'omoresearch/theia' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, ci-shared]
+    # Full browser coverage exceeded 25 minutes with every check passing;
+    # leave headroom for shared-runner load, setup and cleanup.
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: omo
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NODE_OPTIONS: '--max-old-space-size=4096'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Check isolated runner prerequisites
+        run: |
+          node --version
+          python3 --version
+          tmux -V
+      - name: Install locked compile/test dependencies (no lifecycle hooks)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Fetch checksum-pinned modern tmux for full paste-mode coverage
+        run: node scripts/ci-tmux.cjs "$RUNNER_TEMP/omo-tmux"
+      - name: Build the native drive-enumeration addon required at app startup
+        run: npm rebuild drivelist --foreground-scripts
+      - name: Type-check and test Omo code and local runtime
+        env:
+          OMO_WEB_TEST_CONTAINER: '1'
+        run: |
+          npm run compile
+          npm test
+      - name: Cache checksum-verified IDE extension downloads
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: omo/.cache
+          key: omo-ide-extensions-${{ hashFiles('omo/ide-extensions.lock.json') }}
+      - name: Prepare the pinned, sha256-verified IDE extension bundle
+        run: npm run prepare:ide
+      - name: Build the real Theia browser application
+        run: npm run build --workspace=omo-browser
+      - name: Check read-only developer setup preflight
+        run: npm run --silent doctor -- --json
+      - name: Exercise the actual app with real tmux shells and headless Chrome
+        run: npm run test:ci-e2e

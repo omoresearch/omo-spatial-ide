@@ -1,0 +1,52 @@
+/* Read-only Git review page. Uses tokens from design-tokens.css (imported by omo-world.css). */
+.omo-git-review {
+    display: flex; flex-direction: column; flex: 1; min-height: 0; padding: var(--omo-sp-4) var(--omo-sp-4) var(--omo-sp-2);
+    background: var(--omo-bg-0); color: var(--omo-text); overflow: hidden; outline: none;
+}
+.omo-git-review > header { display: flex; align-items: center; gap: var(--omo-sp-2); flex-wrap: wrap; margin-bottom: var(--omo-sp-3); }
+.omo-git-review > header > div { margin-right: auto; min-width: 0; }
+.omo-git-review h2 { margin: 0 0 2px; font-size: var(--omo-fs-xl); font-weight: 600; letter-spacing: -.01em; }
+.omo-git-review p { color: var(--omo-text-2); font-size: var(--omo-fs-xs); line-height: 1.55; margin: 0; }
+.omo-git-review button {
+    height: var(--omo-control-h); padding: 0 var(--omo-sp-3); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-sm);
+    background: var(--omo-surface-3); color: var(--omo-text); font-size: var(--omo-fs-sm); font-weight: 500; white-space: nowrap;
+}
+.omo-git-review button:hover:not(:disabled) { background: var(--omo-surface-hover); border-color: var(--omo-line-3); }
+.omo-git-review > header > button[data-testid="git-review-close"] { background: var(--omo-accent); color: var(--omo-accent-ink); border-color: var(--omo-accent-strong); font-weight: 600; }
+.omo-git-review > header > button[data-testid="git-review-close"]:hover { background: var(--omo-accent-strong); }
+.omo-git-review .omo-error { color: var(--omo-danger); margin-bottom: var(--omo-sp-2); }
+.omo-git-review-body {
+    display: flex; flex: 1; min-height: 0; border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-lg); overflow: hidden;
+    background: var(--omo-surface-1); box-shadow: var(--omo-shadow-2);
+}
+.omo-git-review-body > nav { flex: 0 0 280px; min-width: 0; overflow: auto; padding: var(--omo-sp-2); border-right: 1px solid var(--omo-line); background: var(--omo-bg-1); }
+.omo-git-review-body > nav > p { padding: var(--omo-sp-1) var(--omo-sp-2) var(--omo-sp-2); font-family: var(--omo-mono); color: var(--omo-text-3); }
+.omo-git-review-body > nav button {
+    display: flex; align-items: flex-start; gap: var(--omo-sp-2); width: 100%; height: auto; min-height: 28px; margin: 1px 0; padding: 5px var(--omo-sp-2);
+    text-align: left; background: transparent; border-color: transparent; font-size: var(--omo-fs-sm); font-weight: 400;
+}
+.omo-git-review-body > nav button:hover:not(:disabled) { background: var(--omo-surface-2); border-color: transparent; }
+.omo-git-review-body > nav button[aria-pressed="true"] { background: var(--omo-accent-soft); border-color: var(--omo-accent-line); }
+.omo-git-review-body code { white-space: pre; color: var(--omo-warn); font-family: var(--omo-mono); font-size: var(--omo-fs-xs); font-weight: 600; }
+.omo-git-review-body > nav span { overflow-wrap: anywhere; white-space: pre-wrap; }
+.omo-git-review-body > article { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.omo-git-review-file { display: flex; align-items: center; justify-content: space-between; gap: var(--omo-sp-3); padding: var(--omo-sp-2) var(--omo-sp-3); border-bottom: 1px solid var(--omo-line); background: var(--omo-surface-1); }
+.omo-git-review-file strong { overflow-wrap: anywhere; font: 600 var(--omo-fs-sm) var(--omo-mono); }
+.omo-git-review-file button { flex-shrink: 0; height: var(--omo-control-h-sm); font-size: var(--omo-fs-xs); }
+.omo-git-review pre {
+    margin: 0; padding: var(--omo-sp-4); flex: 1; min-height: 0; overflow: auto; font: 12px/1.65 var(--omo-mono);
+    background: var(--omo-bg-1); color: var(--omo-text); white-space: pre; tab-size: 4; user-select: text;
+}
+.omo-git-review-note { margin: var(--omo-sp-2) 0 0!important; color: var(--omo-text-3)!important; }
+@media (max-width: 760px) {
+    .omo-git-review { padding: var(--omo-sp-3); }
+    .omo-git-review-body > nav { flex-basis: 160px; }
+    .omo-git-review-file { flex-wrap: wrap; }
+}
+/* Patch line colouring (markup from PatchLines in git-review-panel.tsx). */
+.omo-git-review pre:has(.omo-patch-line) { padding: var(--omo-sp-3) 0; }
+.omo-patch-line { display: block; padding: 0 var(--omo-sp-4); min-height: 1.65em; border-left: 3px solid transparent; }
+.omo-patch-line.is-add { background: rgba(123, 217, 154, .1); color: #c5f2d3; border-left-color: var(--omo-ok); }
+.omo-patch-line.is-del { background: rgba(255, 155, 143, .1); color: #ffd3cd; border-left-color: var(--omo-danger); }
+.omo-patch-line.is-hunk { color: var(--omo-info); background: rgba(158, 195, 255, .07); margin-top: var(--omo-sp-1); }
+.omo-patch-line.is-meta { color: var(--omo-text-3); }
