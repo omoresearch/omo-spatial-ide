@@ -22,6 +22,10 @@ export interface WorldPresetPanelProps {
     disabled?: boolean;
     /** A desk is locked: previews that move desks cannot be saved. */
     locked?: boolean;
+    /** t3:polish2 — which locked desk blocks Save and what the preview does to it. */
+    lockedReason?: string;
+    /** t3:polish2 — Save was pressed while blocked: the note becomes an alert. */
+    lockedSaveTried?: boolean;
     onPreview: (world: WorldSpec, source: string) => void;
     onDiscard: () => void;
     onExport?: () => void;
@@ -65,7 +69,7 @@ export function WorldPresetPanel(props: WorldPresetPanelProps): React.ReactEleme
         {props.draft && <section className="omo-world-preview" data-testid="world-preset-preview" aria-label="World preview">
             <strong>{props.draftSource ?? 'Preview'} · {describeWorld(props.draft)}</strong>
             <ul>{lines.map((line, index) => <li key={index}>{line}</li>)}</ul>
-            {props.locked && <small role="note" data-testid="world-preset-locked">🔒 A desk is locked, so this world cannot be saved. Unlock it in Station recipes first.</small>}
+            {props.locked && <small role={props.lockedSaveTried ? 'alert' : 'note'} className={props.lockedSaveTried ? 'is-blocked' : undefined} data-testid="world-preset-locked">🔒 {props.lockedReason || 'A desk is locked, so this world cannot be saved. Unlock it in Station recipes first.'}</small>}{/* t3:polish2: names the desk */}
             <button type="button" data-testid="world-preset-discard" onClick={props.onDiscard}>Discard preview</button>
         </section>}
     </div>;

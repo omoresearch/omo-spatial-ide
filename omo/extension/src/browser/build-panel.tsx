@@ -72,8 +72,11 @@ export function BuildPanel(props: { build: BuildMode }): React.ReactElement | nu
         <div className={`omo-build-hint${s.tool === 'place' || s.tool === 'move' ? (s.ghostValid ? ' is-ok' : ' is-bad') : ''}`} role="status" data-testid="build-hint">{s.hint}</div>
         {s.notice && <div className={`omo-build-notice is-${s.noticeTone}`} role={s.noticeTone === 'warn' ? 'alert' : 'status'} data-testid="build-notice">{s.noticeTone === 'warn' ? <Icon name="alert" size={14} /> : <Icon name="check" size={14} />}{s.notice}</div>}
         {!s.worldRenderer && <div className="omo-build-renderer-note" data-testid="build-renderer-note">Blueprint view · New things show as outlines until the world renderer draws them.</div>}
-        {selected && !setupFor && <Inspector key={selected.id} build={build} entity={selected} />}
-        {store.proposal && <ProposalBar build={build} />}
+        {/* t3:polish2 — inspector and pending changes share one right column, so they never cover each other. */}
+        {((selected && !setupFor) || store.proposal) && <div className="omo-build-right">
+            {selected && !setupFor && <Inspector key={selected.id} build={build} entity={selected} />}
+            {store.proposal && <ProposalBar build={build} />}
+        </div>}
         {setupFor && <StationSetup key={setupFor.id} build={build} entity={setupFor} />}
     </div>;
 }

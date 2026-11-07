@@ -173,3 +173,8 @@
 @media (prefers-reduced-motion: reduce) {
     .omo-ob-pane, .omo-ob-confirm, .omo-ob-planning { animation: none; }
 }
+
+/* t3:polish2 — step labels size to their text (no clipped "Describe your plan"); the room size never wraps. */
+.omo-ob-steps { grid-template-columns: repeat(3, auto); }
+.omo-ob-meta > span:last-child { white-space: nowrap; flex: 0 0 auto; }
+.omo-ob-meta > span:first-child { min-width: 0; }

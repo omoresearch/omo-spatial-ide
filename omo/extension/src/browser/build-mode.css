@@ -258,3 +258,17 @@
     .omo-build-tool span { display: none; }
     .omo-build-notice { max-width: calc(100% - 32px); }
 }
+
+/* t3:polish2 — right column: inspector on top (scrolls), pending changes at the bottom. Neither covers the other. */
+.omo-build > .omo-build-right {
+    position: absolute; top: 64px; right: var(--omo-sp-3); bottom: var(--omo-sp-4); display: flex; flex-direction: column; align-items: flex-end;
+    gap: var(--omo-sp-2); pointer-events: none; min-height: 0;
+}
+.omo-build-right > * { pointer-events: auto; }
+.omo-build-right > .omo-build-inspector { position: relative; top: auto; right: auto; max-height: none; flex: 0 1 auto; min-height: 96px; }
+.omo-build-right > .omo-build-proposal { position: relative; right: auto; bottom: auto; flex: 0 0 auto; margin-top: auto; max-height: 60%; overflow: hidden; }
+.omo-build-right > .omo-build-proposal ul { max-height: 120px; }
+/* t3:polish2 — Station Setup: header, lock row and buttons stay in view; only the form scrolls. */
+.omo-build-dialog { overflow: hidden; }
+.omo-build-dialog > fieldset { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px; }
+.omo-build-dialog > header, .omo-build-dialog > .omo-build-lockrow, .omo-build-dialog > footer, .omo-build-dialog > .omo-build-locknote { flex: 0 0 auto; }

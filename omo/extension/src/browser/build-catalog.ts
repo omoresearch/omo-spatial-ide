@@ -102,7 +102,13 @@ export function makeEntity(item: PaletteId, world: WorldSpec, transform: Transfo
 const GRID = 0.25;
 export const snapGrid = (n: number): number => Math.round(n / GRID) * GRID;
 const round3 = (n: number): number => Math.round(n * 1000) / 1000;
-export const normalizeRotation = (r: number): number => { const two = Math.PI * 2; let v = r % two; if (v > Math.PI) v -= two; if (v < -Math.PI) v += two; return round3(v); };
+export const normalizeRotation = (r: number): number => {
+    const two = Math.PI * 2; let v = r % two; if (v > Math.PI) v -= two; if (v < -Math.PI) v += two;
+    // t3:polish2 — snap near-quarter turns to the exact quarter so rounding never builds up (four turns = 0, not 0.001).
+    const q = Math.round(v / (Math.PI / 2)); if (Math.abs(v - q * Math.PI / 2) < 0.01) v = q * Math.PI / 2;
+    if (v > Math.PI - 1e-9) v -= two; // +π and -π are one direction: keep one value
+    return round3(v) + 0; // + 0 turns -0 into 0
+};
 
 /**
  * Where a palette item goes for a floor point: grid-snapped, kept inside the shell, and (wall items)

@@ -6,3 +6,4 @@
 .omo-world-preview ul { margin: 0 0 var(--omo-sp-2); padding-left: 1.1em; max-height: 160px; overflow: auto; }
 .omo-world-preview li { line-height: 1.45; }
 .omo-world-preview small[role=note] { display: block; margin-bottom: var(--omo-sp-2); }
+.omo-world-preview small.is-blocked { color: var(--omo-warn); padding: 6px 8px; border: 1px solid rgba(243, 189, 98, .45); border-radius: var(--omo-r-sm); background: var(--omo-warn-soft); } /* t3:polish2 */

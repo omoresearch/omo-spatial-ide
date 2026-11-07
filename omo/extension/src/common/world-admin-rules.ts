@@ -619,7 +619,8 @@ class Planner {
         let rotation = target.transform.rotation + delta;
         while (rotation > Math.PI) rotation -= 2 * Math.PI;
         while (rotation < -Math.PI) rotation += 2 * Math.PI;
-        this.push({ op: 'move', id: target.id, transform: { ...target.transform, rotation: round(rotation * 1000) / 1000 } });
+        { const q = Math.round(rotation / (Math.PI / 2)); if (Math.abs(rotation - q * Math.PI / 2) < 0.01) rotation = q * Math.PI / 2; if (rotation > Math.PI - 1e-9) rotation -= 2 * Math.PI; } // t3:polish2: exact quarters, no drift
+        this.push({ op: 'move', id: target.id, transform: { ...target.transform, rotation: round(rotation * 1000) / 1000 + 0 } });
         this.lastRefs = [target.id];
     }
 
