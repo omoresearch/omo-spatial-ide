@@ -67,6 +67,7 @@ async function main() {
         process.stdout.write([
             `Invite ${out.record.id}: role ${out.record.role}, single use, expires ${new Date(out.record.expiresAt).toISOString()}`,
             out.link ? `Link (send privately): ${out.link}` : 'No --public-url given; send the invite code and the server address:',
+            ...(a['public-url'] ? [`Omo app link (paste into Remote room → Join): ${require('./src/ide-wire.cjs').ideInviteLink(new URL(a['public-url']).origin, roomId, out.token)}`] : []), // t2:pkg
             `Invite code: ${out.token}`,
             ''
         ].join('\n') + '\n');

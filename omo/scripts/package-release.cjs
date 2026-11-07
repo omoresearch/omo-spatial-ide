@@ -78,6 +78,12 @@ function stagePayload(stage, version, platformArch) {
     for (const rel of ['scripts/start.cjs', 'scripts/runtime-ide-plugins.cjs', 'scripts/doctor.cjs', 'scripts/prepare-ide.cjs', 'ide-extensions.lock.json', 'package.json', 'README.md', 'MAC-SETUP.md', 'SETUP.md']) {
         if (fs.existsSync(path.join(ROOT, rel))) copy(rel);
     }
+    // t2:pkg: the standalone room server (shared rooms) and its one dependency, ws, so the package can host rooms.
+    for (const rel of ['server/omo-room-server.cjs', 'server/package.json', 'server/README.md', 'server/src', 'server/vendor', 'server/client']) copy(rel);
+    const wsDir = path.dirname(require.resolve('ws/package.json', { paths: [path.join(ROOT, 'server'), ROOT] }));
+    for (const f of ['package.json', 'index.js', 'wrapper.mjs', 'browser.js', 'LICENSE', 'lib']) {
+        if (fs.existsSync(path.join(wsDir, f))) fs.cpSync(path.join(wsDir, f), path.join(stage, 'server', 'node_modules', 'ws', f), { recursive: true, dereference: true });
+    }
     fs.copyFileSync(path.join(PACKAGING, 'desktop-launch.cjs'), path.join(stage, 'scripts', 'desktop-launch.cjs'));
     fs.copyFileSync(path.join(PACKAGING, 'omo-app.sh'), path.join(stage, 'omo-app'));
     fs.chmodSync(path.join(stage, 'omo-app'), 0o755);
@@ -103,6 +109,20 @@ if [ -z "\${OMO_SPATIAL_TMUX:-}" ] && ! command -v tmux >/dev/null 2>&1; then
 fi
 exec "$NODE" "$HERE/scripts/start.cjs" "$@"
 `, { mode: 0o755 });
+    // t2:pkg: room server launcher (same bundled Node.js). ./omo-room-server --help lists the commands.
+    fs.writeFileSync(path.join(stage, 'omo-room-server'), `#!/bin/sh
+# Omo room server ${version}: shared rooms for people on different computers. See server/README.md.
+#   ./omo-room-server create-room --data DIR --id ROOM --owner NAME
+#   ./omo-room-server --data DIR --port 8787
+set -e
+HERE="$(cd "$(dirname "$0")" && pwd)"
+NODE="$HERE/vendor/node/bin/node"
+if [ ! -x "$NODE" ]; then
+    NODE="$(command -v node 2>/dev/null || true)"
+    [ -n "$NODE" ] || { echo "omo-room-server needs Node.js 22 or newer." >&2; exit 1; }
+fi
+exec "$NODE" "$HERE/server/omo-room-server.cjs" "$@"
+`, { mode: 0o755 });
     fs.writeFileSync(path.join(stage, 'INSTALL.txt'), `${APP_NAME} ${version} (${platformArch})
 
 ${mac ? `Easiest: download the .dmg, open it and drag "${APP_NAME}" to Applications.
@@ -118,11 +138,29 @@ This tarball is the same app for the terminal:
 2. Unpack:   tar -xzf omo-spatial-ide-${version}-${platformArch}.tar.gz && cd omo-spatial-ide-${version}-${platformArch}
 ${mac ? '   macOS may quarantine downloaded files:  xattr -dr com.apple.quarantine .\n' : ''}3. Run:      ./omo-app                      (desktop: free port, opens the browser, logs to a file)
    or:       ./omo --workspace /path/to/your/project   (terminal: http://127.0.0.1:3190)
+4. Optional: ./omo-room-server hosts shared rooms for people on other computers (server/README.md).
 
 Local single-user IDE: listens only on 127.0.0.1. ${mac ? 'Not code-signed unless the release notes say so. ' : ''}Agents (Hermes, Claude Code,
 Codex) are used only if their CLIs are installed and signed in; starting one always asks first.
 Third-party licenses for bundled runtimes: vendor/node/LICENSE, vendor/tmux/LICENSES/.
 `);
+}
+
+/** t2:pkg: files the packaged app needs at run time. A missing one fails the build, not the user's first launch. */
+const PAYLOAD_REQUIRED = [
+    'omo', 'omo-app', 'omo-room-server', 'scripts/start.cjs', 'scripts/desktop-launch.cjs', 'scripts/runtime-ide-plugins.cjs', 'ide-extensions.lock.json',
+    'browser-app/lib/backend/main.js', 'browser-app/lib/frontend/index.html', 'browser-app/src-gen/backend/main.js',
+    'runtime/omo_spatial_host.py', 'runtime/claude_status_hook.py', 'runtime/claude_with_status.sh', 'runtime/dsh_web_launch.py',
+    'runtime/guarded_hermes_exec.py', 'runtime/owned_agent_exec.py', 'runtime/owned_agent_launch.py', 'runtime/owned_pty_process.py', 'runtime/process_identity.py',
+    'runtime/bridge/omobridge.py', 'runtime/bridge/tmux.conf',
+    'server/omo-room-server.cjs', 'server/src/server.cjs', 'server/src/hub.cjs', 'server/vendor/world-model.cjs', 'server/vendor/presence-protocol.cjs',
+    'server/vendor/player-state.cjs', 'server/node_modules/ws/index.js'
+];
+function verifyPayload(stage) {
+    const missing = PAYLOAD_REQUIRED.filter(rel => !fs.existsSync(path.join(stage, rel)));
+    if (missing.length) throw new Error(`Package payload incomplete: ${missing.join(', ')}`);
+    const tests = path.join(stage, 'runtime', 'tests');
+    if (fs.existsSync(tests)) fs.rmSync(tests, { recursive: true, force: true }); // the filter keeps an empty dir
 }
 
 /** Copy the pinned runtimes into <stage>/vendor. */
@@ -249,6 +287,7 @@ async function main() {
     const stage = path.join(out, name);
     fs.mkdirSync(out, { recursive: true });
     stagePayload(stage, version, platformArch);
+    verifyPayload(stage);
     const bundled = await addRuntimes(stage, platformArch, opts);
     const result = { version, platform: platformArch, stage, bundled, artifacts: {} };
     const record = (kind, file) => { if (file) result.artifacts[kind] = { file, sha256: writeChecksum(file), bytes: fs.statSync(file).size }; };
@@ -276,4 +315,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
-module.exports = { parseArgs, infoPlist };
+module.exports = { parseArgs, infoPlist, PAYLOAD_REQUIRED };
