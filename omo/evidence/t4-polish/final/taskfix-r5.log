@@ -1,0 +1,36 @@
+PASS: The full world exposes a task entry point
+PASS: A shell is not an agent task destination
+PASS: claude requires explicit launch confirmation
+TimeoutError: Waiting for selector `[data-testid="agent-task-input"]` failed
+    at CSSQueryHandler.waitFor (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/common/QueryHandler.js:211:46)
+    at async CdpFrame.waitForSelector (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:541:21)
+    at async CdpPage.waitForSelector (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:1387:20)
+    at async /home/harry/dev/omo-t4-polish/omo/extension/test/agent-task-real-app.cjs:100:13 {
+  cause: TimeoutError: Waiting failed: 30000ms exceeded
+      at new WaitTask (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/common/WaitTask.js:46:34)
+      at IsolatedWorld.waitForFunction (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Realm.js:49:26)
+      at CSSQueryHandler.waitFor (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/common/QueryHandler.js:176:95)
+      at async CdpFrame.waitForSelector (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:541:21)
+      at async CdpPage.waitForSelector (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:1387:20)
+      at async /home/harry/dev/omo-t4-polish/omo/extension/test/agent-task-real-app.cjs:100:13
+}
+RUNNER FAIL extension/test/agent-task-real-app.cjs (exit 1)
+PASS: claude: explicit launch confirmation and no other tab's task record
+PASS: claude: successful paste records exact text without submitting
+PASS: claude: submission report sends no terminal input and does not claim verified execution
+PASS: claude: real physical Enter delivers the original task and creates the owned project edit
+PASS: A real failed project review cannot unlock a task decision
+PASS: claude: real patch review and explicit accepted decision do not mutate Git, files or terminal input
+PASS: hermes: explicit launch confirmation and no other tab's task record
+PASS: hermes: successful paste records exact text without submitting
+PASS: Denied task-record storage keeps the usable record in memory with a visible warning
+PASS: hermes: submission report sends no terminal input and does not claim verified execution
+PASS: hermes: real physical Enter delivers the original task and creates the owned project edit
+PASS: hermes: real patch review and explicit changes-requested decision do not mutate Git, files or terminal input
+PASS: codex: explicit launch confirmation and no other tab's task record
+PASS: codex: successful paste records exact text without submitting
+PASS: codex: submission report sends no terminal input and does not claim verified execution
+PASS: codex: real physical Enter delivers the original task and creates the owned project edit
+PASS: codex: real patch review and explicit accepted decision do not mutate Git, files or terminal input
+PASS: All three isolated task records and user decisions survive reload without relaunch or resubmission
+RUNNER PASS extension/test/task-review-real-app.cjs (exit 0)

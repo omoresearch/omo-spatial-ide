@@ -7,6 +7,20 @@ const { execFileSync } = require('node:child_process');
 const { ROOT, CANVAS, openWorld, walkTo, clickStation } = require('./world-test-driver.cjs');
 const { DESK_ONE } = require('./world-navigation-targets.cjs');
 const { ownedAppFixture } = require('./owned-app-fixture.cjs');
+// t4: open the Task drawer with a real click, retrying if the click did not land. Just after an agent tab starts, the
+// console row re-flows (new tab chip, "started" notice), so a single coordinate click can hit the gap beside the button.
+async function openTaskDrawer(p) {
+    const misses = [];
+    for (let attempt = 0; attempt < 4; attempt++) {
+        if (await p.$eval('[data-testid="runtime-task-toggle"]', b => b.getAttribute('aria-expanded') === 'true')) return;
+        await new Promise(r => setTimeout(r, 150 * attempt));
+        const box = await p.$eval('[data-testid="runtime-task-toggle"]', b => { const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+        misses.push(await p.evaluate(({ x, y }) => { const e = document.elementFromPoint(x, y); return e ? `${e.tagName}.${e.className}`.slice(0, 80) + (e.dataset.testid ? `[${e.dataset.testid}]` : '') : 'none'; }, box));
+        await p.mouse.click(box.x, box.y);
+        try { await p.waitForFunction(() => document.querySelector('[data-testid="runtime-task-toggle"]')?.getAttribute('aria-expanded') === 'true', { timeout: 2000 }); if (attempt) console.log(`NOTE task drawer opened on click ${attempt + 1}; earlier hit: ${misses.slice(0, -1).join(' | ')}`); return; } catch { /* retry */ }
+    }
+    throw new Error(`Task drawer did not open after 4 real clicks; elements at the click point: ${misses.join(' | ')}`);
+}
 (async () => {
     let fixture, world;
     const previous = process.env.OMO_URL;
@@ -55,7 +69,7 @@ for line in sys.stdin:
             await p.click('[data-testid="runtime-confirm-yes"]');
             await p.waitForFunction(kind => document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.terminalText.includes('TASK-REVIEW-FIXTURE-READY-' + kind), {}, kind);
             tabs[kind] = await p.$eval('[data-testid="runtime-console"] [role="tab"][aria-selected="true"]', e => e.dataset.testid.slice('runtime-tab-'.length));
-            if (!await p.$('[data-testid="agent-task-input"]')) await p.click('[data-testid="runtime-task-toggle"]');
+            await openTaskDrawer(p); // t4: open only if closed; retried real click (row re-flows as the tab starts)
             await p.waitForSelector('[data-testid="agent-task-input"]');
             assert.equal(await p.$('[data-testid="task-run-phase"]'), null);
             check(`${kind}: explicit launch confirmation and no other tab's task record`);
@@ -119,7 +133,7 @@ for line in sys.stdin:
         const launched = records('launch').length; const received = records('input').length;
         await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForSelector(`${CANVAS}[data-navigation="walk"]`);
         await walkTo(p, DESK_ONE.x, DESK_ONE.z); await clickStation(p, 'terminal'); await p.waitForSelector('[data-testid="runtime-console"][data-phase="live"]');
-        if (!await p.$('[data-testid="agent-task-input"]')) await p.click('[data-testid="runtime-task-toggle"]');
+        await openTaskDrawer(p); // t4: open only if closed; retried real click (row re-flows as the tab starts)
         for (const kind of ['claude', 'hermes', 'codex']) {
             await p.click(`[data-testid="runtime-tab-${tabs[kind]}"]`); await phase(decisions[kind]);
             assert.ok((await p.$eval('[data-testid="task-run-text"]', e => e.textContent)).includes(`Owned ${kind} lifecycle task`));

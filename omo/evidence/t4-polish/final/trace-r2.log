@@ -1,0 +1,21 @@
+PASS: The full world exposes a task entry point
+PASS: A shell is not an agent task destination
+PASS: claude requires explicit launch confirmation
+PASS: claude has an isolated empty draft
+PASS: Writing a native task draft does not walk or send input
+PASS: hermes requires explicit launch confirmation
+PASS: hermes has an isolated empty draft
+PASS: Storage denial retains the native textarea text with a visible memory-only warning
+PASS: Writing a native task draft does not walk or send input
+PASS: codex requires explicit launch confirmation
+PASS: codex has an isolated empty draft
+PASS: Writing a native task draft does not walk or send input
+PASS: Switching agents restores the selected tab draft
+PASS: Multiline task text is blocked without real bracketed paste
+PASS: Actual PTY text reaches the physical terminal without submitting the task
+PASS: Pasting retains the draft and makes no completion claim
+PASS: Only the explicit physical-terminal Enter submits the exact draft to the selected fixture
+PASS: Task review shortcut reads actual project changes without submitting more input or changing Git
+PASS: This browser tab keeps the per-agent draft across reload without relaunching a process
+PASS: Task controls stay above, not over, the physical world
+RUNNER PASS extension/test/agent-task-real-app.cjs (exit 0)

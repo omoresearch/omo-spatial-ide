@@ -1,0 +1,17 @@
+PASS: The full world exposes a task entry point
+PASS: A shell is not an agent task destination
+PASS: claude requires explicit launch confirmation
+TimeoutError: Waiting for selector `[data-testid="agent-task-input"]` failed
+    at CSSQueryHandler.waitFor (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/common/QueryHandler.js:211:46)
+    at async CdpFrame.waitForSelector (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:541:21)
+    at async CdpPage.waitForSelector (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:1387:20)
+    at async /home/harry/dev/omo-t4-polish/omo/extension/test/agent-task-real-app.cjs:101:19 {
+  cause: TimeoutError: Waiting failed: 15000ms exceeded
+      at new WaitTask (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/common/WaitTask.js:46:34)
+      at IsolatedWorld.waitForFunction (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Realm.js:49:26)
+      at CSSQueryHandler.waitFor (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/common/QueryHandler.js:176:95)
+      at async CdpFrame.waitForSelector (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:541:21)
+      at async CdpPage.waitForSelector (file:///home/harry/dev/omo-t4-polish/omo/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:1387:20)
+      at async /home/harry/dev/omo-t4-polish/omo/extension/test/agent-task-real-app.cjs:101:19
+}
+RUNNER FAIL extension/test/agent-task-real-app.cjs (exit 1)
