@@ -14,6 +14,12 @@ class Buckets {
         if (b.tokens < cost) return false;
         b.tokens -= cost; return true;
     }
+    /** True when `cost` tokens are available, without taking them. */
+    has(key, cost = 1) {
+        const b = this.map.get(key);
+        if (!b) return true;
+        return Math.min(this.capacity, b.tokens + ((Date.now() - b.at) / 1000) * this.perSecond) >= cost;
+    }
     sweep(now = Date.now(), hard = false) {
         for (const [k, b] of this.map) if (hard || b.tokens + ((now - b.at) / 1000) * this.perSecond >= this.capacity) this.map.delete(k);
     }
