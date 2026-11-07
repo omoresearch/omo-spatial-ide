@@ -133,7 +133,7 @@ export class BuildMode {
                     off.push(() => { if (controls.buildClick) controls.buildClick = undefined; if (controls.buildKey) controls.buildKey = undefined; });
                 }
                 this.bound = { scene, controls, off };
-                this.pushWorld();
+                this.pushWorld(); this.markWrap(this.state.active);
             }
             this.set({ worldRenderer: hasWorldRenderer(scene) });
         }
@@ -160,6 +160,7 @@ export class BuildMode {
         this.bound.controls?.releaseTyping();
         this.set({ active: true, tool: 'select', item: undefined, selected: undefined, hover: undefined, linkSource: undefined, setupFor: undefined, notice: '' });
         this.layer.attach(threeOf(this.bound.scene).scene);
+        this.markWrap(true); this.pushWorld();
         this.render();
         this.options.message('Build mode · Pick something from the palette · Click a thing to select it · B to leave.');
     }
@@ -171,6 +172,7 @@ export class BuildMode {
         this.ghost = undefined;
         this.set({ active: false, tool: 'select', item: undefined, selected: undefined, hover: undefined, linkSource: undefined, setupFor: undefined });
         this.layer.render(this.view()); this.layer.detach();
+        this.markWrap(false); this.pushWorld();
         this.bound?.controls?.element.focus({ preventScroll: true });
         this.options.message('Build mode off.');
         return true;
@@ -250,8 +252,13 @@ export class BuildMode {
     saveSetup(id: string, next: StationConfig, label?: string): boolean {
         const e = this.entity(id); if (e?.kind !== 'station') return false;
         const cur = e.station, ops: WorldOp[] = [];
-        if (cur.locked && next.locked) { this.warn(`${entityTitle(e)} is locked. Unlock it first.`); return false; }
-        if (cur.locked && !next.locked) ops.push({ op: 'update-station', id, station: { locked: false } });
+        if (cur.locked) {
+            // A locked desk takes exactly one change: unlock. Edit it after that.
+            if (next.locked) { this.warn(`${entityTitle(e)} is locked. Unlock it first.`); return false; }
+            const ok = this.propose([{ op: 'update-station', id, station: { locked: false } }], `Unlock ${entityTitle(e)}`);
+            if (ok) this.set({ setupFor: undefined });
+            return ok;
+        }
         const change: Partial<StationConfig> = {};
         if (next.name !== cur.name) change.name = next.name;
         if (next.kind !== cur.kind) change.kind = next.kind;
@@ -261,7 +268,7 @@ export class BuildMode {
         if ('profile' in change || Object.keys(change).length) ops.push({ op: 'update-station', id, station: change });
         const newLabel = (label ?? next.name).trim();
         if (newLabel && newLabel !== e.label) ops.push({ op: 'rename', id, label: newLabel.slice(0, 60) });
-        if (!cur.locked && next.locked) ops.push({ op: 'update-station', id, station: { locked: true } });
+        if (next.locked) ops.push({ op: 'update-station', id, station: { locked: true } });
         if (!ops.length) { this.closeSetup(); return true; }
         const ok = this.propose(ops, `Station Setup · ${next.name}`);
         if (ok) this.set({ setupFor: undefined });
@@ -485,6 +492,8 @@ export class BuildMode {
         this.layer.detach();
         this.bound = undefined;
     }
+    /** `data-building` on the scene wrapper: crosshair cursor, dimmed workstation labels (build-mode.css). */
+    private markWrap(on: boolean): void { const wrap = threeOf(this.bound?.scene).canvas?.closest('.omo-scene-wrap') as HTMLElement | null; if (wrap) wrap.dataset.building = String(on); }
     private focusCanvas(): void { const c = threeOf(this.bound?.scene).canvas; c?.focus({ preventScroll: true }); }
     private entity(id: string | undefined): WorldEntity | undefined { return id ? this.store?.preview.entities.find(e => e.id === id) : undefined; }
     private preview(): WorldSpec { return this.store?.preview ?? emptyWorld; }

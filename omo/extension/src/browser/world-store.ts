@@ -50,7 +50,9 @@ export interface WorldStoreChange { reason: WorldStoreEvent; world: WorldSpec; p
 
 interface HistoryEntry { label: string; before: WorldSpec; after: WorldSpec; ops: WorldOp[] }
 
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value));
+/** Ops keep explicit `undefined` keys (`{ profile: undefined }` clears a profile in the contract's merge). */
+const cloneOps = (ops: readonly WorldOp[]): WorldOp[] => typeof structuredClone === 'function' ? structuredClone(ops) as WorldOp[] : ops.map(o => ({ ...o, ...('station' in o ? { station: { ...o.station, ...(o.station.tabs ? { tabs: o.station.tabs.map(t => ({ ...t })) } : {}) } } : {}) }) as WorldOp);
 let proposalCounter = 0;
 const proposalId = (): string => `p-${Date.now().toString(36)}-${(++proposalCounter).toString(36)}`;
 
@@ -109,10 +111,10 @@ export class WorldStore {
     /** Replace the pending proposal. Returns the preview world, or why the ops are refused (nothing changes then). */
     propose(proposal: Omit<WorldProposal, 'id' | 'baseRevision'> & Partial<Pick<WorldProposal, 'id' | 'baseRevision'>>): WorldResult {
         const base = this.world;
-        const steps: ProposalStep[] = [{ label: proposal.summary, ops: clone(proposal.ops) }];
+        const steps: ProposalStep[] = [{ label: proposal.summary, ops: cloneOps(proposal.ops) }];
         const result = applyWorldOps(base, steps[0].ops);
         if (!result.ok) { this.fail(result.error); return result; }
-        this.pending = { id: proposal.id ?? proposalId(), source: proposal.source, summary: proposal.summary, ops: clone(proposal.ops), baseRevision: base.revision, steps, diff: [] };
+        this.pending = { id: proposal.id ?? proposalId(), source: proposal.source, summary: proposal.summary, ops: cloneOps(proposal.ops), baseRevision: base.revision, steps, diff: [] };
         this.previewWorld = result.world;
         this.pending.diff = describeChange(base, result.world);
         this.lastError = '';
@@ -124,7 +126,7 @@ export class WorldStore {
     amend(ops: WorldOp[], label: string, source: WorldProposal['source'] = 'build-mode'): WorldResult {
         if (!this.pending) return this.propose({ source, summary: label, ops });
         const base = this.world;
-        const steps = [...this.pending.steps, { label, ops: clone(ops) }];
+        const steps = [...this.pending.steps, { label, ops: cloneOps(ops) }];
         const all = steps.flatMap(step => step.ops);
         const result = applyWorldOps(base, all);
         if (!result.ok) { this.fail(result.error); return result; }
@@ -308,6 +310,7 @@ export function diffWorlds(a: WorldSpec, b: WorldSpec): WorldOp[] {
             if (ea.station.locked && !eb.station.locked) unlocks.push({ op: 'update-station', id: ea.id, station: { locked: false } });
             const change: Partial<StationConfig> = {};
             for (const k of ['name', 'kind', 'profile', 'tabs'] as const) if (!deepEqual(ea.station[k], eb.station[k])) (change as Record<string, unknown>)[k] = clone(eb.station[k]);
+            // An explicit `profile: undefined` key clears the profile in the contract's spread merge.
             if (Object.keys(change).length) edits.push({ op: 'update-station', id: ea.id, station: change });
             if (!ea.station.locked && eb.station.locked) locks.push({ op: 'update-station', id: ea.id, station: { locked: true } });
         }

@@ -71,7 +71,7 @@ function placeGroup(group: THREE.Object3D, t: Transform): void { group.position.
 
 let lockTexture: THREE.CanvasTexture | undefined;
 function lockSprite(): THREE.Sprite {
-    if (!lockTexture) {
+    if (!lockTexture && typeof document !== 'undefined') {
         const c = document.createElement('canvas'); c.width = c.height = 128;
         const g = c.getContext('2d');
         if (g) {
@@ -110,6 +110,7 @@ export class BuildLayer {
     private particles?: { points: THREE.Points; from: THREE.Vector3; to: THREE.Vector3; start: number; offsets: Float32Array };
     private stopTick?: () => void;
     private ghostKey = '';
+    private blueprintKey = '';
     /** Called once per drawn room frame while attached (build mode re-aims the ghost here). */
     onFrame?: () => void;
     private readonly ray = new THREE.Raycaster();
@@ -171,6 +172,10 @@ export class BuildLayer {
     }
 
     private renderBlueprints(view: BuildLayerView): void {
+        // Rebuilt only when what they show changes (the ghost moves far more often).
+        const key = JSON.stringify([view.world.entities, [...view.pending], view.selected, view.hover, view.linkSource, view.solid]);
+        if (key === this.blueprintKey && this.blueprints.children.length === view.world.entities.length) return;
+        this.blueprintKey = key;
         disposeTree(this.blueprints); this.blueprints.clear();
         for (const e of view.world.entities) {
             const fp = footprint(e);
@@ -193,7 +198,11 @@ export class BuildLayer {
         }
     }
 
+    private linkKey = '';
     private renderLinks(view: BuildLayerView): void {
+        const key = this.blueprintKey;
+        if (key === this.linkKey) return;
+        this.linkKey = key;
         disposeTree(this.links); this.links.clear();
         const byId = new Map(view.world.entities.map(e => [e.id, e]));
         for (const e of view.world.entities) {
