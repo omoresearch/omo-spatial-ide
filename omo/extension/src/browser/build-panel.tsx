@@ -54,7 +54,7 @@ export function BuildPanel(props: { build: BuildMode }): React.ReactElement | nu
         if (isField(event.target)) { if (event.key === 'Escape') (event.target as HTMLElement).blur(); return; }
         if (build.handleKey(event.nativeEvent)) { event.preventDefault(); event.stopPropagation(); }
     };
-    return <div className="omo-build" data-testid="build-mode" data-tool={s.tool} onKeyDown={onKey}>
+    return <div className="omo-build" data-testid="build-mode" data-tool={s.tool} data-ghost={s.ghostAt && (s.tool === 'place' || s.tool === 'move') ? `${s.ghostAt.x},${s.ghostAt.z},${s.ghostAt.rotation},${s.ghostValid}` : ''} data-selected={s.selected ?? ''} data-hover={s.hover ?? ''} onKeyDown={onKey}>
         <div className="omo-build-topbar" role="toolbar" aria-label="Build tools">
             <span className="omo-build-badge"><BuildGlyph name="build" size={14} /> Build</span>
             <ToolButton glyph="cursor" label="Select" keyHint="V" active={s.tool === 'select'} onClick={() => build.selectTool()} />

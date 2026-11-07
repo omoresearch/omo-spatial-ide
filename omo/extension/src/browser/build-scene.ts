@@ -184,7 +184,7 @@ export class BuildLayer {
             const pending = view.pending.has(e.id);
             const color = selected || source ? COLOR.select : hover ? COLOR.hover : pending ? COLOR.pending : kindColor(e);
             const fillOpacity = selected || source ? 0.16 : hover ? 0.1 : view.solid ? 0.1 : 0.0;
-            const box = new THREE.Mesh(boxFor(fp), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: fillOpacity, depthWrite: false }));
+            const box = new THREE.Mesh(boxFor(fp), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: fillOpacity, depthWrite: false, side: THREE.DoubleSide /* pick works from inside a footprint */ }));
             box.userData.pickable = true; box.userData.area = fp.width * fp.depth; box.renderOrder = 10;
             group.add(box);
             if (selected || hover || source || view.solid || pending) {

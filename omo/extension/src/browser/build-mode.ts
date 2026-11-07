@@ -40,6 +40,10 @@ export interface BuildState {
     setupFor?: string;
     /** True when the renderer draws the WorldSpec (RoomScene.setWorld exists). */
     worldRenderer: boolean;
+    /** Where the ghost is (inspection data for tests and the HUD). */
+    ghostAt?: Transform;
+    /** Bumps when profile names arrive (re-renders Station Setup). */
+    profilesVersion: number;
     /** Short status line for the build HUD. */
     hint: string;
     /** Shown briefly when something was refused. */
@@ -52,6 +56,8 @@ export interface BuildModeOptions {
     store: () => WorldStore | undefined;
     /** Hermes profiles found on this computer (host status). Names only. */
     profiles: () => string[];
+    /** Read-only host status (profile names). Called when Station Setup opens and no desk has read them yet. */
+    loadProfiles?: () => Promise<string[]>;
     /** One-line room feedback (footer). */
     message: (text: string) => void;
 }
@@ -61,7 +67,7 @@ const isLinkable = (e: WorldEntity | undefined): boolean => e?.kind === 'monitor
 const isLocked = (e: WorldEntity | undefined): boolean => e?.kind === 'station' && e.station.locked;
 
 export class BuildMode {
-    state: BuildState = { active: false, tool: 'select', rotation: 0, ghostValid: false, ghostReason: '', worldRenderer: false, hint: '', notice: '', noticeTone: 'info' };
+    state: BuildState = { active: false, tool: 'select', rotation: 0, ghostValid: false, ghostReason: '', worldRenderer: false, profilesVersion: 0, hint: '', notice: '', noticeTone: 'info' };
     readonly layer = new BuildLayer();
     private listeners = new Set<() => void>();
     private bound?: { scene: RoomScene; controls?: FirstPersonControls; off: Array<() => void> };
@@ -81,7 +87,9 @@ export class BuildMode {
         // Overview mode has no FirstPersonControls: take B / build keys and clicks from the canvas here.
         const key = (event: KeyboardEvent): void => {
             const canvas = threeOf(this.bound?.scene).canvas;
-            if (!canvas || event.target !== canvas || this.bound?.controls?.enabled) return;
+            if (!canvas) return;
+            const lost = this.state.active && (event.target === document.body || event.target === document.documentElement);
+            if (!lost && (event.target !== canvas || this.bound?.controls?.enabled)) return;
             if (this.handleKey(event)) { event.preventDefault(); event.stopImmediatePropagation(); }
         };
         const down = (event: PointerEvent): void => {
@@ -247,7 +255,11 @@ export class BuildMode {
         if (e?.kind !== 'station') { this.warn('Station Setup is for desks. Select a desk first.'); return; }
         this.bound?.controls?.releaseTyping();
         this.set({ setupFor: e.id, selected: e.id });
+        if (!this.options.profiles().length && !this.fetchedProfiles.length && this.options.loadProfiles) {
+            void this.options.loadProfiles().then(list => { this.fetchedProfiles = list; this.set({ profilesVersion: this.state.profilesVersion + 1 }); }, () => undefined);
+        }
     }
+    private fetchedProfiles: string[] = [];
     closeSetup(): void { this.set({ setupFor: undefined }); this.focusCanvas(); }
     /** Save Station Setup as one proposal step. Locked desks only accept `{ locked: false }`. */
     saveSetup(id: string, next: StationConfig, label?: string): boolean {
@@ -279,7 +291,7 @@ export class BuildMode {
         const e = this.entity(id); if (e?.kind !== 'station' || e.station.locked === locked) return;
         this.propose([{ op: 'update-station', id, station: { locked } }], `${locked ? 'Lock' : 'Unlock'} ${entityTitle(e)}`);
     }
-    profiles(): string[] { return this.options.profiles().filter(p => /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(p)); }
+    profiles(): string[] { return [...new Set([...this.options.profiles(), ...this.fetchedProfiles])].filter(p => /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(p)); }
 
     // ------------------------------------------------------------------ proposal
 
@@ -287,10 +299,11 @@ export class BuildMode {
         const store = this.store; if (!store?.proposal) return;
         const count = store.proposal.diff.length;
         const result = store.apply();
+        this.focusCanvas();
         if (result.ok) this.note(`Applied ${count} change${count === 1 ? '' : 's'}. Ctrl+Z to undo. Nothing was started.`);
         else this.warn(result.error);
     }
-    discard(): void { const store = this.store; if (!store?.proposal) return; store.discard(); this.note('Changes discarded. The world is as it was.'); }
+    discard(): void { const store = this.store; if (!store?.proposal) return; store.discard(); this.focusCanvas(); this.note('Changes discarded. The world is as it was.'); }
     undo(): void {
         const store = this.store; if (!store) return;
         if (store.proposal) { store.dropLastStep(); this.note('Removed the last unapplied step.'); return; }
@@ -427,7 +440,7 @@ export class BuildMode {
         if (!entity) return;
         const reason = this.fitProblem(world, entity, tool === 'move');
         this.ghost = { entity, valid: !reason };
-        this.set({ ghostValid: !reason, ghostReason: reason });
+        this.set({ ghostValid: !reason, ghostReason: reason, ghostAt: entity.transform });
         this.render();
     }
     /** Why `entity` cannot go where it is ('' = it fits). */
@@ -437,6 +450,8 @@ export class BuildMode {
         if (!r.ok) return friendly(r.error, world);
         const solid = (e: WorldEntity): boolean => e.kind === 'station' || (e.kind === 'decor' && e.decor !== 'rug' && e.decor !== 'window');
         const wallish = (e: WorldEntity): boolean => !solid(e) && !(e.kind === 'decor' && e.decor === 'rug');
+        const pose = this.bound?.scene.getPlayerPose();
+        if (solid(entity) && pose && threeOf(this.bound?.scene).navigation === 'walk' && inside(entity, pose)) return 'You are standing there. Step back a little.';
         for (const other of world.entities) {
             if (other.id === entity.id) continue;
             const clash = (solid(entity) && solid(other)) || (wallish(entity) && wallish(other) && Math.abs(entity.transform.rotation - other.transform.rotation) < 0.01);
@@ -539,6 +554,12 @@ function overlaps(a: WorldEntity, b: WorldEntity): boolean {
         if (a1 <= b0 + 1e-3 || b1 <= a0 + 1e-3) return false;
     }
     return true;
+}
+/** Point inside an entity's footprint (with a small body margin). */
+function inside(e: WorldEntity, p: { x: number; z: number }): boolean {
+    const fp = footprint(e), t = e.transform, c = Math.cos(t.rotation), s = Math.sin(t.rotation);
+    const dx = p.x - t.x, dz = p.z - t.z, lx = dx * c - dz * s, lz = dx * s + dz * c;
+    return Math.abs(lx) < fp.width / 2 + 0.25 && Math.abs(lz - fp.offsetZ) < fp.depth / 2 + 0.25;
 }
 function corners(e: WorldEntity): Array<{ x: number; z: number }> {
     const fp = footprint(e), t: Transform = e.transform, c = Math.cos(t.rotation), s = Math.sin(t.rotation);

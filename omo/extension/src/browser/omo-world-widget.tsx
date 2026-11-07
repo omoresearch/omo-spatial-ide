@@ -188,6 +188,7 @@ export class OmoWorldWidget extends ReactWidget {
     private worldStore?: WorldStore;
     private buildMode = new BuildMode({ scene: () => this.worldScene, store: () => this.currentWorldStore(),
         profiles: () => [...new Set([...(this.consoleStates.terminal.host?.profiles ?? []), ...(this.consoleStates['terminal-2'].host?.profiles ?? [])])],
+        loadProfiles: async () => (await this.runtime.status()).profiles, // read-only host status
         message: text => { this.feedback = text; this.update(); } });
     private currentWorldStore(): WorldStore | undefined {
         if (!this.project || !this.room || this.configuring) return undefined;
