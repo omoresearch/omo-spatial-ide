@@ -1,0 +1,118 @@
+PASS: Real rendered route includes persistent-runtime console, not just an unmounted component
+PASS: Room still starts in first person at eye height
+PASS: Session controls have their own layout row and never cover the 3D viewport
+PASS: Physical station stores an actual workspace and active tab binding
+PASS: No flat or hidden xterm panel replaces the in-world monitor
+PASS: In-world typing executes in the actual chosen project and records a real shell PID
+PASS: Actual command output, not an echoed command substring, reaches the physical monitor
+PASS: A real browser multiline clipboard event cannot execute a hidden shell command
+PASS: Single-line clipboard text waits for the operator to press Enter
+PASS: The same actual pasted line executes only after explicit Enter
+PASS: Real rename control changes persisted tab metadata without a replacement tab
+PASS: New shell is an independent tab inside the same persistent workspace
+PASS: Both tabs have distinct actual shell processes and independent environment state
+PASS: Switching tabs restores the first terminal output rather than clearing/restarting it
+PASS: Esc returns to walking while real shell work and output continue
+PASS: Page refresh reconnects the same workspace/tab without duplicates
+PASS: Renamed tab survives a full page reload and server metadata read
+PASS: Actual PID, exported environment and cwd survive browser refresh
+PASS: hermes launcher is on the real route with an availability state
+PASS: claude launcher is on the real route with an availability state
+PASS: codex launcher is on the real route with an availability state
+PASS: No uncaught browser errors occurred
+FINAL PASS: 22 real local-app runtime checks
+PASS: Real shell BEL, desk isolation, physical lamp, acknowledge and rearm
+PASS: both physical monitors select exact real shell text; visible highlight; real clipboard; explicit copy; output invalidation; Escape clears; native word and line gestures.
+PASS: Distant Web-wall label is hidden during first-person walking
+PASS: Nearby terminal label remains available
+PASS: A distant HTML workstation label cannot cover the physical terminal centre
+PASS: Normal terminal-centre click activates physical typing
+PASS: Web-wall label remains available when its actual screen is within reach
+PASS: Overview retains discoverable Web-wall labels regardless of walking reach
+PASS: Builtin Git provider stages the exact owned file through the real command palette
+PASS: Actual SCM message and commit action create the requested commit with a clean owned worktree
+PASS: Real JavaScript debugger pauses before execution with the source call stack visible
+PASS: JavaScript continue executes the actual owned program
+PASS: Real Python debugpy adapter pauses at entry with the source call stack visible
+PASS: Python continue executes the actual owned program
+PASS: All agent recorder logs stay empty; no real agent is launched and no Git remote is configured
+PASS: real CJK continuation, combining glyph raster, physical colour columns, cursor and exact clipboard; no terminal input from selecting/copying.
+PASS: owned temporary Git repo and isolated app; physical Code review, scoped real patches, long-preview label, literal filename/editor, unchanged index/HEAD/file.
+PASS: The full world exposes a task entry point
+PASS: A shell is not an agent task destination
+PASS: claude requires explicit launch confirmation
+TimeoutError: Waiting for selector `[data-testid="agent-task-input"]` failed
+    at CSSQueryHandler.waitFor (file:///home/harry/dev/omo-world-v2/omo/node_modules/puppeteer-core/lib/puppeteer/common/QueryHandler.js:211:46)
+    at async CdpFrame.waitForSelector (file:///home/harry/dev/omo-world-v2/omo/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:541:21)
+    at async CdpPage.waitForSelector (file:///home/harry/dev/omo-world-v2/omo/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:1387:20)
+    at async /home/harry/dev/omo-world-v2/omo/extension/test/agent-task-real-app.cjs:100:13 {
+  cause: TimeoutError: Waiting failed: 30000ms exceeded
+      at new WaitTask (file:///home/harry/dev/omo-world-v2/omo/node_modules/puppeteer-core/lib/puppeteer/common/WaitTask.js:46:34)
+      at IsolatedWorld.waitForFunction (file:///home/harry/dev/omo-world-v2/omo/node_modules/puppeteer-core/lib/puppeteer/api/Realm.js:49:26)
+      at CSSQueryHandler.waitFor (file:///home/harry/dev/omo-world-v2/omo/node_modules/puppeteer-core/lib/puppeteer/common/QueryHandler.js:176:95)
+      at async CdpFrame.waitForSelector (file:///home/harry/dev/omo-world-v2/omo/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:541:21)
+      at async CdpPage.waitForSelector (file:///home/harry/dev/omo-world-v2/omo/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:1387:20)
+      at async /home/harry/dev/omo-world-v2/omo/extension/test/agent-task-real-app.cjs:100:13
+}
+Real app agent-task-real-app.cjs failed with exit 1
+Real app server diagnostics:
+2026-11-07T14:26:36.524Z plugin-manager WARN Unsupported activation events: onEditSession:file, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T14:26:36.524Z plugin-manager WARN Unsupported activation events: onTerminalShellIntegration:*, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T14:26:36.524Z plugin-manager WARN Unsupported activation events: onTunnel, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T14:26:36.693Z root INFO [424efd46-5b7a-4b3c-9ed2-b902a3e437ef] Starting plugins.
+2026-11-07T14:26:36.727Z root INFO [424efd46-5b7a-4b3c-9ed2-b902a3e437ef] Start of 93 plugins: 2035.1 ms [3.675 s since frontend page start]
+2026-11-07T14:26:37.245Z root WARN Frontend OmoWorldContribution.onDidInitializeLayout took longer than the expected maximum 100 milliseconds: 2265.5 ms [4.193 s since frontend page start]
+2026-11-07T14:26:37.289Z core:ApplicationShell WARN Widget was activated, but did not accept focus after 2000ms: omo-world
+2026-11-07T14:26:38.056Z root INFO Replace loading indicator with ready workbench UI (animation): 810.9 ms [5.004 s since frontend page start]
+2026-11-07T14:26:38.056Z root INFO Frontend application startup sequence completed (async work may still be pending): 3849.1 ms [115.232 s since backend process start]
+2026-11-07T14:26:38.056Z root INFO Changed application state from 'initialized_layout' to 'ready'.
+2026-11-07T14:26:38.056Z root INFO All frontend contributions settled: 3910.9 ms [5.004 s since frontend page start]
+2026-11-07T14:26:55.810Z root INFO socket closed
+2026-11-07T14:26:55.810Z root INFO closing connection for 50b82f9d-da04-4a32-91b3-94c21ac6f9b0
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/localization-server'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/os'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/logger'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/commands'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/messageService'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/remote-filesystem'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/envs'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/workspace'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/quickInput'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/stopwatch'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/application'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/i18n'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/debug'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/task'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/quickPick'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/shell-terminal'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/search'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/hostedPlugin'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/plugin-ext'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/plugin-paths'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/vsx-registry'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/cli-preferences'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/mcpservermanagerserver'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/mcpservermanager'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/mcpOAuthFrontendDelegate'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/request-service'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/search-in-workspace'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/vsx-environment'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/terminals/1678121003'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/omo-runtime'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/omo-web'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/omo-presence'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/omo-remote-room'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/omo-git-review'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/omo-task-workspaces'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/omo-world-admin'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/omo-voice-settings'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/omo-agent-signals'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/keyStore'.
+2026-11-07T14:26:55.810Z core:DefaultMessagingService INFO Closing channel on service path '/services/languagePackService'.
+2026-11-07T14:27:58.847Z root INFO >>> Stopping backend contributions...
+2026-11-07T14:27:58.848Z process WARN This process was not registered or was already unregistered. [ID: 1678121003]
+2026-11-07T14:27:58.848Z process WARN This process was not registered or was already unregistered. [ID: 1362426579]
+2026-11-07T14:27:58.848Z process WARN This process was not registered or was already unregistered. [ID: 792315378]
+2026-11-07T14:27:58.848Z process WARN This process was not registered or was already unregistered. [ID: 1157230342]
+2026-11-07T14:27:58.850Z root INFO <<< All backend contributions have been stopped.
+
