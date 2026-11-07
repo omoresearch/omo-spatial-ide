@@ -1,0 +1,29 @@
+{
+  "_comment": "Pinned third-party runtimes bundled into the Omo app packages. Every download is sha256-verified by fetch-pinned.cjs before use. Update url + sha256 together, from the publisher's own checksum list.",
+  "node": {
+    "version": "22.23.4",
+    "source": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt (official Node.js release, LTS 'Jod')",
+    "assets": {
+      "darwin-arm64": { "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-darwin-arm64.tar.gz", "sha256": "c9e1dbc748b33ed2d14f42445191ecaf14c56259c7a9a26d0042c49ec2b66428", "dir": "node-v22.23.4-darwin-arm64" },
+      "darwin-x64": { "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-darwin-x64.tar.gz", "sha256": "efcc2b0db6f94bf53eddb038fe2b370277a042bd29e4f19b8f8e23598795b819", "dir": "node-v22.23.4-darwin-x64" },
+      "linux-x64": { "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz", "sha256": "b8492284c76a54baf58d61668dd0e41ee0fc98adabf9503d30f05d08f55b4406", "dir": "node-v22.23.4-linux-x64" },
+      "linux-arm64": { "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-arm64.tar.gz", "sha256": "f7a1e486dbc8b286847815b477d4fb5e9fb963ed4489c3e1588853d685f589f9", "dir": "node-v22.23.4-linux-arm64" }
+    }
+  },
+  "tmux": {
+    "version": "3.7c",
+    "source": "https://github.com/tmux/tmux-builds/releases/tag/v3.7c (official tmux organisation; Linux builds are static musl, macOS builds use only system libraries; sha256 = GitHub release asset digests)",
+    "assets": {
+      "darwin-arm64": { "url": "https://github.com/tmux/tmux-builds/releases/download/v3.7c/tmux-3.7c-macos-arm64.tar.gz", "sha256": "0a763dd0380aa980d239509654da1bc7455843706a3c050f6709c8cd2e13d12d" },
+      "darwin-x64": { "url": "https://github.com/tmux/tmux-builds/releases/download/v3.7c/tmux-3.7c-macos-x86_64.tar.gz", "sha256": "1c21f9ade964e4a539be05ffe3a4e95854ab76a0a9c4c05d0ffbe7fc6c4d783f" },
+      "linux-x64": { "url": "https://github.com/tmux/tmux-builds/releases/download/v3.7c/tmux-3.7c-linux-x86_64.tar.gz", "sha256": "cc56bd1cc873eb6089c615f0496b072385bda8a6d944069f38564a5d49c128aa" },
+      "linux-arm64": { "url": "https://github.com/tmux/tmux-builds/releases/download/v3.7c/tmux-3.7c-linux-arm64.tar.gz", "sha256": "29dcb978da2a4b0cf6790f9e004865dac239a3ba03bbf776dddacce23d03831b" }
+    },
+    "licenses": { "url": "https://github.com/tmux/tmux-builds/releases/download/v3.7c/LICENSES.tar.gz", "sha256": "094905d3ba42397c65fecd817dc29736dd14bd35e75600441403a365125f47d1" }
+  },
+  "appimage": {
+    "source": "https://github.com/AppImage/appimagetool/releases/tag/1.9.1 and https://github.com/AppImage/type2-runtime/releases/tag/20251108 (GitHub release asset digests)",
+    "appimagetool-x64": { "url": "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage", "sha256": "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0" },
+    "runtime-x64": { "url": "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64", "sha256": "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d" }
+  }
+}
