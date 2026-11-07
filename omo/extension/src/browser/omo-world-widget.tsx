@@ -9,6 +9,7 @@ import { FileDialogService } from '@theia/filesystem/lib/browser/file-dialog/fil
 import URI from '@theia/core/lib/common/uri';
 import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame, CodeReviewFrame } from './room-scene';
 import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
+import { validateWorld, worldStorageKey } from '../common/world-model'; // w2:render
 import { exportRoomPreset, parseRoomPreset, ROOM_PRESET_FILENAME, ROOM_PRESET_MAX_BYTES } from '../common/room-preset';
 import { ROOM_LAYOUTS, ROOM_KITS } from '../common/player-state';
 import type { RoomLayoutId, RoomKitId, PlayerPose } from '../common/player-state';
@@ -238,6 +239,18 @@ export class OmoWorldWidget extends ReactWidget {
     private leaveImmersive = (): void => { this.immersive.leave(); this.focusMode.controls?.element.focus({ preventScroll: true }); };
     // --- end omo immersive lane ---
     private storageKey(): string { return `omo.room.v1:${this.project?.toString() ?? ''}`; }
+    /**
+     * w2:render (mount hook) — draw this project's saved v2 world (localStorage omo.world.v2:<projectUri>) when there
+     * is one and the room is not being customised. No saved world = the scene's own v1 room. Read only.
+     */
+    private drawStoredWorld(scene: RoomScene | undefined): void {
+        if (!scene || !this.project || this.configuring) return;
+        let raw: string | null = null;
+        try { raw = safeStorage()?.getItem(worldStorageKey(this.project.toString())) ?? null; } catch { return; }
+        if (!raw) return;
+        try { const result = validateWorld(JSON.parse(raw)); if (result.ok) scene.setWorld(result.world); else { this.feedback = `The saved world could not be drawn: ${result.error}`; } }
+        catch { this.feedback = 'The saved world could not be read. Showing the classic room.'; }
+    }
     private async initialize(): Promise<void> {
         const roots = await this.workspace.roots;
         this.project = roots[0]?.resource;
@@ -631,7 +644,7 @@ export class OmoWorldWidget extends ReactWidget {
                         {this.recipeOpen&&<StationRecipePanel recipes={this.recipes} stationId={this.activeStation} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} locked={this.stationLocks[this.activeStation]} onLock={locked=>this.setStationLock(this.activeStation,locked)} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)}/>}
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.activeStation==='terminal-2'?'Desk two':'Desk one'} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>}
                     </div>}
-                    <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
+                    <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;this.drawStoredWorld(scene);/* w2:render */scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
                         {/* omo immersive lane (mount hook) */}{this.room && !this.configuring && (this.immersive.mode.active
                             ? <ImmersivePill roomName={this.room.projectName} activeDesk={this.activeMode} focus={this.focusMode} hud={this.hudHub} voice={this.voiceHub}
                                 bells={{ terminal: this.consoleStates.terminal.unreadBells, 'terminal-2': this.consoleStates['terminal-2'].unreadBells }} onExit={this.leaveImmersive}/>

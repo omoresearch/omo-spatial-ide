@@ -16,7 +16,8 @@ export function shellColors(jungle: boolean): ShellColors {
 
 /** Wall planes, for entities that decide whether they hang on a wall or need a stand. */
 export function shellWalls(shell: WorldShell): { back: number; left: number } {
-    return { back: -shell.depth / 2 - 0.15, left: -shell.width / 2 - 0.25 };
+    // Same planes buildShell uses: back wall centre at -depth/2 + 0.35 (v1 -4.65), left wall at -width/2 - 0.25 (v1 -6.25).
+    return { back: -shell.depth / 2 + 0.35, left: -shell.width / 2 - 0.25 };
 }
 /** Is a point near a solid wall (the back wall or the left cutaway wall)? */
 export function nearWall(shell: WorldShell, x: number, z: number, reach = 0.6): boolean {
@@ -28,7 +29,15 @@ export function nearWall(shell: WorldShell, x: number, z: number, reach = 0.6): 
  * Build the shell into a fresh group. `blocks` are the current entity footprints.
  * Returns the group; the landing plane under the room is part of it.
  */
-export function buildShell(shell: WorldShell, blocks: readonly Footprint[]): THREE.Group {
+/**
+ * The station theme's orb (globe + ring) on the back wall, in v1 room coordinates (back wall face at
+ * z -4.45 in a 12 x 10 shell). Data, not code: RoomScene passes its own ORB so a lane that moves the
+ * orb changes one constant. Other shell depths keep the same distance to the back wall.
+ */
+export interface OrbSpot { x: number; y: number; z: number; ringZ: number; scale: number }
+export const V1_ORB: OrbSpot = { x: 0.8, y: 2, z: -4.2, ringZ: -4.1, scale: 1 };
+
+export function buildShell(shell: WorldShell, blocks: readonly Footprint[], orb: OrbSpot = V1_ORB): THREE.Group {
     const jungle = shell.theme === 'jungle';
     const root = new THREE.Group(); root.name = 'omo-world-shell';
     const W = shell.width, D = shell.depth, hw = W / 2, hd = D / 2;
@@ -59,10 +68,11 @@ export function buildShell(shell: WorldShell, blocks: readonly Footprint[]): THR
         ];
         for (const [x, z, make] of props) if (free(x, z)) make(x, z);
     } else {
+        const dz = back - (-4.65); // v1 back wall centre
         const globe = new THREE.Mesh(new THREE.SphereGeometry(0.9, 48, 32), material(0x568eb1, 0.5));
-        globe.position.set(0.8, 2, back + 0.45); globe.scale.z = 0.22; root.add(globe);
+        globe.position.set(orb.x, orb.y, orb.z + dz); globe.scale.set(orb.scale, orb.scale, 0.22 * orb.scale); root.add(globe);
         const ring = new THREE.Mesh(new THREE.TorusGeometry(1.22, 0.025, 12, 64), material(0x8ce3ec));
-        ring.position.set(0.8, 2, back + 0.55); ring.rotation.z = -0.4; root.add(ring);
+        ring.position.set(orb.x, orb.y, orb.ringZ + dz); ring.scale.setScalar(orb.scale); ring.rotation.z = -0.4; root.add(ring);
         for (let i = 0; i < 24; i++) {
             const star = new THREE.Mesh(new THREE.SphereGeometry(0.018 + (i % 3) * 0.007, 6, 6), new THREE.MeshBasicMaterial({ color: 0xb1d9f7 }));
             star.position.set(-3.2 + ((i * 37) % 67) / 10, 0.9 + ((i * 13) % 19) / 10, back + 0.27); root.add(star);

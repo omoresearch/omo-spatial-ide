@@ -1,0 +1,148 @@
+{
+  "port": 3647,
+  "scratch": "/home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-w2-render-bi88Pw",
+  "runs": {
+    "v1": {
+      "worldName": "Omo room",
+      "revision": "0",
+      "entities": [
+        "terminal",
+        "terminal-2",
+        "code",
+        "web",
+        "mirror"
+      ],
+      "stations": [
+        "terminal",
+        "terminal-2"
+      ],
+      "targets": [
+        "terminal",
+        "terminal-2",
+        "code",
+        "web",
+        "mirror"
+      ],
+      "terminalX": "590.8513001566391",
+      "deskPositions": {
+        "terminal": {
+          "x": -2.65,
+          "z": 0.5
+        },
+        "terminal-2": {
+          "x": 2.25,
+          "z": -0.45
+        }
+      },
+      "lamps": {
+        "terminal": "6d7c86",
+        "terminal-2": "6d7c86"
+      },
+      "linked": "{}",
+      "labels": [
+        "terminal=01  Desk one ↗",
+        "terminal-2=02  Desk two ↗",
+        "code=04  Code review ↗",
+        "web=03  Web wall ↗",
+        "mirror=04  Mirror · Desk one ↗"
+      ],
+      "renderError": "",
+      "errors": []
+    },
+    "six": {
+      "projectUri": "file:///home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-w2-render-bi88Pw/project",
+      "worldName": "W2 six desks",
+      "revision": "3",
+      "entities": [
+        "terminal",
+        "terminal-2",
+        "research",
+        "builder",
+        "ops",
+        "writer",
+        "web",
+        "wall-1",
+        "mirror",
+        "code",
+        "plant-1",
+        "sofa-1",
+        "lamp-1",
+        "shelf-1"
+      ],
+      "stations": [
+        "terminal",
+        "terminal-2",
+        "research",
+        "builder",
+        "ops",
+        "writer"
+      ],
+      "targets": [
+        "terminal",
+        "terminal-2",
+        "research",
+        "builder",
+        "ops",
+        "writer",
+        "web",
+        "wall-1",
+        "mirror",
+        "code"
+      ],
+      "terminalX": "601.5897329356137",
+      "deskPositions": {
+        "terminal": {
+          "x": -5.5,
+          "z": -2.2
+        },
+        "terminal-2": {
+          "x": 0,
+          "z": -2.2
+        },
+        "research": {
+          "x": 5.5,
+          "z": -2.2
+        },
+        "builder": {
+          "x": -5.5,
+          "z": 2
+        },
+        "ops": {
+          "x": 0,
+          "z": 2
+        },
+        "writer": {
+          "x": 5.5,
+          "z": 2
+        }
+      },
+      "lamps": {
+        "terminal": "6d7c86",
+        "terminal-2": "6d7c86",
+        "research": "6d7c86",
+        "builder": "6d7c86",
+        "ops": "6d7c86",
+        "writer": "6d7c86"
+      },
+      "linked": "{\"wall-1\":0}",
+      "labels": [
+        "terminal=01  Desk one ↗",
+        "terminal-2=02  Desk two ↗",
+        "code=Code review ↗",
+        "web=Web wall ↗",
+        "mirror=Mirror · Desk one ↗",
+        "research=03  Research ↗",
+        "builder=04  Builder ↗",
+        "ops=05  Ops ↗",
+        "writer=06  Writer ↗",
+        "wall-1=Research wall ↗"
+      ],
+      "renderError": "",
+      "errors": []
+    },
+    "sixWalk": {
+      "x": "0.000",
+      "z": "4.100"
+    }
+  }
+}

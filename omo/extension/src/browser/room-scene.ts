@@ -6,13 +6,21 @@ import type { WebSurfaceFrame } from '../common/web-runtime-protocol';
 import { MonitorSelection, monitorCell, monitorCellSpan, visibleMonitorCells } from '../common/monitor-selection';
 import type { SelectionUnit } from '../common/monitor-selection';
 import type { RoomMember } from '../common/presence-protocol';
-import { PLAYER_HOME, PlayerPose, ROOM_LAYOUTS, ROOM_KITS } from '../common/player-state';
+import { PLAYER_HOME, PlayerPose } from '../common/player-state';
 import type { RoomLayoutId, RoomKitId } from '../common/player-state';
 import type { RuntimeColorMetadata } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
 import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-preview';
 import { workstationLabelVisible } from './workstation-label-visibility';
 import { PoseSmoother } from './movement-smoothing';
+// w2:render — the room is built from a WorldSpec (shared contract) by the world scene builders.
+import type { WorldEntity, WorldSpec } from '../common/world-model';
+import { validateWorld } from '../common/world-model';
+import { buildShell, nearWall, shellColors } from './world-scene-shell';
+import type { OrbSpot } from './world-scene-shell';
+import { BuiltEntity, placeRoot, buildDecorEntity, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
+import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
+import { footprints, worldHome, worldMover } from './world-scene-collision';
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -61,8 +69,22 @@ export interface MonitorFrame {
     status?: string;
 }
 
+/**
+ * v1 workstation ids. w2:render: a WorldSpec can hold any number of stations, monitor walls and mirrors;
+ * their ids (lowercase, stable) are passed through these types by cast, as the runtime lane does.
+ */
 export type Workstation = 'terminal' | 'terminal-2' | 'code' | 'web' | 'mirror';
 export type TerminalWorkstation = 'terminal' | 'terminal-2';
+/** w2:render — v1 ids keep their exact v1 labels (tests and muscle memory rely on them). */
+const LEGACY_LABELS: Record<string, { text: string; aria: string }> = {
+    terminal: { text: '01  Desk one ↗', aria: 'Open project terminal' },
+    'terminal-2': { text: '02  Desk two ↗', aria: 'Open second project terminal' },
+    web: { text: '03  Web wall ↗', aria: 'Use physical web wall' },
+    code: { text: '04  Code review ↗', aria: 'Review project changes' },
+    mirror: { text: '04  Mirror · Desk one ↗', aria: 'Use linked monitor mirror' }
+};
+/** One built entity: its THREE root, label and the key it was built from (rebuilt only when the key changes). */
+interface SceneEntity { entity: WorldEntity; key: string; built: BuiltEntity; label?: HTMLButtonElement }
 export interface ScreenPoint { x: number; y: number }
 
 /** A canvas-backed screen texture. Changed rows are re-uploaded as one sub-rectangle, never the whole canvas. */
@@ -81,8 +103,16 @@ interface ScreenSurface {
     selection?: unknown;
     truecolorSource?: RuntimeColorMetadata;
     truecolor?: RuntimeColorMetadata;
+    /** w2:render — empty-screen hint (linked walls) and the last painted linked input. */
+    hint?: string;
+    linkSource?: unknown;
 }
 const SURFACE_W = 1024, SURFACE_H = 576;
+/**
+ * The station theme's back-wall orb (globe + ring), v1 room coordinates. Data-driven so a lane that moves
+ * it changes only this constant (the shell builder applies it to any shell size).
+ */
+const ORB: OrbSpot = { x: 0.8, y: 2, z: -4.2, ringZ: -4.1, scale: 1 };
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
 const MAX_PIXEL_RATIO = 1.5;
 /**
@@ -108,6 +138,8 @@ export interface RoomSceneOptions {
     theme: RoomTheme;
     layout?: RoomLayoutId;
     kit?: RoomKitId;
+    /** w2:render — the world to draw. Omitted = the v1 room of theme/layout/kit (looks exactly like v1). */
+    world?: WorldSpec;
     camera: RoomState['camera'];
     onSelect: (station: Workstation, point?: ScreenPoint) => void;
     onTextSelect: (station: TerminalWorkstation) => void;
@@ -168,19 +200,32 @@ export class RoomScene {
     private walker?: FirstPersonControls;
     private navigation: 'walk' | 'overview' = 'overview';
     private lastFrame = performance.now();
-    private terminalSurfaces = new Map<TerminalWorkstation, ScreenSurface>();
-    private terminalSelection?: { station: TerminalWorkstation; model: MonitorSelection };
-    private terminalFrames: Record<TerminalWorkstation, MonitorFrame> = { terminal: { lines: [] }, 'terminal-2': { lines: [] } };
-    private screens = new Map<Workstation, THREE.Mesh>();
-    private lamps = new Map<TerminalWorkstation, THREE.Mesh>();
+    // w2:render — everything below is keyed by station / entity id (v1 ids 'terminal', 'terminal-2', 'web', 'code', 'mirror').
+    private terminalSurfaces = new Map<string, ScreenSurface>();
+    private terminalSelection?: { station: string; model: MonitorSelection };
+    private terminalFrames: Record<string, MonitorFrame> = { terminal: { lines: [] }, 'terminal-2': { lines: [] } };
+    private screens = new Map<string, THREE.Mesh>();
+    private lamps = new Map<string, THREE.Mesh>();
+    /** The WorldSpec on screen, its built entities, the shell group and its key. */
+    private world!: WorldSpec;
+    private entities = new Map<string, SceneEntity>();
+    private worldRoot = new THREE.Group();
+    private shellRoot?: THREE.Group;
+    private shellKey = '';
+    /** Screens of linked monitor walls / extra mirrors: own canvas each, painted with the linked station's frame. */
+    private linkedSurfaces = new Map<string, ScreenSurface>();
+    private linkedFrames = new Map<string, MonitorFrame>();
+    private stationNumbers = new Map<string, number>();
+    private lights?: { hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight; accent: THREE.PointLight };
+    /** Overview camera distance scale for shells larger than the v1 12 x 10 room. */
+    private roomScale = 1;
     private webSurface?: HTMLCanvasElement;
     private mirrorSurface?: HTMLCanvasElement;
     private mirrorTexture?: THREE.CanvasTexture;
     private mirrorFrame: MonitorFrame = { lines: [] };
     /** Last full-size frame per desk and its 80 x 22 monitor window, so a re-render reuses the same object. */
-    private terminalSources?: Map<TerminalWorkstation, { input: MonitorFrame; frame: MonitorFrame }>;
-    private mirrorLabel?: HTMLButtonElement;
-    private deskLabels = new Map<TerminalWorkstation, HTMLButtonElement>();
+    private terminalSources?: Map<string, { input: MonitorFrame; frame: MonitorFrame }>;
+    private deskLabels = new Map<string, HTMLButtonElement>();
     private codeSurface?: {canvas:HTMLCanvasElement;texture:THREE.CanvasTexture};
     private webTexture?: THREE.CanvasTexture;
     private webEpoch = 0;
@@ -196,9 +241,13 @@ export class RoomScene {
         }
     }
     private init(): void {
-        const jungle = this.options.theme === 'jungle';
-        this.scene.background = new THREE.Color(jungle ? '#101c1a' : '#101622');
-        this.scene.fog = new THREE.Fog(jungle ? '#101c1a' : '#101622', 33, 65);
+        // w2:render — the world to draw: the given WorldSpec, else the v1 room (same look as before).
+        const given = this.options.world ? validateWorld(this.options.world) : undefined;
+        if (given && !given.ok) this.options.onError(`This world could not be drawn: ${given.error} Showing the classic room.`);
+        const world = given?.ok ? given.world : legacyRoomWorld({ theme: this.options.theme, layout: this.options.layout, kit: this.options.kit });
+        const colors = shellColors(world.shell.theme === 'jungle');
+        this.scene.background = new THREE.Color(colors.background);
+        this.scene.fog = new THREE.Fog(colors.background, 33, 65);
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
         this.renderer.setPixelRatio(this.pixelRatio());
         this.renderer.shadowMap.enabled = true;
@@ -213,27 +262,26 @@ export class RoomScene {
         canvas.setAttribute('aria-label', 'Interactive 3D room. Drag or use arrow keys to orbit. Scroll to zoom. Select a workstation to work.');
         canvas.tabIndex = 0;
         this.host.appendChild(canvas);
-        this.scene.add(new THREE.HemisphereLight(jungle ? 0xd9f3d5 : 0xc7e6ff, 0x283136, 2.3));
-        const sun = new THREE.DirectionalLight(jungle ? 0xffe8b8 : 0xffecd1, 4);
+        const hemi = new THREE.HemisphereLight(colors.hemiSky, 0x283136, 2.3); this.scene.add(hemi);
+        const sun = new THREE.DirectionalLight(colors.sun, 4);
         sun.position.set(-5, 12, 8); sun.castShadow = true;
         sun.shadow.mapSize.set(2048, 2048);
         Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
         sun.shadow.bias = -0.001; sun.shadow.normalBias = 0.025;
         this.scene.add(sun);
-        const accent = new THREE.PointLight(jungle ? 0xc3ff9b : 0x70c9ff, 25, 18);
+        const accent = new THREE.PointLight(colors.accent, 25, 18);
         accent.position.set(0, 4, -2); this.scene.add(accent);
-        this.buildRoom(jungle);
+        this.lights = { hemi, sun, accent };
         this.freeze(this.scene.children);
+        // Shared surfaces outlive world rebuilds: the web wall page, the classic mirror and the code review screen.
+        this.createSurfaces();
+        this.worldRoot.name = 'omo-world'; this.scene.add(this.worldRoot); freezeTree(this.worldRoot);
         // Ambient modules (agent avatars) join this loop through scene.userData instead of running their own rAF.
         this.scene.userData.omoAmbient = {
             add: (tick: (seconds: number) => boolean): (() => void) => { this.ambientTicks.add(tick); this.invalidate(); return () => { this.ambientTicks.delete(tick); this.invalidate(); }; },
             invalidate: (shadows = false): void => { if (shadows && this.renderer) this.renderer.shadowMap.needsUpdate = true; this.invalidate(); }
         };
         canvas.dataset.roomLayout = this.options.layout ?? 'classic';
-        canvas.dataset.deskPositions = JSON.stringify(Object.fromEntries(this.roots.filter(root => root.userData.workstation === 'terminal' || root.userData.workstation === 'terminal-2').map(root => {
-            const point = root.getWorldPosition(new THREE.Vector3());
-            return [root.userData.workstation, { x: point.x, z: point.z }];
-        })));
         this.bindControls(canvas);
         this.bindWake(canvas);
         this.walker = new FirstPersonControls(canvas, this.camera, (x,y,modifiers)=>this.interactAt(x,y,modifiers), text=>this.options.onInput(text), text=>this.options.onMessage(text), this.options.onPaste, {
@@ -241,6 +289,7 @@ export class RoomScene {
             end: () => this.options.onMessage('Selected visible terminal text · Ctrl+Shift+C to copy.'),
             clear: () => this.clearTerminalSelection(), copy: () => this.copyTerminalSelection()
         }, this.options.layout ?? 'classic', shortcut => this.options.onShortcut?.(shortcut));
+        this.applyWorld(world);
         this.setNavigation(this.options.walk ? 'walk' : 'overview');
         this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(this.host);
         this.resize(); this.positionCamera(); this.draw(); this.options.onReady();
@@ -320,65 +369,220 @@ export class RoomScene {
         (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.5;
         return mesh;
     }
-    private buildRoom(jungle: boolean): void {
-        const root = new THREE.Group(); this.scene.add(root);
-        this.box(root, [13, 0.55, 10], [0, -0.42, 0], jungle ? 0x34453a : 0x303c50);
-        this.box(root, [12.6, 0.12, 9.6], [0, -0.08, 0], jungle ? 0x76907b : 0x647889);
-        const grid = new THREE.GridHelper(12, 12, jungle ? 0x91a98b : 0x8b9fac, jungle ? 0x718b76 : 0x718391);
-        grid.position.set(0, 0.005, 0); (grid.material as THREE.Material).transparent = true;
-        (grid.material as THREE.Material).opacity = 0.24; root.add(grid);
-        // Cutaway architecture preserves legibility and keeps the workstations visible.
-        this.box(root, [12.7, 3.4, 0.22], [0, 1.65, -4.65], jungle ? 0x526b59 : 0x28374b);
-        this.box(root, [0.22, 2, 8.8], [-6.25, 0.95, -0.3], jungle ? 0x526b59 : 0x34475b);
-        this.glow(root, [11.8, 0.055, 0.06], [0, 3.16, -4.49], jungle ? 0xc6e5a7 : 0x77deef);
-        this.box(root, [7.4, 2.1, 0.08], [0.1, 1.8, -4.49], jungle ? 0x284c41 : 0x101c32);
-        if (jungle) {
-            for (let i = 0; i < 7; i++) this.tree(root, -5.1 + i * 1.67, -4.1, 1 + (i % 3) * 0.3);
-            this.box(root, [3, 0.04, 2.8], [3.7, 0.02, 2.8], 0x2f7775);
-            for (let i = 0; i < 5; i++) {
-                this.cylinder(root, 0.28, 0.1, [2.4 + i * 0.55, 0.1, 2.4 + Math.sin(i) * 0.35], 0xbac1a4, 0.35, 7);
-            }
-            this.tree(root, -5, 2.6, 1.2); this.tree(root, 5.25, -0.7, 1.35);
-            this.fern(root, -4.5, 3.6); this.fern(root, 5.1, 3.9); this.fern(root, 0.1, -3.6);
-        } else {
-            const globe = new THREE.Mesh(new THREE.SphereGeometry(0.9, 48, 32), this.material(0x568eb1, 0.5));
-            globe.position.set(0.8, 2, -4.2); globe.scale.z = 0.22; root.add(globe);
-            const ring = new THREE.Mesh(new THREE.TorusGeometry(1.22, 0.025, 12, 64), this.material(0x8ce3ec));
-            ring.position.set(0.8, 2, -4.1); ring.rotation.z = -0.4; root.add(ring);
-            for (let i = 0; i < 24; i++) {
-                const star = new THREE.Mesh(new THREE.SphereGeometry(0.018 + (i % 3) * 0.007, 6, 6), new THREE.MeshBasicMaterial({ color: 0xb1d9f7 }));
-                star.position.set(-3.2 + ((i * 37) % 67) / 10, 0.9 + ((i * 13) % 19) / 10, -4.38); root.add(star);
-            }
-            for (const x of [-5.7, 5.7]) {
-                this.box(root, [0.32, 3.6, 0.5], [x, 1.75, -4.1], 0x728896);
-                this.glow(root, [0.065, 2.7, 0.07], [x, 1.8, -3.8], 0x98dce9);
-            }
-            this.plant(root, -5, 2.9); this.plant(root, 5.2, 2.8);
-            this.box(root, [2.5, 0.5, 1], [-3.5, 0.25, -3.5], 0xa39c8c);
-            this.box(root, [2.5, 0.65, 0.3], [-3.5, 0.65, -3.85], 0xa39c8c);
-        }
-        const desks = ROOM_LAYOUTS[this.options.layout ?? 'classic'].desks;
-        this.desk(root, desks.terminal.x, desks.terminal.z, 'terminal', jungle);
-        this.desk(root, desks['terminal-2'].x, desks['terminal-2'].z, 'terminal-2', jungle);
-        if (ROOM_KITS[this.options.kit ?? 'hermes-desk'].webWall) this.webWall(root);
-        if (ROOM_KITS[this.options.kit ?? 'hermes-desk'].mirror) this.mirrorWall(root);
-        this.codeWall(root);
-        this.cylinder(root, 0.7, 0.15, [0.2, 0.06, 3], jungle ? 0xb9ba91 : 0x8398a5, 0.75);
-        const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.35, 0), this.material(jungle ? 0xd6e7a4 : 0x7cdae2, 0.6));
-        core.position.set(0.2, 0.65, 3); root.add(core);
-        const landing = new THREE.Mesh(new THREE.PlaneGeometry(130, 130), this.material(jungle ? 0x101c1a : 0x101622));
-        landing.rotation.x = -Math.PI / 2; landing.position.y = -1.05; landing.receiveShadow = true; this.scene.add(landing);
+    // ------------------------------------------------------------------ w2:render — world from a WorldSpec
+    /** Surfaces shared by every world: the web page, the classic mirror and the code review screen. */
+    private createSurfaces(): void {
+        const code = document.createElement('canvas'); code.width = 1024; code.height = 576;
+        const codeTexture = new THREE.CanvasTexture(code); codeTexture.colorSpace = THREE.SRGBColorSpace; this.codeSurface = { canvas: code, texture: codeTexture };
+        this.webSurface = document.createElement('canvas'); this.webSurface.width = 960; this.webSurface.height = 600;
+        this.webTexture = new THREE.CanvasTexture(this.webSurface); this.webTexture.colorSpace = THREE.SRGBColorSpace;
+        this.mirrorSurface = document.createElement('canvas'); this.mirrorSurface.width = 1024; this.mirrorSurface.height = 576;
+        this.mirrorTexture = new THREE.CanvasTexture(this.mirrorSurface); this.mirrorTexture.colorSpace = THREE.SRGBColorSpace;
+        this.setCodeReview({ title: 'PROJECT CHANGES', lines: ['Open this screen to read real Git changes.', 'Patches are read only. Files stay in your editor.'], status: 'No Git contents read yet' });
+        this.setWebPlaceholder('Click the web wall, then open an address.');
+        this.setMirrorFrame({ lines: [], title: 'LINKED MONITOR', status: 'Link this screen to a desk above.' });
     }
-    private codeWall(parent:THREE.Object3D):void {
-        const group=new THREE.Group();group.position.set(-4.8,0,-3.9);group.userData.workstation='code';group.userData.labelHeight=2.8;parent.add(group);this.roots.push(group);
-        this.box(group,[2.12,1.22,.12],[0,1.99,-.08],0x17222e);
-        const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=576;
-        const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;this.codeSurface={canvas,texture};
-        const screen=new THREE.Mesh(new THREE.PlaneGeometry(1.98,1.08),new THREE.MeshBasicMaterial({map:texture}));screen.position.set(0,1.99,0);group.add(screen);this.screens.set('code',screen);
-        const label=document.createElement('button');label.className='omo-scene-label';label.dataset.workstation='code';label.textContent='04  Code review ↗';label.setAttribute('aria-label','Review project changes');
-        label.addEventListener('click',()=>{if(this.navigation==='walk'&&this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3()))>3.2){this.options.onMessage('Walk closer to the code screen.');return;}this.releaseTyping();this.options.onSelect('code');});
-        this.host.appendChild(label);this.labels.push(label);
-        this.setCodeReview({title:'PROJECT CHANGES',lines:['Open this screen to read real Git changes.','Patches are read only. Files stay in your editor.'],status:'No Git contents read yet'});
+    /** A terminal-style monitor surface (unflipped upload, so a changed row band maps 1:1 to a sub-rectangle). */
+    private terminalSurface(hint?: string): ScreenSurface {
+        const canvas = document.createElement('canvas'); canvas.width = SURFACE_W; canvas.height = SURFACE_H;
+        const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+        texture.flipY = false; texture.repeat.set(1, -1); texture.offset.set(0, 1);
+        const source = new THREE.CanvasTexture(canvas); source.flipY = false;
+        return { canvas, texture, source, ctx: canvas.getContext('2d') ?? undefined, hint };
+    }
+    private disposeSurface(surface: ScreenSurface | undefined): void { surface?.texture.dispose(); surface?.source?.dispose(); }
+    /** The WorldSpec on screen (a copy). */
+    getWorld(): WorldSpec { return JSON.parse(JSON.stringify(this.world)); }
+    /**
+     * Draw a new WorldSpec. Incremental by entity id: unchanged entities stay, moved ones are moved,
+     * changed ones are rebuilt, removed ones are disposed. Station screens keep their live frames.
+     * Throws on an invalid world (the room keeps the previous one).
+     */
+    setWorld(world: WorldSpec): void {
+        if (this.disposed || !this.renderer) return;
+        const result = validateWorld(world);
+        if (!result.ok) throw new Error(result.error);
+        this.applyWorld(JSON.parse(JSON.stringify(result.world)));
+    }
+    private applyWorld(world: WorldSpec): void {
+        const previous = this.world; this.world = world;
+        const jungle = world.shell.theme === 'jungle';
+        if (previous && previous.shell.theme !== world.shell.theme) this.applyTheme(jungle);
+        const stations = world.entities.filter(e => e.kind === 'station');
+        this.stationNumbers = new Map(stations.map((e, i) => [e.id, i + 1]));
+        const blocks = footprints(world);
+        // Shell: rebuilt only when its size/theme or the footprints that hide ambient props change.
+        const shellKey = JSON.stringify([world.shell, blocks]);
+        if (shellKey !== this.shellKey) {
+            if (this.shellRoot) { this.worldRoot.remove(this.shellRoot); disposeTree(this.shellRoot); }
+            this.shellRoot = buildShell(world.shell, blocks, ORB); this.worldRoot.add(this.shellRoot); freezeTree(this.shellRoot); this.shellKey = shellKey;
+        }
+        const ids = new Set(world.entities.map(e => e.id));
+        for (const [id, item] of this.entities) if (!ids.has(id)) this.removeEntity(id, item);
+        for (const entity of world.entities) {
+            const standing = entity.kind !== 'station' && entity.kind !== 'decor' && !nearWall(world.shell, entity.transform.x, entity.transform.z, 0.8);
+            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing]);
+            const item = this.entities.get(entity.id);
+            if (item && item.key === key) {
+                if (JSON.stringify(item.entity.transform) !== JSON.stringify(entity.transform)) { placeRoot(item.built.root, entity); refreeze(item.built.root); }
+                item.entity = entity;
+                continue;
+            }
+            if (item) { this.worldRoot.remove(item.built.root); disposeTree(item.built.root); this.screens.delete(entity.id); this.lamps.delete(entity.id); }
+            const built = this.buildEntity(entity, jungle, standing);
+            this.worldRoot.add(built.root); freezeTree(built.root);
+            this.entities.set(entity.id, { entity, key, built, label: item?.label });
+            if (built.screen) { built.screen.userData.screenOf = entity.id; built.screen.userData.screenKind = entity.kind; this.screens.set(entity.id, built.screen); }
+            if (built.lamp) { this.lamps.set(entity.id, built.lamp); this.paintLamp(entity.id); }
+        }
+        // Keep the world's order (labels and data follow it).
+        this.entities = new Map(world.entities.map(e => [e.id, this.entities.get(e.id)!]));
+        this.roots = [...this.entities.values()].map(item => item.built.root);
+        for (const item of this.entities.values()) this.syncLabel(item);
+        this.labels = [...this.entities.values()].flatMap(item => item.label ? [item.label] : []);
+        this.labels.forEach(label => label.classList.toggle('is-walk', this.navigation === 'walk'));
+        for (const label of this.labels) this.labelPos.delete(label);
+        this.paintLinked();
+        // Walking: footprint collision, bounds and reset spot of this world.
+        if (this.walker) { this.walker.mover = worldMover(world); this.walker.home = worldHome(world.shell); }
+        this.roomScale = Math.max(1, world.shell.width / 12, world.shell.depth / 10);
+        if (this.lights) {
+            const extent = Math.max(12, Math.max(world.shell.width, world.shell.depth) * 0.75);
+            Object.assign(this.lights.sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent }); this.lights.sun.shadow.camera.updateProjectionMatrix();
+        }
+        const canvas = this.renderer.domElement;
+        canvas.dataset.worldName = world.name;
+        canvas.dataset.worldRevision = String(world.revision);
+        canvas.dataset.worldEntities = JSON.stringify(world.entities.map(e => e.id));
+        canvas.dataset.worldStations = JSON.stringify(stations.map(e => e.id));
+        canvas.dataset.deskPositions = JSON.stringify(Object.fromEntries(stations.map(e => [e.id, { x: e.transform.x, z: e.transform.z }])));
+        this.lastView[0] = NaN; this.renderer.shadowMap.needsUpdate = true;
+        if (previous) this.positionCamera();
+        this.invalidate();
+    }
+    private applyTheme(jungle: boolean): void {
+        const colors = shellColors(jungle);
+        (this.scene.background as THREE.Color).set(colors.background); (this.scene.fog as THREE.Fog).color.set(colors.background);
+        if (this.lights) { this.lights.hemi.color.setHex(colors.hemiSky); this.lights.sun.color.setHex(colors.sun); this.lights.accent.color.setHex(colors.accent); }
+    }
+    private buildEntity(entity: WorldEntity, jungle: boolean, standing: boolean): BuiltEntity {
+        switch (entity.kind) {
+            case 'station': {
+                let surface = this.terminalSurfaces.get(entity.id);
+                if (!surface) { surface = this.terminalSurface(); this.terminalSurfaces.set(entity.id, surface); }
+                const built = buildStation(entity, jungle, surface.texture);
+                if (!surface.frame) { this.terminalFrames[entity.id] ??= { lines: [] }; queueMicrotask(() => { if (!this.disposed && this.terminalSurfaces.get(entity.id) === surface) this.setTerminalFrame(this.terminalFrames[entity.id] ?? { lines: [] }, entity.id as TerminalWorkstation); }); }
+                return built;
+            }
+            case 'web-wall': return buildWebWall(entity, this.webTexture!, standing);
+            case 'review-screen': return buildReviewScreen(entity, this.codeSurface!.texture, standing);
+            case 'mirror': return buildMirror(entity, entity.id === 'mirror' ? this.mirrorTexture! : this.linkedSurface(entity.id).texture, standing);
+            case 'monitor-wall': return buildMonitorWall(entity, this.linkedSurface(entity.id).texture, standing);
+            case 'decor': return buildDecorEntity(entity, jungle);
+        }
+    }
+    private linkedSurface(id: string): ScreenSurface {
+        let surface = this.linkedSurfaces.get(id);
+        if (!surface) { surface = this.terminalSurface(); this.linkedSurfaces.set(id, surface); }
+        return surface;
+    }
+    private removeEntity(id: string, item: SceneEntity): void {
+        this.worldRoot.remove(item.built.root); disposeTree(item.built.root);
+        item.label?.remove(); this.labelPos.delete(item.label!);
+        this.screens.delete(id); this.lamps.delete(id); this.deskLabels.delete(id); this.entities.delete(id);
+        if (item.entity.kind === 'station') {
+            this.disposeSurface(this.terminalSurfaces.get(id)); this.terminalSurfaces.delete(id); this.terminalSources?.delete(id);
+            if (id !== 'terminal' && id !== 'terminal-2') delete this.terminalFrames[id];
+            if (this.terminalSelection?.station === id) this.terminalSelection = undefined;
+        }
+        if (this.linkedSurfaces.has(id)) { this.disposeSurface(this.linkedSurfaces.get(id)); this.linkedSurfaces.delete(id); }
+    }
+    /** What a click on an entity selects: web walls drive the one web runtime, review screens the code review. */
+    private selectId(id: string): Workstation {
+        const kind = this.entities.get(id)?.entity.kind;
+        return (kind === 'web-wall' ? 'web' : kind === 'review-screen' ? 'code' : id) as Workstation;
+    }
+    private labelText(item: SceneEntity): { text: string; aria: string } {
+        const { entity } = item, stations = this.stationNumbers.size;
+        const legacy = LEGACY_LABELS[entity.id];
+        const defaultTitle = legacy?.text.replace(/^\d+\s+/, '').replace(/ ↗$/, '');
+        if (legacy && stations <= 2 && (entity.label === undefined || entity.label === defaultTitle)) return legacy;
+        const title = entityTitle(entity, this.world).slice(0, 40), n = this.stationNumbers.get(entity.id);
+        const text = n ? `${String(n).padStart(2, '0')}  ${title} ↗` : `${title} ↗`;
+        const aria = entity.kind === 'station' ? `Open ${title} terminal` : entity.kind === 'web-wall' ? `Use ${title}` : entity.kind === 'review-screen' ? 'Review project changes' : `Use ${title}`;
+        return { text, aria };
+    }
+    private syncLabel(item: SceneEntity): void {
+        if (item.entity.kind === 'decor') { item.label?.remove(); item.label = undefined; return; }
+        const id = item.entity.id;
+        if (!item.label) {
+            const label = document.createElement('button'); label.className = 'omo-scene-label'; label.dataset.workstation = id;
+            label.addEventListener('click', () => this.labelClicked(id));
+            this.host.appendChild(label); item.label = label;
+        }
+        const { text, aria } = this.labelText(item);
+        // A live workspace name on a desk label wins until the world changes the desk's own title.
+        if (item.label.dataset.baseText !== text) { item.label.dataset.baseText = text; item.label.textContent = text; }
+        item.label.setAttribute('aria-label', aria);
+        if (item.entity.kind === 'station') this.deskLabels.set(id, item.label);
+    }
+    private labelClicked(id: string): void {
+        const item = this.entities.get(id); if (!item) return;
+        const screen = item.built.screen, kind = item.entity.kind;
+        const far = (): boolean => this.navigation === 'walk' && !!screen && this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3())) > 3.2;
+        if (kind === 'station') {
+            if (this.navigation === 'walk') { if (far()) { this.options.onMessage('Walk closer to the terminal monitor.'); return; } this.walker?.focusTerminal(); }
+            this.options.onSelect(id as Workstation); return;
+        }
+        if (kind === 'web-wall') { if (far()) { this.options.onMessage('Walk closer to the web wall.'); return; } this.options.onSelect('web'); this.walker?.focusTerminal(); return; }
+        if (kind === 'review-screen') { if (far()) { this.options.onMessage('Walk closer to the code screen.'); return; } this.releaseTyping(); this.options.onSelect('code'); return; }
+        this.options.onSelect(id as Workstation);
+    }
+    /** Station lamp colour from its frame status. */
+    private paintLamp(station: string): void {
+        const lamp = this.lamps.get(station), frame = this.terminalFrames[station]; if (!lamp || !frame) return;
+        const color = /interrupted|exited|error/i.test(frame.status ?? '') ? 0xd26464 : frame.unreadBells ? 0xff9e4a : /process active|working/i.test(frame.status ?? '') ? 0xe8bd60 : /live|running|idle/i.test(frame.status ?? '') ? 0x87cdb4 : 0x6d7c86;
+        const material = lamp.material as THREE.MeshStandardMaterial;
+        if (material.color.getHex() !== color || material.emissive.getHex() !== color) { material.color.setHex(color); material.emissive.setHex(color); this.invalidate(); }
+    }
+    /** Monitor frames for every station, keyed by station id (runtime lane hook). */
+    setStationFrames(frames: Record<string, MonitorFrame>): void {
+        for (const [id, frame] of Object.entries(frames)) if (frame) this.setTerminalFrame(frame, id as TerminalWorkstation);
+    }
+    /** Frames for linked monitor walls / mirrors, keyed by entity id: each shows its linked station's frame (runtime lane hook). */
+    setLinkedFrames(frames: Record<string, MonitorFrame>): void {
+        this.linkedFrames = new Map(Object.entries(frames).filter(([, f]) => !!f));
+        this.paintLinked();
+    }
+    private paintLinked(): void {
+        if (!this.renderer) return;
+        let changed = false;
+        for (const [id, surface] of this.linkedSurfaces) {
+            const item = this.entities.get(id); if (!item) continue;
+            const link = item.entity.kind === 'monitor-wall' || item.entity.kind === 'mirror' ? item.entity.link : undefined;
+            const input = this.linkedFrames.get(id);
+            const linkName = link ? entityTitle(this.world.entities.find(e => e.id === link) ?? item.entity, this.world) : undefined;
+            surface.hint = link ? `Linked to ${linkName}. Waiting for its screen.` : 'Link this wall to a desk in build mode.';
+            const source = input ?? `${surface.hint}\u0000${linkName ?? ''}`;
+            if (surface.linkSource === source) continue;
+            surface.linkSource = source;
+            const frame: MonitorFrame = input ? monitorWindow(input) : { lines: [], title: link ? `LINKED · ${String(linkName).toUpperCase()}` : 'MONITOR WALL', status: link ? 'No frame yet' : 'Not linked' };
+            surface.frame = frame; surface.selection = '';
+            if (this.paintTerminal(surface, frame, [])) changed = true;
+        }
+        if (changed) this.invalidate();
+        this.setData('linkedFrames', JSON.stringify(Object.fromEntries([...this.linkedSurfaces].map(([id, s]) => [id, s.frame?.lines.length ?? 0]))));
+    }
+    /** The entity under a client (CSS pixel) point: the frontmost hit, any kind (build lane hook). */
+    entityAt(clientX: number, clientY: number): string | undefined {
+        if (!this.renderer) return undefined;
+        const rect = this.renderer.domElement.getBoundingClientRect(); if (!rect.width || !rect.height) return undefined;
+        const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((clientX-rect.left)/rect.width*2-1, -(clientY-rect.top)/rect.height*2+1), this.camera);
+        // The frontmost hit decides: a wall or the floor in front of an entity hides it.
+        const hit = ray.intersectObjects(this.shellRoot ? [this.shellRoot, ...this.roots] : this.roots, true)[0];
+        let node: THREE.Object3D | null = hit?.object ?? null;
+        while (node && node.userData.entity === undefined) node = node.parent;
+        return node ? node.userData.entity as string : undefined;
     }
     setCodeReview(frame:CodeReviewFrame):void {
         const surface=this.codeSurface;if(!surface)return;
@@ -387,68 +591,6 @@ export class RoomScene {
         frame.lines.forEach((line,i)=>{ctx.fillStyle=line.startsWith('+')?'#91e4ac':line.startsWith('-')?'#f1a49c':'#d7e3df';ctx.fillText(line,24,70+i*21,976);});ctx.fillStyle='#8ea5aa';ctx.font='14px monospace';ctx.fillText(frame.status.slice(0,110),24,564,976);surface.texture.needsUpdate=true;this.invalidate();
         this.renderer.domElement.dataset.codeReviewText=frame.lines.join('\n');
         this.renderer.domElement.dataset.codeReviewStatus=frame.status;
-    }
-    private desk(parent: THREE.Object3D, x: number, z: number, action: TerminalWorkstation, jungle: boolean): void {
-        const group = new THREE.Group(); group.position.set(x, 0, z); group.userData.workstation = action; parent.add(group); this.roots.push(group);
-        this.box(group, [3.2, 0.15, 1.55], [0, 1.15, 0], jungle ? 0xc0aa7b : 0xd2c9b5);
-        for (const leg of [-1.28, 1.28]) this.box(group, [0.13, 1.1, 1.25], [leg, 0.54, 0], jungle ? 0x394e42 : 0x374656);
-        this.box(group, [0.65, 0.06, 0.48], [0, 1.26, -0.25], 0x293645);
-        this.box(group, [0.1, 0.35, 0.1], [0, 1.43, -0.35], 0x435664);
-        this.box(group, [1.72, 1.04, 0.11], [0, 1.99, -0.36], 0x17222e);
-        const texture = this.screenTexture(action);
-        const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.58, 0.9), new THREE.MeshBasicMaterial({map:texture}));
-        screen.position.set(0, 1.99, -0.296); group.add(screen);
-        this.screens.set(action, screen);
-        this.box(group, [0.9, 0.045, 0.3], [-0.15, 1.26, 0.28], 0x344353);
-        for(let i=0;i<3;i++) this.box(group,[0.72,0.008,0.012],[-0.15,1.285,0.2+i*0.075],0x71808c);
-        this.cylinder(group, 0.11, 0.25, [1.15, 1.32, 0.3], jungle ? 0xd3d3a8 : 0xc9a478);
-        const lamp = this.glow(group, [0.3, 0.025, 0.025], [-0.6, 1.42, -0.265], 0x6d7c86);
-        if (action === 'terminal' || action === 'terminal-2') this.lamps.set(action, lamp);
-        // Chair and footrest. These are navigation landmarks, not pretend agents.
-        this.cylinder(group, 0.15, 0.5, [0, 0.3, 1.35], 0x374656);
-        this.box(group, [0.9, 0.16, 0.85], [0, 0.62, 1.35], jungle ? 0x758968 : 0x648697);
-        this.box(group, [0.9, 0.85, 0.14], [0, 1.03, 1.72], jungle ? 0x758968 : 0x648697);
-        const label = document.createElement('button'); label.className = 'omo-scene-label'; label.dataset.workstation = action;
-        label.textContent = action === 'terminal' ? '01  Desk one ↗' : '02  Desk two ↗';
-        label.setAttribute('aria-label', action === 'terminal' ? 'Open project terminal' : 'Open second project terminal');
-        label.addEventListener('click', () => {
-            if(this.navigation==='walk'){const center = screen.getWorldPosition(new THREE.Vector3());if(this.camera.position.distanceTo(center)>3.2){this.options.onMessage('Walk closer to the terminal monitor.');return;}this.walker?.focusTerminal();}
-            this.options.onSelect(action);
-        });
-        this.host.appendChild(label); this.labels.push(label); this.deskLabels.set(action, label);
-    }
-    private screenTexture(action: Workstation): THREE.CanvasTexture {
-        if(action==='terminal' || action==='terminal-2'){
-            const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=576;
-            const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
-            // Unflipped upload so a changed row band maps 1:1 to a sub-rectangle; flip in the UV transform instead.
-            texture.flipY=false;texture.repeat.set(1,-1);texture.offset.set(0,1);
-            const source=new THREE.CanvasTexture(canvas);source.flipY=false;
-            this.terminalSurfaces.set(action, { canvas, texture, source, ctx: canvas.getContext('2d') ?? undefined });
-            this.setTerminalFrame(this.terminalFrames[action], action);return texture;
-        }
-        const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
-        const c = canvas.getContext('2d')!;
-        c.fillStyle='#111d2a'; c.fillRect(0,0,640,360);
-        c.fillStyle='#a4c6ed'; c.font='24px monospace';
-        c.fillText('PROJECT FILES',36,55);
-        c.fillStyle='#d2dce6'; c.font='21px monospace';
-        const lines=['README.md','src/','', 'Open in the editor →'];
-        lines.forEach((line,i)=>c.fillText(line,36,115+i*43));
-        c.fillStyle='#526c7c'; c.font='16px monospace'; c.fillText('OMO / WORKSTATION',36,330);
-        const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture;
-    }
-    private mirrorWall(parent: THREE.Object3D): void {
-        const group = new THREE.Group(); group.position.set(4.7, 0, -3.98); group.userData.workstation = 'mirror'; group.userData.labelHeight = 3.25; parent.add(group); this.roots.push(group);
-        this.box(group, [2.55, 2.0, .14], [0, 1.75, 0], 0x17222e);
-        this.mirrorSurface = document.createElement('canvas'); this.mirrorSurface.width = 1024; this.mirrorSurface.height = 576;
-        this.mirrorTexture = new THREE.CanvasTexture(this.mirrorSurface); this.mirrorTexture.colorSpace = THREE.SRGBColorSpace;
-        const screen = new THREE.Mesh(new THREE.PlaneGeometry(2.36, 1.8), new THREE.MeshBasicMaterial({ map: this.mirrorTexture, toneMapped: false }));
-        screen.position.set(0, 1.75, .08); group.add(screen); this.screens.set('mirror', screen);
-        const label = document.createElement('button'); label.className = 'omo-scene-label'; label.dataset.workstation = 'mirror'; label.textContent = '04  Mirror · Desk one ↗'; label.setAttribute('aria-label', 'Use linked monitor mirror');
-        label.addEventListener('click', () => { this.options.onSelect('mirror'); });
-        this.host.appendChild(label); this.labels.push(label); this.mirrorLabel = label;
-        this.setMirrorFrame({ lines: [], title: 'LINKED MONITOR', status: 'Link this screen to a desk above.' });
     }
     private mirrorKey = '';
     setMirrorFrame(frame: MonitorFrame | undefined): void {
@@ -465,23 +607,6 @@ export class RoomScene {
         if (!lines.length) { c.fillStyle = '#c7ded4'; c.fillText((this.mirrorFrame.status ?? 'Link this monitor to a desk.').slice(0, 80), 24, 105); }
         this.mirrorTexture.needsUpdate = true;
         if (this.renderer) { this.renderer.domElement.dataset.mirrorText = this.mirrorFrame.lines.join('\\n'); this.invalidate(); }
-    }
-    private webWall(parent: THREE.Object3D): void {
-        const group = new THREE.Group(); group.position.set(0, 0, -4.12); group.userData.workstation = 'web'; group.userData.labelHeight = 3.43;
-        parent.add(group); this.roots.push(group);
-        this.box(group, [4.12, 2.6, .14], [0, 1.9, 0], 0x17222e);
-        this.webSurface = document.createElement('canvas'); this.webSurface.width = 960; this.webSurface.height = 600;
-        this.webTexture = new THREE.CanvasTexture(this.webSurface); this.webTexture.colorSpace = THREE.SRGBColorSpace;
-        const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.9, 2.44), new THREE.MeshBasicMaterial({ map: this.webTexture, toneMapped: false }));
-        screen.position.set(0, 1.9, .08); group.add(screen); this.screens.set('web', screen);
-        this.setWebPlaceholder('Click the web wall, then open an address.');
-        const label = document.createElement('button'); label.className = 'omo-scene-label'; label.dataset.workstation = 'web'; label.textContent = '03  Web wall ↗';
-        label.setAttribute('aria-label', 'Use physical web wall');
-        label.addEventListener('click', () => {
-            if (this.navigation === 'walk' && this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3())) > 3.2) { this.options.onMessage('Walk closer to the web wall.'); return; }
-            this.options.onSelect('web'); this.walker?.focusTerminal();
-        });
-        this.host.appendChild(label); this.labels.push(label);
     }
     setWebPlaceholder(message: string): void {
         this.webEpoch++;
@@ -511,26 +636,6 @@ export class RoomScene {
         this.setWebPlaceholder('Open a page above to use this wall.');
         delete this.renderer.domElement.dataset.webFrameSequence;
     }
-    private plant(parent: THREE.Object3D, x: number, z: number): void {
-        this.cylinder(parent, 0.35, 0.5, [x, 0.25, z], 0xd1c7af, 0.25);
-        this.fern(parent,x,z,0.5);
-    }
-    private fern(parent: THREE.Object3D, x: number, z: number, lift=0): void {
-        for (let i=0;i<7;i++) {
-            const a=i*Math.PI*2/7;
-            const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.26,8,6), this.material(i%2?0x6d9b71:0x4c7e62));
-            leaf.scale.set(0.5,2.5,0.35); leaf.rotation.z=-Math.sin(a)*0.8; leaf.rotation.x=Math.cos(a)*0.8;
-            leaf.position.set(x+Math.sin(a)*0.2,0.65+lift,z+Math.cos(a)*0.2); leaf.castShadow=true; parent.add(leaf);
-        }
-    }
-    private tree(parent: THREE.Object3D, x: number, z: number, scale: number): void {
-        const trunk=this.cylinder(parent,0.1*scale,2.6*scale,[x,1.3*scale,z],0x675940,0.16*scale,8);
-        trunk.rotation.z=0.1;
-        for(let i=0;i<4;i++) {
-            const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(0.75*scale,1),this.material(i%2?0x5c8661:0x466e55));
-            crown.position.set(x+Math.sin(i*2.4)*0.5,2.4*scale+(i%2)*0.3,z+Math.cos(i*2.4)*0.4); crown.scale.y=0.8; crown.castShadow=true;parent.add(crown);
-        }
-    }
     private bindControls(canvas: HTMLCanvasElement): void {
         const down=(event:PointerEvent)=> {if(event.button!==0)return;this.pointer={x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY,dragged:false};canvas.setPointerCapture(event.pointerId);};
         const move=(event:PointerEvent)=>{
@@ -544,7 +649,7 @@ export class RoomScene {
             if(dragged){this.options.onCameraChange({...this.state});return;}
             const rect=canvas.getBoundingClientRect();const p=new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
             const ray=new THREE.Raycaster();ray.setFromCamera(p,this.camera);const hits=ray.intersectObjects(this.roots,true);
-            for(const hit of hits){let node:THREE.Object3D|null=hit.object;while(node&&!node.userData.workstation)node=node.parent;if(node?.userData.workstation){this.options.onSelect(node.userData.workstation);break;}}
+            for(const hit of hits){let node:THREE.Object3D|null=hit.object;while(node&&!node.userData.workstation)node=node.parent;if(node?.userData.workstation){this.options.onSelect(this.selectId(node.userData.workstation));break;}}
         };
         // omo webscroll lane: in walk mode the wheel scrolls the web page under the pointer (within reach), clicked or not.
         const wheel=(event:WheelEvent)=>{event.preventDefault();if(this.navigation==='walk'){
@@ -573,11 +678,12 @@ export class RoomScene {
     }
     setTerminalLines(lines: string[]): void { this.setTerminalFrame({ ...this.terminalFrames.terminal, lines, cells: undefined, foreground: undefined, background: undefined, cursor: undefined }); }
     setTerminalFrames(frames: Record<TerminalWorkstation, MonitorFrame>): void {
-        this.setTerminalFrame(frames.terminal, 'terminal'); this.setTerminalFrame(frames['terminal-2'], 'terminal-2');
+        if (frames.terminal) this.setTerminalFrame(frames.terminal, 'terminal'); if (frames['terminal-2']) this.setTerminalFrame(frames['terminal-2'], 'terminal-2');
     }
+    /** w2:render — `station` may be any station id of the world (cast), not only the two v1 desks. */
     setTerminalFrame(input: MonitorFrame, station: TerminalWorkstation = 'terminal'): void {
         // Larger focus-mode grids are cropped to the monitor's 80 x 22 (the same object when it already fits).
-        const previous = this.terminalFrames[station], sources = this.terminalSources ??= new Map();
+        const previous = this.terminalFrames[station] ?? { lines: [] }, sources = this.terminalSources ??= new Map();
         const cached = sources.get(station);
         const frame = input === previous ? previous : cached?.input === input ? cached.frame : monitorWindow(input);
         if (input !== previous) { if (frame !== input) sources.set(station, { input, frame }); else sources.delete(station); }
@@ -585,7 +691,8 @@ export class RoomScene {
         this.terminalFrames[station] = frame;
         const workspaceName = frame.title?.split(' / ')[0]?.trim();
         const deskLabel = this.deskLabels.get(station);
-        const deskText = workspaceName ? `${station === 'terminal' ? '01' : '02'}  ${workspaceName.slice(0, 36)} ↗` : undefined;
+        const number = this.stationNumbers?.get(station) ?? (station === 'terminal-2' ? 2 : 1);
+        const deskText = workspaceName ? `${String(number).padStart(2, '0')}  ${workspaceName.slice(0, 36)} ↗` : undefined;
         if (deskText && deskLabel && deskLabel.textContent !== deskText) deskLabel.textContent = deskText;
         const surface = this.terminalSurfaces.get(station);
         if (!surface) return;
@@ -597,12 +704,7 @@ export class RoomScene {
         const frameChanged = surface.frame !== frame;
         surface.frame = frame; surface.selection = selectionKey;
         if (this.paintTerminal(surface, frame, spans)) this.invalidate();
-        const lamp = this.lamps.get(station);
-        if (lamp) {
-            const color = /interrupted|exited|error/i.test(frame.status ?? '') ? 0xd26464 : frame.unreadBells ? 0xff9e4a : /process active|working/i.test(frame.status ?? '') ? 0xe8bd60 : /live|running|idle/i.test(frame.status ?? '') ? 0x87cdb4 : 0x6d7c86;
-            const material = lamp.material as THREE.MeshStandardMaterial;
-            if (material.color.getHex() !== color || material.emissive.getHex() !== color) { material.color.setHex(color); material.emissive.setHex(color); this.invalidate(); }
-        }
+        this.paintLamp(station);
         if (!this.renderer) return;
         this.setData('terminalSelection', this.terminalSelection?.model.text() ?? '');
         this.setData('terminalSelectionStation', this.terminalSelection?.station ?? '');
@@ -610,9 +712,11 @@ export class RoomScene {
         if (!frameChanged) return;
         this.setData('terminalMetrics', JSON.stringify(Object.fromEntries([...this.terminalSurfaces].map(([id,s]) => [id,{ cellWidth:s.cellWidth ?? 12 }]))));
         if (station === 'terminal') { this.setData('terminalText', frame.lines.join('\n')); this.setData('terminalCursor', frame.cursor?`${frame.cursor.x},${frame.cursor.y},${frame.cursor.visible}`:''); }
-        this.setData('stationText', JSON.stringify({ terminal: this.terminalFrames.terminal.lines, 'terminal-2': this.terminalFrames['terminal-2'].lines }));
-        this.setData('stationCells', JSON.stringify({ terminal:this.terminalFrames.terminal.cells,'terminal-2':this.terminalFrames['terminal-2'].cells }));
-        this.setData('stationBells', JSON.stringify({ terminal: this.terminalFrames.terminal.unreadBells ?? 0, 'terminal-2': this.terminalFrames['terminal-2'].unreadBells ?? 0 }));
+        // Keyed by station id: v1 keys 'terminal' / 'terminal-2' always present, plus every world station.
+        const frames = Object.entries(this.terminalFrames);
+        this.setData('stationText', JSON.stringify(Object.fromEntries(frames.map(([id, f]) => [id, f.lines]))));
+        this.setData('stationCells', JSON.stringify(Object.fromEntries(frames.map(([id, f]) => [id, f.cells]))));
+        this.setData('stationBells', JSON.stringify(Object.fromEntries(frames.map(([id, f]) => [id, f.unreadBells ?? 0]))));
     }
     /**
      * Paint a terminal frame into its canvas. Only the header and the rows whose content changed are
@@ -630,7 +734,7 @@ export class RoomScene {
         const plainBg = lines.length && frame.background ? frame.palette?.[dominantKey(frame.background) ?? ''] : undefined;
         const skip = plainBg ? (plainBg.startsWith('#') ? plainBg : `#${plainBg}`).toLowerCase() : base;
         const header = `${frame.title ?? ''}\u0000${frame.status ?? ''}\u0000${frame.unreadBells ?? 0}`;
-        const layout = lines.length ? `${skip}\u0000${!!frame.foreground}\u0000${frame.cells !== undefined}\u0000${JSON.stringify(frame.palette ?? null)}` : `empty\u0000${frame.status ?? ''}`;
+        const layout = lines.length ? `${skip}\u0000${!!frame.foreground}\u0000${frame.cells !== undefined}\u0000${JSON.stringify(frame.palette ?? null)}` : `empty\u0000${frame.status ?? ''}\u0000${surface.hint ?? ''}`;
         const cursor = frame.cursor?.visible && frame.cursor.y - offset >= 0 && frame.cursor.y - offset < MONITOR_ROWS && frame.cursor.x >= 0 && frame.cursor.x < MONITOR_COLS ? frame.cursor : undefined;
         const keys: string[] = [];
         for (let i = 0; i < MONITOR_ROWS; i++) {
@@ -658,7 +762,7 @@ export class RoomScene {
         }
         c.font = '20px monospace'; c.textBaseline = 'alphabetic';
         if (!lines.length) {
-            if (full) { c.fillStyle='#c7ded4';c.fillText('Walk up and click this screen.',24,104); c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140); }
+            if (full) { c.fillStyle='#c7ded4';c.fillText((surface.hint ?? 'Walk up and click this screen.').slice(0,MONITOR_COLS),24,104); c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140); }
             this.markDirty(surface, full, 0, headerDirty ? 49 : 0);
             return true;
         }
@@ -711,7 +815,7 @@ export class RoomScene {
         surface.dirty = surface.dirty ? { from: Math.min(surface.dirty.from, top), to: Math.max(surface.dirty.to, bottom) } : { from: top, to: bottom };
     }
     private uploadDirty(): void {
-        for (const surface of this.terminalSurfaces.values()) {
+        for (const surface of [...this.terminalSurfaces.values(), ...this.linkedSurfaces.values()]) {
             const dirty = surface.dirty; if (!dirty || !surface.source) continue;
             surface.dirty = undefined;
             // A full upload is already queued and will include these pixels.
@@ -723,12 +827,12 @@ export class RoomScene {
     }
     /** Pointer moved to an overlay control: stop typing into the monitor so keys go to that control. */
     releaseTyping(): void { this.clearTerminalSelection(); this.walker?.releaseTyping(); }
-    private terminalCellAt(x: number, y: number, clamp = false): { station: TerminalWorkstation; cell: {row:number;col:number} } | undefined {
+    private terminalCellAt(x: number, y: number, clamp = false): { station: string; cell: {row:number;col:number} } | undefined {
         const rect = this.renderer.domElement.getBoundingClientRect(), ray = new THREE.Raycaster();
         ray.setFromCamera(new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1), this.camera);
         // Only the frontmost actual screen counts. Never select through another object or workstation.
         const hit = ray.intersectObjects(this.roots,true)[0]; if (!hit?.uv) return undefined;
-        for (const station of ['terminal','terminal-2'] as const) {
+        for (const station of this.terminalSurfaces.keys()) {
             const screen = this.screens.get(station);
             if (!screen || hit.object !== screen || this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3())) > 3.2) continue;
             const point = monitorCell(hit.uv.x, hit.uv.y, this.terminalSurfaces.get(station)?.cellWidth ?? 12, clamp);
@@ -739,18 +843,18 @@ export class RoomScene {
     private startTerminalSelection(x: number, y: number, unit: SelectionUnit = 'char'): boolean {
         this.clearTerminalSelection(); const hit = this.terminalCellAt(x,y); if (!hit) return false;
         // Selecting text changes the active desk locally; it must not bind/revive a runtime.
-        this.options.onTextSelect(hit.station);
+        this.options.onTextSelect(hit.station as TerminalWorkstation);
         this.terminalSelection = { station:hit.station,model:new MonitorSelection(this.terminalFrames[hit.station].lines,hit.cell,unit,this.terminalFrames[hit.station].cells) };
-        this.setTerminalFrame(this.terminalFrames[hit.station],hit.station); return true;
+        this.setTerminalFrame(this.terminalFrames[hit.station],hit.station as TerminalWorkstation); return true;
     }
     private extendTerminalSelection(x: number, y: number): void {
         const selected = this.terminalSelection, hit = this.terminalCellAt(x,y,true);
         if (!selected || hit?.station !== selected.station) return;
-        selected.model.extend(hit.cell); this.setTerminalFrame(this.terminalFrames[selected.station],selected.station);
+        selected.model.extend(hit.cell); this.setTerminalFrame(this.terminalFrames[selected.station],selected.station as TerminalWorkstation);
     }
     private clearTerminalSelection(): void {
         const selected = this.terminalSelection; if (!selected) return;
-        this.terminalSelection = undefined; this.setTerminalFrame(this.terminalFrames[selected.station],selected.station);
+        this.terminalSelection = undefined; if (this.terminalFrames[selected.station]) this.setTerminalFrame(this.terminalFrames[selected.station],selected.station as TerminalWorkstation);
     }
     private copyTerminalSelection(): void {
         const text = this.terminalSelection?.model.text();
@@ -761,9 +865,9 @@ export class RoomScene {
             if (!this.disposed) this.options.onMessage('Clipboard copy failed. Check browser permissions. Nothing was sent to the terminal.');
         });
     }
-    private terminalLinkAt(station: TerminalWorkstation, hit: THREE.Intersection): string | undefined {
+    private terminalLinkAt(station: string, hit: THREE.Intersection): string | undefined {
         if (!hit.uv) return undefined;
-        const frame = this.terminalFrames[station];
+        const frame = this.terminalFrames[station]; if (!frame) return undefined;
         const visible = frame.lines.slice(-MONITOR_ROWS);
         const row = Math.max(0, Math.min(MONITOR_ROWS - 1, Math.floor((1 - hit.uv.y) * MONITOR_ROWS)));
         const line = visible[row] ?? '';
@@ -776,11 +880,12 @@ export class RoomScene {
     }
     /** omo webscroll lane: the web page pixel under a canvas point, when the web wall is the frontmost hit and within reach. */
     private webPointAt(x: number, y: number): ScreenPoint | undefined {
-        const screen = this.screens.get('web'); if (!screen || !this.renderer) return undefined;
+        if (!this.renderer) return undefined;
         const rect = this.renderer.domElement.getBoundingClientRect(); if (!rect.width || !rect.height) return undefined;
         const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1), this.camera);
         const hit = ray.intersectObjects(this.roots,true)[0];
-        if (!hit?.uv || hit.object !== screen || this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3())) > 3.2) return undefined;
+        const screen = hit?.object as THREE.Mesh | undefined;
+        if (!hit?.uv || !screen || screen.userData.screenKind !== 'web-wall' || this.camera.position.distanceTo(screen.getWorldPosition(new THREE.Vector3())) > 3.2) return undefined;
         const { width, height } = this.webSize;
         return { x: Math.min(width-1, Math.max(0, hit.uv.x*width)), y: Math.min(height-1, Math.max(0, (1-hit.uv.y)*height)) };
     }
@@ -790,18 +895,19 @@ export class RoomScene {
         const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1),this.camera);
         for(const hit of ray.intersectObjects(this.roots,true)){
             let node:THREE.Object3D|null=hit.object;while(node&&!node.userData.workstation)node=node.parent;
-            const action=node?.userData.workstation as Workstation|undefined;
-            if(!action)continue;
-            const screen = this.screens.get(action); if (!screen) continue;
+            const id=node?.userData.workstation as string|undefined;
+            if(!id)continue;
+            const screen = this.screens.get(id); if (!screen) continue;
+            const kind = this.entities.get(id)?.entity.kind, action = this.selectId(id);
             const center = screen.getWorldPosition(new THREE.Vector3());
             if(this.camera.position.distanceTo(center)>3.2){this.options.onMessage('Walk closer to the workstation.');return;}
-            if ((modifiers?.ctrlKey || modifiers?.metaKey) && (action === 'terminal' || action === 'terminal-2') && hit.object === screen) {
-                const link = this.terminalLinkAt(action, hit);
+            if ((modifiers?.ctrlKey || modifiers?.metaKey) && kind === 'station' && hit.object === screen) {
+                const link = this.terminalLinkAt(id, hit);
                 if (link) { this.options.onOpenLink?.(link); return 'terminal'; }
                 this.options.onMessage('Ctrl-click a complete safe HTTP(S) link on this monitor.'); return 'terminal';
             }
             const point = action === 'web' && hit.object === screen && hit.uv ? { x: Math.min(this.webSize.width-1, Math.max(0, hit.uv.x*this.webSize.width)), y: Math.min(this.webSize.height-1, Math.max(0, (1-hit.uv.y)*this.webSize.height)) } : undefined;
-            this.options.onSelect(action, point); return action === 'code' ? 'code' : action === 'mirror' ? undefined : 'terminal';
+            this.options.onSelect(action, point); return action === 'code' ? 'code' : kind === 'mirror' || kind === 'monitor-wall' ? undefined : 'terminal';
         }
         return undefined;
     }
@@ -809,7 +915,7 @@ export class RoomScene {
         this.invalidate();
         if (this.navigation === 'walk') { this.walker?.step(0); return; }
         const {azimuth:a,elevation:e,distance:d}=this.state;
-        const fit = Math.max(1, 1.28 / this.camera.aspect);
+        const fit = Math.max(1, 1.28 / this.camera.aspect) * this.roomScale;
         this.camera.position.set(Math.sin(a)*Math.cos(e)*d*fit,Math.sin(e)*d*fit,Math.cos(a)*Math.cos(e)*d*fit);
         this.camera.lookAt(0,0.7,0);
     }
@@ -938,10 +1044,10 @@ export class RoomScene {
     private placeLabels(w:number,h:number):void{
         const {a,b}=this.tmp;
         for(const label of this.labels){
-            const action = label.dataset.workstation as Workstation;
+            const action = label.dataset.workstation as string;
             const root = this.rootFor(action);
             if (!root) continue;
-            const p=a.copy(root.position).add(b.set(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3)).project(this.camera);
+            const p=a.copy(root.position).add(b.set(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3).applyAxisAngle(THREE.Object3D.DEFAULT_UP,root.rotation.y)).project(this.camera);
             const mesh = this.screens.get(action);
             const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(b)) : undefined;
             const x=Math.round((p.x*0.5+0.5)*w*2)/2,y=Math.round((-p.y*0.5+0.5)*h*2)/2;
@@ -955,7 +1061,7 @@ export class RoomScene {
             }
         }
     }
-    private rootFor(action:Workstation):THREE.Object3D|undefined{for(const root of this.roots)if(root.userData.workstation===action)return root;return undefined;}
+    private rootFor(action:string):THREE.Object3D|undefined{return this.entities.get(action)?.built.root;}
     private publishView(w:number,h:number):void{
         const {a}=this.tmp;
         const toScreen=(v:THREE.Vector3):{x:number;y:number}=>({x:(v.x*.5+.5)*w,y:(-v.y*.5+.5)*h});
@@ -965,23 +1071,27 @@ export class RoomScene {
         }))));
         const targets: Record<string, { x: number; y: number; visible: boolean }> = {};
         for(const label of this.labels){
-            const action = label.dataset.workstation as Workstation;
+            const action = label.dataset.workstation as string;
             const mesh = this.screens.get(action);
             if (!mesh || !this.rootFor(action)) continue;
             const projected = mesh.getWorldPosition(a).project(this.camera);
             targets[action] = { ...toScreen(projected), visible: projected.z >= -1 && projected.z <= 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 };
         }
-        if(targets.terminal){this.setData('terminalX',String(targets.terminal.x));this.setData('terminalY',String(targets.terminal.y));}
+        // Old keys: terminalX/Y follow 'terminal', else the world's first station.
+        const first=targets.terminal??targets[[...this.stationNumbers.keys()][0]??''];
+        if(first){this.setData('terminalX',String(first.x));this.setData('terminalY',String(first.y));}
         this.setData('stationTargets',JSON.stringify(targets));
         const quad=(mesh:THREE.Mesh,x:number,y:number)=>[[-x,y],[x,y],[x,-y],[-x,-y]].map(([qx,qy])=>toScreen(mesh.localToWorld(a.set(qx,qy,0)).project(this.camera)));
-        this.setData('terminalQuads',JSON.stringify(Object.fromEntries((['terminal','terminal-2'] as const).map(id => [id,quad(this.screens.get(id)!,.79,.45)]))));
-        const code=this.screens.get('code');if(code)this.setData('codeReviewQuad',JSON.stringify(quad(code,.99,.54)));
-        const web=this.screens.get('web');if(web)this.setData('webQuad',JSON.stringify(quad(web,1.95,1.22)));
+        const half=(mesh:THREE.Mesh)=>{const g=(mesh.geometry as THREE.PlaneGeometry).parameters;return [g.width/2,g.height/2] as const;};
+        const of=(kind:WorldEntity['kind'])=>[...this.entities.values()].filter(item=>item.entity.kind===kind&&item.built.screen);
+        this.setData('terminalQuads',JSON.stringify(Object.fromEntries(of('station').map(item=>[item.entity.id,quad(item.built.screen!,...half(item.built.screen!))]))));
+        const code=this.screens.get('code')??of('review-screen')[0]?.built.screen;if(code)this.setData('codeReviewQuad',JSON.stringify(quad(code,...half(code))));
+        const web=this.screens.get('web')??of('web-wall')[0]?.built.screen;if(web)this.setData('webQuad',JSON.stringify(quad(web,...half(web))));
     }
     resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();this.invalidate();return;}this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
     dispose():void{
         this.setPeers([]);
-        this.disposed=true;this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
+        this.disposed=true;for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
     }
