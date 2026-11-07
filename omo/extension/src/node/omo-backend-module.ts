@@ -16,12 +16,19 @@ import { OMO_GIT_REVIEW_PATH } from '../common/git-review-protocol';
 import { ProjectGitReviewBackend, projectGitReviewConnection } from './git-review';
 import { StandaloneSecurityContribution } from './standalone-security';
 import { WsRequestValidatorContribution } from '@theia/core/lib/node/ws-request-validators';
+import { EnvVariablesServer } from '@theia/core/lib/common/env-variables'; // w2:mp-client
+import { FileUri } from '@theia/core/lib/common/file-uri'; // w2:mp-client
+import * as nodePath from 'path'; // w2:mp-client
+import { OMO_REMOTE_ROOM_PATH } from '../common/remote-room-protocol'; // w2:mp-client
+import { remoteRoomConnection } from './remote-room-client'; // w2:mp-client
+import { RemoteRoomTokenStore } from './remote-room-token-store'; // w2:mp-client
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
 export const OmoManagedWeb = Symbol('OmoManagedWeb');
 const OmoRoomPresence = Symbol('OmoRoomPresence');
 const OmoTaskWorkspaceBackend = Symbol('OmoTaskWorkspaceBackend');
 const OmoStandaloneSecurity = Symbol('OmoStandaloneSecurity');
+const OmoRemoteRoomTokens = Symbol('OmoRemoteRoomTokens'); // w2:mp-client
 
 /** Stops the runtime host with the backend. The tmux server and every tab keep running. */
 @injectable()
@@ -58,6 +65,20 @@ export default new ContainerModule(bind => {
             return connection;
         });
     }).inSingletonScope();
+    // --- w2:mp-client: remote rooms. Backend connects out over WSS; member tokens in <config dir>/omo/remote-rooms.json (0600). ---
+    bind(OmoRemoteRoomTokens).toDynamicValue(ctx => {
+        const envs = ctx.container.get<EnvVariablesServer>(EnvVariablesServer);
+        return new RemoteRoomTokenStore(async () => nodePath.join(FileUri.fsPath(await envs.getConfigDirUri()), 'omo', 'remote-rooms.json'));
+    }).inSingletonScope();
+    bind(ConnectionHandler).toDynamicValue(ctx => {
+        const store = ctx.container.get<RemoteRoomTokenStore>(OmoRemoteRoomTokens);
+        return new RpcConnectionHandler<object>(OMO_REMOTE_ROOM_PATH, proxy => {
+            const connection = remoteRoomConnection(store, { log: message => console.warn(`[omo] ${message}`) });
+            proxy.onDidCloseConnection(() => connection.dispose());
+            return connection;
+        });
+    }).inSingletonScope();
+    // --- end w2:mp-client ---
     bind(OmoRuntimeLifecycle).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(OmoRuntimeLifecycle);
     bind(ConnectionHandler).toDynamicValue(ctx => {

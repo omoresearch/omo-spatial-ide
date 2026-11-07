@@ -35,7 +35,7 @@ import type { PlayerPose } from './player-state';
 import type { WorldOp, WorldSpec } from './world-model';
 import { validateWorld, WORLD_MAX_BYTES } from './world-model';
 import type { ChatEmote, ChatMessage, ChatSay, PresenceColour, RoomMember, VoiceSignal, VoiceSignalEnvelope, VoiceStatus } from './presence-protocol';
-import { CHAT_EMOTES, PRESENCE_COLOURS, chatSay, presenceColour, presencePose, voiceSignal, voiceStatus } from './presence-protocol';
+import { CHAT_EMOTES, PRESENCE_COLOURS, chatSay, presenceColour, voiceSignal, voiceStatus } from './presence-protocol';
 
 // ---------------------------------------------------------------------------------------------
 // Constants
@@ -67,6 +67,8 @@ export const ROOM_MEMBER_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
 /** Invite codes, member tokens and owner tokens: opaque URL-safe strings. */
 export const ROOM_SECRET_RE = /^[A-Za-z0-9_-]{16,256}$/;
 const RID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/** Half of the largest WorldShell size (40 m): poses are room-space metres, clamped by the world, not the v1 room. */
+export const ROOM_POSE_LIMIT_M = 20;
 
 /**
  * WebSocket close codes. Codes in ROOM_CLOSE_FINAL mean "do NOT auto-reconnect"; any other close
@@ -155,7 +157,7 @@ export type RoomErrorCode =
 export interface HelloFrame { t: 'hello'; rid?: string; proto: typeof ROOM_WIRE_VERSION; client: { app: 'omo-ide'; version: string }; auth: RoomAuth }
 /** Join the room after `welcome`. `name` 1–32 chars; `colour` optional preference. */
 export interface JoinFrame { t: 'join'; rid?: string; name: string; colour?: PresenceColour; agents?: AgentStatusSummary[] }
-/** Presence update: this member's pose (same bounds as local presence). Fire and forget. */
+/** Presence update: this member's pose (see `wirePose` for bounds). Fire and forget. */
 export interface PoseFrame { t: 'pose'; pose: PlayerPose }
 /** Publish (status) or clear (null) this member's voice status. */
 export interface VoiceStatusFrame { t: 'voice-status'; status: VoiceStatus | null }
@@ -299,6 +301,16 @@ export function roomDisplayName(input: unknown): string {
     if (!line(input, 32)) throw new Error('Name must be 1–32 characters without control characters.');
     return (input as string).trim();
 }
+/**
+ * Pose on the wire. Looser than the v1 local `presencePose` (12×10 m room) because v2 worlds can be
+ * up to 40×40 m. Receivers may further clamp to the room's WorldShell.
+ */
+export function wirePose(input: unknown): PlayerPose {
+    const p = input as PlayerPose;
+    if (!p || ![p.x, p.z, p.yaw, p.pitch].every(n => typeof n === 'number' && Number.isFinite(n))
+        || Math.abs(p.x) > ROOM_POSE_LIMIT_M || Math.abs(p.z) > ROOM_POSE_LIMIT_M || Math.abs(p.yaw) > Math.PI + 1e-6 || Math.abs(p.pitch) > 1.2) throw new Error('Invalid room position.');
+    return { x: p.x, z: p.z, yaw: p.yaw, pitch: p.pitch };
+}
 function worldOps(input: unknown): WorldOp[] {
     if (!Array.isArray(input) || input.length === 0 || input.length > ROOM_WORLD_OPS_MAX) throw new Error(`A world batch holds 1–${ROOM_WORLD_OPS_MAX} operations.`);
     // Deep validation happens in applyWorldOps + validateWorld on the result.
@@ -312,7 +324,7 @@ function world(input: unknown): WorldSpec {
 }
 function member(input: unknown): RemoteRoomMember {
     if (!isObj(input) || typeof input.id !== 'string' || !ROOM_MEMBER_ID_RE.test(input.id) || (input.role !== 'owner' && input.role !== 'member')) throw new Error('Invalid room member.');
-    const out: RemoteRoomMember = { id: input.id, name: roomDisplayName(input.name), pose: presencePose(input.pose as PlayerPose), role: input.role };
+    const out: RemoteRoomMember = { id: input.id, name: roomDisplayName(input.name), pose: wirePose(input.pose), role: input.role };
     if (input.voice !== undefined && input.voice !== null) out.voice = voiceStatus(input.voice as VoiceStatus)!;
     if (input.colour !== undefined) out.colour = presenceColour(input.colour);
     if (input.agents !== undefined) out.agents = agentSummaries(input.agents);
@@ -373,7 +385,7 @@ export function parseClientFrame(raw: unknown): RoomClientFrame | undefined {
             if (f.agents !== undefined) out.agents = agentSummaries(f.agents);
             return out;
         }
-        case 'pose': return { t: 'pose', pose: presencePose(f.pose as PlayerPose) };
+        case 'pose': return { t: 'pose', pose: wirePose(f.pose) };
         case 'voice-status': return { t: 'voice-status', status: voiceStatus((f.status ?? null) as VoiceStatus | null) };
         case 'colour': return { t: 'colour', colour: presenceColour(f.colour) };
         case 'chat': { const s = chatSay({ kind: 'text', text: f.text as string }) as { kind: 'text'; text: string }; return { t: 'chat', rid: optRid(f.rid), text: s.text }; }
