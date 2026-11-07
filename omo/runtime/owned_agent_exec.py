@@ -26,15 +26,17 @@ def _claude_has_session(session_id: str, config_dir: str) -> bool:
     return any(Path(path).is_file() for path in glob.glob(str(root / "projects" / "*" / f"{session_id}.jsonl")))
 
 
-def build_argv(kind: str, executable: str, session_id: str, config_dir: str) -> list[str]:
+def build_argv(kind: str, executable: str, session_id: str, config_dir: str, settings: str = "") -> list[str]:
     if kind not in {"claude", "codex"} or not executable or not os.path.isabs(executable):
         raise ValueError(ERROR)
     if not os.path.isfile(executable) or not os.access(executable, os.X_OK):
         raise ValueError(ERROR)
+    # w2:agents: the opt-in Omo Claude status file (never ~/.claude), only when the host passes it.
+    extra = ["--settings", settings] if kind == "claude" and settings and os.path.isabs(settings) else []
     if kind == "claude" and session_id:
         mode = "--resume" if _claude_has_session(session_id, config_dir) else "--session-id"
-        return [executable, mode, session_id]
-    return [executable]
+        return [executable, *extra, mode, session_id]
+    return [executable, *extra]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,10 +46,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--session-id", default="")
     parser.add_argument("--receipt")
     parser.add_argument("--handshake")
+    parser.add_argument("--settings", default="")
     parser.add_argument("--config-dir", default=os.environ.get("CLAUDE_CONFIG_DIR", str(Path.home() / ".claude")))
     args = parser.parse_args(argv)
     try:
-        command = build_argv(args.kind, args.executable, args.session_id, args.config_dir)
+        command = build_argv(args.kind, args.executable, args.session_id, args.config_dir, args.settings)
         # Nothing is created until the host has marked this pane as owned.
         _guard.await_launch_authorization(args.handshake)
         child = _guard.owned_pty_process.spawn(command, close_fds=True)

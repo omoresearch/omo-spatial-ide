@@ -138,6 +138,64 @@ def _tab_env(ws, tab, autorun=True):
 
 
 ob.tab_env = _tab_env      # the bridge's _open_window_locked looks tab_env up at call time
+
+
+# --------------------------------------------------------------------------- w2:agents Claude status
+# Opt-in Claude Code hooks. The Theia backend writes <OMO_DATA>/claude-status/settings.json only
+# after the user saw the exact JSON and confirmed. While that file is a regular file holding the
+# Omo hook config, Claude tabs that OMO starts load it with `claude --settings <file>`. The user's
+# own ~/.claude settings are never read or changed.
+CLAUDE_STATUS_SETTINGS = os.path.join(ob.DATA_DIR, "claude-status", "settings.json")
+CLAUDE_STATUS_WRAPPER = os.path.join(HERE, "claude_with_status.sh")
+CLAUDE_STATUS_HOOK = os.path.join(HERE, "claude_status_hook.py")
+
+
+def claude_status_settings():
+    """The settings file path when Claude status is enabled, else ""."""
+    path = CLAUDE_STATUS_SETTINGS
+    try:
+        if os.path.islink(path) or os.path.islink(os.path.dirname(path)) or not os.path.isfile(path):
+            return ""
+        if os.path.getsize(path) > 64 * 1024:
+            return ""
+        with open(path, "r", encoding="utf-8") as stream:
+            data = json.load(stream)
+        hooks = data.get("hooks") if isinstance(data, dict) else None
+        # The backend may name this runtime folder through a symlink, so match the script name.
+        if not isinstance(hooks, dict) or not hooks or os.path.basename(CLAUDE_STATUS_HOOK) not in json.dumps(hooks):
+            return ""
+        return path
+    except (OSError, ValueError):
+        return ""
+
+
+_bridge_agent_command = ob.agent_command
+
+
+def _agent_command(ws, tab):
+    """Claude tabs with status enabled start through a tiny wrapper that adds --settings.
+    Everything else (and Claude with status off) is the bridge's own command, unchanged."""
+    if tab.get("kind") == "claude" and claude_status_settings() and ob.find_agent("claude"):
+        session = ob.claude_session(ws["id"], tab["id"])
+        return f"omo_agent claude {ob.shell_quote(CLAUDE_STATUS_WRAPPER)} {ob.shell_quote(session)}"
+    return _bridge_agent_command(ws, tab)
+
+
+ob.agent_command = _agent_command   # the bridge's autorun_command looks agent_command up at call time
+_tab_env_before_status = ob.tab_env
+
+
+def _tab_env_with_status(ws, tab, autorun=True):
+    env = _tab_env_before_status(ws, tab, autorun)
+    on = tab.get("kind") == "claude" and bool(claude_status_settings())
+    claude = os.path.realpath(ob.find_agent("claude") or "") if on else ""
+    # Always set, even empty: a session's -e environment is inherited by later windows.
+    env += ["-e", "OMO_CLAUDE_STATUS_BIN=" + (claude if on else ""),
+            "-e", "OMO_CLAUDE_STATUS_SETTINGS=" + (CLAUDE_STATUS_SETTINGS if on else "")]
+    return env
+
+
+ob.tab_env = _tab_env_with_status
 STATIONS_FILE = os.path.join(ob.DATA_DIR, "spatial-stations.json")
 ID_RE = re.compile(r"^[0-9a-f]{12}$")
 STATION_RE = re.compile(r"^[\x21-\x7e]{1,128}$")
@@ -701,6 +759,9 @@ def _owned_agent_argv(ws, tab, receipt=None, handshake=None):
     session = ob.claude_session(ws["id"], tab["id"]) if kind == "claude" else ""
     args = [sys.executable, OWNED_AGENT_EXEC, "--kind", kind, "--executable", _agent_executable(kind),
             "--session-id", session]
+    settings = claude_status_settings() if kind == "claude" else ""
+    if settings:
+        args += ["--settings", settings]       # w2:agents: opt-in Claude status, only when enabled
     if receipt is not None:
         args += ["--receipt", receipt]
     if handshake is not None:

@@ -16,12 +16,15 @@ import { OMO_GIT_REVIEW_PATH } from '../common/git-review-protocol';
 import { ProjectGitReviewBackend, projectGitReviewConnection } from './git-review';
 import { StandaloneSecurityContribution } from './standalone-security';
 import { WsRequestValidatorContribution } from '@theia/core/lib/node/ws-request-validators';
+import { OMO_AGENT_SIGNALS_PATH } from '../common/agent-signals-protocol'; // w2:agents
+import { AgentSignalsBackend } from './agent-signals'; // w2:agents
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
 export const OmoManagedWeb = Symbol('OmoManagedWeb');
 const OmoRoomPresence = Symbol('OmoRoomPresence');
 const OmoTaskWorkspaceBackend = Symbol('OmoTaskWorkspaceBackend');
 const OmoStandaloneSecurity = Symbol('OmoStandaloneSecurity');
+const OmoAgentSignals = Symbol('OmoAgentSignals'); // w2:agents
 
 /** Stops the runtime host with the backend. The tmux server and every tab keep running. */
 @injectable()
@@ -57,6 +60,12 @@ export default new ContainerModule(bind => {
             proxy.onDidCloseConnection(()=>connection.dispose());
             return connection;
         });
+    }).inSingletonScope();
+    // w2:agents: real agent status (Claude hook opt-in, Hermes lease, process tree) and agent check reports.
+    bind(OmoAgentSignals).toDynamicValue(ctx => new AgentSignalsBackend(ctx.container.get<RuntimeHost>(OmoRuntimeHost))).inSingletonScope();
+    bind(ConnectionHandler).toDynamicValue(ctx => {
+        const signals = ctx.container.get<AgentSignalsBackend>(OmoAgentSignals);
+        return new RpcConnectionHandler<object>(OMO_AGENT_SIGNALS_PATH, () => signals);
     }).inSingletonScope();
     bind(OmoRuntimeLifecycle).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(OmoRuntimeLifecycle);
