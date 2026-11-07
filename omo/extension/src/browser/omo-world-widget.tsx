@@ -19,7 +19,7 @@ import type { RoomLayoutId, RoomKitId, PlayerPose } from '../common/player-state
 import { OmoRuntimeService } from '../common/runtime-protocol';
 import type { RuntimeFrame } from '../common/runtime-protocol';
 import { RuntimeConsoleController, RuntimeConsoleState, StationBinding } from './runtime-console-controller';
-import { WorldStations, StationInfo, WORLD_CHANGED_EVENT, loadWorld, linkedEntities, saveWorldOps, stationInfos } from './world-stations'; // w2:runtime
+import { WorldStations, StationInfo, WORLD_CHANGED_EVENT, loadWorld, linkedEntities, saveWorldOps, stationInfos, lockedLayoutReason } from './world-stations'; // w2:runtime
 import type { WorldChangedDetail } from './world-stations'; // w2:runtime
 import { RuntimeConsoleStrip } from './runtime-console-strip';
 import { OmoWebService, WebSurfaceFrame } from '../common/web-runtime-protocol';
@@ -267,6 +267,8 @@ export class OmoWorldWidget extends ReactWidget {
     private recipes: StationRecipe[]=[];
     private stationLocks: StationLocks={ terminal: false, 'terminal-2': false };
     private get anyStationLocked(): boolean { return this.stationList.some(s => this.stations.locked(s.id)); } // w2:runtime
+    /** t4:polish — the room layout lock note names every locked desk. */
+    private get layoutLockReason(): string { return lockedLayoutReason(this.stationList.filter(s => this.stations.locked(s.id)).map(s => ({ name: s.name, inSetup: this.stations.configLocked(s.id) }))); }
     private pushStationLocks(): void { this.stations?.pushLocks(); } // w2:runtime
     private setStationLock = (station: string, locked: boolean): void => {
         if (!this.project) return;
@@ -599,7 +601,7 @@ export class OmoWorldWidget extends ReactWidget {
     }
     private createRoom = (): void => {
         if (!this.project || !this.draftName.trim() || this.presetLoading) return;
-        if (this.anyStationLocked && this.room && this.draftLayout !== (this.room.layout ?? 'classic')) { this.error = 'A desk is locked, so the room layout was not changed. Unlock it in Station recipes first.'; this.update(); return; }
+        if (this.anyStationLocked && this.room && this.draftLayout !== (this.room.layout ?? 'classic')) { this.error = `Not saved: ${this.layoutLockReason}`; this.update(); return; }
         this.invalidatePresetRead();
         const next: RoomState = { version: 1, theme: this.draftTheme, layout: this.draftLayout, kit: this.draftKit, projectUri: this.project.toString(),
             projectName: this.draftName.trim().slice(0, 120), camera: { ...(this.draftCamera ?? this.room?.camera ?? CAMERA) } };
@@ -951,7 +953,7 @@ export class OmoWorldWidget extends ReactWidget {
                     <div className="omo-step-title"><span>02</span> Make it yours</div>
                     <label className="omo-field">Room layout<select data-testid="room-layout" aria-label="Room layout" value={layout} disabled={this.presetLoading || this.busy || this.anyStationLocked} onChange={event => { this.draftLayout = event.target.value as RoomLayoutId; this.update(); }}>
                         {(Object.keys(ROOM_LAYOUTS) as RoomLayoutId[]).map(key => <option key={key} value={key}>{ROOM_LAYOUTS[key].label}</option>)}
-                    </select><small>{ROOM_LAYOUTS[layout].description}</small>{this.anyStationLocked && <small data-testid="room-layout-locked" role="note">🔒 A desk is locked, so the room layout cannot change. Unlock it in Station recipes.</small>}</label>
+                    </select><small>{ROOM_LAYOUTS[layout].description}</small>{this.anyStationLocked && <small data-testid="room-layout-locked" role="note">🔒 {this.layoutLockReason}</small>}</label>
                     <label className="omo-field">Room kit<select data-testid="room-kit" aria-label="Room kit" value={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} disabled={this.presetLoading || this.busy} onChange={event => { this.draftKit = event.target.value as RoomKitId; this.update(); }}>
                         {(Object.keys(ROOM_KITS) as RoomKitId[]).map(key => <option key={key} value={key}>{ROOM_KITS[key].label}</option>)}
                     </select><small>{ROOM_KITS[this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'].description}</small></label>

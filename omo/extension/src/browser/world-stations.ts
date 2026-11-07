@@ -65,6 +65,18 @@ export function stationAliases(info: Pick<StationInfo, 'id' | 'slot' | 'name'>):
     return [...out];
 }
 
+/**
+ * t4:polish — why the room layout cannot change, naming every locked desk (same wording family as the
+ * widget's lockedDeskReason). `inSetup` = locked in the world's Station Setup (build mode), else the browser lock.
+ */
+export function lockedLayoutReason(locked: ReadonlyArray<{ name: string; inSetup: boolean }>): string {
+    if (!locked.length) return '';
+    const names = locked.map(d => `“${d.name}”`);
+    const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    const it = locked.length > 1 ? 'them' : 'it';
+    const where = locked.some(d => d.inSetup) ? `build mode (Station Setup) or in Station recipes` : 'Station recipes';
+    return `${locked.length > 1 ? 'Desks' : 'Desk'} ${list} ${locked.length > 1 ? 'are' : 'is'} locked, so the room layout cannot change. Unlock ${it} in ${where}, or keep this layout.`;
+}
 /** Stations of a world in a stable order: legacy desks first (keeps Ctrl+1 / Ctrl+2), then world order. */
 export function stationInfos(world: WorldSpec | undefined): StationInfo[] {
     if (!world) return LEGACY_STATIONS.map((id, i) => ({ id, slot: i + 1, name: LEGACY_NAMES[id], config: { name: LEGACY_NAMES[id], kind: i ? 'shell' : 'hermes', tabs: [{ name: 'Shell', kind: 'shell' }], locked: false } }));
