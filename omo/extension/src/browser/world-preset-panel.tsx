@@ -8,7 +8,7 @@ import * as React from 'react';
 import type { WorldSpec } from '../common/world-model';
 import { WORLD_TEMPLATES, describeWorld } from '../common/world-templates';
 import { WORLD_KITS, insertKit, suggestKitAnchor } from '../common/world-kits';
-import { previewWorldPreset, WORLD_PRESET_FORMAT, WORLD_PRESET_VERSION } from '../common/room-preset';
+import { previewWorldPreset, WORLD_PRESET_FORMAT, WORLD_PRESET_VERSION } from '../common/world-preset';
 import { instantiateTemplate } from '../common/world-templates';
 import '../../src/browser/world-preset.css';
 

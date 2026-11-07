@@ -200,9 +200,9 @@ const RAW_TEMPLATES: Array<Omit<WorldTemplate, 'summary'>> = [
     }
 ];
 
-function isDevBuild(): boolean {
-    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-    return env?.NODE_ENV !== 'production';
+/** Dev build? Written as a literal `process.env.NODE_ENV` so webpack's DefinePlugin can replace it. */
+export function isDevBuild(): boolean {
+    try { return process.env.NODE_ENV !== 'production'; } catch { return true; }
 }
 
 /** Validate every template (dev: throw; production: drop and warn). Exported for checks. */

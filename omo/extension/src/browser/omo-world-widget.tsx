@@ -10,7 +10,7 @@ import URI from '@theia/core/lib/common/uri';
 import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame, CodeReviewFrame } from './room-scene';
 import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
 import { exportRoomPreset, parseRoomPreset, ROOM_PRESET_FILENAME, ROOM_PRESET_MAX_BYTES } from '../common/room-preset';
-import { exportWorldPreset, exportStationSetupPreset, parseAnyRoomPreset, stationConfigFromSetup, WORLD_PRESET_FILENAME, WORLD_PRESET_MAX_BYTES } from '../common/room-preset'; // w2:templates
+import { exportWorldPreset, exportStationSetupPreset, parseAnyRoomPreset, stationConfigFromSetup, WORLD_PRESET_FILENAME, WORLD_PRESET_MAX_BYTES } from '../common/world-preset'; // w2:templates
 import { validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model'; // w2:templates
 import type { WorldSpec } from '../common/world-model'; // w2:templates
 import { WorldPresetPanel } from './world-preset-panel'; // w2:templates
@@ -588,9 +588,16 @@ export class OmoWorldWidget extends ReactWidget {
         const project = this.project.toString();
         const ownsPreview = (): boolean => epoch === this.presetReadEpoch && this.configuring && project === this.project?.toString();
         this.presetLoading = true; this.presetStatus = ''; this.error = '';
-        if (file.size > WORLD_PRESET_MAX_BYTES) { // w2:templates — v2 world presets may be larger; v1 keeps its 8 KiB check in the parser
-            this.presetLoading = false; this.error = `Preset files must be at most ${Math.round(WORLD_PRESET_MAX_BYTES / 1024)} KiB (appearance presets: 8 KiB).`; this.update(); return;
+        // w2:templates — v1 keeps its 8 KiB refuse-before-read rule. A larger file is allowed (up to the
+        // v2 cap) only when a 512-byte header sniff shows it is an Omo world preset.
+        const sniffWorld = async (): Promise<boolean> => { try { return /"format"\s*:\s*"omo-world-preset"/.test(await file.slice(0, 512).text()); } catch { return false; } };
+        if (file.size > WORLD_PRESET_MAX_BYTES || (file.size > ROOM_PRESET_MAX_BYTES && !(await sniffWorld()))) {
+            if (!ownsPreview()) return;
+            this.presetLoading = false;
+            this.error = file.size > WORLD_PRESET_MAX_BYTES ? `World preset files must be at most ${Math.round(WORLD_PRESET_MAX_BYTES / 1024)} KiB.` : 'Room preset files must be at most 8 KiB (8192 bytes).';
+            this.update(); return;
         }
+        if (!ownsPreview()) return;
         this.update();
         let raw: string;
         try { raw = await file.text(); }
@@ -605,7 +612,7 @@ export class OmoWorldWidget extends ReactWidget {
             const preset = any.preset;
             this.draftTheme = preset.theme; this.draftLayout = preset.layout; this.draftCamera = { ...preset.camera };
             this.presetRevision++; this.presetStatus = 'Appearance loaded into preview. Save room to apply it to this project.';
-        } catch (error) { this.error = error instanceof Error && error.message !== 'Invalid room preset' ? error.message : 'That file is not a valid Omo appearance preset (8 KiB maximum).'; } // w2:templates
+        } catch (error) { this.error = /"format"\s*:\s*"omo-world-preset"/.test(raw) && error instanceof Error ? `That world preset was refused: ${error.message}` : 'That file is not a valid Omo appearance preset (8 KiB maximum).'; } // w2:templates
         this.presetLoading = false; this.update();
     };
     private exportPreset = (): void => {
