@@ -1,0 +1,85 @@
+/* w2:admin — the in-world World admin console. Values come from design-tokens.css. */
+.omo-admin-panel {
+    position: absolute; z-index: 30; top: var(--omo-sp-4); right: var(--omo-sp-4); bottom: 52px;
+    width: min(440px, calc(100% - 2 * var(--omo-sp-4))); display: flex; flex-direction: column; gap: var(--omo-sp-2);
+    padding: var(--omo-sp-3); background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur);
+    border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-lg); box-shadow: var(--omo-shadow-3);
+    color: var(--omo-text); font-size: var(--omo-fs-sm); animation: omo-admin-in var(--omo-dur-2) var(--omo-ease);
+}
+@keyframes omo-admin-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.omo-admin-panel header { display: flex; align-items: center; gap: var(--omo-sp-2); }
+.omo-admin-panel header > div { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.omo-admin-panel header small { color: var(--omo-text-3); font-size: var(--omo-fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omo-admin-glyph { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--omo-r-sm); background: var(--omo-accent-soft); color: var(--omo-accent); font-size: 16px; }
+.omo-admin-close, .omo-admin-clear {
+    height: var(--omo-control-h-sm); padding: 0 8px; background: transparent; border: 1px solid transparent; border-radius: var(--omo-r-sm); color: var(--omo-text-2);
+}
+.omo-admin-close:hover, .omo-admin-clear:hover { color: var(--omo-text); background: var(--omo-surface-2); }
+.omo-admin-close kbd { margin-right: 4px; font-size: var(--omo-fs-2xs); color: var(--omo-text-3); }
+
+.omo-admin-log { flex: 1 1 auto; min-height: 80px; overflow-y: auto; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--omo-sp-3); }
+.omo-admin-empty p { margin: 0 0 var(--omo-sp-2); color: var(--omo-text-2); }
+.omo-admin-examples { display: flex; flex-wrap: wrap; gap: 6px; }
+.omo-admin-examples button {
+    padding: 4px 10px; background: var(--omo-surface-1); border: 1px solid var(--omo-line); border-radius: var(--omo-r-pill);
+    color: var(--omo-text-2); font-size: var(--omo-fs-xs); text-align: left;
+}
+.omo-admin-examples button:hover { color: var(--omo-text); border-color: var(--omo-accent-line); }
+
+.omo-admin-entry { display: flex; flex-direction: column; gap: 6px; }
+.omo-admin-you, .omo-admin-reply { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.omo-admin-you time { color: var(--omo-text-3); font-size: var(--omo-fs-2xs); }
+.omo-admin-you b { color: var(--omo-text-2); }
+.omo-admin-you span { flex: 1 1 100%; padding: 6px 10px; background: var(--omo-surface-2); border-radius: var(--omo-r-md); white-space: pre-wrap; overflow-wrap: anywhere; }
+.omo-admin-reply b { color: var(--omo-accent); }
+.omo-admin-reply > span { flex: 1 1 100%; color: var(--omo-text); overflow-wrap: anywhere; }
+.omo-admin-thinking { color: var(--omo-text-2) !important; animation: omo-admin-pulse 1.2s var(--omo-ease) infinite; }
+@keyframes omo-admin-pulse { 50% { opacity: .45; } }
+
+.omo-admin-proposal { flex: 1 1 100%; border: 1px solid var(--omo-accent-line); border-radius: var(--omo-r-md); background: var(--omo-surface-1); overflow: hidden; }
+.omo-admin-entry:not(.is-proposed) .omo-admin-proposal { border-color: var(--omo-line); opacity: .75; }
+.omo-admin-entry.is-applied .omo-admin-proposal { border-color: var(--omo-ok); opacity: 1; }
+.omo-admin-summary { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-bottom: 1px solid var(--omo-line); }
+.omo-admin-kicker { font-size: var(--omo-fs-2xs); letter-spacing: var(--omo-tracking-caps); color: var(--omo-text-3); }
+.omo-admin-ops { margin: 0; padding: 6px 10px; list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+.omo-admin-ops li { display: flex; gap: 8px; align-items: baseline; font-size: var(--omo-fs-xs); color: var(--omo-text-2); }
+.omo-admin-ops i { flex: 0 0 18px; height: 18px; display: grid; place-items: center; font-style: normal; border-radius: var(--omo-r-xs); background: var(--omo-surface-3); color: var(--omo-text); }
+.omo-admin-ops li[data-op="add"] i { background: var(--omo-accent-soft); color: var(--omo-accent); }
+.omo-admin-ops li[data-op="remove"] i { background: var(--omo-danger-soft); color: var(--omo-danger); }
+.omo-admin-notes { margin: 0; padding: 6px 10px 6px 26px; color: var(--omo-warn); font-size: var(--omo-fs-xs); border-top: 1px dashed var(--omo-line); }
+.omo-admin-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--omo-line); }
+.omo-admin-actions small { flex: 1 1 100%; color: var(--omo-text-3); font-size: var(--omo-fs-2xs); }
+.omo-admin-apply { height: var(--omo-control-h-sm); padding: 0 14px; background: var(--omo-accent); color: var(--omo-accent-ink); border: 0; border-radius: var(--omo-r-sm); font-weight: 600; }
+.omo-admin-apply:not(:disabled):hover { background: var(--omo-accent-strong); }
+.omo-admin-discard { height: var(--omo-control-h-sm); padding: 0 12px; background: transparent; color: var(--omo-text); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-sm); }
+.omo-admin-outcome { flex: 1 1 100%; margin: 0; font-size: var(--omo-fs-xs); color: var(--omo-text-2); }
+.omo-admin-outcome.is-applied { color: var(--omo-ok); }
+.omo-admin-outcome.is-failed, .omo-admin-outcome.is-stale { color: var(--omo-warn); }
+.omo-admin-entry.is-failed .omo-admin-reply > span { color: var(--omo-warn); }
+
+.omo-admin-hint { margin: 0; color: var(--omo-text-3); font-size: var(--omo-fs-2xs); }
+.omo-admin-error { margin: 0; padding: 6px 10px; border-radius: var(--omo-r-sm); background: var(--omo-danger-soft); color: var(--omo-danger); }
+.omo-admin-hermes { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 6px; border-top: 1px solid var(--omo-line); font-size: var(--omo-fs-xs); color: var(--omo-text-2); }
+.omo-admin-hermes label { display: inline-flex; align-items: center; gap: 6px; }
+.omo-admin-profile input { width: 110px; height: 24px; padding: 0 6px; background: var(--omo-bg-0); border: 1px solid var(--omo-line); border-radius: var(--omo-r-xs); color: var(--omo-text); font-family: var(--omo-mono); }
+.omo-admin-planner { margin-left: auto; padding: 2px 8px; border-radius: var(--omo-r-pill); background: var(--omo-surface-2); color: var(--omo-text-3); }
+.omo-admin-planner.is-hermes { background: var(--omo-accent-soft); color: var(--omo-agent-hermes, var(--omo-accent)); }
+.omo-admin-confirm { padding: 8px 10px; border: 1px solid var(--omo-warn); border-radius: var(--omo-r-md); background: var(--omo-warn-soft); }
+.omo-admin-confirm p { margin: 0 0 6px; font-size: var(--omo-fs-xs); }
+.omo-admin-confirm .omo-admin-actions { padding: 6px 0 0; border: 0; }
+.omo-admin-status { color: var(--omo-text-2); }
+.omo-admin-ask { display: flex; gap: 6px; align-items: stretch; }
+.omo-admin-ask textarea {
+    flex: 1; resize: none; padding: 8px 10px; background: var(--omo-bg-0); border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-md);
+    color: var(--omo-text); font-size: var(--omo-fs-sm); line-height: 1.35;
+}
+.omo-admin-ask textarea:focus { border-color: var(--omo-accent-line); outline: none; box-shadow: var(--omo-focus); }
+.omo-admin-ask button { min-width: 64px; background: var(--omo-accent); color: var(--omo-accent-ink); border: 0; border-radius: var(--omo-r-md); font-weight: 600; }
+
+.omo-admin-toggle {
+    position: absolute; z-index: 6; right: var(--omo-sp-4); top: calc(var(--omo-sp-4) + 40px); display: inline-flex; align-items: center; gap: 6px;
+    height: 30px; padding: 0 12px; background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur);
+    border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-pill); color: var(--omo-text); box-shadow: var(--omo-shadow-2); font-size: var(--omo-fs-sm);
+}
+.omo-admin-toggle.active { border-color: var(--omo-accent-line); color: var(--omo-accent); }
+.omo-admin-toggle kbd { font-size: var(--omo-fs-2xs); color: var(--omo-text-3); }
