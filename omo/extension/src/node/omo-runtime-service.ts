@@ -9,7 +9,7 @@ import { RuntimeLocations } from './runtime-discovery';
 import { RuntimeHost } from './runtime-host';
 import { assertHermesProfileTurnLeaseFree } from './hermes-profile-lease';
 
-const AGENT_KINDS: readonly AgentKind[] = ['shell', 'hermes', 'claude', 'codex'];
+const AGENT_KINDS: readonly AgentKind[] = ['shell', 'hermes', 'claude', 'codex', 'dsh']; // w2:agents
 const INSTALL_TMUX = 'Install tmux (for example: sudo apt install tmux, or brew install tmux) or set OMO_SPATIAL_TMUX to a tmux binary.';
 const INSTALL_PYTHON = 'Install Python 3 (for example: sudo apt install python3) or set OMO_SPATIAL_PYTHON.';
 
@@ -71,7 +71,7 @@ export class OmoRuntimeServiceImpl implements OmoRuntimeService {
             const missing = !tmux ? INSTALL_TMUX : INSTALL_PYTHON;
             return {
                 available: false, tmux: !!tmux, python: !!python, profiles: [],
-                agents: AGENT_KINDS.map(kind => ({ kind, available: false, detail: 'the terminal runtime is unavailable', installHint: missing })),
+                agents: AGENT_KINDS.filter(kind => kind !== 'dsh').map(kind => ({ kind, available: false, detail: 'the terminal runtime is unavailable', installHint: missing })), // w2:agents: dsh is listed only when installed
                 detail: `${!tmux ? 'tmux' : 'python3'} was not found. ${missing}`
             };
         }
@@ -123,7 +123,7 @@ export class OmoRuntimeServiceImpl implements OmoRuntimeService {
 
     async newTab(input: { workspaceId: string; kind: AgentKind; name?: string; profile?: string; confirmedStart: boolean }): Promise<SessionWorkspace> {
         if (!AGENT_KINDS.includes(input?.kind)) {
-            throw new Error('kind must be shell, hermes, claude or codex');
+            throw new Error('kind must be shell, hermes, claude, codex or dsh'); // w2:agents
         }
         const workspaceId = requireString(input.workspaceId, 'workspaceId', 64);
         if (input.kind === 'hermes') {

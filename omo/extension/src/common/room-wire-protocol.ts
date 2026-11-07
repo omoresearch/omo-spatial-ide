@@ -103,7 +103,7 @@ export type RoomRole = 'owner' | 'member';
  * Agent status summary: what a member's local agent tabs are doing, for the HUD of OTHER members.
  * Closed vocabulary only. Never terminal text, prompts, file names or output.
  */
-export type AgentSummaryKind = 'hermes' | 'claude' | 'codex';
+export type AgentSummaryKind = 'hermes' | 'claude' | 'codex' | 'dsh';
 export type AgentSummaryActivity = 'working' | 'idle' | 'background' | 'sleeping' | 'interrupted' | 'exited';
 export interface AgentStatusSummary {
     /** Stable per member, [a-z0-9:-], e.g. `terminal:tab-3`. */
@@ -287,7 +287,7 @@ const needRid = (v: unknown): string => { const r = optRid(v); if (!r) throw new
 const int = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
 const time = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 
-const AGENT_KINDS: readonly string[] = ['hermes', 'claude', 'codex'];
+const AGENT_KINDS: readonly string[] = ['hermes', 'claude', 'codex', 'dsh'];
 const AGENT_ACTIVITIES: readonly string[] = ['working', 'idle', 'background', 'sleeping', 'interrupted', 'exited'];
 export function agentSummaries(input: unknown): AgentStatusSummary[] {
     if (!Array.isArray(input) || input.length > ROOM_AGENTS_MAX) throw new Error('Invalid agent summary list.');

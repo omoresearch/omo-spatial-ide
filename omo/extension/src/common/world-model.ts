@@ -22,7 +22,7 @@ export const WORLD_MAX_BYTES = 64 * 1024;
 export const WORLD_ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
 
 export type StationKind = 'hermes' | 'shell';
-export type TabKind = 'shell' | 'hermes' | 'claude' | 'codex';
+export type TabKind = 'shell' | 'hermes' | 'claude' | 'codex' | 'dsh'; // w2:agents
 export type EntityKind = 'station' | 'monitor-wall' | 'web-wall' | 'mirror' | 'review-screen' | 'decor';
 export type DecorKind = 'plant' | 'lamp' | 'crystal' | 'sofa' | 'bookshelf' | 'whiteboard' | 'rug' | 'window';
 
@@ -101,7 +101,7 @@ export function validStation(s: unknown): s is StationConfig {
     return !!v && text(v.name, 60) && (v.kind === 'hermes' || v.kind === 'shell') && typeof v.locked === 'boolean'
         && (v.profile === undefined || PROFILE_RE.test(v.profile))
         && Array.isArray(v.tabs) && v.tabs.length >= 1 && v.tabs.length <= 8
-        && v.tabs.every(t => !!t && text(t.name, 40) && ['shell', 'hermes', 'claude', 'codex'].includes(t.kind));
+        && v.tabs.every(t => !!t && text(t.name, 40) && ['shell', 'hermes', 'claude', 'codex', 'dsh'].includes(t.kind)); // w2:agents
 }
 export function validEntity(e: unknown, shell: WorldShell): e is WorldEntity {
     const v = e as WorldEntity;

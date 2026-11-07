@@ -27,6 +27,8 @@ import { RemoteRoomTokenStore } from './remote-room-token-store'; // w2:mp-clien
 // w2:voice — STUN/TURN settings in the Theia config dir
 import { OMO_VOICE_SETTINGS_PATH } from '../common/voice-settings-protocol';
 import { VoiceSettingsStore } from './voice-settings-store';
+import { OMO_AGENT_SIGNALS_PATH } from '../common/agent-signals-protocol'; // w2:agents
+import { AgentSignalsBackend } from './agent-signals'; // w2:agents
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
 export const OmoManagedWeb = Symbol('OmoManagedWeb');
@@ -35,6 +37,7 @@ const OmoTaskWorkspaceBackend = Symbol('OmoTaskWorkspaceBackend');
 const OmoStandaloneSecurity = Symbol('OmoStandaloneSecurity');
 const OmoRemoteRoomTokens = Symbol('OmoRemoteRoomTokens'); // w2:mp-client
 const OmoVoiceSettingsStore = Symbol('OmoVoiceSettingsStore'); // w2:voice
+const OmoAgentSignals = Symbol('OmoAgentSignals'); // w2:agents
 
 /** Stops the runtime host with the backend. The tmux server and every tab keep running. */
 @injectable()
@@ -100,6 +103,12 @@ export default new ContainerModule(bind => {
     bind(ConnectionHandler).toDynamicValue(ctx => {
         const store = ctx.container.get<VoiceSettingsStore>(OmoVoiceSettingsStore);
         return new RpcConnectionHandler<object>(OMO_VOICE_SETTINGS_PATH, () => ({ get: () => store.get(), save: (u: never) => store.save(u), iceConfig: () => store.iceConfig() }));
+    }).inSingletonScope();
+    // w2:agents: real agent status (Claude hook opt-in, Hermes lease, process tree) and agent check reports.
+    bind(OmoAgentSignals).toDynamicValue(ctx => new AgentSignalsBackend(ctx.container.get<RuntimeHost>(OmoRuntimeHost))).inSingletonScope();
+    bind(ConnectionHandler).toDynamicValue(ctx => {
+        const signals = ctx.container.get<AgentSignalsBackend>(OmoAgentSignals);
+        return new RpcConnectionHandler<object>(OMO_AGENT_SIGNALS_PATH, () => signals);
     }).inSingletonScope();
     bind(OmoRuntimeLifecycle).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(OmoRuntimeLifecycle);

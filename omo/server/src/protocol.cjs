@@ -44,7 +44,7 @@ function agentStatus(input) {
         if (!AGENT_STATES.includes(s.state)) throw new Error(`Desk state must be one of ${AGENT_STATES.join(', ')}.`);
         const out = { station: s.station, state: s.state };
         const agent = s.agent === undefined ? undefined : String(s.agent);
-        if (agent !== undefined) { if (!['hermes', 'claude', 'codex', 'shell'].includes(agent)) throw new Error('Unknown agent kind.'); out.agent = agent; }
+        if (agent !== undefined) { if (!['hermes', 'claude', 'codex', 'shell', 'dsh'].includes(agent)) throw new Error('Unknown agent kind.'); out.agent = agent; }
         const detail = U.label(s.detail, LIMITS.agentDetailMax);
         if (detail !== undefined) { if (U.looksSecret(detail)) throw new Error('Status text must not contain secrets, tokens or file paths.'); out.detail = detail; }
         if (s.progress !== undefined) { if (typeof s.progress !== 'number' || !(s.progress >= 0 && s.progress <= 1)) throw new Error('Progress is 0–1.'); out.progress = Math.round(s.progress * 100) / 100; }

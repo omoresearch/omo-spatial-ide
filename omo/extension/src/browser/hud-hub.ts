@@ -7,6 +7,7 @@ import type { AgentPresence, DeskId } from './agent-avatars';
 import type { RoomVoiceState } from './voice-controller';
 import { ChatController, Toast, ToastKind } from './chat-controller';
 import { NotificationsHub, AgentNotice } from './notifications-hub';
+import type { AgentStatusReading } from '../common/agent-status-signals'; // w2:agents
 import { HudPeers } from './hud-peers';
 import { sceneControls } from './focus-screen';
 import { DESKS, DESK_NAME, slug } from './chat-mentions'; // w2:runtime: DESKS
@@ -21,6 +22,8 @@ export interface HudHost {
     activeDesk(): DeskId | 'web' | string;
     /** Agent tabs (from the voice lane's roster). */
     agents(): AgentPresence[];
+    /** w2:agents: real status readings per agent key (optional; the screen hint is the fallback). */
+    signals?(key: string): AgentStatusReading[];
     /** Existing room voice state (read only). */
     voice(): RoomVoiceState | undefined;
     /** Choose the desk that receives keys and frame its screen. Opens/starts nothing new. */
@@ -71,7 +74,7 @@ export class HudHub {
             command: (name, arg) => this.command(name, arg), onChange: () => this.changed()
         });
         this.notices = new NotificationsHub({
-            desk: desk => host.desk(desk).state, agents: () => host.agents(), now: () => Date.now(),
+            desk: desk => host.desk(desk).state, agents: () => host.agents(), now: () => Date.now(), signals: key => host.signals?.(key) ?? [], // w2:agents
             watching: () => this.watching()
         }, notice => this.toast('info', notice.text, undefined, notice.kind === 'approval' ? 'alert' : notice.kind === 'finished' ? 'check' : 'bell'));
         this.view = this.compute();

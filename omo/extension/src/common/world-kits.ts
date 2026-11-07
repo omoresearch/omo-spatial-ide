@@ -26,7 +26,7 @@ export interface WorldKit {
 }
 
 const HALF_PI = Math.PI / 2;
-const TAB_LABEL: Record<TabKind, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex', shell: 'Shell' };
+const TAB_LABEL: Record<TabKind, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex', shell: 'Shell', dsh: 'DeepSeek Harness' };
 function setup(name: string, main: TabKind): StationConfig {
     const kinds: TabKind[] = main === 'shell' ? ['shell'] : [main, 'shell'];
     return { name, kind: main === 'hermes' ? 'hermes' : 'shell', tabs: kinds.map(kind => ({ name: TAB_LABEL[kind], kind })), locked: false };

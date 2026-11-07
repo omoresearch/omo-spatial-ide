@@ -79,7 +79,7 @@ const KIND_NAME: Record<EntityKind, string> = {
 const AGENT_WORDS: Array<[TabKind, RegExp]> = [
     ['codex', /\bcodex\b/], ['claude', /\bclaude(?: code)?\b/], ['hermes', /\bhermes\b/], ['shell', /\b(shell|bash|terminal only|plain terminal)\b/]
 ];
-const TAB_TITLE: Record<TabKind, string> = { codex: 'Codex', claude: 'Claude', hermes: 'Hermes', shell: 'Shell' };
+const TAB_TITLE: Record<TabKind, string> = { codex: 'Codex', claude: 'Claude', hermes: 'Hermes', shell: 'Shell', dsh: 'DeepSeek Harness' };
 
 const PROFILE_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const round = (n: number): number => Math.round(n * 100) / 100;

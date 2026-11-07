@@ -1,4 +1,4 @@
-// GENERATED from omo/extension/src/common/world-model.ts (sha256 8bd0eff3e93efba568332b7a74ca9b31ea7d4993c583c11dfedcc5205d9c6d59). Do not edit.
+// GENERATED from omo/extension/src/common/world-model.ts (sha256 835f3c401afc8058870fe63f630209ec393889c32a2bd54dbf6d69d8529bc994). Do not edit.
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.worldStorageKey = exports.WORLD_ID_RE = exports.WORLD_MAX_BYTES = exports.WORLD_MAX_STATIONS = exports.WORLD_MAX_ENTITIES = exports.WORLD_VERSION = void 0;
@@ -28,7 +28,7 @@ function validStation(s) {
     return !!v && text(v.name, 60) && (v.kind === 'hermes' || v.kind === 'shell') && typeof v.locked === 'boolean'
         && (v.profile === undefined || PROFILE_RE.test(v.profile))
         && Array.isArray(v.tabs) && v.tabs.length >= 1 && v.tabs.length <= 8
-        && v.tabs.every(t => !!t && text(t.name, 40) && ['shell', 'hermes', 'claude', 'codex'].includes(t.kind));
+        && v.tabs.every(t => !!t && text(t.name, 40) && ['shell', 'hermes', 'claude', 'codex', 'dsh'].includes(t.kind)); // w2:agents
 }
 function validEntity(e, shell) {
     const v = e;

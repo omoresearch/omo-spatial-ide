@@ -138,6 +138,141 @@ def _tab_env(ws, tab, autorun=True):
 
 
 ob.tab_env = _tab_env      # the bridge's _open_window_locked looks tab_env up at call time
+
+
+# --------------------------------------------------------------------------- w2:agents Claude status
+# Opt-in Claude Code hooks. The Theia backend writes <OMO_DATA>/claude-status/settings.json only
+# after the user saw the exact JSON and confirmed. While that file is a regular file holding the
+# Omo hook config, Claude tabs that OMO starts load it with `claude --settings <file>`. The user's
+# own ~/.claude settings are never read or changed.
+CLAUDE_STATUS_SETTINGS = os.path.join(ob.DATA_DIR, "claude-status", "settings.json")
+CLAUDE_STATUS_WRAPPER = os.path.join(HERE, "claude_with_status.sh")
+CLAUDE_STATUS_HOOK = os.path.join(HERE, "claude_status_hook.py")
+
+
+def claude_status_settings():
+    """The settings file path when Claude status is enabled, else ""."""
+    path = CLAUDE_STATUS_SETTINGS
+    try:
+        if os.path.islink(path) or os.path.islink(os.path.dirname(path)) or not os.path.isfile(path):
+            return ""
+        if os.path.getsize(path) > 64 * 1024:
+            return ""
+        with open(path, "r", encoding="utf-8") as stream:
+            data = json.load(stream)
+        hooks = data.get("hooks") if isinstance(data, dict) else None
+        # The backend may name this runtime folder through a symlink, so match the script name.
+        if not isinstance(hooks, dict) or not hooks or os.path.basename(CLAUDE_STATUS_HOOK) not in json.dumps(hooks):
+            return ""
+        return path
+    except (OSError, ValueError):
+        return ""
+
+
+_bridge_agent_command = ob.agent_command
+
+
+def _agent_command(ws, tab):
+    """Claude tabs with status enabled start through a tiny wrapper that adds --settings.
+    Everything else (and Claude with status off) is the bridge's own command, unchanged."""
+    if tab.get("kind") == "claude" and claude_status_settings() and ob.find_agent("claude"):
+        session = ob.claude_session(ws["id"], tab["id"])
+        return f"omo_agent claude {ob.shell_quote(CLAUDE_STATUS_WRAPPER)} {ob.shell_quote(session)}"
+    return _bridge_agent_command(ws, tab)
+
+
+ob.agent_command = _agent_command   # the bridge's autorun_command looks agent_command up at call time
+_tab_env_before_status = ob.tab_env
+
+
+def _tab_env_with_status(ws, tab, autorun=True):
+    env = _tab_env_before_status(ws, tab, autorun)
+    on = tab.get("kind") == "claude" and bool(claude_status_settings())
+    claude = os.path.realpath(ob.find_agent("claude") or "") if on else ""
+    # Always set, even empty: a session's -e environment is inherited by later windows.
+    env += ["-e", "OMO_CLAUDE_STATUS_BIN=" + (claude if on else ""),
+            "-e", "OMO_CLAUDE_STATUS_SETTINGS=" + (CLAUDE_STATUS_SETTINGS if on else "")]
+    return env
+
+
+ob.tab_env = _tab_env_with_status
+
+
+# --------------------------------------------------------------------------- w2:agents dsh
+# DeepSeek Harness (dsh) as an optional agent kind. The vendored bridge is NOT edited: its agent list is
+# overridden here, at import time of this host. dsh has no terminal UI, so a dsh tab runs
+# `dsh web --no-open --port <free loopback port>` in the station terminal (only after the user confirmed
+# the start, like every agent tab). dsh is never installed by Omo; it is offered only when found.
+DSH_PINNED_VERSION = "0.2.2-rc.1"
+DSH_INSTALL = f"npm install -g @deepseek-ai/dsh@{DSH_PINNED_VERSION}  (needs Node 24.9 or newer)"
+DSH_LAUNCH = os.path.join(HERE, "dsh_web_launch.py")
+RESERVED_PORTS = {3190, 3192, 3195, 3198, 3199}
+ob.TAB_KINDS = tuple(ob.TAB_KINDS) + (("dsh",) if "dsh" not in ob.TAB_KINDS else ())
+ob.TAB_NAMES = dict(ob.TAB_NAMES, dsh="dsh")
+ob.AGENTS = dict(ob.AGENTS, dsh={"bin": "dsh", "env": "OMO_DSH_BIN", "install": DSH_INSTALL})
+dsh_launch = _load_runtime_module("dsh_web_launch")
+_NODE_CHECK = {"at": 0.0, "path": None, "problem": ""}
+
+
+def dsh_node_problem():
+    """Cached (30 s) Node >= 24.9 check of the node on this host's PATH; "" when fine."""
+    now = time.monotonic()
+    path = os.environ.get("PATH", "")
+    if _NODE_CHECK["path"] != path or now - _NODE_CHECK["at"] > 30:
+        _NODE_CHECK.update(at=now, path=path, problem=dsh_launch.node_problem(path))
+    return _NODE_CHECK["problem"]
+
+
+def free_loopback_port(avoid=()):
+    """A port nothing listens on at 127.0.0.1 right now (the kernel picks it)."""
+    import socket
+    for _ in range(20):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        if port not in RESERVED_PORTS and port not in avoid:
+            return port
+    raise HostError("no free loopback port for dsh web")
+
+
+def loopback_port_free(port):
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind(("127.0.0.1", int(port)))
+            return True
+        except OSError:
+            return False
+
+
+def dsh_web_url(tab):
+    port = tab.get("dshPort")
+    return f"http://127.0.0.1:{int(port)}/" if isinstance(port, int) else ""
+
+
+_agent_command_before_dsh = ob.agent_command
+
+
+def _agent_command_dsh(ws, tab):
+    if tab.get("kind") != "dsh":
+        return _agent_command_before_dsh(ws, tab)
+    path = ob.find_agent("dsh") or ""
+    port = tab.get("dshPort")
+    if not path or not isinstance(port, int):
+        return "printf 'dsh is not installed. Install: %s\\n' " + ob.shell_quote(DSH_INSTALL)
+    return " ".join(ob.shell_quote(part) for part in (sys.executable, "-I", "-B", DSH_LAUNCH, os.path.realpath(path), str(port)))
+
+
+ob.agent_command = _agent_command_dsh
+
+
+def _prepare_dsh_tab(tab):
+    """Give a dsh tab a free loopback port before its window opens (a new one if the old port is taken)."""
+    if tab.get("kind") != "dsh":
+        return
+    port = tab.get("dshPort")
+    if not isinstance(port, int) or port in RESERVED_PORTS or not loopback_port_free(port):
+        tab["dshPort"] = free_loopback_port()
 STATIONS_FILE = os.path.join(ob.DATA_DIR, "spatial-stations.json")
 ID_RE = re.compile(r"^[0-9a-f]{12}$")
 STATION_RE = re.compile(r"^[\x21-\x7e]{1,128}$")
@@ -237,6 +372,8 @@ SLEEP_SCAN_EVERY_SECONDS = 5.0
 def agent_found(kind):
     if kind == "shell":
         return bool(shutil.which("bash"))
+    if kind == "dsh" and dsh_node_problem():       # w2:agents: dsh needs Node >= 24.9
+        return False
     info = ob.agents_info().get(kind)
     return bool(info and info["found"])
 
@@ -256,6 +393,11 @@ def agents():
         if not found:
             entry["installHint"] = info.get(kind, {}).get("install", "")
         out.append(entry)
+    # w2:agents: dsh is optional and listed only when it is installed (it is never installed by Omo).
+    if info.get("dsh", {}).get("found"):
+        problem = dsh_node_problem()
+        out.append({"kind": "dsh", "available": not problem,
+                    "detail": problem or f"dsh found (Omo is tested with {DSH_PINNED_VERSION}); a dsh tab runs dsh web on a loopback port"})
     return out
 
 
@@ -263,6 +405,8 @@ class SpatialWorkspaces(ob.Workspaces):
     """The bridge's Workspaces, with tabs that start in the project directory."""
 
     def _open_window_locked(self, ws, tab, autorun=True):
+        if autorun:
+            _prepare_dsh_tab(tab)      # w2:agents: dsh web needs its loopback port before the shell starts
         project = ws.get("project_dir")
         if not tab.get("cwd") and project and os.path.isdir(project):
             tab["cwd"] = project
@@ -453,6 +597,10 @@ def describe(ws_id):
         if t["kind"] == "hermes":
             # The captured profile that start/revive/resume/wake will use.
             tab["profile"] = launch_identity.selected_tab_profile(raw, t["id"]) or "default"
+        if t["kind"] == "dsh":
+            url = dsh_web_url(next((x for x in raw.get("tabs", []) if x.get("id") == t["id"]), {}))
+            if url:
+                tab["webUrl"] = url        # w2:agents: where this tab's dsh web listens (loopback only)
         if t.get("command"):
             tab["detail"] = str(t["command"])
         elif state == "interrupted":
@@ -481,8 +629,11 @@ def tab_of(ws_id, tab_id):
 def need_agent(kind):
     if kind not in ob.TAB_KINDS:
         raise HostError("unknown tab kind")
+    if kind == "dsh" and ob.find_agent("dsh") and dsh_node_problem():
+        raise HostError(dsh_node_problem())
     if not agent_found(kind):
         hint = next((a.get("installHint", "") for a in agents() if a["kind"] == kind), "")
+        hint = hint or (DSH_INSTALL if kind == "dsh" else "")
         raise HostError(f"{kind} is not available on this machine. Install: {hint}".strip())
 
 
@@ -701,6 +852,9 @@ def _owned_agent_argv(ws, tab, receipt=None, handshake=None):
     session = ob.claude_session(ws["id"], tab["id"]) if kind == "claude" else ""
     args = [sys.executable, OWNED_AGENT_EXEC, "--kind", kind, "--executable", _agent_executable(kind),
             "--session-id", session]
+    settings = claude_status_settings() if kind == "claude" else ""
+    if settings:
+        args += ["--settings", settings]       # w2:agents: opt-in Claude status, only when enabled
     if receipt is not None:
         args += ["--receipt", receipt]
     if handshake is not None:
@@ -1137,6 +1291,7 @@ RESUME_NOTES = {
     "hermes": "Resuming this tab's own Hermes conversation",
     "claude": "Claude Code resumes this tab's saved session when one exists; otherwise it starts one with this tab's session id",
     "codex": "Codex starts a fresh session: an earlier Codex conversation is not resumed",
+    "dsh": "dsh has no terminal session to resume",
 }
 
 
@@ -1150,6 +1305,8 @@ def op_agent_resume(a):
     tab = tab_of(ws_id, tab_id)
     if tab["kind"] == "shell":
         raise HostError("a shell tab has no agent to resume")
+    if tab["kind"] == "dsh":
+        raise HostError("dsh has no terminal session to resume; revive the tab to start dsh web again")
     need_agent(tab["kind"])
     with WS.lock:
         ws = ob.META.workspaces[ws_id]
@@ -1683,6 +1840,42 @@ OPS = {
     "paste": op_paste,
 }
 ORDERED_OPS = ("input", "resize", "detach", "paste", "scroll", "wheel", "find", "clear_history")
+
+
+# --------------------------------------------------------------------------- w2:agents process signals
+def _owned_agent_alive(tab):
+    """True/False for an Omo-owned agent child proven by pid + start time; None when there is none."""
+    record = tab.get("ownedLaunch") or {}
+    pid, start = str(record.get("agentPid") or ""), str(record.get("agentStart") or "")
+    if not record.get("started") or not pid.isdigit() or not start:
+        return None
+    return bool(_process_alive(pid, start))
+
+
+def op_agent_procs(a):
+    """Read-only process-tree facts for the agent tabs of one workspace. Starts, types and kills nothing.
+    paneAlive: the tab's tmux window exists. agentAlive: the agent process is still running (an owned
+    agent child proven by pid + start time, else the shell's foreground job), or None when unknown."""
+    ws_id = check_ws(a.get("workspaceId"))
+    wanted = {str(t) for t in (a.get("tabIds") or []) if isinstance(t, str)}
+    out = []
+    with WS.lock:
+        ws = ob.META.workspaces[ws_id]
+        server = ob.TM.server_id()
+        desc = WS._describe_locked(ws, server)
+        raw = {t["id"]: t for t in ws["tabs"]}
+        for t in desc["tabs"]:
+            if t["kind"] == "shell" or (wanted and t["id"] not in wanted):
+                continue
+            pane_alive = t["state"] == "live"
+            owned = _owned_agent_alive(raw.get(t["id"], {})) if pane_alive else None
+            agent_alive = (owned if owned is not None else bool(t["busy"])) if pane_alive else False
+            out.append({"tabId": t["id"], "kind": t["kind"], "paneAlive": pane_alive, "agentAlive": agent_alive,
+                        "command": ob.clean(str(t.get("command") or ""), 40), "owned": owned is not None})
+    return {"workspaceId": ws_id, "at": int(time.time() * 1000), "tabs": out}
+
+
+OPS["agent_procs"] = op_agent_procs
 
 
 def handle(msg):

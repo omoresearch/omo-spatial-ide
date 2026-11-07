@@ -144,7 +144,7 @@ export interface RemoteRoomView {
 }
 
 const DESK_LABEL: Record<string, string> = { terminal: 'Desk one', 'terminal-2': 'Desk two' };
-const KIND_LABEL: Record<string, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex' };
+const KIND_LABEL: Record<string, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex', dsh: 'DeepSeek Harness' };
 
 /** Closed-vocabulary summary of local agent tabs. Never tab names, terminal text or output. */
 export function agentSummary(agents: AgentPresence[]): AgentStatusSummary[] {

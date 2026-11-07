@@ -3,11 +3,14 @@ import type { RuntimeConsoleState } from './runtime-console-controller';
 import type { AgentPresence, DeskId } from './agent-avatars';
 import { agentLabel } from './agent-avatars';
 import { DESKS, DESK_NAME } from './chat-mentions';
+import type { AgentStatus, AgentStatusReading } from '../common/agent-status-signals';
+import { mergeStatus } from '../common/agent-status-signals';
 
 /**
  * Agent notifications: the HUD version of the mod pack's Status Lamp and bell.
  * Read-only. It watches desk metadata and the visible screen; it never types, starts,
- * wakes or approves anything. "Needs approval" is a screen-text hint, said as a hint.
+ * wakes or approves anything. w2:agents: when a real signal exists (Claude hook event, Hermes turn
+ * lease, process tree) it decides; otherwise "needs approval" is a screen-text hint, said as a hint.
  */
 export type NoticeKind = 'finished' | 'approval' | 'bell' | 'interrupted' | 'ended';
 export interface AgentNotice { id: string; kind: NoticeKind; desk: DeskId; tabId?: string; label: string; text: string; at: number; read: boolean }
@@ -17,6 +20,20 @@ export interface NoticeInputs {
     /** The desk the user is typing into / attached to right now (no notice for what you are watching). */
     watching(): DeskId | undefined;
     now(): number;
+    /** w2:agents: real readings (hook, lease, process) for one agent key; the screen text stays the fallback. */
+    signals?(key: string): AgentStatusReading[];
+}
+
+const SOURCE_TEXT: Record<AgentStatusReading['source'], string> = { hook: 'reported by the agent', lease: 'Hermes turn state', process: 'process ended', screen: 'check the screen' };
+
+/**
+ * w2:agents: the real status of one agent, or undefined when only the screen hint is known.
+ * The process tree saying 'exited' always wins; otherwise the strongest fresh signal.
+ */
+export function realAgentStatus(readings: AgentStatusReading[], screenApproval: boolean, now: number): AgentStatusReading | undefined {
+    if (!readings.length) return undefined;
+    const merged = mergeStatus([...readings, ...(screenApproval ? [{ status: 'waiting-approval' as AgentStatus, source: 'screen' as const, at: now }] : [])], now);
+    return merged.source === 'screen' || merged.status === 'unknown' ? undefined : merged;
 }
 
 export const NOTICE_MAX = 30;
@@ -31,7 +48,7 @@ export function looksLikeApproval(lines: string[]): boolean {
     return APPROVAL.test(lines.slice(-12).join('\n'));
 }
 
-interface Track { activity?: AgentPresence['activity']; since: number; approval: boolean; state?: SessionTab['state'] }
+interface Track { activity?: AgentPresence['activity']; since: number; approval: boolean; state?: SessionTab['state']; real?: AgentStatus; realSince?: number }
 
 let seq = 0;
 
@@ -67,13 +84,22 @@ export class NotificationsHub {
             const onScreen = state.activeTabId === tab?.id;
             const approval = onScreen && state.phase === 'live' && looksLikeApproval(state.lines);
             const old = this.tracks.get(agent.key);
-            const track: Track = { activity: agent.activity, since: old && old.activity === agent.activity ? old.since : now, approval, state: tab?.state };
+            // w2:agents: a real signal (hook > lease > process) decides when there is one; the screen text is the fallback.
+            const real = realAgentStatus(this.inputs.signals?.(agent.key) ?? [], approval, now);
+            const track: Track = { activity: agent.activity, since: old && old.activity === agent.activity ? old.since : now, approval, state: tab?.state,
+                real: real?.status, realSince: old && old.real === real?.status ? old.realSince : now };
             this.tracks.set(agent.key, track);
             if (!old || !this.primed) continue; // first sight is history, not news
             const label = `${agentLabel(agent.kind, agent.tabName)} (${DESK_NAME[agent.desk] ?? agent.desk})`;
             const quiet = watching === agent.desk;
-            if (old.activity === 'working' && agent.activity === 'idle' && now - old.since >= FINISH_MIN_MS && !quiet) this.add('finished', agent.desk, label, tab?.id);
-            if (approval && !old.approval) this.add('approval', agent.desk, label, tab?.id, 'check the screen');
+            if (real) {
+                if (old.real === 'working' && real.status === 'idle' && now - (old.realSince ?? now) >= FINISH_MIN_MS && !quiet) this.add('finished', agent.desk, label, tab?.id);
+                if (real.status === 'waiting-approval' && old.real !== 'waiting-approval') this.add('approval', agent.desk, label, tab?.id, SOURCE_TEXT[real.source]);
+                if (real.status === 'exited' && old.real !== 'exited' && old.state === 'running' && tab?.state === 'running') this.add('ended', agent.desk, label, tab?.id, SOURCE_TEXT[real.source]);
+            } else {
+                if (old.activity === 'working' && agent.activity === 'idle' && now - old.since >= FINISH_MIN_MS && !quiet) this.add('finished', agent.desk, label, tab?.id);
+                if (approval && !old.approval) this.add('approval', agent.desk, label, tab?.id, 'check the screen');
+            }
             if (old.state === 'running' && tab?.state === 'interrupted') this.add('interrupted', agent.desk, label, tab.id);
             if (old.state === 'running' && tab?.state === 'exited') this.add('ended', agent.desk, label, tab.id);
         }

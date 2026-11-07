@@ -28,7 +28,7 @@ export interface WorldTemplate {
 
 const HALF_PI = Math.PI / 2;
 
-const TAB_LABEL: Record<TabKind, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex', shell: 'Shell' };
+const TAB_LABEL: Record<TabKind, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex', shell: 'Shell', dsh: 'DeepSeek Harness' };
 
 /** A station config whose first tab is `main`, plus a shell tab. Shell-only stations get one shell tab. */
 function setup(name: string, main: TabKind, extra: TabKind[] = main === 'shell' ? [] : ['shell']): StationConfig {
