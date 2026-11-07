@@ -341,10 +341,14 @@ export class RoomScene {
             this.tree(root, -5, 2.6, 1.2); this.tree(root, 5.25, -0.7, 1.35);
             this.fern(root, -4.5, 3.6); this.fern(root, 5.1, 3.9); this.fern(root, 0.1, -3.6);
         } else {
+            // w2:polish: the orb sat at x 0.8 inside the web wall (x -2.06..2.06, y 0.6..3.2, z -4.19..-4.04).
+            // It now hangs in the gap between the code screen (right edge x -3.74) and the web wall:
+            // ring x -3.67..-2.13, globe x -3.46..-2.34, y 1.42..2.98, z -4.32..-4.08 (panel face -4.45).
+            const ORB = { x: -2.9, y: 2.2, z: -4.2, ringZ: -4.1, scale: 0.62 };
             const globe = new THREE.Mesh(new THREE.SphereGeometry(0.9, 48, 32), this.material(0x568eb1, 0.5));
-            globe.position.set(0.8, 2, -4.2); globe.scale.z = 0.22; root.add(globe);
+            globe.position.set(ORB.x, ORB.y, ORB.z); globe.scale.set(ORB.scale, ORB.scale, 0.22 * ORB.scale); root.add(globe);
             const ring = new THREE.Mesh(new THREE.TorusGeometry(1.22, 0.025, 12, 64), this.material(0x8ce3ec));
-            ring.position.set(0.8, 2, -4.1); ring.rotation.z = -0.4; root.add(ring);
+            ring.position.set(ORB.x, ORB.y, ORB.ringZ); ring.scale.setScalar(ORB.scale); ring.rotation.z = -0.4; root.add(ring);
             for (let i = 0; i < 24; i++) {
                 const star = new THREE.Mesh(new THREE.SphereGeometry(0.018 + (i % 3) * 0.007, 6, 6), new THREE.MeshBasicMaterial({ color: 0xb1d9f7 }));
                 star.position.set(-3.2 + ((i * 37) % 67) / 10, 0.9 + ((i * 13) % 19) / 10, -4.38); root.add(star);
