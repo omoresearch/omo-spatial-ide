@@ -64,6 +64,9 @@ import { OmoImmersiveService } from './immersive-service'; // omo immersive lane
 import { ImmersivePill } from './immersive-hud'; // omo immersive lane
 import { Icon } from './icons'; // omo immersive lane
 // --- end omo focus lane ---
+import { WorldStore } from './world-store'; // w2:build
+import { BuildMode } from './build-mode'; // w2:build
+import { BuildPanel, BuildToggle } from './build-panel'; // w2:build
 
 export const TERMINAL_STATION_ID = 'terminal-1';
 // w2:runtime — stations come from the WorldSpec (WorldStations). Ids are strings; the scene/focus types keep
@@ -202,6 +205,19 @@ export class OmoWorldWidget extends ReactWidget {
         select: station => this.selectStation(station), message: text => { this.feedback = text; this.update(); },
         stations: () => this.stationList }); // w2:runtime
     // --- end omo focus lane ---
+    // --- w2:build — per-project WorldStore + in-world build mode. Changes only go through store proposals; starts nothing. ---
+    private worldStore?: WorldStore;
+    private buildMode = new BuildMode({ scene: () => this.worldScene, store: () => this.currentWorldStore(),
+        profiles: () => [...new Set([...(this.consoleStates.terminal.host?.profiles ?? []), ...(this.consoleStates['terminal-2'].host?.profiles ?? [])])],
+        loadProfiles: async () => (await this.runtime.status()).profiles, // read-only host status
+        message: text => { this.feedback = text; this.update(); } });
+    private currentWorldStore(): WorldStore | undefined {
+        if (!this.project || !this.room || this.configuring) return undefined;
+        const uri = this.project.toString();
+        if (this.worldStore?.projectUri !== uri) this.worldStore = new WorldStore({ storage: safeStorage(), projectUri: uri, roomV1: this.room });
+        return this.worldStore;
+    }
+    // --- end w2:build ---
 
     @postConstruct()
     protected init(): void {
@@ -220,6 +236,8 @@ export class OmoWorldWidget extends ReactWidget {
         this.toDispose.push({dispose:()=>{this.voiceHub?.dispose();this.voiceHub=undefined;}});
         // --- end omo voice lane ---
         this.toDispose.push({ dispose: () => this.focusMode.dispose() }); // omo focus lane
+        this.toDispose.push({ dispose: () => this.buildMode.dispose() }); // w2:build
+        { const offBuild = this.buildMode.subscribe(() => this.update()); this.toDispose.push({ dispose: offBuild }); } // w2:build
         // --- omo immersive lane (mount hook): the room fills the window while a saved room shows. ---
         const offImmersive = this.immersive.mode.subscribe(() => this.update());
         this.toDispose.push({ dispose: () => { offImmersive(); this.immersive.mode.setEngaged(false); } });
@@ -260,7 +278,7 @@ export class OmoWorldWidget extends ReactWidget {
     protected override onAfterShow(msg: Message): void { super.onAfterShow(msg); this.syncImmersive(); }
     protected override onAfterHide(msg: Message): void { super.onAfterHide(msg); this.syncImmersive(); }
     protected override onBeforeDetach(msg: Message): void { this.immersive.mode.setEngaged(false); super.onBeforeDetach(msg); }
-    protected override onUpdateRequest(msg: Message): void { super.onUpdateRequest(msg); this.syncImmersive(); }
+    protected override onUpdateRequest(msg: Message): void { super.onUpdateRequest(msg); this.syncImmersive(); this.buildMode.sync(); /* w2:build */ }
     private toggleImmersiveButton = (): void => { this.worldScene?.releaseTyping(); this.immersive.toggleFromButton(); this.focusMode.controls?.element.focus({ preventScroll: true }); };
     private leaveImmersive = (): void => { this.immersive.leave(); this.focusMode.controls?.element.focus({ preventScroll: true }); };
     // --- end omo immersive lane ---
@@ -519,6 +537,7 @@ export class OmoWorldWidget extends ReactWidget {
     private poseChanged = (pose: PlayerPose): void => { void this.web?.setDistance(webWallDistance(pose)); };
 
     private selectStation = (station: Workstation | string, point?: ScreenPoint): void => {
+        if (this.buildMode.ownsClicks) return; // w2:build — a click while building selects/places, never opens a workstation
         if (this.configuring) { this.feedback = 'Create your room first, then select a workstation.'; this.update(); return; }
         if (station === 'code') { void this.runAction(() => this.openCode()); return; }
         // w2:runtime — a clicked monitor wall / extra mirror with link=stationId goes to that station.
@@ -789,8 +808,9 @@ export class OmoWorldWidget extends ReactWidget {
                             ? <ImmersivePill roomName={this.room.projectName} activeDesk={this.activeMode as Workstation} focus={this.focusMode} hud={this.hudHub} voice={this.voiceHub}
                                 desks={this.stationList.map(info => ({ id: info.id, label: info.name, slot: info.slot }))}
                                 bells={Object.fromEntries(this.stationList.map(info => [info.id, this.deskState(info.id).unreadBells]))} onExit={this.leaveImmersive}/>
-                            : <button type="button" className="omo-immersive-launch" data-testid="immersive-launch" title="Immersive world (G)" onMouseDown={event => event.preventDefault()} onClick={this.toggleImmersiveButton}>
-                                <Icon name="expand" size={14} />Immersive world <kbd>G</kbd></button>)}
+                            : <><BuildToggle build={this.buildMode}/>{/* w2:build */}<button type="button" className="omo-immersive-launch" data-testid="immersive-launch" title="Immersive world (G)" onMouseDown={event => event.preventDefault()} onClick={this.toggleImmersiveButton}>
+                                <Icon name="expand" size={14} />Immersive world <kbd>G</kbd></button></>)}
+                        {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode}/>}
                     </SceneView>
                     {/* omo parity2 lane (mount hook) */}{this.room && !this.configuring && this.hudHub && <HudOverlay hub={this.hudHub} view={this.hudHub.state} chat={this.hudHub.chat.state}/>}
                     {/* omo focus lane (mount hook) */}{this.room && !this.configuring && <FocusOverlay focus={this.focusMode} frames={this.monitors} desk={station => ({ state: this.deskState(station), controller: this.stations.peek(station) })}/>}

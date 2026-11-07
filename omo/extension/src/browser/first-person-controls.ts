@@ -80,6 +80,12 @@ export class FirstPersonControls {
     tabRequest?: (slot: number | 'next' | 'previous') => boolean;
     /** Ctrl+Shift+= / Ctrl+Shift+- while attached: text size. True when it handled the key. */
     comfortRequest?: (direction: 1 | -1) => boolean;
+    // w2:build — build mode (build-mode.ts) owns plain clicks while it is on, and B / its keys while walking (not typing, not attached).
+    /** A plain (not dragged) click at client x/y. True = build mode handled it; the monitor is not used. */
+    buildClick?: (x: number, y: number) => boolean;
+    /** A key while walking. True = build mode handled it (B toggles build mode). */
+    buildKey?: (event: KeyboardEvent) => boolean;
+    // w2:build end
     constructor(private canvas: HTMLCanvasElement, private camera: THREE.PerspectiveCamera,
         private interact: (x: number, y: number, modifiers?: { ctrlKey: boolean; metaKey: boolean }) => 'terminal' | 'code' | undefined,
         private input: (text: string) => void, private message: (text: string) => void, private pasteText?: (text: string) => void,
@@ -136,6 +142,7 @@ export class FirstPersonControls {
             if (!this.pointer) return; const {dragged,startX,startY}=this.pointer;this.pointer=undefined;
             if (!dragged) {
                 const locked=this.locked, x=locked?startX:event.clientX, y=locked?startY:event.clientY;
+                if(this.buildClick?.(x,y))return; // w2:build
                 const hit=this.interact(x,y,{ctrlKey:event.ctrlKey,metaKey:event.metaKey});
                 // A plain click frames the desk screen; Ctrl/Cmd-click stays a link click.
                 if(hit==='terminal'&&!event.ctrlKey&&!event.metaKey&&this.attachRequest?.())return;
@@ -159,6 +166,7 @@ export class FirstPersonControls {
                 event.preventDefault(); if (!this.copyOverride?.()) this.selection?.copy(); return;
             }
             const attached = this.attached;
+            if (!this.typing && !attached && this.buildKey?.(event)) { event.preventDefault(); this.keys.delete(event.key.toLowerCase()); return; } // w2:build
             // omo keys6 lane: Ctrl+Shift+W / N / E / R (or Alt+Shift+…) on the desk in use. Each only opens the desk's
             // existing explicit action: close asks first (Station Lock refuses), rename opens a prompt, reconnect re-attaches.
             // Walking (no desk in use): Ctrl+Shift+R stays the browser's reload; Alt+Shift+… only explains.
