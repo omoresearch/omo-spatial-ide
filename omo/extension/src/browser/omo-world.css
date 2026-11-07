@@ -566,3 +566,6 @@
 /* t3:polish2 — the 3D view clips its own overlays (Admin, Build, Immersive). When a tall panel above (voice settings)
    squeezes the room, those buttons stay inside the room instead of floating over the panel. */
 .omo-root[data-configured="true"] .omo-body:not(.is-onboarding) .omo-scene-wrap { overflow: hidden; }
+@container omo-stage (max-width: 1499px) {
+    .omo-presence-bar small { font-size: 0; overflow: hidden; } /* t3:polish2: the later base rule re-set 11px, so the chip showed clipped text */
+}

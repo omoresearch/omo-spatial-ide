@@ -68,15 +68,12 @@ export function BuildPanel(props: { build: BuildMode }): React.ReactElement | nu
             <span className="omo-build-sep" />
             <button type="button" className="omo-build-exit" data-testid="build-exit" onClick={() => build.exit()} title="Leave build mode (B)"><Icon name="x" size={14} /> Done</button>
         </div>
-        <Palette build={build} />
+        {/* t3:polish2 — pending changes sit under the palette (left column); the inspector keeps the right side, so they never cover each other. */}
+        <div className="omo-build-left"><Palette build={build} />{store.proposal && <ProposalBar build={build} />}</div>
         <div className={`omo-build-hint${s.tool === 'place' || s.tool === 'move' ? (s.ghostValid ? ' is-ok' : ' is-bad') : ''}`} role="status" data-testid="build-hint">{s.hint}</div>
         {s.notice && <div className={`omo-build-notice is-${s.noticeTone}`} role={s.noticeTone === 'warn' ? 'alert' : 'status'} data-testid="build-notice">{s.noticeTone === 'warn' ? <Icon name="alert" size={14} /> : <Icon name="check" size={14} />}{s.notice}</div>}
         {!s.worldRenderer && <div className="omo-build-renderer-note" data-testid="build-renderer-note">Blueprint view · New things show as outlines until the world renderer draws them.</div>}
-        {/* t3:polish2 — inspector and pending changes share one right column, so they never cover each other. */}
-        {((selected && !setupFor) || store.proposal) && <div className="omo-build-right">
-            {selected && !setupFor && <Inspector key={selected.id} build={build} entity={selected} />}
-            {store.proposal && <ProposalBar build={build} />}
-        </div>}
+        {selected && !setupFor && <Inspector key={selected.id} build={build} entity={selected} />}
         {setupFor && <StationSetup key={setupFor.id} build={build} entity={setupFor} />}
     </div>;
 }
@@ -224,7 +221,7 @@ function StationSetup(props: { build: BuildMode; entity: StationEntity }): React
                 <button type="button" className="omo-build-close" aria-label="Close Station Setup" onClick={() => build.closeSetup()}><Icon name="x" size={16} /></button>
             </header>
             {locked && <div className="omo-build-locknote is-banner" data-testid="station-setup-locked"><Icon name="lock" size={14} /> Locked. Settings are read-only. Unlock to change them; nothing running is stopped.</div>}
-            <fieldset disabled={locked}>
+            <div className="omo-build-dialog-body">{/* t3:polish2: only the form scrolls; buttons stay in view */}<fieldset disabled={locked}>
                 <label className="omo-build-field"><span>Name</span><input ref={first} data-testid="setup-name" maxLength={60} value={draft.name} onChange={ev => patch({ name: ev.target.value })} aria-invalid={!nameOk} /></label>
                 <div className="omo-build-field"><span>Kind</span>
                     <div className="omo-build-seg" role="radiogroup" aria-label="Desk kind">
@@ -247,7 +244,7 @@ function StationSetup(props: { build: BuildMode; entity: StationEntity }): React
                     </li>)}</ol>
                     <button type="button" className="omo-build-addtab" data-testid="setup-add-tab" disabled={draft.tabs.length >= 8} onClick={() => setDraft(d => ({ ...d, tabs: [...d.tabs, { name: d.kind === 'hermes' && !d.tabs.some(t => t.kind === 'hermes') ? 'Hermes' : `Shell ${d.tabs.length + 1}`, kind: d.kind === 'hermes' && !d.tabs.some(t => t.kind === 'hermes') ? 'hermes' : 'shell' }] }))}><Icon name="plus" size={12} /> Add tab</button>
                     <small>A plan only. Each agent tab still asks you before it starts.</small></div>
-            </fieldset>
+            </fieldset></div>
             <label className={`omo-build-lockrow${draft.locked ? ' is-on' : ''}`}>
                 <input type="checkbox" data-testid="setup-lock" checked={draft.locked} onChange={ev => patch({ locked: ev.target.checked })} />
                 <span className="omo-build-switch" aria-hidden="true" /><span><strong><Icon name="lock" size={12} /> Lock this desk</strong><small>Refuses moves, renames, removal and setup changes until unlocked.</small></span>
