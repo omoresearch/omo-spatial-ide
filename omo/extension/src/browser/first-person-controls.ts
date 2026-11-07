@@ -45,6 +45,9 @@ export class FirstPersonControls {
     enabled = false;
     typing = false;
     pose: PlayerPose = { ...PLAYER_HOME };
+    // w2:render — walking rules and reset spot of the current WorldSpec (RoomScene sets them). Unset = v1 layout rules.
+    mover?: (player: PlayerPose, input: { forward: number; right: number }, seconds: number) => PlayerPose;
+    home?: PlayerPose;
     private keys = new Set<string>();
     private selecting = false;
     private selectionOrigin?: { x: number; y: number };
@@ -360,7 +363,7 @@ export class FirstPersonControls {
             const k=this.keys;
             const speed=this.velocity.step(Number(k.has('w'))-Number(k.has('s')),Number(k.has('d'))-Number(k.has('a')),seconds);
             // advancePlayer moves at full speed along the input direction; eased speed scales the time step.
-            if(speed>0)this.pose=advancePlayer(this.pose,{forward:this.velocity.forward,right:this.velocity.right},seconds*Math.min(1,speed),this.layout);
+            if(speed>0){const input={forward:this.velocity.forward,right:this.velocity.right},time=seconds*Math.min(1,speed);this.pose=this.mover?this.mover(this.pose,input,time):advancePlayer(this.pose,input,time,this.layout);} // w2:render
         }else this.velocity.stop();
         this.apply();
     }
@@ -387,6 +390,6 @@ export class FirstPersonControls {
         const typing = this.typing ? 'true' : 'false';
         if (typing !== w.typing) { w.typing = typing; d.typing = typing; }
     }
-    reset():void{this.selection?.clear();this.selecting=false;this.dropFocus();this.pose={...PLAYER_HOME};this.typing=false;this.keys.clear();this.velocity.stop();this.apply();}
+    reset():void{this.selection?.clear();this.selecting=false;this.dropFocus();this.pose={...(this.home??PLAYER_HOME)}; /* w2:render */this.typing=false;this.keys.clear();this.velocity.stop();this.apply();}
     dispose():void{this.listeners.forEach(dispose=>dispose());this.keys.clear();this.focusListeners.clear();}
 }
