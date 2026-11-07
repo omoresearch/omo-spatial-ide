@@ -112,7 +112,7 @@ const SURFACE_W = 1024, SURFACE_H = 576;
  * The station theme's back-wall orb (globe + ring), v1 room coordinates. Data-driven so a lane that moves
  * it changes only this constant (the shell builder applies it to any shell size).
  */
-const ORB: OrbSpot = { x: 0.8, y: 2, z: -4.2, ringZ: -4.1, scale: 1 };
+const ORB: OrbSpot = { x: -2.9, y: 2.2, z: -4.2, ringZ: -4.1, scale: 0.62 }; // w2:polish — clear of the web wall
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
 const MAX_PIXEL_RATIO = 1.5;
 /**

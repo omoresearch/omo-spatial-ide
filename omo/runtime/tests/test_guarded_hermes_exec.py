@@ -211,7 +211,8 @@ class GuardedHermesExecTests(unittest.TestCase):
         self.assertEqual([row[0] for row in rows], ["contender"])
 
     def test_real_owned_tmux_delay_cannot_run_cli_after_contender_wins(self):
-        tmux = os.environ.get("OMO_TEST_TMUX") or shutil.which("tmux") or "/home/harry/.local/share/omo/bin/tmux"
+        tmux = (os.environ.get("OMO_TEST_TMUX") or os.environ.get("OMO_SPATIAL_TMUX") or shutil.which("tmux")
+                or str(Path.home() / ".local" / "share" / "omo" / "bin" / "tmux"))
         if not (os.path.isfile(tmux) and os.access(tmux, os.X_OK)):
             self.skipTest("owned tmux executable is not available")
         socket = f"omo-atomic-test-{os.getpid()}"

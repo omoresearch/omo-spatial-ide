@@ -44,6 +44,8 @@
     --omo-agent-hermes: #f7d774;
     --omo-agent-claude: #ebb3e0;
     --omo-agent-codex: #a9cdf5;
+    --omo-agent-shell: #b7c4cb;  /* w2:polish: shell prompt glyph */
+    --omo-agent-dsh: #5ccfe6;    /* w2:polish: dsh whale/wave glyph */
 
     /* Type */
     --omo-font: Inter, 'Inter var', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

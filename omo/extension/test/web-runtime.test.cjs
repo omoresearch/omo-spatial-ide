@@ -385,10 +385,12 @@ test('audio: muted by default even if the page unmutes itself; setAudio clamps a
     site.beacons.length = 0;
     await svc.click({ id: surf.id, x: 100, y: 50 });
     const docs = {};
-    await w.waitUntil(() => {
-      for (const b of site.beacons) { if (b.ev === 'audio') { docs[b.doc] = b.els; } }
+    // w2:polish: event-driven wait (wakes on each beacon) with a bounded 20 s ceiling. The fixture
+    // queues the request for a frame that is still loading, so the cross-origin frame always answers.
+    await site.waitForBeacons(beacons => {
+      for (const b of beacons) { if (b.ev === 'audio') { docs[b.doc] = b.els; } }
       return docs.top && docs.same && docs.cross;
-    });
+    }, 20000);
     for (const doc of ['top', 'same', 'cross']) {
       assert.ok(docs[doc], `no audio report from ${doc} frame`);
       for (const el of docs[doc]) {

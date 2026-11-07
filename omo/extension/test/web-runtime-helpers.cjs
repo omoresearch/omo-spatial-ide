@@ -64,12 +64,15 @@ const AUDIO = port => `<!doctype html><html><head><title>Audio fixture</title></
 <audio id="a1" src="/tone.wav" loop></audio>
 <button id="report" style="position:absolute;left:0;top:0;width:200px;height:100px">report</button>
 <button id="add" style="position:absolute;left:300px;top:0;width:200px;height:100px">add</button>
-<iframe id="same" src="/audio-frame?doc=same" style="position:absolute;left:0;top:200px;width:300px;height:150px"></iframe>
-<iframe id="cross" src="http://localhost:${port}/audio-frame?doc=cross" style="position:absolute;left:400px;top:200px;width:300px;height:150px"></iframe>
+<iframe id="same" onload="this.dataset.loaded='1'" src="/audio-frame?doc=same" style="position:absolute;left:0;top:200px;width:300px;height:150px"></iframe>
+<iframe id="cross" onload="this.dataset.loaded='1'" src="http://localhost:${port}/audio-frame?doc=cross" style="position:absolute;left:400px;top:200px;width:300px;height:150px"></iframe>
 <script>${mediaReport('top')}
 // The page tries to unmute and max itself on load; the runtime's policy must win.
 const a1 = document.getElementById('a1'); a1.muted = false; a1.volume = 1;
-document.getElementById('report').onclick = () => { report(); for (const f of document.querySelectorAll('iframe')) f.contentWindow.postMessage('report', '*'); };
+// w2:polish: a frame that has not finished loading yet (common for the cross-origin frame under load)
+// would drop the postMessage, so ask it once its load event fires instead of losing the request.
+const ask = f => f.contentWindow.postMessage('report', '*');
+document.getElementById('report').onclick = () => { report(); for (const f of document.querySelectorAll('iframe')) { if (f.dataset.loaded) ask(f); else f.addEventListener('load', () => ask(f), { once: true }); } };
 document.getElementById('add').onclick = () => { const e = document.createElement('audio'); e.id = 'added'; e.src = '/tone.wav'; e.muted = false; e.volume = 1; document.body.appendChild(e); e.play().catch(() => {}); };
 </script></body></html>`;
 
@@ -91,6 +94,7 @@ function wav() {
 /** Local fixture site. `beacons` holds everything the pages reported; `/slow` never answers. */
 async function fixtureServer() {
   const beacons = [];
+  const listeners = new Set(); // w2:polish: event-driven waits wake on each new beacon
   const hung = new Set();
   const tone = wav();
   let port = 0;
@@ -99,7 +103,7 @@ async function fixtureServer() {
     if (req.method === 'POST' && url.pathname === '/beacon') {
       let body = '';
       req.on('data', c => { body += c; });
-      req.on('end', () => { try { beacons.push(JSON.parse(body)); } catch { /* ignore */ } res.end('ok'); });
+      req.on('end', () => { try { beacons.push(JSON.parse(body)); for (const fn of [...listeners]) { fn(); } } catch { /* ignore */ } res.end('ok'); });
       return;
     }
     const html = body => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(body); };
@@ -120,6 +124,20 @@ async function fixtureServer() {
     port,
     url: p => `http://127.0.0.1:${port}${p}`,
     beacons,
+    /**
+     * w2:polish: resolve as soon as `check()` (re-run on every new beacon) returns truthy, or with
+     * undefined after `ms`. No polling interval, so a slow machine only costs the real arrival time.
+     */
+    waitForBeacons(check, ms = 20000) {
+      return new Promise(resolve => {
+        let timer;
+        const done = value => { listeners.delete(probe); clearTimeout(timer); resolve(value); };
+        const probe = () => { const value = check(beacons); if (value) { done(value); } };
+        listeners.add(probe);
+        timer = setTimeout(() => done(undefined), ms);
+        probe();
+      });
+    },
     async waitFor(pred, ms = 5000) {
       const end = Date.now() + ms;
       while (Date.now() < end) {

@@ -22,7 +22,10 @@ from runtime.tests.test_owned_interactive_real_tmux import (
     PYTHON, HostHarness, HostRefused, OwnedInteractiveRealTmuxTests, text_of,
 )
 
-HERMES_SRC = Path(os.environ.get("OMO_TEST_HERMES_SRC", "/home/harry/.hermes/hermes-agent"))
+# Installed Hermes source: OMO_TEST_HERMES_SRC, else <Hermes root>/hermes-agent where the root is
+# OMO_SPATIAL_HERMES_ROOT (as the app uses) or ~/.hermes. Tests skip when it is absent.
+HERMES_SRC = Path(os.environ.get("OMO_TEST_HERMES_SRC")
+                  or Path(os.environ.get("OMO_SPATIAL_HERMES_ROOT") or Path.home() / ".hermes") / "hermes-agent")
 HERMES_PY = HERMES_SRC / "venv" / "bin" / "python"
 
 # Same fake as the original suite, plus the reserving guard's argv (from /proc).
