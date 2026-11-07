@@ -1,8 +1,11 @@
 name: Omo spatial IDE macOS release
 
 # Builds, packages and smoke-tests a self-contained macOS tarball of the Omo app on
-# GitHub-hosted Apple Silicon, then attaches it to an existing omo-v* release.
+# GitHub-hosted Apple Silicon, then attaches it to an omo-v* release (automatically when an
+# omo-v* release is published, or manually via workflow_dispatch).
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -22,7 +25,8 @@ concurrency:
 
 jobs:
   macos-arm64:
-    if: github.repository == 'omoresearch/theia'
+    # Rename-safe owner guard; on release events only Omo tags build (upstream Theia tags are ignored).
+    if: github.repository_owner == 'omoresearch' && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'omo-v'))
     runs-on: macos-15
     timeout-minutes: 60
     defaults:
@@ -85,7 +89,7 @@ jobs:
 
   attach:
     needs: macos-arm64
-    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    if: (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || github.event_name == 'release'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -97,7 +101,7 @@ jobs:
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.release_tag }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
           case "$TAG" in omo-v*) ;; *) echo "Refusing non-Omo tag $TAG"; exit 1;; esac
           gh release upload "$TAG" dist/*.tar.gz dist/*.sha256 --clobber -R "$GITHUB_REPOSITORY"
