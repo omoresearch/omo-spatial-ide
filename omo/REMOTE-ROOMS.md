@@ -23,7 +23,8 @@ Status: client side built. Needs the mp-server lane's room server to go live.
 | `extension/src/node/remote-room-token-store.ts` | Member tokens: `<theia config dir>/omo/remote-rooms.json`, file 0600, dir 0700. |
 | `extension/src/browser/remote-room-controller.ts` | `RoutedPresenceService`, `RemoteRoomController`, `WorldSource` / `RemoteWorldSource`. |
 | `extension/src/browser/remote-room-panel.tsx`, `remote-room.css` | Chip + Join/Host panel. |
-| `extension/test/remote-room-probe.cjs` | Mock server + real compiled client: 27 checks end to end. |
+| `extension/test/remote-room-probe.cjs` | Mock server + real compiled client: 27 checks end to end (incl. two tabs on one IDE). |
+| `extension/test/remote-room-ui-probe.cjs` | Real app + two headless Chrome browsers + mock server: host, invite, join, shared presence strip, leave. |
 
 Marked hooks (`w2:mp-client`) in shared files: `node/omo-backend-module.ts` (token store + RPC handler),
 `browser/omo-frontend-module.ts` (OmoPresenceService → routed service), `browser/omo-world-widget.tsx`
@@ -52,8 +53,14 @@ While connected, use `widget.remoteRoom.world` (a `RemoteWorldSource`). On `appl
   the user to Apply again. Never auto-apply.
 - other error → message.
 
-## Run the probe
+## Run the probes
 
 ```
 cd omo && npx tsc -p extension && node extension/test/remote-room-probe.cjs
+# UI probe: start the app on port 3291 with a throwaway THEIA_CONFIG_DIR (from browser-app/:
+#   THEIA_CONFIG_DIR=$(mktemp -d) npx theia start --hostname 127.0.0.1 --port 3291 ../demo-project), then:
+node extension/test/remote-room-ui-probe.cjs
 ```
+
+Notes: one IDE backend can serve several tabs. Each live connection claims its membership, so a second
+tab joins as a new member and never kicks the first one out. The status chip refreshes once a second.
