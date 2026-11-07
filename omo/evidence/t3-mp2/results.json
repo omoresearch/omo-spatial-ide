@@ -1,0 +1,8 @@
+{
+  "lane": "t3-mp2",
+  "code_commit": "cd1481ce1",
+  "status": "INCOMPLETE: code parts 1-3 written, type-check clean, NOT verified end to end; part 4 two-app test not written",
+  "ran": { "tsc -p extension": "exit 0", "node --check server ide-wire, server, cli": "ok" },
+  "not_run": ["npm run build (browser bundle not rebuilt)", "server/test/ide-client-smoke.cjs", "remote-two-app-real.cjs (not written)", "voice getStats", "screenshots", "npm test"],
+  "known_risk": "ide-client-smoke.cjs line 56 expects role member from an IDE invite with no role; the server now gives builder in that case and the welcome now carries the real server role"
+}
