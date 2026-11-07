@@ -55,6 +55,7 @@ import { RemoteRoomChip, RemoteRoomPanel, RemoteRoomPopover } from './remote-roo
 import { OmoRemoteRoomService } from '../common/remote-room-protocol'; // w2:mp-client
 import { worldFromRoomV1 } from '../common/world-model'; // w2:mp-client
 import { VoicePanel } from './voice-panel';
+import { OmoVoiceSettingsService } from '../common/voice-settings-protocol'; // w2:voice
 // --- end omo voice lane ---
 // --- omo parity2 lane (mount hook): room chat, agent notifications, follow/teleport, name colours, speaking HUD ---
 import { HudHub } from './hud-hub';
@@ -204,6 +205,7 @@ export class OmoWorldWidget extends ReactWidget {
     remoteRoom?: RemoteRoomController;
     private remotePanelOpen = false; // w2:mp-client
     private remoteAnchor: HTMLElement | null = null; // w2:mp-client
+    @inject(OmoVoiceSettingsService) protected readonly voiceSettings!: OmoVoiceSettingsService; // w2:voice
     private project?: URI;
     private room?: RoomState;
     private draftTheme: RoomTheme = 'station';
@@ -312,7 +314,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.presence=new PresenceController({service:this.presenceService,pose:()=>this.worldScene?.getPlayerPose()??{...PLAYER_HOME},schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:state=>this.presenceChanged(state)});
         this.toDispose.push({dispose:()=>{void this.presence?.dispose().catch(()=>undefined);}});
         // --- omo voice lane (mount hook): read-only access to presence, scene and desks. Starts nothing. ---
-        this.voiceHub=new VoiceHub({presenceService:this.presenceService,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',
+        this.voiceHub=new VoiceHub({presenceService:this.presenceService,voiceSettings:this.voiceSettings/* w2:voice */,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',
             desk:desk=>({state:this.deskState(desk),controller:this.stations?.peek(desk)}),activeDesk:()=>asDesk(this.activeStation),
             onChange:()=>this.update(),message:text=>{this.feedback=text;this.update();}});
         this.toDispose.push({dispose:()=>{this.voiceHub?.dispose();this.voiceHub=undefined;}});
