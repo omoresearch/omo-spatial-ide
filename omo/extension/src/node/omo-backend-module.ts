@@ -67,8 +67,8 @@ export default new ContainerModule(bind => {
     }).inSingletonScope();
     // --- w2:mp-client: remote rooms. Backend connects out over WSS; member tokens in <config dir>/omo/remote-rooms.json (0600). ---
     bind(OmoRemoteRoomTokens).toDynamicValue(ctx => {
-        const envs = ctx.container.get<EnvVariablesServer>(EnvVariablesServer);
-        return new RemoteRoomTokenStore(async () => nodePath.join(FileUri.fsPath(await envs.getConfigDirUri()), 'omo', 'remote-rooms.json'));
+        // Resolved lazily: only a real remote-room action needs the config dir.
+        return new RemoteRoomTokenStore(async () => nodePath.join(FileUri.fsPath(await ctx.container.get<EnvVariablesServer>(EnvVariablesServer).getConfigDirUri()), 'omo', 'remote-rooms.json'));
     }).inSingletonScope();
     bind(ConnectionHandler).toDynamicValue(ctx => {
         const store = ctx.container.get<RemoteRoomTokenStore>(OmoRemoteRoomTokens);
