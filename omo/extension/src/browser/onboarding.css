@@ -65,6 +65,7 @@
 .omo-ob-hermes.is-off { opacity: .62; cursor: default; }
 .omo-ob-link { display: block; margin: var(--omo-sp-3) 0 0; padding: 0; border: 0; background: none; color: var(--omo-text-3); font-size: var(--omo-fs-xs); text-decoration: underline dotted; text-underline-offset: 3px; }
 .omo-ob-link:hover { color: var(--omo-accent); }
+.omo-ob-link-center { margin: 6px auto 0; }
 
 /* Step 2: floor plan */
 .omo-ob-plan { display: block; width: 100%; height: auto; max-height: 240px; margin: var(--omo-sp-2) 0 0; border-radius: var(--omo-r-md); background: var(--omo-bg-0); border: 1px solid var(--omo-line); }

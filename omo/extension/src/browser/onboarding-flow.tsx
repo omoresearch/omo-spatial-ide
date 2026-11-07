@@ -285,6 +285,7 @@ export function OnboardingFlow(props: OnboardingFlowProps): React.ReactElement {
             </div>
             {step < 3 && <button type="button" className="omo-ob-quick" data-testid="create-room" disabled={!canCreate} onClick={() => { void create(); }}>{props.hasRoom ? 'Save now' : 'Create now'} · skip review</button>}
             {props.hasRoom && <button className="omo-cancel" data-testid="cancel-room" onClick={props.onCancel}>Back to my room</button>}
+            {step > 1 && <button type="button" className="omo-ob-link omo-ob-link-center" data-testid="onboarding-classic-footer" onClick={props.onClassic}>Room settings (layout, kit, presets)</button>}
             <p className="omo-privacy">Saved on this device. Nothing starts until you choose it.{useHermes && props.hermes ? ' Hermes sees only your plan text.' : ' No model calls.'}</p>
         </div>
     </section>;
