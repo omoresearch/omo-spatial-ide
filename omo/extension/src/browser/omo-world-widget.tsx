@@ -571,7 +571,7 @@ export class OmoWorldWidget extends ReactWidget {
         const old = this.consoleStates[station] ?? RuntimeConsoleController.initial(); // w2:runtime: any station id
         const framed = state.lines !== old.lines || state.cursor !== old.cursor || state.truecolor !== old.truecolor || state.statusText !== old.statusText || state.workspace !== old.workspace || state.activeTabId !== old.activeTabId || state.unreadBells !== old.unreadBells;
         this.consoleStates[station] = state;
-        if (this.stations?.stored && this.room) this.stations.maybeOfferSetup(station, state, this.project?.toString()); // w2:runtime: StationConfig tabs, confirm first
+        if (this.stations && this.room) this.stations.maybeOfferSetup(station, state, this.project?.toString()); // w2:runtime: StationConfig tabs, confirm first; t4:polish: only after an explicit first open
         if (state.phase === 'live' && station === this.stationLink.targetStationId && !this.mirrorAttached && !this.mirrorAttaching) {
             // attachMirror clears its old frame synchronously. That is not a
             // disconnect and must not allow the next poll to start another attach.
@@ -734,7 +734,9 @@ export class OmoWorldWidget extends ReactWidget {
     private async openTerminal(station: string): Promise<void> {
         const binding = this.binding(station);
         if (!binding) throw new Error('Choose a project folder first.');
-        const controller = this.stations.controller(station); await controller?.bind(binding);
+        const controller = this.stations.controller(station);
+        if (!this.stations.hasSavedBinding(binding)) this.stations.armSetup(station); // t4:polish: the first explicit open of this desk may offer its setup (confirm first)
+        await controller?.bind(binding);
         if (this.activeMode === station) { this.feedback = controller?.state.phase === 'live' ? 'Live terminal on this monitor · Type here. Esc to walk away.' : controller?.state.error || controller?.state.statusText || ''; this.update(); }
     }
     private async openReviewSnapshot(): Promise<GitReviewSnapshot | undefined> {

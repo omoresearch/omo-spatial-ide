@@ -166,6 +166,7 @@ export class WorldStations {
     private controllers = new Map<StationId, RuntimeConsoleController>();
     private states = new Map<StationId, RuntimeConsoleState>();
     private offered = new Set<string>();
+    private armed = new Set<StationId>(); // t4:polish: desks the user just opened for the first time
     private disposed = false;
     /** True when the world came from storage (not a fresh v1 migration). */
     stored = false;
@@ -195,6 +196,7 @@ export class WorldStations {
         const removed = [...before].filter(id => !after.has(id));
         const added = [...after].filter(id => !before.has(id));
         for (const id of [...this.controllers.keys()]) if (!after.has(id)) { this.controllers.get(id)?.dispose(); this.controllers.delete(id); this.states.delete(id); }
+        for (const id of [...this.armed]) if (!after.has(id)) this.armed.delete(id);
         this.pushLocks();
         publishDirectory(this.list);
         this.options.onStations?.(this.list, removed);
@@ -256,12 +258,20 @@ export class WorldStations {
     }
 
     /**
-     * Offer the station's StationConfig tabs once per (station, workspace) when a fresh workspace goes
-     * live. Offering = the controller's pending confirmation; nothing starts until the user confirms.
+     * t4:polish — the user explicitly opened this desk for the first time (clicked its monitor, or picked it in the
+     * desk switcher). Only an armed desk may be offered its setup; adding a desk to the world never arms one.
+     */
+    armSetup(id: StationId): void { if (this.has(id)) this.armed.add(id); }
+    /**
+     * Offer the station's StationConfig tabs once per (station, workspace) when the user's first open of a desk
+     * goes live. Offering = the controller's pending confirmation; nothing starts until the user confirms.
      */
     maybeOfferSetup(id: StationId, state: RuntimeConsoleState, projectUri: string | undefined): boolean {
         const info = this.info(id), c = this.peek(id), ws: SessionWorkspace | undefined = state.workspace;
+        if (!this.armed.has(id)) return false; // t4:polish: never on a world change or a poll of a desk in use
         if (!info || !c || !projectUri || state.phase !== 'live' || !ws || state.pending || state.acting) return false;
+        this.armed.delete(id); // one decision per explicit open
+        if (!this.stored) return false; // classic room: no StationConfig to offer, and the open does not carry over to a later world
         const key = `omo.station-setup.v1:${JSON.stringify(projectUri)}#${id}`;
         const mark = `${id}:${ws.id}`;
         if (this.offered.has(mark)) return false;
