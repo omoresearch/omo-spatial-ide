@@ -1,0 +1,231 @@
+{
+  "format": "omo-world-preset",
+  "version": 2,
+  "world": {
+    "version": 2,
+    "name": "Shared Omo world",
+    "shell": {
+      "theme": "station",
+      "width": 16,
+      "depth": 14
+    },
+    "entities": [
+      {
+        "id": "terminal",
+        "transform": {
+          "x": -4,
+          "z": -1.6,
+          "rotation": 0
+        },
+        "label": "Lead · Hermes",
+        "kind": "station",
+        "station": {
+          "name": "Lead · Hermes",
+          "kind": "hermes",
+          "tabs": [
+            {
+              "name": "Hermes",
+              "kind": "hermes"
+            },
+            {
+              "name": "Shell",
+              "kind": "shell"
+            }
+          ],
+          "locked": false
+        }
+      },
+      {
+        "id": "terminal-2",
+        "transform": {
+          "x": 0,
+          "z": -1.6,
+          "rotation": 0
+        },
+        "label": "Builder · Claude",
+        "kind": "station",
+        "station": {
+          "name": "Builder · Claude",
+          "kind": "shell",
+          "tabs": [
+            {
+              "name": "Claude",
+              "kind": "claude"
+            },
+            {
+              "name": "Shell",
+              "kind": "shell"
+            }
+          ],
+          "locked": false
+        }
+      },
+      {
+        "id": "desk-3",
+        "transform": {
+          "x": 4,
+          "z": -1.6,
+          "rotation": 0
+        },
+        "label": "Builder · Codex",
+        "kind": "station",
+        "station": {
+          "name": "Builder · Codex",
+          "kind": "shell",
+          "tabs": [
+            {
+              "name": "Codex",
+              "kind": "codex"
+            },
+            {
+              "name": "Shell",
+              "kind": "shell"
+            }
+          ],
+          "locked": false
+        }
+      },
+      {
+        "id": "desk-4",
+        "transform": {
+          "x": -4,
+          "z": 2,
+          "rotation": 0
+        },
+        "label": "Ops · Shell",
+        "kind": "station",
+        "station": {
+          "name": "Ops · Shell",
+          "kind": "shell",
+          "tabs": [
+            {
+              "name": "Shell",
+              "kind": "shell"
+            }
+          ],
+          "locked": false
+        }
+      },
+      {
+        "id": "desk-5",
+        "transform": {
+          "x": 0,
+          "z": 2,
+          "rotation": 0
+        },
+        "label": "Research · Hermes",
+        "kind": "station",
+        "station": {
+          "name": "Research · Hermes",
+          "kind": "hermes",
+          "tabs": [
+            {
+              "name": "Hermes",
+              "kind": "hermes"
+            },
+            {
+              "name": "Shell",
+              "kind": "shell"
+            }
+          ],
+          "locked": false
+        }
+      },
+      {
+        "id": "desk-6",
+        "transform": {
+          "x": 4,
+          "z": 2,
+          "rotation": 0
+        },
+        "label": "QA · Shell",
+        "kind": "station",
+        "station": {
+          "name": "QA · Shell",
+          "kind": "shell",
+          "tabs": [
+            {
+              "name": "Shell",
+              "kind": "shell"
+            }
+          ],
+          "locked": false
+        }
+      },
+      {
+        "id": "ops-wall",
+        "transform": {
+          "x": -3.4,
+          "z": -6.5,
+          "rotation": 0
+        },
+        "label": "Ops wall · Lead",
+        "kind": "monitor-wall",
+        "width": 5.6,
+        "height": 2.6,
+        "elevation": 0.6,
+        "link": "terminal"
+      },
+      {
+        "id": "web",
+        "transform": {
+          "x": 3.4,
+          "z": -6.5,
+          "rotation": 0
+        },
+        "label": "Web wall",
+        "kind": "web-wall",
+        "width": 5.6,
+        "height": 2.6,
+        "elevation": 0.6
+      },
+      {
+        "id": "whiteboard",
+        "transform": {
+          "x": 7.6,
+          "z": 0,
+          "rotation": -1.5707963267948966
+        },
+        "kind": "decor",
+        "decor": "whiteboard",
+        "scale": 1.4
+      },
+      {
+        "id": "plant-1",
+        "transform": {
+          "x": -7.4,
+          "z": -6.4,
+          "rotation": 0
+        },
+        "kind": "decor",
+        "decor": "plant"
+      },
+      {
+        "id": "plant-2",
+        "transform": {
+          "x": 7.4,
+          "z": -6.4,
+          "rotation": 0
+        },
+        "kind": "decor",
+        "decor": "plant"
+      },
+      {
+        "id": "sofa",
+        "transform": {
+          "x": -6.8,
+          "z": 5.2,
+          "rotation": 1.5707963267948966
+        },
+        "kind": "decor",
+        "decor": "sofa"
+      }
+    ],
+    "revision": 0
+  },
+  "camera": {
+    "azimuth": 0.56,
+    "elevation": 0.61,
+    "distance": 24
+  }
+}

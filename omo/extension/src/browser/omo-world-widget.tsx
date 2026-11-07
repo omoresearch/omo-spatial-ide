@@ -290,7 +290,7 @@ export class OmoWorldWidget extends ReactWidget {
     // --- w2:build — per-project WorldStore + in-world build mode. Changes only go through store proposals; starts nothing. ---
     private worldStore?: WorldStore;
     private buildMode = new BuildMode({ scene: () => this.worldScene, store: () => this.currentWorldStore(),
-        profiles: () => [...new Set([...(this.consoleStates.terminal.host?.profiles ?? []), ...(this.consoleStates['terminal-2'].host?.profiles ?? [])])],
+        profiles: () => [...new Set(Object.values(this.consoleStates).flatMap(state => state?.host?.profiles ?? []))], // t2:worldui — any desk's host status; no opened desk = no crash
         loadProfiles: async () => (await this.runtime.status()).profiles, // read-only host status
         message: text => { this.feedback = text; this.update(); } });
     private currentWorldStore(): WorldStore | undefined {
