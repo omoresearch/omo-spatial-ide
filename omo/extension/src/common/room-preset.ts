@@ -337,3 +337,31 @@ export function previewWorldPreset(preset: WorldPreset): string[] {
     lines.push('Starting tabs are listed only. No agent starts until you confirm it at the desk.');
     return lines;
 }
+
+/**
+ * w2:templates — Station recipe panel export: turn a desk's setup (as typed in the recipe form)
+ * into a StationConfig. Profile 'default' or empty means "workspace default" and is omitted.
+ */
+export function stationConfigFromSetup(input: { name: string; profile?: string; tabs: Array<{ kind: StationConfig['tabs'][number]['kind']; name?: string }>; locked?: boolean }): StationConfig {
+    const label: Record<string, string> = { shell: 'Shell', hermes: 'Hermes', claude: 'Claude', codex: 'Codex' };
+    const tabs = input.tabs.slice(0, 8).map(tab => ({ kind: tab.kind, name: (tab.name?.trim() || label[tab.kind] || 'Tab').slice(0, 40) }));
+    const profile = input.profile?.trim();
+    const config: StationConfig = {
+        name: (input.name.trim() || 'Desk').slice(0, 60),
+        kind: tabs.some(tab => tab.kind === 'hermes') ? 'hermes' : 'shell',
+        tabs: tabs.length ? tabs : [{ kind: 'shell', name: 'Shell' }],
+        locked: input.locked === true
+    };
+    if (profile && profile !== 'default') config.profile = profile;
+    return config;
+}
+
+/** Export a world with one station's setup replaced (read-only: a lock does not block exporting). */
+export function exportStationSetupPreset(world: WorldSpec, stationId: string, setup: StationConfig, options: { camera?: RoomPreset['camera'] } = {}): string {
+    const copy: WorldSpec = JSON.parse(JSON.stringify(world));
+    const target = copy.entities.find(e => e.id === stationId);
+    if (target?.kind !== 'station') throw new Error('That desk is not in the saved world.');
+    target.station = { ...setup, tabs: setup.tabs.map(tab => ({ ...tab })) };
+    if (setup.name) target.label = setup.name;
+    return exportWorldPreset(copy, { name: `Desk setup · ${setup.name}`.slice(0, 120), camera: options.camera });
+}

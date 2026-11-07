@@ -17,6 +17,8 @@ export function StationRecipePanel(props: {
     /** Station Lock for this desk. */
     locked?: boolean;
     onLock?: (locked: boolean) => void;
+    /** w2:templates — export the saved world with this desk's setup (from the form) as a v2 preset. */
+    onExportSetup?: (setup: { name: string; profile: string; tabs: StationRecipeTab[]; locked: boolean }) => void;
 }): React.ReactElement {
     const frozen = !!props.locked;
     const [sleepMinutes, setSleepMinutes] = React.useState(Math.max(1, Math.round((props.idleSleep?.afterSeconds || 900) / 60)));
@@ -47,6 +49,7 @@ export function StationRecipePanel(props: {
             <div className="omo-console-row"><span>Initial tabs</span>{(['shell', 'hermes', 'claude', 'codex'] as AgentKind[]).map(kind => <button type="button" key={kind} data-testid={`station-recipe-add-${kind}`} disabled={tabs.length >= 8} onClick={() => add(kind)}>+ {AGENT_LABELS[kind]}</button>)}</div>
             <ul data-testid="station-recipe-tabs">{tabs.map((tab, index) => <li key={`${tab.kind}-${index}`}>{AGENT_LABELS[tab.kind]} <button type="button" aria-label={`Remove ${AGENT_LABELS[tab.kind]} tab ${index + 1}`} onClick={() => setTabs(tabs.filter((_, i) => i !== index))}>×</button></li>)}</ul>
             <button data-testid="station-recipe-save" disabled={frozen || !name.trim() || !profile.trim() || !tabs.length}>Save recipe</button>
+            {props.onExportSetup && <button type="button" data-testid="station-setup-export" title="Exports desks, walls and this desk's setup. Never workspace ids, tokens or paths." disabled={!tabs.length} onClick={() => props.onExportSetup?.({ name: name.trim() || (props.stationId === 'terminal' ? 'Desk one' : 'Desk two'), profile, tabs, locked: frozen })}>Export desk setup (world v2)</button>}{/* w2:templates */}
         </form>
         <div data-testid="station-recipe-list">{props.recipes.map(recipe => <article key={recipe.id} className="omo-console-row"><span><strong>{recipe.name}</strong> · {recipe.profile} · {recipe.tabs.map(tab => AGENT_LABELS[tab.kind]).join(', ')}</span><button type="button" data-testid="station-recipe-apply" disabled={frozen} onClick={() => props.onApply(recipe)}>Apply…</button><button type="button" data-testid="station-recipe-delete" disabled={frozen} onClick={() => props.onDelete(recipe)}>Delete</button></article>)}</div>
     </section>;

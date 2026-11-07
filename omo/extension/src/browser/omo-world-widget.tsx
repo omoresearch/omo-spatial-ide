@@ -10,6 +10,10 @@ import URI from '@theia/core/lib/common/uri';
 import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame, CodeReviewFrame } from './room-scene';
 import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
 import { exportRoomPreset, parseRoomPreset, ROOM_PRESET_FILENAME, ROOM_PRESET_MAX_BYTES } from '../common/room-preset';
+import { exportWorldPreset, exportStationSetupPreset, parseAnyRoomPreset, stationConfigFromSetup, WORLD_PRESET_FILENAME, WORLD_PRESET_MAX_BYTES } from '../common/room-preset'; // w2:templates
+import { validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model'; // w2:templates
+import type { WorldSpec } from '../common/world-model'; // w2:templates
+import { WorldPresetPanel } from './world-preset-panel'; // w2:templates
 import { ROOM_LAYOUTS, ROOM_KITS } from '../common/player-state';
 import type { RoomLayoutId, RoomKitId, PlayerPose } from '../common/player-state';
 import { OmoRuntimeService } from '../common/runtime-protocol';
@@ -126,6 +130,8 @@ export class OmoWorldWidget extends ReactWidget {
     private presetReadEpoch = 0;
     private presetLoading = false;
     private presetStatus = '';
+    private draftWorld?: WorldSpec; // w2:templates — previewed world (template, kit or imported v2 preset); Save applies it
+    private draftWorldSource?: string; // w2:templates
     private configuring = true;
     private error = '';
     private feedback = '';
@@ -281,7 +287,7 @@ export class OmoWorldWidget extends ReactWidget {
     private leavePresence=():void=>{this.worldScene?.releaseTyping();void this.presence?.leave().catch(error=>{this.error=String(error);this.update();});};
     private projectChanged(next: URI | undefined): void {
         if (next?.toString() === this.project?.toString()) return;
-        this.invalidatePresetRead(); this.draftCamera = undefined; this.presetStatus = '';
+        this.invalidatePresetRead(); this.draftCamera = undefined; this.presetStatus = ''; this.draftWorld = undefined; this.draftWorldSource = undefined; // w2:templates
         this.taskOverviewOpen=false;
         this.taskWorkspacesOpen=false;
         this.closeReview();
@@ -372,8 +378,17 @@ export class OmoWorldWidget extends ReactWidget {
         this.invalidatePresetRead();
         const next: RoomState = { version: 1, theme: this.draftTheme, layout: this.draftLayout, kit: this.draftKit, projectUri: this.project.toString(),
             projectName: this.draftName.trim().slice(0, 120), camera: { ...(this.draftCamera ?? this.room?.camera ?? CAMERA) } };
+        // w2:templates — a previewed world is validated and stored next to the v1 room (no ids, tokens or paths in it).
+        let world: WorldSpec | undefined;
+        if (this.draftWorld) {
+            if (this.draftWorldTouchesLockedDesk(this.draftWorld)) { this.error = 'A desk is locked, so this world was not saved. Unlock it in Station recipes first.'; this.update(); return; }
+            const checked = validateWorld({ ...this.draftWorld, name: next.projectName, shell: { ...this.draftWorld.shell, theme: next.theme }, revision: (this.savedWorld()?.revision ?? 0) + 1 });
+            if (!checked.ok) { this.error = checked.error; this.update(); return; }
+            world = checked.world;
+        }
         if (!this.save(next)) return;
-        this.room = next; this.configuring = false; this.feedback = 'Room saved on this device.'; this.update();
+        if (world) { try { localStorage.setItem(worldStorageKey(next.projectUri), JSON.stringify(world)); } catch { this.error = 'The world could not be saved. Check browser storage.'; } this.draftWorld = undefined; this.draftWorldSource = undefined; } // w2:templates
+        this.room = next; this.configuring = false; this.feedback = world ? 'Room and world saved on this device. No agent was started.' : 'Room saved on this device.'; this.update();
     };
     private cameraChanged = (camera: RoomState['camera']): void => {
         if (this.configuring) { this.draftCamera = { ...camera }; return; }
@@ -536,14 +551,45 @@ export class OmoWorldWidget extends ReactWidget {
         if (selected) await this.workspace.open(selected);
     }); };
     private invalidatePresetRead(): void { this.presetReadEpoch++; this.presetLoading = false; }
+    // w2:templates — the saved v2 world for this project, or the v1 room migrated (never written here).
+    private savedWorld(): WorldSpec | undefined {
+        if (!this.project) return undefined;
+        try { const raw = safeStorage()?.getItem(worldStorageKey(this.project.toString())); if (raw) { const checked = validateWorld(JSON.parse(raw)); if (checked.ok) return checked.world; } } catch { /* fall back to the v1 room */ }
+        return this.room ? worldFromRoomV1(this.room) : undefined;
+    }
+    // w2:templates — a locked desk must be identical in the preview (same place, same setup) before Save.
+    private draftWorldTouchesLockedDesk(draft: WorldSpec): boolean {
+        const saved = this.savedWorld();
+        return TERMINAL_STATIONS.some(id => this.stationLocks[id as keyof StationLocks] && JSON.stringify(saved?.entities.find(e => e.id === id)) !== JSON.stringify(draft.entities.find(e => e.id === id)));
+    }
+    private previewWorld = (world: WorldSpec, source: string): void => { // w2:templates
+        if (!this.configuring) return;
+        this.draftWorld = world; this.draftWorldSource = source; this.draftTheme = world.shell.theme; this.error = '';
+        this.presetRevision++; this.presetStatus = `${source} loaded into preview. Save room to apply it to this project.`; this.update();
+    };
+    private discardWorldPreview = (): void => { this.draftWorld = undefined; this.draftWorldSource = undefined; this.draftTheme = this.room?.theme ?? this.draftTheme; this.presetRevision++; this.presetStatus = 'World preview discarded.'; this.update(); }; // w2:templates
+    private exportWorld = (): void => this.downloadWorld(world => exportWorldPreset(world, { camera: this.room?.camera })); // w2:templates
+    private exportStationSetup = (setup: { name: string; profile: string; tabs: StationRecipe['tabs']; locked: boolean }): void => // w2:templates
+        this.downloadWorld(world => exportStationSetupPreset(world, this.activeStation, stationConfigFromSetup(setup), { camera: this.room?.camera }));
+    private downloadWorld(build: (world: WorldSpec) => string): void { // w2:templates
+        const world = this.savedWorld(); if (!world) { this.error = 'Save a room first, then export it.'; this.update(); return; }
+        try {
+            const contents = build(world);
+            const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }));
+            const link = document.createElement('a'); link.href = url; link.download = WORLD_PRESET_FILENAME;
+            document.body.appendChild(link);
+            try { link.click(); } finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 60000); }
+            this.error = ''; this.presetStatus = 'World exported (v2). Workspace ids, tokens, project names and paths are not included.'; this.update();
+        } catch (error) { this.error = error instanceof Error ? error.message : 'This world could not be exported.'; this.update(); }
+    }
     private importPreset = async (file: File): Promise<void> => {
         if (!this.project || !this.configuring) return;
         const epoch = ++this.presetReadEpoch;
         const project = this.project.toString();
         const ownsPreview = (): boolean => epoch === this.presetReadEpoch && this.configuring && project === this.project?.toString();
         this.presetLoading = true; this.presetStatus = ''; this.error = '';
-        if (file.size > ROOM_PRESET_MAX_BYTES) {
-            this.presetLoading = false; this.error = 'Room preset files must be at most 8 KiB (8192 bytes).'; this.update(); return;
+        if (file.size > WORLD_PRESET_MAX_BYTES) { // w2:templates — v2 world presets may be larger; v1 keeps its 8 KiB check in the parser
+            this.presetLoading = false; this.error = `Preset files must be at most ${Math.round(WORLD_PRESET_MAX_BYTES / 1024)} KiB (appearance presets: 8 KiB).`; this.update(); return;
         }
         this.update();
         let raw: string;
@@ -554,10 +600,12 @@ export class OmoWorldWidget extends ReactWidget {
         }
         if (!ownsPreview()) return;
         try {
-            const preset = parseRoomPreset(raw);
+            const any = parseAnyRoomPreset(raw); // w2:templates — v1 appearance or v2 world
+            if (any.version === 2) { if (any.preset.camera) this.draftCamera = { ...any.preset.camera }; this.presetLoading = false; this.previewWorld(any.preset.world, 'Imported world'); return; }
+            const preset = any.preset;
             this.draftTheme = preset.theme; this.draftLayout = preset.layout; this.draftCamera = { ...preset.camera };
             this.presetRevision++; this.presetStatus = 'Appearance loaded into preview. Save room to apply it to this project.';
-        } catch { this.error = 'That file is not a valid Omo appearance preset (8 KiB maximum).'; }
+        } catch (error) { this.error = error instanceof Error && error.message !== 'Invalid room preset' ? error.message : 'That file is not a valid Omo appearance preset (8 KiB maximum).'; } // w2:templates
         this.presetLoading = false; this.update();
     };
     private exportPreset = (): void => {
@@ -571,8 +619,8 @@ export class OmoWorldWidget extends ReactWidget {
             this.error = ''; this.presetStatus = 'Saved appearance exported. Project paths, names and running sessions are not included.'; this.update();
         } catch { this.error = 'Those saved appearance settings could not be exported.'; this.update(); }
     };
-    private cancelConfiguration = (): void => { this.invalidatePresetRead(); this.presetRevision++; this.presetStatus = ''; this.error = ''; this.configuring = false; this.update(); };
-    private configure = (): void => { this.invalidatePresetRead(); this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
+    private cancelConfiguration = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetRevision++; this.presetStatus = ''; this.error = ''; this.configuring = false; this.update(); };
+    private configure = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
 
     protected render(): React.ReactNode {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;
@@ -610,9 +658,10 @@ export class OmoWorldWidget extends ReactWidget {
                     <div className="omo-field">Project folder<div className="omo-folder"><span title={this.project?.path.toString()}>{this.project?.path.toString() ?? 'No folder selected'}</span><button onClick={this.chooseProject} disabled={this.busy}>Browse</button></div></div>
                     <fieldset className="omo-preset-controls" aria-label="Portable room appearance">
                         <legend>Room appearance preset</legend>
-                        <label className="omo-field">Import JSON (maximum 8 KiB)<input type="file" accept=".json,application/json" data-testid="room-preset-import" aria-label="Import room appearance preset" disabled={this.presetLoading || this.busy} onChange={event => { const input = event.currentTarget; const file = input.files?.[0]; input.value = ''; if (file) void this.importPreset(file); }}/></label>
+                        <label className="omo-field">Import JSON (appearance 8 KiB, world 80 KiB){/* w2:templates */}<input type="file" accept=".json,application/json" data-testid="room-preset-import" aria-label="Import room appearance or world preset" disabled={this.presetLoading || this.busy} onChange={event => { const input = event.currentTarget; const file = input.files?.[0]; input.value = ''; if (file) void this.importPreset(file); }}/></label>
                         <button type="button" data-testid="room-preset-export" disabled={!this.room || this.presetLoading || this.busy} onClick={this.exportPreset}>Export saved room</button>
-                        <p>Appearance only. No project names, paths, sessions or agent settings. Import previews first; Save room applies it.</p>
+                        <p>Appearance presets hold looks only. World presets (v2) add desks, walls and station setup, but never workspace ids, tokens, project names or paths. Import previews first; Save room applies it.</p>
+                        {/* w2:templates */}<WorldPresetPanel saved={this.savedWorld()} draft={this.draftWorld} draftSource={this.draftWorldSource} disabled={this.presetLoading || this.busy || !this.project} locked={!!this.draftWorld && this.draftWorldTouchesLockedDesk(this.draftWorld)} onPreview={this.previewWorld} onDiscard={this.discardWorldPreview} onExport={this.room ? this.exportWorld : undefined} onError={message => { this.error = message; this.update(); }}/>
                         <span role="status" data-testid="room-preset-status">{this.presetLoading ? 'Reading appearance preset…' : this.presetStatus}</span>
                     </fieldset>
                     </div><div className="omo-setup-actions">
@@ -628,7 +677,7 @@ export class OmoWorldWidget extends ReactWidget {
                         <PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>
                         {/* omo voice lane (mount hook) */}{this.voiceHub&&<VoicePanel hub={this.voiceHub} view={this.voiceHub.state}/>}
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button>{ROOM_KITS[this.room?.kit ?? 'hermes-desk'].webWall && <button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button>}<button data-testid="station-mirror-controls" onClick={()=>this.selectStation('mirror')}>Mirror · {this.stationLink.targetStationId === 'terminal' ? 'Desk one' : 'Desk two'}</button><button data-testid="station-recipe-toggle" aria-expanded={this.recipeOpen} onClick={()=>{this.recipeOpen=!this.recipeOpen;this.update();}}>Station recipes</button></nav>
-                        {this.recipeOpen&&<StationRecipePanel recipes={this.recipes} stationId={this.activeStation} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} locked={this.stationLocks[this.activeStation]} onLock={locked=>this.setStationLock(this.activeStation,locked)} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)}/>}
+                        {this.recipeOpen&&<StationRecipePanel recipes={this.recipes} stationId={this.activeStation} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} locked={this.stationLocks[this.activeStation]} onLock={locked=>this.setStationLock(this.activeStation,locked)} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)} onExportSetup={this.room ? this.exportStationSetup : undefined} /* w2:templates *//>}
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.activeStation==='terminal-2'?'Desk two':'Desk one'} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>}
                     </div>}
                     <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
