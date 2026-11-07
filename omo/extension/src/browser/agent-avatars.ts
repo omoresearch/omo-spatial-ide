@@ -26,8 +26,8 @@ export interface AgentPresence {
 }
 export interface VoiceIndicator { id: string; name: string; pose: PlayerPose; speaking: boolean; muted: boolean }
 
-export const AGENT_KIND_LABEL: Record<Exclude<AgentKind, 'shell'>, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex' };
-const KIND_COLOR: Record<Exclude<AgentKind, 'shell'>, number> = { hermes: 0xe9b949, claude: 0xe07a45, codex: 0x4f8fe8 };
+export const AGENT_KIND_LABEL: Record<Exclude<AgentKind, 'shell'>, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex', dsh: 'dsh' }; // w2:agents
+const KIND_COLOR: Record<Exclude<AgentKind, 'shell'>, number> = { hermes: 0xe9b949, claude: 0xe07a45, codex: 0x4f8fe8, dsh: 0x4d6bfe }; // w2:agents
 const ACTIVITY_COLOR: Record<AgentActivity, string> = { working: '#ffcf5a', idle: '#7fe0a4', background: '#b9c6d6', sleeping: '#9aa7b8', interrupted: '#ff6b6b', exited: '#9aa7b8' };
 const ACTIVITY_TEXT: Record<AgentActivity, string> = { working: 'working', idle: 'idle', background: 'running · other tab', sleeping: 'asleep', interrupted: 'interrupted', exited: 'ended' };
 

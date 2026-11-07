@@ -77,10 +77,5 @@ export const DSH_PACKAGE = '@deepseek-ai/dsh';
 export const DSH_NODE_MIN = '24.9.0';
 /** Launch argv when a local `dsh` is found; the npx form is shown as an install hint only. */
 export const DSH_INSTALL_HINT = `npx ${DSH_PACKAGE}@${DSH_PINNED_VERSION} --version  (needs Node >= ${DSH_NODE_MIN}; or npm i -g ${DSH_PACKAGE}@${DSH_PINNED_VERSION})`;
-/**
- * Contract change needed (NOT made here; world-model.ts is frozen):
- *   world-model.ts:  export type TabKind = 'shell' | 'hermes' | 'claude' | 'codex' | 'dsh';
- *   plus 'dsh' in the validStation tabs list. runtime-protocol.ts AgentKind needs the same, which
- *   also needs a 'dsh' entry in 5 Record<AgentKind,…> maps (agent-avatars, agent-glyphs, runtime-console-controller).
- */
+/** w2:agents: contract change made (integrator approved): TabKind and AgentKind include 'dsh'. */
 export const DSH_CONTRACT_NOTE = "TabKind = 'shell' | 'hermes' | 'claude' | 'codex' | 'dsh'";

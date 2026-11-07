@@ -92,7 +92,7 @@ export class RuntimeHost {
             // macOS: the host, tmux and every tab shell resolve bash/python/git from Homebrew first.
             env.PATH = this.locations.searchPath;
         }
-        for (const key of ['OMO_HERMES_BIN', 'OMO_CLAUDE_BIN', 'OMO_CODEX_BIN', 'OMO_HERMES_ROOT']) {
+        for (const key of ['OMO_HERMES_BIN', 'OMO_CLAUDE_BIN', 'OMO_CODEX_BIN', 'OMO_DSH_BIN', 'OMO_HERMES_ROOT']) { // w2:agents: OMO_SPATIAL_DSH_BIN pins dsh
             const pinned = this.env[`OMO_SPATIAL_${key.slice(4)}`];
             if (pinned) {
                 env[key] = pinned;

@@ -12,11 +12,12 @@ export interface GlyphShape { d: string; mode: 'fill' | 'stroke'; color: string;
 export const AGENT_GLYPHS: Record<AgentGlyphKind, GlyphShape> = {
     hermes: { name: 'Hermes spark', mode: 'fill', color: '#e9b949', d: 'M12 2L14.2 9.8L22 12L14.2 14.2L12 22L9.8 14.2L2 12L9.8 9.8Z' },
     claude: { name: 'Claude burst', mode: 'stroke', color: '#e07a45', d: 'M12 3V21M3 12H21M5.6 5.6L18.4 18.4M18.4 5.6L5.6 18.4' },
-    codex: { name: 'Codex ring', mode: 'stroke', color: '#4f8fe8', d: 'M12 4A8 8 0 1 1 11.99 4Z' }
+    codex: { name: 'Codex ring', mode: 'stroke', color: '#4f8fe8', d: 'M12 4A8 8 0 1 1 11.99 4Z' },
+    dsh: { name: 'dsh wave', mode: 'stroke', color: '#4d6bfe', d: 'M3 14C6 10 9 10 12 14S18 18 21 14' } // w2:agents (minimal; w2-polish owns the real glyph)
 };
 
 export function isGlyphKind(kind: AgentKind | string | undefined): kind is AgentGlyphKind {
-    return kind === 'hermes' || kind === 'claude' || kind === 'codex';
+    return kind === 'hermes' || kind === 'claude' || kind === 'codex' || kind === 'dsh'; // w2:agents
 }
 
 /** Small inline glyph. Renders nothing for shell tabs or unknown kinds. */

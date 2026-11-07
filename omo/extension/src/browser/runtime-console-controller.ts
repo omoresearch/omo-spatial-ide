@@ -28,9 +28,11 @@ export const POLL_MS = 200;
 export const RETRY_MS = 1500;
 /** Idle interval for the pane clipboard-write check (it is also checked on every new frame). */
 const CLIPBOARD_CHECK_MS = 1000;
-export const AGENT_KINDS: AgentKind[] = ['shell', 'hermes', 'claude', 'codex'];
-export const AGENT_LABELS: Record<AgentKind, string> = { shell: 'Shell', hermes: 'Hermes', claude: 'Claude Code', codex: 'Codex' };
+export const AGENT_KINDS: AgentKind[] = ['shell', 'hermes', 'claude', 'codex', 'dsh']; // w2:agents
+export const AGENT_LABELS: Record<AgentKind, string> = { shell: 'Shell', hermes: 'Hermes', claude: 'Claude Code', codex: 'Codex', dsh: 'dsh' }; // w2:agents
 export const WORKSPACE_NAME_MAX = 40;
+/** w2:agents: what a dsh start confirmation adds. */
+export const DSH_START_NOTE = 'dsh has no terminal screen of its own: this tab runs “dsh web” on a private loopback port, and you open it on the web wall. It uses the model account set up in dsh and may use API credits. Needs Node 24.9 or newer.';
 /** Same limit the bridge enforces; checked here too so a refused paste never leaves the browser. */
 export const PASTE_LIMIT_BYTES = 256 * 1024;
 export interface CopyRange { x1: number; y1: number; x2: number; y2: number; unit?: 'char' | 'word' | 'line' }
@@ -96,7 +98,8 @@ const TASK_UNSAFE_CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009
 const RESUME_NOTE: Record<AgentKind, string> = {
     shell: '', hermes: 'It resumes this tab’s own Hermes conversation.',
     claude: 'Claude Code resumes this tab’s saved session when there is one.',
-    codex: 'Codex starts a fresh session: an earlier Codex conversation is not resumed.'
+    codex: 'Codex starts a fresh session: an earlier Codex conversation is not resumed.',
+    dsh: 'dsh has no terminal session to resume. Revive the tab to start dsh web again.' // w2:agents
 };
 function utf8Bytes(text: string): number {
     let n = 0;
@@ -143,7 +146,8 @@ export function launchersLastFirst(options: LauncherOption[], last = readLastTab
 }
 
 export function launcherOptions(host: HostStatus | undefined): LauncherOption[] {
-    return AGENT_KINDS.map(kind => {
+    // w2:agents: dsh is optional: offered only when this computer reports it installed.
+    return AGENT_KINDS.filter(kind => kind !== 'dsh' || !!host?.agents.some(a => a.kind === 'dsh')).map(kind => {
         const label = AGENT_LABELS[kind];
         if (!host) return { kind, label, available: false, reason: 'Checking this computer…' };
         if (!host.tmux) return { kind, label, available: false, reason: `tmux is required for tabs that keep running. ${host.detail}`.trim() };
@@ -667,8 +671,9 @@ export class RuntimeConsoleController {
         }
         if (kind === 'shell') { await this.run({ type: 'new', kind, message: '', confirmLabel: '' }); return; }
         const profile = kind === 'hermes' ? ` with profile “${this.current.profile}”` : '';
+        const extra = kind === 'dsh' ? ` ${DSH_START_NOTE}` : ''; // w2:agents
         this.set({ error: '', notice: '', pending: { type: 'new', kind, confirmLabel: `Start ${option.label}`,
-            message: `Start ${option.label}${profile} in a new tab? It runs on this computer under your own account and may use your plan or API credits. It keeps running when you walk away.` } });
+            message: `Start ${option.label}${profile} in a new tab? It runs on this computer under your own account and may use your plan or API credits. It keeps running when you walk away.${extra}` } });
     }
     /** Station Lock flag from the widget. Changing it never touches a tab. */
     setStationLocked(locked: boolean): void { if (!!this.current.stationLocked !== locked) this.set({ stationLocked: locked }); }

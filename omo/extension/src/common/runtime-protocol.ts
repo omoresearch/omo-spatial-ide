@@ -1,5 +1,5 @@
 export const OMO_RUNTIME_PATH = '/services/omo-runtime';
-export type AgentKind = 'shell' | 'hermes' | 'claude' | 'codex';
+export type AgentKind = 'shell' | 'hermes' | 'claude' | 'codex' | 'dsh'; // w2:agents
 export interface AgentAvailability {
     kind: AgentKind;
     available: boolean;
@@ -25,6 +25,8 @@ export interface SessionTab {
     detail?: string;
     /** Hermes tabs: the captured profile this tab launches with ('default' for the base profile). */
     profile?: string;
+    /** w2:agents: dsh tabs: the loopback root `dsh web` listens on (http://127.0.0.1:<port>/). */
+    webUrl?: string;
 }
 export interface SessionWorkspace {
     id: string;

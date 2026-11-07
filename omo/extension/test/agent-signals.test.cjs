@@ -181,3 +181,22 @@ test('notifications hub: hook approval and finish come from real signals, screen
   assert.equal(realAgentStatus([{ status: 'idle', source: 'hook', at: now }], true, now).status, 'idle', 'a hook outranks the screen text');
   assert.equal(realAgentStatus([{ status: 'idle', source: 'hook', at: now - 11 * 60 * 1000 }], false, now), undefined, 'stale readings are ignored');
 });
+
+// ---- part 3: dsh in the browser ----
+test('dsh: launcher listed only when the host reports it, start asks first, web wall URL is loopback', async () => {
+  const { dshWebUrl } = loadTs('browser/dsh-web.ts');
+  const tab = { kind: 'dsh', webUrl: 'http://127.0.0.1:41234/', state: 'running' };
+  assert.equal(dshWebUrl(tab, ['booting']), 'http://127.0.0.1:41234/');
+  assert.equal(dshWebUrl(tab, ['dsh web: http://127.0.0.1:41234/?token=abc', 'later']), 'http://127.0.0.1:41234/?token=abc');
+  assert.equal(dshWebUrl(tab, ['dsh web: http://127.0.0.1:9999/?token=abc']), 'http://127.0.0.1:41234/', 'another port is ignored');
+  assert.equal(dshWebUrl({ kind: 'dsh', webUrl: 'http://example.com:41234/' }), undefined, 'only loopback');
+  assert.equal(dshWebUrl({ kind: 'claude', webUrl: 'http://127.0.0.1:41234/' }), undefined);
+  const { launcherOptions, AGENT_KINDS, DSH_START_NOTE } = loadTs('browser/runtime-console-controller.ts');
+  assert.ok(AGENT_KINDS.includes('dsh'));
+  const base = { available: true, tmux: true, python: true, detail: '', profiles: ['default'], agents: [{ kind: 'shell', available: true, detail: 'bash' }] };
+  assert.equal(launcherOptions(base).find(o => o.kind === 'dsh'), undefined, 'not installed: not offered at all');
+  const old = launcherOptions({ ...base, agents: [...base.agents, { kind: 'dsh', available: false, detail: 'dsh needs Node 24.9.0 or newer. The node on PATH is 22.23.4.' }] }).find(o => o.kind === 'dsh');
+  assert.equal(old.available, false);
+  assert.match(old.reason, /Node 24\.9\.0/);
+  assert.match(DSH_START_NOTE, /loopback/);
+});

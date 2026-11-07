@@ -5,6 +5,7 @@ import { Icon } from './icons';
 import type { GitReviewSnapshot } from '../common/git-review-protocol';
 import type { SessionTab } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
+import { dshWebUrl } from './dsh-web'; // w2:agents
 import { AGENT_LABELS, PASTE_LIMIT_BYTES, RuntimeConsoleController, RuntimeConsoleState, TAB_NAME_MAX, WORKSPACE_NAME_MAX, launcherOptions, launchersLastFirst, readLastTabKind } from './runtime-console-controller';
 
 const STATE_LABEL: Record<SessionTab['state'], string> = { running: 'running', exited: 'exited', interrupted: 'interrupted', sleeping: 'asleep', unknown: 'unknown' };
@@ -32,7 +33,7 @@ function ManageDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeC
         if (!text) return;
         try { await navigator.clipboard.writeText(text); setCopied(`Copied ${text.length} characters.`); } catch { setCopied('The browser refused clipboard access. Select the text below and copy it yourself.'); }
     };
-    const agentTabs = ws.tabs.filter(t => t.kind !== 'shell');
+    const agentTabs = ws.tabs.filter(t => t.kind !== 'shell' && t.kind !== 'dsh'); // w2:agents: dsh has no session to resume
     const links = terminalLinks(state.lines,state.cells);
     return <div data-testid="runtime-manage" role="region" aria-label="Manage terminal" style={DRAWER_STYLE}>
         {props.onOpenLink && links.length > 0 && <section data-testid="terminal-links" aria-label="Links visible on this monitor">
@@ -199,6 +200,10 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
                 <button className="omo-console-mini" aria-label={`Close ${tab.name}`} disabled={locked || !!state.stationLocked} data-testid={`runtime-close-${tab.id}`} onClick={() => controller?.requestClose(tab.id)} title={state.stationLocked ? 'Desk is locked: unlock it in Station recipes to close tabs' : 'Close tab'}><Icon name="x" size={13} /></button>
             </span>)}
         </div>}
+        {/* w2:agents: a dsh tab runs dsh web on loopback; open it on the web wall (nothing opens until clicked) */}
+        {ws && props.onOpenLink && (() => { const active = ws.tabs.find(t => t.id === state.activeTabId); const url = dshWebUrl(active, state.lines);
+            return url && active?.state === 'running' ? <div className="omo-console-row" data-testid="dsh-web-row"><span className="omo-console-hint">dsh web · {active.webUrl}</span>
+                <button type="button" data-testid="dsh-open-web" data-destination={active.webUrl} onClick={() => props.onOpenLink?.(url)}>Open on web wall</button></div> : null; })()}
         {ws && state.stationLocked && <p className="omo-console-hint" data-testid="runtime-station-locked" role="note"><Icon name="lock" size={13} /> This desk is locked: tabs cannot be closed and its recipe and room layout cannot change. Unlock in Station recipes.</p>}
         {ws && editing && <form className="omo-console-row" data-testid="runtime-rename-form" onSubmit={event => { event.preventDefault(); void controller?.renameTab(editing.tabId, editing.name).then(saved => { if (saved) setEditing(undefined); }); }}>
             <label>Tab name <input autoFocus aria-label="Tab name" data-testid="runtime-rename-name" maxLength={TAB_NAME_MAX} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
