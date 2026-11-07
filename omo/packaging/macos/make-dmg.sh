@@ -12,6 +12,7 @@ VOLNAME="$NAME"
 command -v hdiutil >/dev/null 2>&1 || { echo "make-dmg: hdiutil not found (macOS only)" >&2; exit 1; }
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/omo-dmg.XXXXXX")"
 MOUNT=""
+# shellcheck disable=SC2015  # best-effort detach; `|| true` covers both failures on purpose
 cleanup() { [ -n "$MOUNT" ] && hdiutil detach "$MOUNT" -quiet -force >/dev/null 2>&1 || true; rm -rf "$WORK"; }
 trap cleanup EXIT INT TERM
 

@@ -1,17 +1,31 @@
-name: Omo spatial IDE macOS release
+name: Omo spatial IDE release packages
 
-# Builds, packages and smoke-tests a self-contained macOS tarball of the Omo app on
-# GitHub-hosted Apple Silicon, then attaches it to an existing omo-v* release.
+# Release matrix for the self-contained Omo app. Each platform builds on its own native runner
+# (native modules are host-built), packages, and smoke-tests the result in real headless Chrome
+# with no repo and no node_modules:
+#   darwin-arm64  macos-15        tarball + "Omo Spatial IDE.app" (.app.zip) + .dmg   smoke: ./omo, ./omo-app, the .app from the dmg
+#   darwin-x64    macos-15-intel  tarball + "Omo Spatial IDE.app" (.app.zip) + .dmg   smoke: ./omo, ./omo-app, the .app from the dmg
+#   linux-x64     ubuntu-22.04    tarball + .AppImage                                 smoke: ./omo, ./omo-app, the AppImage
+# macOS code signing + notarization run only when every signing secret is set; otherwise they are
+# skipped and the app stays unsigned. Every artifact gets a .sha256. The attach job uploads them
+# all to the omo-v* release: automatically when an omo-v* release is published, or by
+# workflow_dispatch with release_tag. (File name kept for history; it now builds every platform.)
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Existing release tag to attach the macOS build to (e.g. omo-v0.1.0); empty = artifact only'
+        description: 'Existing release tag to attach the packages to (e.g. omo-v0.1.0); empty = artifacts only'
         required: false
         default: ''
   pull_request:
     branches: ['master', 'omo/**']
-    paths: ['omo/scripts/package-release.cjs', 'omo/scripts/release-smoke.cjs', '.github/workflows/omo-macos-release.yml']
+    paths:
+      - 'omo/scripts/package-release.cjs'
+      - 'omo/scripts/release-smoke.cjs'
+      - 'omo/packaging/**'
+      - '.github/workflows/omo-macos-release.yml'
 
 permissions:
   contents: read
@@ -21,10 +35,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  macos-arm64:
-    if: github.repository == 'omoresearch/theia'
-    runs-on: macos-15
-    timeout-minutes: 60
+  package:
+    # Rename-safe owner guard; on release events only Omo tags build (upstream Theia tags are ignored).
+    if: github.repository_owner == 'omoresearch' && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'omo-v'))
+    name: package (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-15
+            formats: tar,app,dmg
+          - platform: darwin-x64
+            runner: macos-15-intel
+            formats: tar,app,dmg
+          - platform: linux-x64
+            runner: ubuntu-22.04
+            formats: tar,appimage
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: omo
@@ -33,6 +62,8 @@ jobs:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       NODE_OPTIONS: '--max-old-space-size=4096'
+      # 'true' only when every signing secret is set (never on forks or when unset).
+      HAS_MACOS_SIGNING: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.MACOS_CERT_PASSWORD != '' && secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -43,13 +74,29 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
-      - name: Install macOS prerequisites (tmux, bash)
+      - name: Check the runner matches the target platform
         run: |
-          brew install tmux bash
-          tmux -V; bash --version | head -1; node --version; python3 --version; uname -m
+          host="$(node -p 'process.platform + "-" + process.arch')"
+          echo "host $host, target ${{ matrix.platform }}"; uname -a
+          test "$host" = "${{ matrix.platform }}"
+          echo "DIST=$RUNNER_TEMP/omo-dist" >> "$GITHUB_ENV"
+      - name: Install macOS prerequisites (tmux, bash, SVG renderer for the icon)
+        if: runner.os == 'macOS'
+        run: |
+          brew install tmux bash librsvg
+          tmux -V; bash --version | head -1; node --version; python3 --version; rsvg-convert --version
+      - name: Install Linux prerequisites (SVG renderer for the icon; no system tmux)
+        # tmux is removed on purpose: the Linux packages must work with their bundled tmux.
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends librsvg2-bin
+          sudo apt-get remove -y tmux >/dev/null 2>&1 || true
+          if command -v tmux; then echo "tmux is still installed; the bundled-tmux checks would be meaningless"; exit 1; fi
+          node --version; python3 --version; rsvg-convert --version
       - name: Install locked dependencies (no lifecycle hooks)
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Build native modules for macOS
+      - name: Build native modules for this platform
         run: npm rebuild drivelist node-pty --foreground-scripts
       - name: Type-check and compile
         run: npm run compile
@@ -57,47 +104,133 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: omo/.cache
-          key: omo-ide-extensions-macos-${{ hashFiles('omo/ide-extensions.lock.json') }}
-      - name: Prepare the pinned, sha256-verified IDE extension bundle (darwin-arm64)
+          key: omo-ide-extensions-${{ matrix.platform }}-${{ hashFiles('omo/ide-extensions.lock.json') }}
+      - name: Prepare the pinned, sha256-verified IDE extension bundle
         run: npm run prepare:ide
       - name: Build the real Theia browser application
         run: npm run build --workspace=omo-browser
-      - name: Read-only doctor (macOS warnings expected)
+      - name: Read-only doctor (warnings expected on clean runners)
         run: npm run --silent doctor -- --json || true
-      - name: Package the self-contained macOS release
-        run: node scripts/package-release.cjs "$RUNNER_TEMP/omo-dist"
-      - name: Smoke-test the UNPACKED package (no repo, no node_modules) in real Chrome
+
+      - name: Package ${{ matrix.formats }} (pinned Node.js and tmux bundled)
+        run: node scripts/package-release.cjs "$DIST" --formats "${{ matrix.formats }}"
+
+      - name: Code-sign and notarize the macOS app and dmg
+        if: runner.os == 'macOS' && env.HAS_MACOS_SIGNING == 'true' && github.event_name != 'pull_request'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: sh packaging/macos/sign-notarize.sh "$DIST/Omo Spatial IDE.app" "$(ls "$DIST"/Omo-Spatial-IDE-*-${{ matrix.platform }}.dmg)"
+      - name: Report skipped signing
+        if: runner.os == 'macOS' && !(env.HAS_MACOS_SIGNING == 'true' && github.event_name != 'pull_request')
+        run: echo "::notice::macOS signing and notarization skipped (signing secrets not set, or a pull request). The ${{ matrix.platform }} app is unsigned."
+
+      - name: Zip the .app (keeps symlinks, metadata and any signature)
+        if: runner.os == 'macOS'
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          ditto -c -k --keepParent "$DIST/Omo Spatial IDE.app" "$DIST/Omo-Spatial-IDE-$version-${{ matrix.platform }}.app.zip"
+      - name: Write the final .sha256 files (after any signing)
+        working-directory: ${{ runner.temp }}/omo-dist
+        run: |
+          sum() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
+          rm -f ./*.sha256
+          for f in *.tar.gz *.dmg *.app.zip *.AppImage; do
+            [ -f "$f" ] || continue
+            sum "$f" > "$f.sha256"
+          done
+          sum -c ./*.sha256
+          ls -la
+
+      - name: Find Chrome
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            test -x "$CHROME" || brew install --cask google-chrome
+          else
+            CHROME="$(command -v google-chrome || command -v google-chrome-stable || true)"
+            if [ -z "$CHROME" ]; then
+              curl -fsSLo "$RUNNER_TEMP/chrome.deb" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+              sudo apt-get install -y "$RUNNER_TEMP/chrome.deb"
+              CHROME="$(command -v google-chrome)"
+            fi
+          fi
+          test -x "$CHROME"; "$CHROME" --version
+          echo "CHROME=$CHROME" >> "$GITHUB_ENV"
+      - name: Smoke-test the UNPACKED tarball (./omo; no repo, no node_modules) in real Chrome
         run: |
           mkdir -p "$RUNNER_TEMP/omo-unpacked"
-          tar -xzf "$RUNNER_TEMP"/omo-dist/omo-spatial-ide-*-darwin-arm64.tar.gz -C "$RUNNER_TEMP/omo-unpacked"
-          D=$(ls -d "$RUNNER_TEMP"/omo-unpacked/omo-spatial-ide-*)
-          CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-          test -x "$CHROME" || brew install --cask google-chrome
+          tar -xzf "$DIST"/omo-spatial-ide-*-${{ matrix.platform }}.tar.gz -C "$RUNNER_TEMP/omo-unpacked"
+          D="$(ls -d "$RUNNER_TEMP"/omo-unpacked/omo-spatial-ide-*)"
+          echo "UNPACKED=$D" >> "$GITHUB_ENV"
           node scripts/release-smoke.cjs "$D" "$PWD/node_modules/puppeteer-core" "$CHROME"
-      - name: Upload macOS package artifact
+      - name: Smoke-test the tarball's desktop launcher (./omo-app) with the bundled tmux
+        run: sh packaging/smoke-desktop.sh "$UNPACKED/omo-app" "$PWD/node_modules/puppeteer-core" "$CHROME" --bundled-tmux "$UNPACKED/vendor/tmux/tmux"
+      - name: Smoke-test the .app's embedded launcher, installed from the dmg
+        if: runner.os == 'macOS'
+        run: |
+          MNT="$RUNNER_TEMP/omo-dmg"; APPS="$RUNNER_TEMP/Applications"
+          mkdir -p "$MNT" "$APPS"
+          hdiutil attach "$(ls "$DIST"/Omo-Spatial-IDE-*-${{ matrix.platform }}.dmg)" -readonly -nobrowse -noautoopen -mountpoint "$MNT"
+          ls -la "$MNT"
+          test -L "$MNT/Applications"
+          ditto "$MNT/Omo Spatial IDE.app" "$APPS/Omo Spatial IDE.app"
+          hdiutil detach "$MNT" -quiet
+          APP="$APPS/Omo Spatial IDE.app"
+          plutil -lint "$APP/Contents/Info.plist"
+          codesign -dv "$APP" 2>&1 || echo "(unsigned)"
+          file "$APP/Contents/Resources/app/vendor/node/bin/node" "$APP/Contents/Resources/app/vendor/tmux/tmux"
+          sh packaging/smoke-desktop.sh "$APP/Contents/MacOS/Omo Spatial IDE" "$PWD/node_modules/puppeteer-core" "$CHROME" \
+            --bundled-tmux "$APP/Contents/Resources/app/vendor/tmux/tmux"
+      - name: Smoke-test the AppImage (its launcher must choose the bundled tmux by itself)
+        if: runner.os == 'Linux'
+        run: |
+          AI="$(ls "$DIST"/Omo-Spatial-IDE-*-x86_64.AppImage)"
+          test -x "$AI"
+          sh packaging/smoke-desktop.sh "$AI" "$PWD/node_modules/puppeteer-core" "$CHROME" --expect-bundled-tmux
+
+      - name: Upload the ${{ matrix.platform }} packages
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: omo-spatial-ide-macos-arm64
+          name: omo-spatial-ide-${{ matrix.platform }}
           path: |
             ${{ runner.temp }}/omo-dist/*.tar.gz
+            ${{ runner.temp }}/omo-dist/*.dmg
+            ${{ runner.temp }}/omo-dist/*.app.zip
+            ${{ runner.temp }}/omo-dist/*.AppImage
             ${{ runner.temp }}/omo-dist/*.sha256
           if-no-files-found: error
 
   attach:
-    needs: macos-arm64
-    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    needs: package
+    if: (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || github.event_name == 'release'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: omo-spatial-ide-macos-arm64
+          pattern: omo-spatial-ide-*
+          merge-multiple: true
           path: dist
+      - name: Check every package and its .sha256
+        working-directory: dist
+        run: |
+          ls -la
+          for f in ./*darwin-arm64.tar.gz ./*darwin-x64.tar.gz ./*linux-x64.tar.gz \
+                   ./*darwin-arm64.dmg ./*darwin-x64.dmg ./*darwin-arm64.app.zip ./*darwin-x64.app.zip ./*x86_64.AppImage; do
+            test -f "$f" || { echo "missing package: $f"; exit 1; }
+            test -f "$f.sha256" || { echo "missing checksum: $f.sha256"; exit 1; }
+          done
+          sha256sum -c ./*.sha256
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.release_tag }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
           case "$TAG" in omo-v*) ;; *) echo "Refusing non-Omo tag $TAG"; exit 1;; esac
-          gh release upload "$TAG" dist/*.tar.gz dist/*.sha256 --clobber -R "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" dist/*.tar.gz dist/*.dmg dist/*.app.zip dist/*.AppImage dist/*.sha256 --clobber -R "$GITHUB_REPOSITORY"

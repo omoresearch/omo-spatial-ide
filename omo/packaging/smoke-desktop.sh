@@ -1,20 +1,24 @@
 #!/bin/sh
 # Run scripts/release-smoke.cjs against a DESKTOP launcher instead of the tarball's ./omo:
-#   smoke-desktop.sh <launcher> <puppeteerModuleDir> [chromePath] [--bundled-tmux <tmux>]
+#   smoke-desktop.sh <launcher> <puppeteerModuleDir> [chromePath] [--bundled-tmux <tmux>] [--expect-bundled-tmux]
 # <launcher> is e.g. "<dir>/Omo Spatial IDE.app/Contents/MacOS/Omo Spatial IDE" (the real .app
 # executable), an .AppImage, or a tarball's ./omo-app. release-smoke spawns "<dir>/omo"; this
 # script makes a shim dir whose ./omo execs the launcher in foreground mode with no browser and no
 # dialogs, its log/state dirs inside a scratch dir. The launcher log is printed when the smoke fails.
 # --bundled-tmux pins OMO_SPATIAL_TMUX so the run proves the bundled tmux, not one on PATH.
+# --expect-bundled-tmux fails the run unless the launcher itself chose a bundled vendor/tmux/tmux
+# (use it where no tmux is installed, e.g. the AppImage on a clean Linux runner).
 set -eu
 LAUNCHER="${1:?usage: smoke-desktop.sh <launcher> <puppeteerDir> [chrome] [--bundled-tmux <tmux>]}"
 PPTR="${2:?usage}"
 shift 2
 CHROME=""
 TMUX_PIN=""
+EXPECT_BUNDLED=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --bundled-tmux) TMUX_PIN="${2:?--bundled-tmux needs a path}"; shift 2 ;;
+        --expect-bundled-tmux) EXPECT_BUNDLED=1; shift ;;
         *) CHROME="$1"; shift ;;
     esac
 done
@@ -40,6 +44,9 @@ if [ -f "$LOG" ]; then
     grep -E 'starting:|prerequisites:|tmux:|server:|ready:|server exited|SIG' "$LOG" | sed 's/^/launcher log: /' || true
     [ "$status" -eq 0 ] || { echo '--- launcher log (tail) ---'; tail -n 60 "$LOG"; }
     grep -q 'ready: http://127.0.0.1:' "$LOG" || { echo 'smoke-desktop: the launcher never reported ready' >&2; status=1; }
+    if [ -n "$EXPECT_BUNDLED" ] && ! grep -q 'prerequisites: tmux=tmux [^ ]* (.*/vendor/tmux/tmux)' "$LOG"; then
+        echo 'smoke-desktop: the launcher did not use the bundled vendor/tmux/tmux' >&2; status=1
+    fi
 else
     echo "smoke-desktop: the launcher wrote no log at $LOG" >&2
     status=1

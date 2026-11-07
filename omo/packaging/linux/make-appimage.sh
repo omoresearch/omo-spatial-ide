@@ -9,6 +9,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PACKAGING="$(cd "$HERE/.." && pwd)"
 NODE="${NODE:-node}"
 pin() { "$NODE" -e 'const p=require(process.argv[1]).appimage[process.argv[2]];process.stdout.write(p.url+" "+p.sha256)' "$PACKAGING/pins.json" "$1"; }
+# shellcheck disable=SC2046  # pin prints "<url> <sha256>"; splitting into two words is intended
 fetch() { set -- $(pin "$1"); "$NODE" "$PACKAGING/fetch-pinned.cjs" "$1" "$2"; }
 TOOL="$(fetch appimagetool-x64)"
 RUNTIME="$(fetch runtime-x64)"

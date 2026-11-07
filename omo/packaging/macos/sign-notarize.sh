@@ -32,6 +32,7 @@ security set-keychain-settings -lut 21600 "$KEYCHAIN"
 security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
 security import "$P12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
 security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+# shellcheck disable=SC2046  # one keychain path per word (runner keychain paths have no spaces)
 security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
 IDENTITY="${MACOS_SIGN_IDENTITY:-$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F'"' '/Developer ID Application/{print $2; exit}')}"
 [ -n "$IDENTITY" ] || { echo "sign-notarize: no Developer ID Application identity in the certificate" >&2; exit 1; }
