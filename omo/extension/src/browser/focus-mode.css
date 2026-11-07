@@ -246,3 +246,12 @@
 @container omo-focus (max-width: 900px) { .omo-focus-layer.is-split .omo-focus-panes { flex-direction: column; } }
 /* Overview camera: attaching needs first person, so the launcher hides. */
 .omo-scene-wrap:not(.omo-walking) .omo-focus-launch { display: none; }
+
+/* w2:polish: Theia toasts (e.g. Git prompts) used to land bottom-right, on top of the attached
+   terminal's prompt line. While a focus terminal is open they move to the top-right, below the
+   focus bar (attached layer top 68 px + 44 px bar; full layer bar ends at 44 px), narrower, and
+   stay above every focus layer (attached z 6, full z 1000, Omo sheets 1100). */
+body:has(.omo-focus-layer) .theia-notifications-container.theia-notification-toasts {
+    top: 124px; bottom: auto; right: 24px; width: min(420px, calc(100vw - 48px)); z-index: 1150;
+    max-height: calc(100vh - 160px); overflow: hidden;
+}
