@@ -1746,6 +1746,42 @@ OPS = {
 ORDERED_OPS = ("input", "resize", "detach", "paste", "scroll", "wheel", "find", "clear_history")
 
 
+# --------------------------------------------------------------------------- w2:agents process signals
+def _owned_agent_alive(tab):
+    """True/False for an Omo-owned agent child proven by pid + start time; None when there is none."""
+    record = tab.get("ownedLaunch") or {}
+    pid, start = str(record.get("agentPid") or ""), str(record.get("agentStart") or "")
+    if not record.get("started") or not pid.isdigit() or not start:
+        return None
+    return bool(_process_alive(pid, start))
+
+
+def op_agent_procs(a):
+    """Read-only process-tree facts for the agent tabs of one workspace. Starts, types and kills nothing.
+    paneAlive: the tab's tmux window exists. agentAlive: the agent process is still running (an owned
+    agent child proven by pid + start time, else the shell's foreground job), or None when unknown."""
+    ws_id = check_ws(a.get("workspaceId"))
+    wanted = {str(t) for t in (a.get("tabIds") or []) if isinstance(t, str)}
+    out = []
+    with WS.lock:
+        ws = ob.META.workspaces[ws_id]
+        server = ob.TM.server_id()
+        desc = WS._describe_locked(ws, server)
+        raw = {t["id"]: t for t in ws["tabs"]}
+        for t in desc["tabs"]:
+            if t["kind"] == "shell" or (wanted and t["id"] not in wanted):
+                continue
+            pane_alive = t["state"] == "live"
+            owned = _owned_agent_alive(raw.get(t["id"], {})) if pane_alive else None
+            agent_alive = (owned if owned is not None else bool(t["busy"])) if pane_alive else False
+            out.append({"tabId": t["id"], "kind": t["kind"], "paneAlive": pane_alive, "agentAlive": agent_alive,
+                        "command": ob.clean(str(t.get("command") or ""), 40), "owned": owned is not None})
+    return {"workspaceId": ws_id, "at": int(time.time() * 1000), "tabs": out}
+
+
+OPS["agent_procs"] = op_agent_procs
+
+
 def handle(msg):
     rid = msg.get("id")
     op = msg.get("op")

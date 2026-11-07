@@ -4,8 +4,11 @@ import * as path from 'path';
 import {
     AgentCheckReport, AgentSignalsService, AgentTabRef, AgentTabSignals, ClaudeStatusPlan
 } from '../common/agent-signals-protocol';
-import { claudeHookConfig } from '../common/agent-status-signals';
+import {
+    AgentStatusReading, HookEvent, claudeHookConfig, statusFromClaudeHook, statusFromHermesLease, statusFromProcess
+} from '../common/agent-status-signals';
 import { RuntimeLocations } from './runtime-discovery';
+import { hermesProfileStateDb, inspectHermesProfileTurnLeases } from './hermes-profile-lease';
 
 /**
  * w2:agents — backend for real agent status.
@@ -70,6 +73,68 @@ export interface SignalsHost {
     request<T>(op: string, args?: object): Promise<T>;
 }
 
+const ID_RE = /^[0-9a-f]{12}$/;
+const KINDS = new Set(['hermes', 'claude', 'codex', 'dsh']);
+function validTabRef(tab: AgentTabRef): boolean {
+    return !!tab && ID_RE.test(String(tab.workspaceId)) && ID_RE.test(String(tab.tabId)) && KINDS.has(tab.kind)
+        && (tab.profile === undefined || (typeof tab.profile === 'string' && tab.profile.length <= 64));
+}
+
+/** The last 256 KiB of the hook events file, as parsed events (bad lines are skipped). */
+export function readHookEvents(file: string, maxBytes = 256 * 1024): HookEvent[] {
+    let fd: number | undefined;
+    try {
+        const st = fs.lstatSync(file);
+        if (!st.isFile()) return [];
+        fd = fs.openSync(file, 'r');
+        const length = Math.min(st.size, maxBytes);
+        const buffer = Buffer.alloc(length);
+        fs.readSync(fd, buffer, 0, length, st.size - length);
+        const events: HookEvent[] = [];
+        for (const line of buffer.toString('utf8').split('\n')) {
+            try {
+                const e = JSON.parse(line);
+                if (e && typeof e.event === 'string' && typeof e.at === 'number') events.push(e);
+            } catch { /* partial first line or junk */ }
+        }
+        return events;
+    } catch {
+        return [];
+    } finally {
+        if (fd !== undefined) fs.closeSync(fd);
+    }
+}
+
+/** The newest hook event of this session that maps to a status. */
+export function latestHookReading(events: HookEvent[], sessionId: string): AgentStatusReading | undefined {
+    for (let i = events.length - 1; i >= 0; i--) {
+        const e = events[i];
+        if (e.sessionId !== sessionId) continue;
+        const status = statusFromClaudeHook(e);
+        if (status) return { status, source: 'hook', at: e.at, detail: e.notificationType ? `${e.event} · ${e.notificationType}` : e.event };
+    }
+    return undefined;
+}
+
+type SqliteDatabase = { prepare(sql: string): { all(...params: unknown[]): Array<Record<string, unknown>> }; close(): void };
+/** Sessions titled `title` or `title #N` (Hermes lineage after compression), newest first. Read-only. */
+export function hermesTabSessions(stateDb: string, title: string): Array<{ id: string; activity?: string }> {
+    // The title is always omo:<12 hex>:<12 hex> (validated), so it holds no LIKE wildcards.
+    if (!/^omo:[0-9a-f]{12}:[0-9a-f]{12}$/.test(title) || !fs.existsSync(stateDb)) return [];
+    const sqlite = require('node:sqlite') as { DatabaseSync: new (location: string, options?: { uri?: boolean }) => SqliteDatabase };
+    const db = new sqlite.DatabaseSync(`file:${stateDb}?mode=ro`, { uri: true });
+    try {
+        const rows = db.prepare(
+            'SELECT id, title, last_activity_description FROM sessions WHERE title = ? OR title LIKE ? ORDER BY started_at DESC LIMIT 20'
+        ).all(title, `${title} #%`);
+        const lineage = (t: unknown): boolean => t === title || (typeof t === 'string' && t.startsWith(`${title} #`) && /^\d+$/.test(t.slice(title.length + 2)));
+        return rows.filter(r => typeof r.id === 'string' && lineage(r.title))
+            .map(r => ({ id: r.id as string, activity: typeof r.last_activity_description === 'string' ? r.last_activity_description : undefined }));
+    } finally {
+        db.close();
+    }
+}
+
 export class AgentSignalsBackend implements AgentSignalsService {
     constructor(protected readonly host: SignalsHost, protected readonly now: () => number = Date.now) { }
 
@@ -115,8 +180,49 @@ export class AgentSignalsBackend implements AgentSignalsService {
         return this.claudeStatus();
     }
 
-    async readSignals(_input: { tabs: AgentTabRef[] }): Promise<AgentTabSignals[]> {
-        return [];
+    async readSignals(input: { tabs: AgentTabRef[] }): Promise<AgentTabSignals[]> {
+        const tabs = (Array.isArray(input?.tabs) ? input.tabs : []).filter(validTabRef).slice(0, 32);
+        const out = new Map<string, AgentTabSignals>();
+        for (const tab of tabs) out.set(`${tab.workspaceId}:${tab.tabId}`, { workspaceId: tab.workspaceId, tabId: tab.tabId, readings: [] });
+        const add = (tab: AgentTabRef, reading: AgentStatusReading | undefined): void => { if (reading) out.get(`${tab.workspaceId}:${tab.tabId}`)!.readings.push(reading); };
+        // 1. hook: Claude Code hook events for this tab's own session id (opt-in file; empty when off).
+        const claude = tabs.filter(t => t.kind === 'claude');
+        if (claude.length) {
+            const events = readHookEvents(this.paths.eventsFile);
+            for (const tab of claude) add(tab, latestHookReading(events, claudeSessionId(tab.workspaceId, tab.tabId)));
+        }
+        // 2. lease: Hermes turn lease of this tab's own conversation (state.db opened read-only).
+        for (const tab of tabs.filter(t => t.kind === 'hermes')) add(tab, this.hermesReading(tab));
+        // 3. process: the runtime host's process tree (pane alive, agent child alive).
+        for (const workspaceId of new Set(tabs.map(t => t.workspaceId))) {
+            try {
+                const procs = await this.host.request<{ at: number; tabs: Array<{ tabId: string; paneAlive: boolean; agentAlive: boolean | null; command?: string }> }>(
+                    'agent_procs', { workspaceId, tabIds: tabs.filter(t => t.workspaceId === workspaceId).map(t => t.tabId) });
+                for (const row of procs.tabs ?? []) {
+                    const tab = tabs.find(t => t.workspaceId === workspaceId && t.tabId === row.tabId);
+                    const status = statusFromProcess(row.paneAlive, row.agentAlive === null ? undefined : row.agentAlive);
+                    if (tab && status) add(tab, { status, source: 'process', at: procs.at || this.now(), detail: row.paneAlive ? 'the agent process ended' : 'the tab is not running' });
+                }
+            } catch {
+                // the host is down or the workspace is gone: no process reading, the screen hint stays
+            }
+        }
+        return [...out.values()];
+    }
+
+    /** Read-only: Hermes resolves `chat -c omo:<ws>:<tab>` to a session by title; its lease is keyed by session id. */
+    protected hermesReading(tab: AgentTabRef): AgentStatusReading | undefined {
+        const env = this.host.hermesLeaseEnvironment ?? process.env;
+        try {
+            const leases = inspectHermesProfileTurnLeases(tab.profile || 'default', env, this.now() / 1000);
+            const sessions = hermesTabSessions(hermesProfileStateDb(tab.profile || 'default', env), `omo:${tab.workspaceId}:${tab.tabId}`);
+            if (!sessions.length) return undefined;
+            const live = sessions.find(s => leases.leases.some(l => l.conversationId === s.id));
+            const status = statusFromHermesLease(!!live, (live ?? sessions[0]).activity);
+            return { status, source: 'lease', at: this.now(), detail: live ? (live.activity || 'a Hermes turn is running') : 'no Hermes turn is running' };
+        } catch {
+            return undefined;
+        }
     }
 
     async recordAgentCheck(_input: { report: AgentCheckReport }): Promise<{ file: string }> {

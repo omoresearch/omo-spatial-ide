@@ -57,6 +57,7 @@ import { ImmersivePill } from './immersive-hud'; // omo immersive lane
 import { Icon } from './icons'; // omo immersive lane
 import { AgentSignalsService } from '../common/agent-signals-protocol'; // w2:agents
 import { AgentsPanel } from './agents-panel'; // w2:agents
+import { AgentSignalPoller } from './agent-signal-poller'; // w2:agents
 // --- end omo focus lane ---
 
 export const TERMINAL_STATION_ID = 'terminal-1';
@@ -119,6 +120,7 @@ export class OmoWorldWidget extends ReactWidget {
     @inject(OmoImmersiveService) protected readonly immersive!: OmoImmersiveService; // omo immersive lane
     @inject(AgentSignalsService) protected readonly agentSignals!: AgentSignalsService; // w2:agents
     private agentsOpen = false; // w2:agents
+    private agentSignalPoller?: AgentSignalPoller; // w2:agents
     private project?: URI;
     private room?: RoomState;
     private draftTheme: RoomTheme = 'station';
@@ -208,7 +210,11 @@ export class OmoWorldWidget extends ReactWidget {
         this.toDispose.push({ dispose: () => { offImmersive(); this.immersive.mode.setEngaged(false); } });
         // --- end omo immersive lane ---
         // --- omo parity2 lane (mount hook): read-only getters; goToDesk is the same path as clicking the desk. Starts nothing. ---
-        this.hudHub=new HudHub({presenceService:this.presenceService,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',
+        // w2:agents: real agent signals (read-only) feed the notifications hub; the screen hint stays the fallback.
+        this.agentSignalPoller=new AgentSignalPoller({service:this.agentSignals,desks:()=>TERMINAL_STATIONS.map(desk=>({desk,workspace:this.consoleStates[desk].workspace})),
+            schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number)});
+        this.toDispose.push({dispose:()=>{this.agentSignalPoller?.dispose();this.agentSignalPoller=undefined;}});
+        this.hudHub=new HudHub({presenceService:this.presenceService,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',signals:key=>this.agentSignalPoller?.get(key)??[],
             desk:desk=>({state:this.consoleStates[desk],controller:this.consoles.get(desk)}),activeDesk:()=>this.activeMode,agents:()=>this.voiceHub?.state.agents??[],
             voice:()=>this.voiceHub?.state.voice,goToDesk:desk=>{this.chooseStation(desk);this.focusMode.sync();if(this.consoleStates[desk].phase==='live')this.focusMode.attachActive();else{this.feedback=`${desk==='terminal'?'Desk one':'Desk two'} is not connected. Click its monitor to reconnect. Nothing was started.`;this.update();}},onChange:()=>this.update()});
         this.toDispose.push({dispose:()=>{this.hudHub?.dispose();this.hudHub=undefined;}});

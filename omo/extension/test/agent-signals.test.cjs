@@ -85,3 +85,99 @@ test('the recorder written into the hook command records a real hook payload', a
 });
 
 module.exports = { fixture, signals };
+
+// ---- part 2: backend real signals (hook, Hermes lease, process tree) ----
+const { DatabaseSync } = require('node:sqlite');
+const WS = 'aaaaaaaaaaaa', CLAUDE_TAB = 'bbbbbbbbbbbb', HERMES_TAB = 'cccccccccccc', CODEX_TAB = 'dddddddddddd';
+
+function hermesFixture(root, { lease, activity }) {
+  // A fixture state.db with the installed Hermes shape (never a real profile DB).
+  const dir = path.join(root, 'hermes', 'profiles', 'fixture');
+  fs.mkdirSync(dir, { recursive: true });
+  const db = new DatabaseSync(path.join(dir, 'state.db'));
+  db.exec('CREATE TABLE session_turn_leases (conversation_id TEXT PRIMARY KEY, holder TEXT NOT NULL, acquired_at REAL NOT NULL, expires_at REAL NOT NULL)');
+  db.exec('CREATE TABLE sessions (id TEXT PRIMARY KEY, title TEXT, started_at REAL NOT NULL, last_activity_description TEXT)');
+  db.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?)').run('old', `omo:${WS}:${HERMES_TAB}`, 1, null);
+  db.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?)').run('new', `omo:${WS}:${HERMES_TAB} #2`, 2, activity ?? null);
+  db.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?)').run('other', `omo:${WS}:${HERMES_TAB}x`, 3, null);
+  if (lease) db.prepare('INSERT INTO session_turn_leases VALUES (?, ?, ?, ?)').run(lease, 'pid=1', Date.now() / 1000 - 1, Date.now() / 1000 + 60);
+  db.close();
+  return path.join(dir, 'state.db');
+}
+
+test('readSignals: Claude hook events for the tab session, Hermes lease (read-only), process tree', async () => {
+  const procs = [];
+  const { root, backend } = fixture({ request: async (op, args) => {
+    procs.push([op, args]);
+    return { at: 1000, tabs: [{ tabId: CODEX_TAB, paneAlive: true, agentAlive: false }, { tabId: CLAUDE_TAB, paneAlive: true, agentAlive: true }] };
+  } });
+  const plan = await backend.claudeStatus();
+  fs.mkdirSync(path.dirname(plan.eventsFile), { recursive: true });
+  const sid = signals.claudeSessionId(WS, CLAUDE_TAB);
+  fs.writeFileSync(plan.eventsFile, [
+    { event: 'UserPromptSubmit', sessionId: sid, at: 10 },
+    { event: 'PermissionRequest', sessionId: sid, at: 20 },
+    { event: 'Stop', sessionId: 'someone-else', at: 30 },
+    'not json',
+  ].map(x => typeof x === 'string' ? x : JSON.stringify(x)).join('\n') + '\n');
+  const db = hermesFixture(root, { lease: 'new', activity: 'waiting for user approval' });
+  const before = fs.readFileSync(db);
+  const out = await backend.readSignals({ tabs: [
+    { workspaceId: WS, tabId: CLAUDE_TAB, kind: 'claude' },
+    { workspaceId: WS, tabId: HERMES_TAB, kind: 'hermes', profile: 'fixture' },
+    { workspaceId: WS, tabId: CODEX_TAB, kind: 'codex' },
+    { workspaceId: '../etc', tabId: CODEX_TAB, kind: 'codex' },
+  ] });
+  const by = Object.fromEntries(out.map(r => [r.tabId, r.readings]));
+  assert.equal(out.length, 3, 'invalid ids are dropped');
+  assert.deepEqual(by[CLAUDE_TAB].map(r => [r.source, r.status]), [['hook', 'waiting-approval']]);
+  assert.deepEqual(by[HERMES_TAB].map(r => [r.source, r.status]), [['lease', 'waiting-approval']]);
+  assert.deepEqual(by[CODEX_TAB].map(r => [r.source, r.status]), [['process', 'exited']]);
+  assert.deepEqual(procs[0], ['agent_procs', { workspaceId: WS, tabIds: [CLAUDE_TAB, HERMES_TAB, CODEX_TAB] }]);
+  assert.deepEqual(fs.readFileSync(db), before, 'the Hermes database is not changed');
+});
+
+test('readSignals: no lease means Hermes is idle; a lease on another conversation does not count', async () => {
+  const { root, backend } = fixture();
+  hermesFixture(root, { lease: 'unrelated' });
+  const out = await backend.readSignals({ tabs: [{ workspaceId: WS, tabId: HERMES_TAB, kind: 'hermes', profile: 'fixture' }] });
+  assert.deepEqual(out[0].readings.map(r => [r.source, r.status]), [['lease', 'idle']]);
+});
+
+// ---- notifications hub: real signals decide; the screen hint stays the fallback ----
+function loadTs(rel) {
+  const prev = Module._extensions['.ts'], prevX = Module._extensions['.tsx'];
+  const loader = (module, filename) => module._compile(typescript.transpileModule(fs.readFileSync(filename, 'utf8'), {
+    compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2020, jsx: typescript.JsxEmit.React, esModuleInterop: true }, fileName: filename }).outputText, filename);
+  Module._extensions['.ts'] = loader; Module._extensions['.tsx'] = loader;
+  try { return require(path.resolve(__dirname, '..', 'src', rel)); } finally { Module._extensions['.ts'] = prev; if (prevX) Module._extensions['.tsx'] = prevX; else delete Module._extensions['.tsx']; }
+}
+
+test('notifications hub: hook approval and finish come from real signals, screen text is fallback', () => {
+  const { NotificationsHub, realAgentStatus } = loadTs('browser/notifications-hub.ts');
+  let now = 100000; let readings = []; let lines = [];
+  const tab = { id: CLAUDE_TAB, name: 'Claude Code', kind: 'claude', state: 'running', busy: true };
+  const desk = () => ({ workspace: { id: WS, tabs: [tab] }, activeTabId: CLAUDE_TAB, phase: 'live', lines, unreadBells: 0 });
+  const agent = { key: `terminal:${CLAUDE_TAB}`, desk: 'terminal', kind: 'claude', tabName: 'Claude Code', label: 'Claude', activity: 'background' };
+  const seen = [];
+  const hub = new NotificationsHub({ desk, agents: () => [agent], watching: () => undefined, now: () => now, signals: () => readings }, n => seen.push(n));
+  hub.tick(); hub.tick();
+  readings = [{ status: 'working', source: 'hook', at: now }]; now += 1000; hub.tick();
+  readings = [{ status: 'waiting-approval', source: 'hook', at: now }]; now += 1000; hub.tick();
+  assert.equal(seen.at(-1).kind, 'approval');
+  assert.match(seen.at(-1).text, /reported by the agent/);
+  readings = [{ status: 'working', source: 'hook', at: now }]; now += 1000; hub.tick();
+  now += 5000; readings = [{ status: 'idle', source: 'hook', at: now }]; hub.tick();
+  assert.equal(seen.at(-1).kind, 'finished');
+  readings = [{ status: 'idle', source: 'hook', at: now }, { status: 'exited', source: 'process', at: now }]; now += 1000; hub.tick();
+  assert.equal(seen.at(-1).kind, 'ended');
+  // No real signal: the old screen-text hint still works.
+  readings = []; lines = ['Do you want to proceed?']; now += 1000; hub.tick(); hub.tick();
+  readings = []; lines = []; hub.tick(); lines = ['Allow this command? (y/n)']; now += 1000; hub.tick();
+  assert.equal(seen.at(-1).kind, 'approval');
+  assert.match(seen.at(-1).text, /check the screen/);
+  // Merge rules.
+  assert.equal(realAgentStatus([], true, now), undefined);
+  assert.equal(realAgentStatus([{ status: 'idle', source: 'hook', at: now }], true, now).status, 'idle', 'a hook outranks the screen text');
+  assert.equal(realAgentStatus([{ status: 'idle', source: 'hook', at: now - 11 * 60 * 1000 }], false, now), undefined, 'stale readings are ignored');
+});
