@@ -202,6 +202,7 @@ export class VoiceHub {
         const presence = this.host.presence();
         // Local presence supplies the roster here; a remote-room transport supplies its own.
         if (this.voice && this.voice.transportKind === 'local-presence') this.voice.roomChanged(presence.phase === 'joined' ? presence.snapshot : undefined);
+        else this.voice?.pullRoster();
         // Re-attach avatars when the RoomScene is rebuilt (theme/layout/kit change).
         const scene = this.host.scene(), layout = this.host.layout();
         if (scene !== this.sceneRef || layout !== this.layoutRef) { this.sceneRef = scene; this.layoutRef = layout; this.avatars.attach(this.threeScene(), layout, this.canvas()); }

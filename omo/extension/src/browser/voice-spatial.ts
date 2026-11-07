@@ -27,6 +27,15 @@ export function facing(yaw: number): Vec3 {
     return { x: Math.abs(x) < 1e-12 ? 0 : x, y: 0, z: Math.abs(z) < 1e-12 ? 0 : z };
 }
 export function earPosition(pose: Pick<PlayerPose, 'x' | 'z'>): Vec3 { return { x: pose.x, y: EAR_HEIGHT, z: pose.z }; }
+/** Closest a voice may be placed to the listener. A source exactly at the ear has no direction and HRTF can go silent. */
+export const MIN_SOURCE_DISTANCE = 0.3;
+/** Where to place a source for the panner: its own position, or (when too close) MIN_SOURCE_DISTANCE away along the same bearing (straight ahead when co-located). */
+export function sourcePosition(listener: Pick<PlayerPose, 'x' | 'z' | 'yaw'>, source: Pick<PlayerPose, 'x' | 'z'>): Vec3 {
+    const dx = source.x - listener.x, dz = source.z - listener.z, d = Math.hypot(dx, dz);
+    if (d >= MIN_SOURCE_DISTANCE) return earPosition(source);
+    const dir = d > 1e-6 ? { x: dx / d, z: dz / d } : (() => { const f = facing(listener.yaw); return { x: f.x, z: f.z }; })();
+    return { x: listener.x + dir.x * MIN_SOURCE_DISTANCE, y: EAR_HEIGHT, z: listener.z + dir.z * MIN_SOURCE_DISTANCE };
+}
 
 /**
  * Where a voice is relative to the listener: azimuth in radians (0 = straight ahead,
@@ -53,6 +62,8 @@ export interface VoiceAudioOut {
     /** '' = system default output. Resolves false when the browser cannot choose an output. */
     setSink(deviceId: string): Promise<boolean>;
     resume(): void;
+    /** Output loudness per ear (RMS), for the meter and tests. Zeros when not measurable. */
+    levels(): { left: number; right: number };
     close(): void;
 }
 
@@ -87,6 +98,7 @@ function elementOutput(): VoiceAudioOut {
         setSpatial: () => undefined,
         setSink: async id => { sink = id; const ok = typeof (HTMLMediaElement.prototype as unknown as { setSinkId?: unknown }).setSinkId === 'function'; elements.forEach(applySink); return ok; },
         resume: () => undefined,
+        levels: () => ({ left: 0, right: 0 }),
         close: () => { elements.forEach(el => { el.srcObject = null; el.remove(); }); elements.clear(); }
     };
 }
@@ -98,11 +110,18 @@ export function browserVoiceOutput(): VoiceAudioOut {
     const ctx = new Ctor({ latencyHint: 'interactive' });
     const master = ctx.createGain();
     master.connect(ctx.destination);
+    // Ear meters: master -> splitter -> one analyser per channel (does not change what you hear).
+    const splitter = ctx.createChannelSplitter(2);
+    const ears = [ctx.createAnalyser(), ctx.createAnalyser()];
+    master.connect(splitter); ears.forEach((a, i) => { a.fftSize = 1024; splitter.connect(a, i); });
+    const earData = new Float32Array(1024);
+    const rms = (a: AnalyserNode) => { a.getFloatTimeDomainData(earData); let s = 0; for (const v of earData) s += v * v; return Math.sqrt(s / earData.length); };
     let spatial = true;
     let sinkElement: HTMLAudioElement | undefined;
     let sinkDest: MediaStreamAudioDestinationNode | undefined;
-    const peers = new Set<{ gain: GainNode; panner: PannerNode; reconnect(): void }>();
+    const peers = new Set<{ gain: GainNode; panner: PannerNode; place(): void; reconnect(): void }>();
     const listener = ctx.listener;
+    let heard: PlayerPose = { x: 0, z: 0, yaw: 0, pitch: 0 };
 
     return {
         spatialSupported: true,
@@ -117,7 +136,14 @@ export function browserVoiceOutput(): VoiceAudioOut {
             panner.panningModel = 'HRTF'; panner.distanceModel = 'inverse'; panner.refDistance = 1; panner.rolloffFactor = 0; // gain does distance
             panner.coneInnerAngle = VOICE_CONE.inner; panner.coneOuterAngle = VOICE_CONE.outer; panner.coneOuterGain = VOICE_CONE.outerGain;
             source.connect(gain);
-            const entry = { gain, panner, reconnect: () => {
+            let speakerPose: PlayerPose | undefined;
+            const place = () => {
+                if (!speakerPose) return;
+                const p = sourcePosition(heard, speakerPose), f = facing(speakerPose.yaw);
+                if (panner.positionX) { setParam(panner.positionX, p.x, ctx); setParam(panner.positionY, p.y, ctx); setParam(panner.positionZ, p.z, ctx); setParam(panner.orientationX, f.x, ctx); setParam(panner.orientationY, f.y, ctx); setParam(panner.orientationZ, f.z, ctx); }
+                else { panner.setPosition(p.x, p.y, p.z); panner.setOrientation(f.x, f.y, f.z); }
+            };
+            const entry = { gain, panner, place, reconnect: () => {
                 try { gain.disconnect(); } catch { /* not connected */ }
                 if (spatial) { gain.connect(panner); panner.connect(master); } else { try { panner.disconnect(); } catch { /* idle */ } gain.connect(master); }
             } };
@@ -125,15 +151,13 @@ export function browserVoiceOutput(): VoiceAudioOut {
             void ctx.resume().catch(() => undefined);
             return {
                 setGain: g => setParam(gain.gain, Math.max(0, Math.min(4, g)), ctx),
-                setPose: pose => {
-                    const p = earPosition(pose), f = facing(pose.yaw);
-                    if (panner.positionX) { setParam(panner.positionX, p.x, ctx); setParam(panner.positionY, p.y, ctx); setParam(panner.positionZ, p.z, ctx); setParam(panner.orientationX, f.x, ctx); setParam(panner.orientationY, f.y, ctx); setParam(panner.orientationZ, f.z, ctx); }
-                    else { panner.setPosition(p.x, p.y, p.z); panner.setOrientation(f.x, f.y, f.z); }
-                },
+                setPose: pose => { speakerPose = { ...pose }; place(); },
                 remove: () => { peers.delete(entry); try { source.disconnect(); gain.disconnect(); panner.disconnect(); } catch { /* gone */ } holder.srcObject = null; holder.remove(); }
             };
         },
         setListener: pose => {
+            heard = { ...pose };
+            peers.forEach(peer => peer.place());
             const p = earPosition(pose), f = facing(pose.yaw);
             if (listener.positionX) {
                 setParam(listener.positionX, p.x, ctx); setParam(listener.positionY, p.y, ctx); setParam(listener.positionZ, p.z, ctx);
@@ -156,6 +180,7 @@ export function browserVoiceOutput(): VoiceAudioOut {
             try { await (sinkElement as unknown as { setSinkId(id: string): Promise<void> }).setSinkId(id); return true; } catch { return false; }
         },
         resume: () => { if (ctx.state !== 'running') void ctx.resume().catch(() => undefined); },
+        levels: () => ({ left: rms(ears[0]), right: rms(ears[1]) }),
         close: () => {
             peers.clear();
             if (sinkElement) { sinkElement.srcObject = null; sinkElement.remove(); }

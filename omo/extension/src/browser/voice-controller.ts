@@ -108,6 +108,14 @@ interface Peer {
     pendingIce: RTCIceCandidateInit[];
     sender?: RTCRtpSender;
     audio?: PeerAudio;
+    trackId?: string;
+    ontracks?: number;
+    iceAdded: number;
+    iceFailed: number;
+    lastIceError?: string;
+    restartReasons: string[];
+    /** The link carried media once. From then on the polite side never offers (see RESTART_REQUEST). */
+    everConnected: boolean;
     createdAt: number;
     healthyAt: number;
     offerSentAt: number;
@@ -134,6 +142,14 @@ const HOLD_UNKNOWN_MS = 4000;
 const HOLD_MAX = 32;
 const ICE_REFRESH_EARLY_MS = 30 * 60_000;
 const PREFS_KEY = 'omo.voice.prefs.v1';
+/**
+ * Chrome (verified on 156) stops a remote audio track for good when an SDP rollback happens on a
+ * link that already receives audio — exactly the polite side's glare path. So once a link has
+ * connected, the polite side does not send offers: it asks the impolite side to restart ICE with
+ * this marker inside an 'ice' signal (older clients ignore it: it has no `candidate`). If a
+ * rollback still happens on a live link, the link is rebuilt (bye + new connection).
+ */
+export const RESTART_REQUEST = JSON.stringify({ omo: 'restart-ice' });
 
 export const DEFAULT_VOICE_PREFS: VoicePrefs = { inputId: '', outputId: '', echoCancellation: true, noiseSuppression: true, autoGainControl: true, mode: 'push', proximity: true, spatial: true, people: {} };
 
@@ -278,10 +294,10 @@ export class RoomVoiceController {
     /** Re-read STUN/TURN settings (after Save, or before minted TURN credentials expire) and ICE-restart every link. */
     async reloadNetwork(): Promise<void> {
         await this.loadIce();
-        for (const peer of this.peers.values()) { try { peer.pc.setConfiguration(this.rtcConfig()); } catch { /* applied on rebuild */ } this.restartIce(peer, true); }
+        for (const peer of this.peers.values()) { try { peer.pc.setConfiguration(this.rtcConfig()); } catch { /* applied on rebuild */ } this.restartIce(peer, true, 'network-reload'); }
     }
     /** Network changed (e.g. Wi-Fi switch): restart ICE on every link. */
-    restartAll(): void { for (const peer of this.peers.values()) this.restartIce(peer, true); }
+    restartAll(): void { for (const peer of this.peers.values()) this.restartIce(peer, true, 'network-change'); }
 
     async refreshDevices(): Promise<void> {
         const list = await this.options.media.enumerateDevices?.().catch(() => [] as MediaDeviceInfo[]) ?? [];
@@ -403,6 +419,9 @@ export class RoomVoiceController {
         this.emit(ok ? { error: '', notice: 'Speaker updated.' } : { error: 'This browser cannot choose a speaker. Use the system sound settings.' });
     }
 
+    /** Remote-room transports carry their own roster: pull it (the hub calls this every tick, also while voice is off). */
+    pullRoster(): void { const roster = this.transport.roster?.(); if (roster) this.roomChanged(roster); }
+
     /** Roster update (presence snapshot, or the remote room's roster). Leaving the room turns voice off. */
     roomChanged(roster: VoiceRoster | undefined): void {
         if (!roster) {
@@ -480,7 +499,7 @@ export class RoomVoiceController {
             if (pc.connectionState === 'connected') { peer.healthyAt = now; peer.disconnectedAt = 0; }
             // A link that stays down is rebuilt. The impolite side goes first so both never race.
             if (now - peer.healthyAt > (peer.polite ? REBUILD_POLITE_MS : REBUILD_IMPOLITE_MS)) { this.rebuild(peer, member); continue; }
-            if (pc.iceConnectionState === 'failed' || (pc.iceConnectionState === 'disconnected' && peer.disconnectedAt && now - peer.disconnectedAt > DISCONNECT_GRACE_MS)) this.restartIce(peer);
+            if (pc.iceConnectionState === 'failed' || (pc.iceConnectionState === 'disconnected' && peer.disconnectedAt && now - peer.disconnectedAt > DISCONNECT_GRACE_MS)) this.restartIce(peer, false, `ice-${pc.iceConnectionState}`);
             // An offer that got no answer (lost signal, remote reload): send it again.
             if (pc.signalingState === 'have-local-offer' && peer.offerSentAt && now - peer.offerSentAt > OFFER_RESEND_MS && peer.offerResends < OFFER_RESEND_MAX && pc.localDescription?.type === 'offer') {
                 peer.offerResends++; peer.offerSentAt = now;
@@ -496,12 +515,14 @@ export class RoomVoiceController {
         this.closePeer(peer, true);
         this.makePeer(member).restarts = restarts;
     }
-    private restartIce(peer: Peer, force = false): void {
+    private restartIce(peer: Peer, force = false, reason = 'manual'): void {
         const now = this.now();
         if (!force && now - peer.restartAt < RESTART_GAP_MS) return;
         if (peer.pc.connectionState === 'closed') return;
         peer.restartAt = now; peer.restarts++;
-        // Fires negotiationneeded with an ICE-restart offer; glare is handled like any other offer.
+        if (peer.restartReasons.length < 8) peer.restartReasons.push(reason);
+        // Fires negotiationneeded: the impolite side (or a polite side before first connect) sends an
+        // ICE-restart offer; a connected polite side asks the impolite side instead.
         try { peer.pc.restartIce(); } catch { /* old browser: the rebuild path recovers */ }
     }
 
@@ -509,11 +530,12 @@ export class RoomVoiceController {
         const pc = this.options.media.createPeer(this.rtcConfig());
         const now = this.now();
         const peer: Peer = { id: member.id, session: member.voice!.session, pc, polite: this.selfId > member.id, makingOffer: false, ignoreOffer: false, settingRemoteAnswer: false,
-            pendingIce: [], createdAt: now, healthyAt: now, offerSentAt: 0, offerResends: 0, disconnectedAt: 0, restartAt: 0, restarts: 0 };
+            pendingIce: [], createdAt: now, healthyAt: now, offerSentAt: 0, offerResends: 0, disconnectedAt: 0, restartAt: 0, restarts: 0, everConnected: false, iceAdded: 0, iceFailed: 0, restartReasons: [] };
         this.peers.set(member.id, peer);
         const live = () => this.peers.get(member.id) === peer;
         pc.onnegotiationneeded = async () => {
             if (!live() || pc.signalingState !== 'stable') return;
+            if (peer.polite && peer.everConnected) { void this.send(peer, 'ice', RESTART_REQUEST).catch(() => undefined); return; }
             try {
                 peer.makingOffer = true;
                 await pc.setLocalDescription();
@@ -532,15 +554,20 @@ export class RoomVoiceController {
             if (!live()) return;
             if (pc.iceConnectionState === 'disconnected') peer.disconnectedAt = peer.disconnectedAt || this.now();
             else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') peer.disconnectedAt = 0;
-            if (pc.iceConnectionState === 'failed') this.restartIce(peer);
+            if (pc.iceConnectionState === 'failed') this.restartIce(peer, false, 'ice-failed-event');
         };
         pc.ontrack = event => {
             if (!live() || event.track.kind !== 'audio' || !this.output) return;
+            // Renegotiation (ICE restart, glare rollback) fires ontrack again for the SAME track.
+            // Rebuilding the audio graph for it would silence it in Chrome, so keep the live one.
+            if (peer.audio && peer.trackId === event.track.id) return;
+            peer.ontracks = (peer.ontracks ?? 0) + 1;
             peer.audio?.remove();
+            peer.trackId = event.track.id;
             peer.audio = this.output.addPeer(event.streams[0] ?? new MediaStream([event.track]));
             this.applyVolumes();
         };
-        pc.onconnectionstatechange = () => { if (!live()) return; if (pc.connectionState === 'connected') { peer.healthyAt = this.now(); peer.offerResends = 0; } this.applyVolumes(); };
+        pc.onconnectionstatechange = () => { if (!live()) return; if (pc.connectionState === 'connected') { peer.healthyAt = this.now(); peer.offerResends = 0; peer.everConnected = true; } this.applyVolumes(); };
         const track = this.stream?.getAudioTracks()[0];
         if (track) peer.sender = pc.addTrack(track, this.stream!);
         else pc.addTransceiver('audio', { direction: 'recvonly' });
@@ -579,6 +606,7 @@ export class RoomVoiceController {
             const collision = signal.kind === 'offer' && !readyForOffer;
             peer.ignoreOffer = !peer.polite && collision;
             if (peer.ignoreOffer) return;
+            if (collision && peer.everConnected) { this.rebuild(peer, member); return; } // rollback would kill the live remote track
             if (signal.kind === 'answer' && pc.signalingState !== 'have-local-offer') return; // stale or duplicate answer
             peer.settingRemoteAnswer = signal.kind === 'answer';
             try { await pc.setRemoteDescription({ type: signal.kind, sdp: signal.data }); }
@@ -590,16 +618,21 @@ export class RoomVoiceController {
             } else { peer.offerSentAt = 0; peer.offerResends = 0; }
             return;
         }
+        if (signal.data === RESTART_REQUEST) { if (!peer.polite) this.restartIce(peer, false, 'peer-request'); return; }
         let candidate: RTCIceCandidateInit;
         try { candidate = JSON.parse(signal.data); } catch { return; }
         if (!candidate || typeof candidate !== 'object' || typeof candidate.candidate !== 'string') return;
         if (!pc.remoteDescription) { if (peer.pendingIce.length < 64) peer.pendingIce.push(candidate); return; }
         // A candidate of an older ICE generation, or for an ignored offer, fails harmlessly.
-        await pc.addIceCandidate(candidate).catch(() => undefined);
+        await this.addIce(peer, candidate);
     }
     private async flushIce(peer: Peer): Promise<void> {
         const queued = peer.pendingIce.splice(0);
-        for (const candidate of queued) await peer.pc.addIceCandidate(candidate).catch(() => undefined);
+        for (const candidate of queued) await this.addIce(peer, candidate);
+    }
+    private async addIce(peer: Peer, candidate: RTCIceCandidateInit): Promise<void> {
+        try { await peer.pc.addIceCandidate(candidate); peer.iceAdded++; }
+        catch (error) { peer.iceFailed++; peer.lastIceError = String(error).slice(0, 160); }
     }
     private closePeer(peer: Peer, sayBye: boolean): void {
         if (this.peers.get(peer.id) === peer) this.peers.delete(peer.id);
@@ -638,8 +671,19 @@ export class RoomVoiceController {
     }
 
     /** Diagnostics for tests and the voice check panel. */
-    debugPeers(): Array<{ id: string; polite: boolean; signaling: string; connection: string; ice: string; restarts: number }> {
-        return [...this.peers.values()].map(p => ({ id: p.id, polite: p.polite, signaling: p.pc.signalingState, connection: p.pc.connectionState, ice: p.pc.iceConnectionState, restarts: p.restarts }));
+    debugPeers(): Array<{ id: string; polite: boolean; signaling: string; connection: string; ice: string; restarts: number; reasons: string[]; iceAdded: number; iceFailed: number; lastIceError?: string }> {
+        return [...this.peers.values()].map(p => ({ id: p.id, polite: p.polite, signaling: p.pc.signalingState, connection: p.pc.connectionState, ice: p.pc.iceConnectionState, restarts: p.restarts, reasons: p.restartReasons, iceAdded: p.iceAdded, iceFailed: p.iceFailed, ...(p.lastIceError ? { lastIceError: p.lastIceError } : {}) }));
+    }
+
+    /** Received audio per peer (inbound-rtp totals) and output ear levels: diagnostics for the voice check and tests. */
+    async debugAudio(): Promise<{ ears: { left: number; right: number }; peers: Array<{ id: string; energy: number; packets: number; path?: string }> }> {
+        const peers: Array<{ id: string; energy: number; packets: number; path?: string }> = [];
+        for (const peer of this.peers.values()) {
+            let energy = 0, packets = 0;
+            try { (await peer.pc.getStats()).forEach((s: Record<string, unknown>) => { if (s.type === 'inbound-rtp' && s.kind === 'audio') { energy += Number(s.totalAudioEnergy ?? 0); packets += Number(s.packetsReceived ?? 0); } }); } catch { /* closed */ }
+            peers.push({ id: peer.id, energy, packets, ...(peer.path ? { path: peer.path } : {}) });
+        }
+        return { ears: this.output?.levels() ?? { left: 0, right: 0 }, peers };
     }
 
     async dispose(): Promise<void> {
