@@ -299,6 +299,17 @@ async function main(argv = process.argv.slice(2), env = process.env) {
             setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } }, 10000).unref();
         });
     }
+    // Foreground: if our parent dies (AppImage extract-and-run: the runtime is killed by a signal and does
+    // not forward it), we are orphaned. Stop the server instead of leaving it running unowned.
+    const parentPid = process.ppid;
+    const orphanWatch = background ? undefined : setInterval(() => {
+        if (process.ppid === parentPid || stopping) return;
+        stopping = true;
+        log(`parent process ${parentPid} exited: stopping the server`);
+        child.kill('SIGTERM');
+        setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } }, 10000).unref();
+    }, 1000);
+    orphanWatch?.unref();
     let ready = false;
     for (let i = 0; i < 600 && child.exitCode === null && !stopping; i++) {
         if (await httpOk(url)) { ready = true; break; }
@@ -315,9 +326,26 @@ async function main(argv = process.argv.slice(2), env = process.env) {
         if (dialog(`${APP_NAME} could not start.\n\nThe log has the details:\n${logFile}`, { buttons: ['Close', 'Show Log'], defaultButton: 'Show Log', icon: 'stop' }, env) === 'Show Log') openPath(logFile);
     }
     const code = await exited;
-    log(`server exited with ${code}`);
+    if (orphanWatch) clearInterval(orphanWatch);
+    log(`server exited with ${code}${stopping ? ' (stop requested)' : ''}`);
     forget();
-    return ready || stopping ? code : (code || 1);
+    cleanupOrphanedExtract(parentPid, log, env);
+    if (stopping) return 0;   // a requested stop (Ctrl+C, logout, Stop Omo) is a clean exit
+    return ready ? code : (code || 1);
+}
+
+/**
+ * AppImage extract-and-run (no FUSE, e.g. CI): the runtime unpacks into $TMPDIR/appimage_extracted_<hash>
+ * and deletes it after AppRun exits, but a runtime killed by a signal never cleans up (~700 MB left behind).
+ * When that runtime is gone, delete the folder ourselves. Only a folder named appimage_extracted_* that
+ * contains this launcher is touched.
+ */
+function cleanupOrphanedExtract(parentPid, log, env = process.env) {
+    const appdir = env.APPDIR;
+    if (!appdir || !env.APPIMAGE || isAlive(parentPid) && process.ppid === parentPid) return;
+    const real = (() => { try { return fs.realpathSync(appdir); } catch { return undefined; } })();
+    if (!real || !/^appimage_extracted_[0-9a-f]+$/.test(path.basename(real)) || !APP_ROOT.startsWith(real + path.sep)) return;
+    try { fs.rmSync(real, { recursive: true, force: true }); log(`removed the AppImage extract folder ${real}`); } catch (e) { log(`could not remove ${real}: ${e.message}`); }
 }
 
 module.exports = { parseArgs, dirs, checkPrerequisites, choosePort, chromeAppCommand, ensureWorkspace };

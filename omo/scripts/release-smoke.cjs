@@ -32,7 +32,13 @@ const chrome = chromeArg || process.env.CHROME_PATH || (process.platform === 'da
         browser = await launch({ executablePath: chrome, headless: true, userDataDir: path.join(scratch, 'chrome'), args: ['--no-sandbox', '--enable-unsafe-swiftshader'], defaultViewport: { width: 1440, height: 900 } });
         const page = await browser.newPage();
         const errors = []; page.on('pageerror', e => errors.push(String(e)));
-        await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.focus.clickAttach', 'false'); } catch {} });
+        await page.evaluateOnNewDocument(() => {
+            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.focus.clickAttach', 'false'); } catch {}
+            // Theia's workspace-trust dialog can open late (after the room renders) and take keyboard focus,
+            // so the walk keys never reach the canvas. Accept it whenever it appears.
+            const trust = () => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click();
+            new MutationObserver(trust).observe(document, { childList: true, subtree: true });
+        });
         await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
         for (let i = 0; i < 300 && !await page.$('[data-testid="omo-onboarding"]'); i++) { await page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click()); await pause(200); }
         await page.waitForSelector('[data-testid="omo-scene"][data-ready="true"]', { timeout: 60000 });
@@ -42,7 +48,16 @@ const chrome = chromeArg || process.env.CHROME_PATH || (process.platform === 'da
         await page.waitForSelector(`${CANVAS}[data-navigation="walk"]`, { timeout: 30000 });
         console.log('PASS first-person room renders in a real browser');
         // Walk to desk one (left desk): A then W, like the repo's world driver.
-        const axis = async (key, field, goal, dir) => { await page.focus(CANVAS); await page.keyboard.down(key); try { await page.waitForFunction((f, g, d) => { const n = Number(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset[f]); return d > 0 ? n >= g : n <= g; }, { timeout: 25000 }, field, goal, dir); } finally { await page.keyboard.up(key); } };
+        // Hold <key> until dataset[field] passes goal. Re-focus the canvas when a dialog took focus (keys only reach a focused canvas).
+        const axis = async (key, field, goal, dir) => {
+            const reached = () => page.$eval(CANVAS, (c, f, g, d) => { const n = Number(c.dataset[f]); return d > 0 ? n >= g : n <= g; }, field, goal, dir);
+            const deadline = Date.now() + 30000;
+            while (!await reached()) {
+                if (Date.now() > deadline) { const d = await page.$eval(CANVAS, c => ({ x: c.dataset.playerX, z: c.dataset.playerZ, focus: document.activeElement === c ? 'canvas' : (document.activeElement?.textContent || '').trim().slice(0, 60) })); throw new Error(`walk ${key} did not reach ${field} ${goal}: ${JSON.stringify(d)}`); }
+                await page.focus(CANVAS); await page.keyboard.down(key);
+                try { for (let t = 0; t < 20 && !await reached() && await page.$eval(CANVAS, c => document.activeElement === c); t++) await pause(50); } finally { await page.keyboard.up(key); }
+            }
+        };
         await axis('a', 'playerX', -2.5, -1); await axis('w', 'playerZ', 1.9, -1);
         const pt = await page.$eval(CANVAS, (e) => { const r = e.getBoundingClientRect(), t = JSON.parse(e.dataset.stationTargets || '{}').terminal; return t && { x: r.left + t.x, y: r.top + t.y }; });
         if (!pt) throw new Error('desk monitor has no projected target');
@@ -61,8 +76,13 @@ const chrome = chromeArg || process.env.CHROME_PATH || (process.platform === 'da
         if (browser) await browser.close().catch(() => {});
         try { process.kill(-server.pid, 'SIGTERM'); } catch {}
         await pause(2500); try { process.kill(-server.pid, 'SIGKILL'); } catch {}
-        const tmux = spawnSync('sh', ['-c', 'command -v tmux'], { encoding: 'utf8' }).stdout.trim();
-        if (tmux) spawnSync(tmux, ['-L', socket, 'kill-server'], { stdio: 'ignore' });
+        // The package may have used its bundled tmux (no tmux on PATH): try every candidate, then kill
+        // any server still bound to our private socket (AppImage extract dirs vanish on exit).
+        const pathTmux = spawnSync('sh', ['-c', 'command -v tmux'], { encoding: 'utf8' }).stdout.trim();
+        for (const tmux of new Set([process.env.OMO_SMOKE_TMUX, process.env.OMO_SPATIAL_TMUX, path.join(dir, 'vendor', 'tmux', 'tmux'), pathTmux].filter(Boolean))) {
+            if (fs.existsSync(tmux)) spawnSync(tmux, ['-L', socket, 'kill-server'], { stdio: 'ignore' });
+        }
+        spawnSync('pkill', ['-f', `tmux.* -L ${socket}( |$)`], { stdio: 'ignore' });
         fs.rmSync(scratch, { recursive: true, force: true });
     }
     process.exitCode = ok ? 0 : 1;
