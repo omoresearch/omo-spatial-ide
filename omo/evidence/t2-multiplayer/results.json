@@ -1,0 +1,21 @@
+{
+  "lane": "t2-multiplayer",
+  "commit_base": "a2f2e5586",
+  "date": "2026-11-07",
+  "status": "INCOMPLETE - run time budget ran out during discovery",
+  "ran": {
+    "setup": "npm ci + npm run build: tsc 0, browser build 0 errors, node build 0 errors",
+    "server_check": "node server/scripts/check.cjs: 16/16 node --check ok, vendored world model matches source",
+    "server_e2e": "node server/test/e2e-smoke.cjs: 60 checks passed (real TLS, openssl self-signed cert)"
+  },
+  "not_run": ["two-app real Chrome scenarios", "voice getStats across two apps", "Voice check panel", "screenshots"],
+  "blockers_found_by_code_reading": [
+    "App client and room server speak different wire protocols: path /omo-room/v1/ws vs /ws; frame key t vs type; hello.auth{kind} vs hello.token; welcome+join+room vs single welcome; invite link /omo-room/join/<room>#invite= vs /join#invite=; roles owner|member vs viewer|member|builder|owner. The app cannot connect to omo/server at all.",
+    "Owner 'host' flow in the app expects the server to create a room from an owner token; omo/server only accepts omo1.* room keys from create-room.",
+    "Build mode WorldStore writes browser localStorage only; RemoteWorldSource (remote-room-controller.ts) is never wired, so owner edits are never sent to the room.",
+    "VoiceHub.useTransport(remoteRoomVoiceTransport(...)) is never called; remote voice uses the local-presence transport via RoutedPresenceService instead of the designed remote transport.",
+    "Existing remote-room probes use a MOCK server written to the client's protocol, so the mismatch was never caught."
+  ],
+  "fixes_committed": [],
+  "docs": ["omo/server/DEPLOY-TAILSCALE.md"]
+}
