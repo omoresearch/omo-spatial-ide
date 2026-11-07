@@ -19,8 +19,11 @@ const keepKeys = (event: React.MouseEvent): void => { event.preventDefault(); };
  */
 export function ImmersivePill(props: {
     roomName: string; activeDesk: Workstation; focus: FocusMode; hud?: HudHub; voice?: VoiceHub;
-    bells: Record<TerminalWorkstation, number>; onExit: () => void;
+    bells: Record<string, number>; onExit: () => void;
+    /** w2:runtime — every station in the world (switcher order). Absent = the two legacy desks. */
+    desks?: { id: string; label: string; slot?: number }[];
 }): React.ReactElement {
+    const desks = props.desks ?? DESKS; // w2:runtime
     const { hud, voice } = props;
     const chatOpen = !!hud?.chat.state.open, chatUnread = hud?.chat.state.unread ?? 0;
     const unread = hud?.state.unreadNotices ?? 0;
@@ -34,9 +37,9 @@ export function ImmersivePill(props: {
         <span className="omo-immersive-room" title={props.roomName}><i aria-hidden="true" />{props.roomName}</span>
         <span className="omo-immersive-sep" aria-hidden="true" />
         <span className="omo-immersive-desks" role="group" aria-label="Desks">
-            {DESKS.map(desk => <button type="button" key={desk.id} data-testid={`immersive-desk-${desk.id}`} aria-pressed={props.activeDesk === desk.id}
-                onMouseDown={keepKeys} onClick={() => props.focus.attachTo(desk.id)} title={`Go to ${desk.label} (same as clicking its screen)`}>
-                <Icon name="monitor" size={14} />{desk.label}{props.bells[desk.id] > 0 && <strong className="omo-immersive-count" aria-label={`${props.bells[desk.id]} bells`}>{props.bells[desk.id]}</strong>}
+            {desks.map((desk, i) => <button type="button" key={desk.id} data-testid={`immersive-desk-${desk.id}`} aria-pressed={props.activeDesk === desk.id}
+                onMouseDown={keepKeys} onClick={() => props.focus.attachTo(desk.id as TerminalWorkstation)} title={`Go to ${desk.label} (same as clicking its screen)${i < 9 ? ` · Ctrl+${i + 1} while attached` : ''}`}>
+                <Icon name="monitor" size={14} />{desk.label}{(props.bells[desk.id] ?? 0) > 0 && <strong className="omo-immersive-count" aria-label={`${props.bells[desk.id]} bells`}>{props.bells[desk.id]}</strong>}
             </button>)}
         </span>
         <span className="omo-immersive-sep" aria-hidden="true" />

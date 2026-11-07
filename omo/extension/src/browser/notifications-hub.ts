@@ -38,7 +38,8 @@ let seq = 0;
 export class NotificationsHub {
     items: AgentNotice[] = [];
     private tracks = new Map<string, Track>();
-    private bells: Record<DeskId, { count: number; at: number }> = { terminal: { count: 0, at: 0 }, 'terminal-2': { count: 0, at: 0 } };
+    // w2:runtime — one bell track per station, created on first sight (any number of stations).
+    private bells: Record<string, { count: number; at: number }> = { terminal: { count: 0, at: 0 }, 'terminal-2': { count: 0, at: 0 } };
     private primed = false;
     constructor(private inputs: NoticeInputs, private onNotice: (notice: AgentNotice) => void) {}
 
@@ -69,7 +70,7 @@ export class NotificationsHub {
             const track: Track = { activity: agent.activity, since: old && old.activity === agent.activity ? old.since : now, approval, state: tab?.state };
             this.tracks.set(agent.key, track);
             if (!old || !this.primed) continue; // first sight is history, not news
-            const label = `${agentLabel(agent.kind, agent.tabName)} (${DESK_NAME[agent.desk]})`;
+            const label = `${agentLabel(agent.kind, agent.tabName)} (${DESK_NAME[agent.desk] ?? agent.desk})`;
             const quiet = watching === agent.desk;
             if (old.activity === 'working' && agent.activity === 'idle' && now - old.since >= FINISH_MIN_MS && !quiet) this.add('finished', agent.desk, label, tab?.id);
             if (approval && !old.approval) this.add('approval', agent.desk, label, tab?.id, 'check the screen');
@@ -79,10 +80,12 @@ export class NotificationsHub {
         for (const key of [...this.tracks.keys()]) if (!seen.has(key)) this.tracks.delete(key);
         for (const desk of DESKS) {
             const count = this.inputs.desk(desk).unreadBells;
-            const bell = this.bells[desk];
-            if (this.primed && count > bell.count && now - bell.at >= BELL_GAP_MS && watching !== desk) { this.add('bell', desk, DESK_NAME[desk]); bell.at = now; }
+            const fresh = !this.bells[desk];
+            const bell = this.bells[desk] ??= { count, at: 0 }; // w2:runtime: a new station's existing bells are history, not news
+            if (this.primed && !fresh && count > bell.count && now - bell.at >= BELL_GAP_MS && watching !== desk) { this.add('bell', desk, DESK_NAME[desk] ?? desk); bell.at = now; }
             bell.count = count;
         }
+        for (const desk of Object.keys(this.bells)) if (!DESKS.includes(desk as DeskId)) { delete this.bells[desk]; this.items = this.items.filter(item => item.desk !== desk); } // w2:runtime: removed station
         this.primed = true;
     }
 }

@@ -37,9 +37,9 @@ export function stationScreen(scene: RoomScene | undefined, canvas: HTMLCanvasEl
 }
 
 /** The desk monitor the player is closest to and roughly facing, within reach. */
-export function nearestStation(scene: RoomScene | undefined, canvas: HTMLCanvasElement | undefined, pose: PlayerPose): TerminalWorkstation | undefined {
+export function nearestStation(scene: RoomScene | undefined, canvas: HTMLCanvasElement | undefined, pose: PlayerPose, list: readonly TerminalWorkstation[] = FOCUS_STATIONS /* w2:runtime */): TerminalWorkstation | undefined {
     let best: { station: TerminalWorkstation; score: number } | undefined;
-    for (const station of FOCUS_STATIONS) {
+    for (const station of list) {
         const screen = stationScreen(scene, canvas, station); if (!screen) continue;
         const dx = screen.center.x - pose.x, dz = screen.center.z - pose.z, distance = Math.hypot(dx, dz);
         if (distance > FOCUS_REACH) continue;

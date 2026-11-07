@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { advancePlayer, ROOM_LAYOUTS } from '../common/player-state';
+import { stationPosition } from './world-stations'; // w2:runtime
 import type { PlayerPose, RoomLayoutId } from '../common/player-state';
 import type { ChatEmote, PresenceColour, RoomMember } from '../common/presence-protocol';
 import { PRESENCE_COLOUR_HEX } from '../common/presence-protocol';
@@ -40,7 +41,8 @@ export function placeBeside(target: PlayerPose, layout: RoomLayoutId, pitch = 0)
 
 /** Where to stand to use a desk monitor (in front of the desk, facing the screen). */
 export function deskSpot(layout: RoomLayoutId, desk: DeskId): PlayerPose {
-    const d = ROOM_LAYOUTS[layout].desks[desk];
+    // w2:runtime — world stations beyond the two layout desks stand at their WorldSpec position.
+    const d = (ROOM_LAYOUTS[layout].desks as Record<string, { x: number; z: number } | undefined>)[desk] ?? stationPosition(desk) ?? { x: 0, z: 0 };
     return { x: d.x, z: Math.min(4.4, d.z + 1.3), yaw: 0, pitch: -0.05 };
 }
 

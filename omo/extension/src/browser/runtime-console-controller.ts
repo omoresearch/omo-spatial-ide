@@ -37,7 +37,9 @@ export interface CopyRange { x1: number; y1: number; x2: number; y2: number; uni
 
 export interface StationBinding { stationId: string; projectUri: string; name: string }
 export type RuntimePhase = 'idle' | 'checking' | 'unavailable' | 'opening' | 'attaching' | 'live' | 'reconnecting' | 'interrupted' | 'error';
-export interface PendingAction { type: 'new' | 'close' | 'revive' | 'deleteWorkspace' | 'deleteWorkspaceBusy' | 'resume' | 'clearHistory' | 'recipe'; kind?: AgentKind; tabId?: string; workspaceId?: string; recipe?: StationRecipe; message: string; confirmLabel: string }
+export interface PendingAction { type: 'new' | 'close' | 'revive' | 'deleteWorkspace' | 'deleteWorkspaceBusy' | 'resume' | 'clearHistory' | 'recipe'; kind?: AgentKind; tabId?: string; workspaceId?: string; recipe?: StationRecipe; message: string; confirmLabel: string;
+    /** w2:runtime — the station's own StationConfig tabs (world setup). Allowed on a locked station; still needs the one confirmation. */
+    setup?: boolean }
 export interface RuntimeConsoleState {
     phase: RuntimePhase;
     statusText: string;
@@ -84,6 +86,8 @@ export interface RuntimeConsoleOptions {
     onChange: (state: RuntimeConsoleState) => void;
     onMirrorFrame?: (frame: RuntimeFrame | undefined) => void;
     onMirrorError?: (message: string) => void;
+    /** w2:runtime — StationConfig.profile from the world. Used when this browser has no profile choice yet; must exist on the host. */
+    preferredProfile?: () => string | undefined;
     pollMs?: number;
     retryMs?: number;
 }
@@ -452,7 +456,9 @@ export class RuntimeConsoleController {
         }
         this.set({ host, phase: 'opening', statusText: 'Opening this room’s terminal workspace…' });
         let workspace: SessionWorkspace;
-        try { workspace = await this.service.openWorkspace({ stationId: binding.stationId, projectUri: binding.projectUri, name: binding.name }); } catch (error) {
+        const preferred = this.options.preferredProfile?.(); // w2:runtime
+        const createProfile = !this.current.profile && preferred && host.profiles.includes(preferred) ? preferred : undefined;
+        try { workspace = await this.service.openWorkspace({ stationId: binding.stationId, projectUri: binding.projectUri, name: binding.name, ...(createProfile ? { profile: createProfile } : {}) }); } catch (error) {
             if (epoch !== this.epoch) return;
             this.set({ phase: 'error', error: `Could not open the terminal workspace: ${message(error)}`, statusText: 'Not connected. Click the monitor to try again.' });
             return;
@@ -461,6 +467,7 @@ export class RuntimeConsoleController {
         const tabs = workspace.tabs;
         const active = tabs.find(t => t.id === preferredTab) ?? tabs.find(t => t.state === 'running') ?? tabs[0];
         const profile = host.profiles.includes(this.current.profile) ? this.current.profile
+            : createProfile ? createProfile // w2:runtime
             : host.profiles.includes(workspace.profile) ? workspace.profile : host.profiles[0] ?? '';
         this.set({ workspace, activeTabId: active?.id, profile });
         this.store();
@@ -592,13 +599,15 @@ export class RuntimeConsoleController {
     acknowledgePendingClipboard(notice: string): void { this.set({ pendingClipboard: undefined, notice, error: '' }); }
 
     /** Saving a recipe is browser state only. Applying it has one explicit launch confirmation. */
-    requestRecipeApply(recipe: StationRecipe): void {
+    requestRecipeApply(recipe: StationRecipe, opts?: { setup?: boolean }): void {
         const workspace = this.current.workspace;
         if (!workspace || this.current.acting || !recipe || !recipe.tabs.length) return;
-        if (this.current.stationLocked) { this.set({ pending: undefined, notice: '', error: 'This desk is locked, so the recipe was not applied. Unlock it in Station recipes first.' }); return; }
+        const setup = !!opts?.setup; // w2:runtime
+        if (this.current.stationLocked && !setup) { this.set({ pending: undefined, notice: '', error: 'This desk is locked, so the recipe was not applied. Unlock it in Station recipes first.' }); return; }
         const kinds = recipe.tabs.map(tab => tab.kind === 'shell' ? 'Shell' : tab.kind === 'hermes' ? 'Hermes' : tab.kind === 'claude' ? 'Claude Code' : 'Codex').join(', ');
-        this.set({ error: '', notice: '', pending: { type: 'recipe', recipe, confirmLabel: 'Start recipe tabs',
-            message: `Apply “${recipe.name}” to ${workspace.name}? It will save profile “${recipe.profile}” and start exactly these requested tabs: ${kinds}. Nothing launches until you confirm.` } });
+        this.set({ error: '', notice: '', pending: { type: 'recipe', recipe, setup, confirmLabel: setup ? 'Start station tabs' : 'Start recipe tabs',
+            message: setup ? `Set up ${workspace.name} as this station is configured? It will use profile “${recipe.profile}” and start exactly these tabs: ${kinds}. Nothing launches until you confirm; Cancel keeps just the shell.`
+                : `Apply “${recipe.name}” to ${workspace.name}? It will save profile “${recipe.profile}” and start exactly these requested tabs: ${kinds}. Nothing launches until you confirm.` } });
     }
 
     async sendInput(data: string): Promise<void> {
@@ -694,7 +703,7 @@ export class RuntimeConsoleController {
     async confirmPending(): Promise<void> {
         const pending = this.current.pending;
         if (!pending || this.current.acting) return;
-        if (this.current.stationLocked && (pending.type === 'close' || pending.type === 'recipe')) { this.set({ pending: undefined, error: 'This desk is locked. Nothing was changed.' }); return; }
+        if (this.current.stationLocked && (pending.type === 'close' || (pending.type === 'recipe' && !pending.setup))) { this.set({ pending: undefined, error: 'This desk is locked. Nothing was changed.' }); return; }
         if (EXTRA_ACTIONS.includes(pending.type)) await this.runExtra(pending);
         else await this.run(pending);
     }

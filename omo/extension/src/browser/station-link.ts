@@ -1,4 +1,5 @@
 import type { RecipeStationId } from './station-recipe';
+import { validRecipeStationId } from './station-recipe';
 
 export const STATION_LINK_VERSION = 1 as const;
 export const MIRROR_STATION_ID = 'monitor-mirror';
@@ -15,7 +16,7 @@ export function validStationLink(value: unknown): value is StationLink {
     return !!value && typeof value === 'object' && !Array.isArray(value)
         && (value as StationLink).version === 1
         && (value as StationLink).mirrorId === MIRROR_STATION_ID
-        && ((value as StationLink).targetStationId === 'terminal' || (value as StationLink).targetStationId === 'terminal-2');
+        && validRecipeStationId((value as StationLink).targetStationId); // w2:runtime — any station id
 }
 export function readStationLink(storage: { getItem(key: string): string | null } | undefined, projectUri: string): StationLink | undefined {
     try {
