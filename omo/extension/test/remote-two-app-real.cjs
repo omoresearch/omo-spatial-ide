@@ -255,7 +255,7 @@ async function step(name, fn) {
             await A.page.mouse.click(pt.x, pt.y);
             await A.page.waitForSelector('[data-testid="in-world-terminal-output"][data-ready="true"]', { timeout: 60000 });
             await A.page.keyboard.type(`echo ${UNIQUE}`); await A.page.keyboard.press('Enter');
-            await A.page.waitForFunction(u => (document.querySelector('[data-testid="in-world-terminal-output"]')?.textContent || '').split(u).length > 2, { timeout: 30000 }, UNIQUE);
+            await A.page.waitForFunction(u => (document.querySelector('canvas[data-testid="omo-world-canvas"]')?.dataset.terminalText || '').split('\n').some(line => line.trim() === u), { timeout: 30000 }, UNIQUE); // t3:final — read the physical monitor (as release-smoke does); the dock text mirror can lag behind a pending station-setup banner
             check('unique string typed into A\'s real terminal and echoed by the shell', true, UNIQUE);
             await A.page.keyboard.press('Escape'); await pause(500);
             await A.page.evaluate(() => document.querySelector('[data-testid="focus-detach"],[data-testid="focus-exit"]')?.click()); await pause(500);
