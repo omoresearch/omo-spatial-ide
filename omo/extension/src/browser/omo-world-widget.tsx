@@ -612,7 +612,7 @@ export class OmoWorldWidget extends ReactWidget {
         } catch { this.error = 'Those saved appearance settings could not be exported.'; this.update(); }
     };
     private cancelConfiguration = (): void => { this.invalidatePresetRead(); this.presetRevision++; this.presetStatus = ''; this.error = ''; this.configuring = false; this.update(); };
-    private configure = (): void => { this.invalidatePresetRead(); this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.onboardingClassic = false; this.onboardingEpoch++; /* w2:onboard */ this.update(); };
+    private configure = (): void => { this.invalidatePresetRead(); this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.onboardingEpoch++; this.onboardingClassic = !!this.room && !this.savedOnboardingWorld(); /* w2:onboard: legacy v1 rooms keep the classic settings; v2 worlds reopen the flow */ this.update(); };
 
     protected render(): React.ReactNode {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;

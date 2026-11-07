@@ -281,15 +281,19 @@ function detectTheme(text: string): RoomTheme | undefined {
     return undefined;
 }
 
+/** "research lab: ..." names the world. Not a URL colon, not a long sentence. */
+export function planTitle(prompt: string): string | undefined {
+    const title = /^\s*([^:,\n]{2,48}):(?!\/\/)/.exec(sanitizePlanText(prompt))?.[1]?.replace(/^(?:a|an|the|my|our)\s+/i, '');
+    return title && title.split(/\s+/).length <= 6 ? cleanLabel(title) || undefined : undefined;
+}
+
 /** The deterministic planner. */
 export function planWorld(prompt: string, options: PlanOptions = {}): PlanResult {
     const clean = sanitizePlanText(prompt).trim();
     const text = ` ${clean.toLowerCase().replace(/[’']/g, '\'')} `;
     const notes: string[] = [], warnings: string[] = [];
     if (clean !== prompt.trim() && /\[(removed|path)\]/.test(clean)) warnings.push('Removed what looked like a key, token or file path. Worlds are shared, so they never hold secrets.');
-    // "research lab: ..." names the world. Not a URL colon, not a list.
-    const title = /^\s*([^:,\n]{2,48}):(?!\/\/)/.exec(clean)?.[1]?.replace(/^(?:a|an|the|my|our)\s+/i, '');
-    const name = (options.name?.trim() || (title && title.split(/\s+/).length <= 6 ? cleanLabel(title) : '') || 'My workspace').slice(0, 120);
+    const name = (options.name?.trim() || planTitle(clean) || 'My workspace').slice(0, 120);
     const detected = detectTheme(text);
     const theme: RoomTheme = options.theme ?? detected ?? 'station';
 

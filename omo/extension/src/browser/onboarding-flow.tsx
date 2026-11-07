@@ -14,7 +14,7 @@ import type { RoomTheme } from '../common/room-state';
 import { WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS, stations } from '../common/world-model';
 import type { WorldEntity, WorldOp, WorldSpec, StationEntity } from '../common/world-model';
 import {
-    ONBOARDING_TEMPLATES, AGENT_LABEL, planWorld, applyOnboardingEdit, agentOf, stationForAgent, nextStationId, nextId, deskName, describeWorld
+    ONBOARDING_TEMPLATES, AGENT_LABEL, planWorld, planTitle, applyOnboardingEdit, agentOf, stationForAgent, nextStationId, nextId, deskName, describeWorld
 } from './onboarding-planner';
 import type { DeskAgent, PlanResult } from './onboarding-planner';
 import { planWithBackend } from './onboarding-admin';
@@ -53,7 +53,7 @@ function RenameField(props: { value: string; disabled?: boolean; testId: string;
     React.useEffect(() => setDraft(props.value), [props.value]);
     const commit = (): void => { const v = draft.trim().slice(0, 60); if (v && v !== props.value) props.onCommit(v); else setDraft(props.value); };
     return <input className="omo-ob-rename" data-testid={props.testId} aria-label="Name" maxLength={60} value={draft} disabled={props.disabled}
-        onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } else if (e.key === 'Escape') { setDraft(props.value); } e.stopPropagation(); }} />;
+        onChange={e => setDraft(e.target.value)} onFocus={e => e.currentTarget.select()} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } else if (e.key === 'Escape') { setDraft(props.value); } e.stopPropagation(); }} />;
 }
 
 /** Top-down plan of the world in metres. Pure SVG; shows every entity where it will stand. */
@@ -84,7 +84,11 @@ function FloorPlan(props: { world: WorldSpec; selected?: string; onSelect: (id: 
 export function OnboardingFlow(props: OnboardingFlowProps): React.ReactElement {
     const [step, setStep] = React.useState<Step>(props.savedWorld ? 2 : 1);
     const [prompt, setPrompt] = React.useState(props.savedWorld?.plan ?? '');
-    const [name, setName] = React.useState(props.savedWorld?.name ?? props.initialName);
+    const [typedName, setName] = React.useState(props.savedWorld?.name ?? props.initialName);
+    /** Until the user types a name, a plan title ("research lab: ...") names the world. */
+    const [nameTouched, setNameTouched] = React.useState(!!props.savedWorld || props.hasRoom);
+    const name = nameTouched ? typedName : (planTitle(prompt) ?? typedName);
+    const typeName = (value: string): void => { setNameTouched(true); setName(value); };
     const [theme, setTheme] = React.useState<RoomTheme>(props.savedWorld?.shell.theme ?? props.initialTheme);
     const [themeTouched, setThemeTouched] = React.useState(!!props.savedWorld);
     const [useHermes, setUseHermes] = React.useState(false);
@@ -211,7 +215,7 @@ export function OnboardingFlow(props: OnboardingFlowProps): React.ReactElement {
                     <span className="omo-ob-template-symbol">{t.symbol}</span><strong>{t.title}</strong><small>{t.caption}</small></button>)}</div>
                 <span className="omo-ob-label">Theme</span>
                 {themePicker}
-                <label className="omo-field">Workspace name<input data-testid="room-name" maxLength={120} value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="My next big thing" /></label>
+                <label className="omo-field">Workspace name<input data-testid="room-name" maxLength={120} value={name} onChange={e => typeName(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="My next big thing" /></label>
                 <label className={`omo-ob-hermes ${props.hermes ? '' : 'is-off'}`}>
                     <input type="checkbox" data-testid="onboarding-use-hermes" checked={useHermes && !!props.hermes} disabled={!props.hermes || planning} onChange={e => setUseHermes(e.target.checked)} />
                     <span><strong>Plan with Hermes</strong><small>{props.hermes ? 'Hermes reads your plan text and proposes a world. You review it before anything is saved.' : 'Not available here. The offline planner runs on this device.'}</small></span>
@@ -258,7 +262,7 @@ export function OnboardingFlow(props: OnboardingFlowProps): React.ReactElement {
                     <div className="omo-ob-card-head"><span>{THEME_INFO[world.shell.theme].symbol}</span><div><strong>{name.trim() || world.name}</strong><small>{THEME_INFO[world.shell.theme].title} · {describeWorld(world)}</small></div></div>
                     <ul>{stations(world).map(s => <li key={s.id}><b>{labelOf(s)}</b><span>{s.station.tabs.map(t => t.name).join(' · ')}</span></li>)}</ul>
                 </div>
-                <label className="omo-field">Workspace name<input data-testid="room-name" maxLength={120} value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></label>
+                <label className="omo-field">Workspace name<input data-testid="room-name" maxLength={120} value={name} onChange={e => typeName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></label>
                 <div className="omo-field">Project folder<div className="omo-folder"><span title={props.projectPath}>{props.projectPath ?? 'No folder selected'}</span><button onClick={props.onChooseProject} disabled={props.busy}>Browse</button></div></div>
             </div>}
 
