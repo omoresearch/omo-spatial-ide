@@ -97,7 +97,18 @@ export const ROOM_CLOSE_FINAL: readonly number[] = [ROOM_CLOSE.auth, ROOM_CLOSE.
 // Shared shapes
 // ---------------------------------------------------------------------------------------------
 
-export type RoomRole = 'owner' | 'member';
+/**
+ * t3:mp2 — the room server's roles. viewer: look only. member: chat, voice, agent status.
+ * builder: also edit the shared world. owner: also invites and roles.
+ */
+export type RoomRole = 'viewer' | 'member' | 'builder' | 'owner';
+export const ROOM_ROLES: readonly RoomRole[] = ['viewer', 'member', 'builder', 'owner'];
+/** Roles an owner can give in an invite or a role change. */
+export type RoomInviteRole = Exclude<RoomRole, 'owner'>;
+export const ROOM_INVITE_ROLES: readonly RoomInviteRole[] = ['viewer', 'member', 'builder'];
+const isRole = (v: unknown): v is RoomRole => typeof v === 'string' && (ROOM_ROLES as readonly string[]).includes(v);
+/** Can this role change the shared world? */
+export function roomRoleCanBuild(role: RoomRole | undefined): boolean { return role === 'builder' || role === 'owner'; }
 
 /**
  * Agent status summary: what a member's local agent tabs are doing, for the HUD of OTHER members.
@@ -181,13 +192,15 @@ export interface WorldGetFrame { t: 'world-get'; rid?: string }
  */
 export interface WorldOpsFrame { t: 'world-ops'; rid: string; baseRevision: number; ops: WorldOp[] }
 /** Owner only: mint an invite link. */
-export interface InviteCreateFrame { t: 'invite-create'; rid: string; ttlMinutes?: number; maxUses?: number }
+export interface InviteCreateFrame { t: 'invite-create'; rid: string; ttlMinutes?: number; maxUses?: number; role?: RoomInviteRole }
+/** t3:mp2 — owner only: change another member's role. Reply `role-ack` (rid) or `error`. */
+export interface MemberRoleFrame { t: 'member-role'; rid: string; member: string; role: RoomInviteRole }
 export interface PingFrame { t: 'ping'; at: number }
 /** Leave the room for good (server closes with 1000). Closing the socket without leave = transient. */
 export interface LeaveFrame { t: 'leave' }
 
 export type RoomClientFrame = HelloFrame | JoinFrame | PoseFrame | VoiceStatusFrame | ColourFrame | ChatFrame | EmoteFrame
-    | SignalFrame | AgentsFrame | WorldGetFrame | WorldOpsFrame | InviteCreateFrame | PingFrame | LeaveFrame;
+    | SignalFrame | AgentsFrame | WorldGetFrame | WorldOpsFrame | InviteCreateFrame | MemberRoleFrame | PingFrame | LeaveFrame;
 
 // ---------------------------------------------------------------------------------------------
 // Server → client frames
@@ -219,7 +232,9 @@ export interface SignalPushFrame { t: 'signal'; envelope: VoiceSignalEnvelope }
 /** One member's agent summaries changed. */
 export interface AgentsPushFrame { t: 'agents'; memberId: string; agents: AgentStatusSummary[] }
 /** Owner-only reply: the invite link to share. */
-export interface InviteFrame { t: 'invite'; rid: string; link: string; expiresAt: number; maxUses?: number }
+export interface InviteFrame { t: 'invite'; rid: string; link: string; expiresAt: number; maxUses?: number; role?: RoomInviteRole }
+/** t3:mp2 — reply to member-role. */
+export interface RoleAckFrame { t: 'role-ack'; rid: string; member: string; role: RoomInviteRole }
 export interface PongFrame { t: 'pong'; at: number; serverTime: number }
 /**
  * Error. With `rid` it answers that request; without, it is about the connection. `fatal: true`
@@ -228,7 +243,7 @@ export interface PongFrame { t: 'pong'; at: number; serverTime: number }
 export interface ErrorFrame { t: 'error'; rid?: string; code: RoomErrorCode; message: string; fatal?: boolean; revision?: number }
 
 export type RoomServerFrame = WelcomeFrame | RoomFrame | PresenceFrame | WorldFrame | WorldAckFrame | WorldAppliedFrame
-    | ChatPushFrame | ChatAckFrame | SignalPushFrame | AgentsPushFrame | InviteFrame | PongFrame | ErrorFrame;
+    | ChatPushFrame | ChatAckFrame | SignalPushFrame | AgentsPushFrame | InviteFrame | RoleAckFrame | PongFrame | ErrorFrame;
 
 // ---------------------------------------------------------------------------------------------
 // URLs and invite links
@@ -323,7 +338,7 @@ function world(input: unknown): WorldSpec {
     return JSON.parse(JSON.stringify(r.world));
 }
 function member(input: unknown): RemoteRoomMember {
-    if (!isObj(input) || typeof input.id !== 'string' || !ROOM_MEMBER_ID_RE.test(input.id) || (input.role !== 'owner' && input.role !== 'member')) throw new Error('Invalid room member.');
+    if (!isObj(input) || typeof input.id !== 'string' || !ROOM_MEMBER_ID_RE.test(input.id) || !isRole(input.role)) throw new Error('Invalid room member.');
     const out: RemoteRoomMember = { id: input.id, name: roomDisplayName(input.name), pose: wirePose(input.pose), role: input.role };
     if (input.voice !== undefined && input.voice !== null) out.voice = voiceStatus(input.voice as VoiceStatus)!;
     if (input.colour !== undefined) out.colour = presenceColour(input.colour);
@@ -401,7 +416,12 @@ export function parseClientFrame(raw: unknown): RoomClientFrame | undefined {
             const out: InviteCreateFrame = { t: 'invite-create', rid: needRid(f.rid) };
             if (f.ttlMinutes !== undefined) { if (!int(f.ttlMinutes, 1, 60 * 24 * 30)) throw new Error('Invite lifetime is 1 minute to 30 days.'); out.ttlMinutes = f.ttlMinutes; }
             if (f.maxUses !== undefined) { if (!int(f.maxUses, 1, 100)) throw new Error('Invite uses must be 1–100.'); out.maxUses = f.maxUses; }
+            if (f.role !== undefined) { if (!(ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role)) throw new Error('Invite role must be viewer, member or builder.'); out.role = f.role as RoomInviteRole; }
             return out;
+        }
+        case 'member-role': {
+            if (typeof f.member !== 'string' || !ROOM_MEMBER_ID_RE.test(f.member) || !(ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role)) throw new Error('Choose a member and one of viewer, member, builder.');
+            return { t: 'member-role', rid: needRid(f.rid), member: f.member, role: f.role as RoomInviteRole };
         }
         case 'ping': return { t: 'ping', at: time(f.at) ? f.at : 0 };
         case 'leave': return { t: 'leave' };
@@ -419,7 +439,7 @@ export function parseServerFrame(raw: unknown): RoomServerFrame | undefined {
         case 'welcome':
             if (f.proto !== ROOM_WIRE_VERSION) throw new Error('Unsupported protocol version.');
             if (typeof f.roomId !== 'string' || !ROOM_ID_RE.test(f.roomId) || typeof f.memberId !== 'string' || !ROOM_MEMBER_ID_RE.test(f.memberId)
-                || (f.role !== 'owner' && f.role !== 'member') || typeof f.memberToken !== 'string' || !ROOM_SECRET_RE.test(f.memberToken)) throw new Error('Invalid welcome.');
+                || !isRole(f.role) || typeof f.memberToken !== 'string' || !ROOM_SECRET_RE.test(f.memberToken)) throw new Error('Invalid welcome.');
             return { t: 'welcome', rid: optRid(f.rid), proto: ROOM_WIRE_VERSION, roomId: f.roomId, roomName: line(f.roomName, 120) ? (f.roomName as string).trim() : f.roomId,
                 memberId: f.memberId, role: f.role, memberToken: f.memberToken, serverTime: time(f.serverTime) ? f.serverTime : 0 };
         case 'room':
@@ -442,7 +462,10 @@ export function parseServerFrame(raw: unknown): RoomServerFrame | undefined {
         }
         case 'agents': if (typeof f.memberId !== 'string' || !ROOM_MEMBER_ID_RE.test(f.memberId)) throw new Error('Invalid agents push.'); return { t: 'agents', memberId: f.memberId, agents: agentSummaries(f.agents) };
         case 'invite': if (typeof f.link !== 'string' || f.link.length > 2048 || !time(f.expiresAt)) throw new Error('Invalid invite.');
-            return { t: 'invite', rid: needRid(f.rid), link: f.link, expiresAt: f.expiresAt, ...(int(f.maxUses, 1, 100) ? { maxUses: f.maxUses } : {}) };
+            return { t: 'invite', rid: needRid(f.rid), link: f.link, expiresAt: f.expiresAt, ...(int(f.maxUses, 1, 100) ? { maxUses: f.maxUses } : {}), ...((ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role) ? { role: f.role as RoomInviteRole } : {}) };
+        case 'role-ack':
+            if (typeof f.member !== 'string' || !ROOM_MEMBER_ID_RE.test(f.member) || !(ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role)) throw new Error('Invalid role reply.');
+            return { t: 'role-ack', rid: needRid(f.rid), member: f.member, role: f.role as RoomInviteRole };
         case 'pong': return { t: 'pong', at: time(f.at) ? f.at : 0, serverTime: time(f.serverTime) ? f.serverTime : 0 };
         case 'error': {
             const out: ErrorFrame = { t: 'error', rid: optRid(f.rid), code: (typeof f.code === 'string' ? f.code : 'server') as RoomErrorCode, message: typeof f.message === 'string' ? f.message.slice(0, 500) : 'Room server error.' };

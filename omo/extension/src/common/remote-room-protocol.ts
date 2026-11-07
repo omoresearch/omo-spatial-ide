@@ -8,7 +8,7 @@
  */
 import type { PlayerPose } from './player-state';
 import type { ChatMessage, ChatSay, PresenceColour, RoomSnapshot, VoiceSignal, VoiceSignalEnvelope, VoiceStatus } from './presence-protocol';
-import type { AgentStatusSummary, RemoteRoomMember, RoomRole } from './room-wire-protocol';
+import type { AgentStatusSummary, RemoteRoomMember, RoomInviteRole, RoomRole } from './room-wire-protocol';
 import type { WorldOp, WorldSpec } from './world-model';
 
 export const OMO_REMOTE_ROOM_PATH = '/services/omo-remote-room';
@@ -45,7 +45,10 @@ export interface RemoteJoinRequest { name: string; colour?: PresenceColour }
 export interface RemoteHostRequest {
     /** https://… (or http://localhost for development). */
     server: string;
-    /** Owner token configured on the room server. Used for this handshake only; not stored. */
+    /**
+     * t3:mp2 — the OWNER KEY printed once by `omo-room-server create-room` (omo1.<room>.<member>.<secret>).
+     * The IDE backend keeps it in its private token file (0600, never in the browser) so it can reconnect.
+     */
     ownerToken: string;
     roomId: string;
     roomName?: string;
@@ -73,8 +76,10 @@ export interface OmoRemoteRoomService {
     saved(): Promise<SavedRemoteRoom[]>;
     /** Delete the stored member token for one room. */
     forget(server: string, roomId: string): Promise<void>;
-    /** Owner only. */
-    createInvite(options?: { ttlMinutes?: number; maxUses?: number }): Promise<{ link: string; expiresAt: number }>;
+    /** Owner only. `role` (t3:mp2): what the invited person may do; default member. */
+    createInvite(options?: { ttlMinutes?: number; maxUses?: number; role?: RoomInviteRole }): Promise<{ link: string; expiresAt: number; role?: RoomInviteRole }>;
+    /** t3:mp2 — owner only: change another member's role (viewer, member, builder). */
+    setMemberRole(memberId: string, role: RoomInviteRole): Promise<void>;
     // --- presence, voice, chat: the same contract as OmoPresenceService ---
     snapshot(): Promise<RoomSnapshot>;
     update(pose: PlayerPose): Promise<RoomSnapshot>;

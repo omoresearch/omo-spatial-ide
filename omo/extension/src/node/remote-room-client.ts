@@ -12,7 +12,7 @@ import { PLAYER_HOME } from '../common/player-state';
 import type { ChatMessage, ChatSay, PresenceColour, RoomMember, RoomSnapshot, VoiceSignal, VoiceSignalEnvelope, VoiceStatus } from '../common/presence-protocol';
 import { CHAT_INBOX_MAX, VOICE_INBOX_MAX, chatSay, presenceColour, voiceSignal, voiceStatus } from '../common/presence-protocol';
 import type { OmoRemoteRoomService, RemoteHostRequest, RemoteJoinRequest, RemoteRoomStatus, RemoteWorldResult, SavedRemoteRoom } from '../common/remote-room-protocol';
-import type { AgentStatusSummary, RemoteRoomMember, RoomAuth, RoomClientFrame, RoomServerFrame, RoomRole } from '../common/room-wire-protocol';
+import type { AgentStatusSummary, RemoteRoomMember, RoomAuth, RoomClientFrame, RoomInviteRole, RoomServerFrame, RoomRole } from '../common/room-wire-protocol';
 import {
     ROOM_CLOSE, ROOM_CLOSE_FINAL, ROOM_ID_RE, ROOM_PING_INTERVAL_MS, ROOM_POSE_MAX_HZ, ROOM_SECRET_RE, ROOM_WIRE_VERSION,
     agentSummaries, encodeFrame, parseInviteLink, parseServerFrame, roomDisplayName, roomServerOrigin, roomSocketUrl, wirePose
@@ -180,11 +180,18 @@ export class RemoteRoomClient {
         await this.options.store.remove(server, roomId);
     }
 
-    async createInvite(options: { ttlMinutes?: number; maxUses?: number } = {}): Promise<{ link: string; expiresAt: number }> {
+    async createInvite(options: { ttlMinutes?: number; maxUses?: number; role?: RoomInviteRole } = {}): Promise<{ link: string; expiresAt: number; role?: RoomInviteRole }> {
         if (this.role !== 'owner') throw new Error('Only the room owner can create invite links.');
         const reply = await this.request({ t: 'invite-create', rid: this.rid(), ...options });
         if (reply.t !== 'invite') throw new Error('The room server did not return an invite.');
-        return { link: reply.link, expiresAt: reply.expiresAt };
+        return { link: reply.link, expiresAt: reply.expiresAt, ...(reply.role ? { role: reply.role } : {}) };
+    }
+    /** t3:mp2 — owner only: change another member's role. */
+    async setMemberRole(memberId: string, role: RoomInviteRole): Promise<void> {
+        if (this.role !== 'owner') throw new Error('Only the room owner can change roles.');
+        const reply = await this.request({ t: 'member-role', rid: this.rid(), member: memberId, role });
+        if (reply.t !== 'role-ack') throw new Error('The room server did not confirm the role change.');
+        this.members = this.members.map(m => m.id === memberId ? { ...m, role } : m);
     }
 
     // ------------------------------------------------------------------ public: presence/voice/chat
@@ -272,6 +279,7 @@ export class RemoteRoomClient {
                 return world ? { ok: false, conflict: true, error: 'Someone changed the room first. Your change was re-applied on top of theirs: check the preview and apply again.', world }
                     : { ok: false, conflict: false, error: e.message };
             }
+            if (e.code === 'forbidden') return { ok: false, conflict: false, error: forbiddenText(this.role, e.message) }; // t3:mp2
             return { ok: false, conflict: false, error: e.message };
         }
     }
@@ -464,7 +472,12 @@ export class RemoteRoomClient {
             if (frame.t !== 'world') return; // a world reply also updates local state below
         }
         switch (frame.t) {
-            case 'presence': this.members = frame.members; break;
+            case 'presence': {
+                this.members = frame.members;
+                const mine = frame.members.find(m => m.id === this.selfId); // t3:mp2: the owner may change my role while I am here
+                if (mine && mine.role !== this.role) { this.role = mine.role; this.log(`remote room: your role is now ${mine.role}`); }
+                break;
+            }
             case 'agents': this.members = this.members.map(m => m.id === frame.memberId ? { ...m, agents: frame.agents } : m); break;
             case 'world': this.worldSpec = frame.world; break;
             case 'world-applied': {
@@ -482,6 +495,15 @@ export class RemoteRoomClient {
     }
 }
 
+/** t3:mp2 — a refusal people can act on: what their role allows and who can change it. */
+export function forbiddenText(role: RoomRole | undefined, serverMessage: string): string {
+    if (/your role/i.test(serverMessage) || role === 'viewer' || role === 'member') {
+        const can = role === 'viewer' ? 'you can look around' : 'you can chat, talk and share agent status';
+        return `Your role in this room is “${role ?? 'unknown'}”: ${can}, but only builders and the owner can change the room. Ask the room owner to make you a builder. Nothing was changed.`;
+    }
+    return `${serverMessage} Nothing was changed.`;
+}
+
 /** RPC facade: one per browser connection. Methods are async because the RPC layer is. */
 export function remoteRoomConnection(store: RemoteRoomTokenStore, options: Omit<RemoteRoomClientOptions, 'store'> = {}): OmoRemoteRoomService & { dispose(): void } {
     const client = new RemoteRoomClient({ ...options, store });
@@ -495,6 +517,7 @@ export function remoteRoomConnection(store: RemoteRoomTokenStore, options: Omit<
         saved: () => client.saved(),
         forget: (server, roomId) => client.forget(server, roomId),
         createInvite: options2 => client.createInvite(options2),
+        setMemberRole: (memberId, role) => client.setMemberRole(memberId, role), // t3:mp2
         snapshot: async () => client.snapshot(),
         update: async pose => client.update(pose),
         setVoice: async status => client.setVoice(status),

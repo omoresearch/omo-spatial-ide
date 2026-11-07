@@ -19,6 +19,20 @@ import {
 import { parseRoomState } from '../common/room-state';
 import type { RoomState } from '../common/room-state';
 
+/**
+ * t3:mp2 — a shared room world (RemoteWorldSource in remote-room-controller.ts) that replaces local storage while connected.
+ * `current()` undefined = not connected. `apply` sends ops with the proposal's baseRevision to the room server.
+ */
+export interface RemoteWorldLink {
+    current(): WorldSpec | undefined;
+    apply(proposal: WorldProposal): Promise<
+        | { ok: true; world: WorldSpec }
+        | { ok: false; conflict: true; error: string; world: WorldSpec; rebased?: WorldProposal; preview?: WorldSpec }
+        | { ok: false; conflict: false; error: string }>;
+    /** Fired when the room world changes or the connection starts/ends. Returns unsubscribe. */
+    onStatus(listener: () => void): () => void;
+}
+
 export interface WorldStorage {
     getItem(key: string): string | null;
     setItem(key: string, value: string): void;
@@ -69,6 +83,11 @@ export class WorldStore {
     loadError = '';
     /** Last save/apply/undo error, for the UI. */
     lastError = '';
+    // t3:mp2 — remote room source (only while connected): the room's world replaces local storage.
+    private remote?: RemoteWorldLink;
+    private offRemote?: () => void;
+    private remoteOn = false;
+    private remoteBusy = false;
 
     constructor(private readonly options: WorldStoreOptions) {
         this.key = worldStorageKey(options.projectUri);
@@ -84,6 +103,71 @@ export class WorldStore {
     get proposal(): PendingProposal | undefined { return this.pending; }
     get canUndo(): boolean { return this.undoStack.length > 0; }
     get canRedo(): boolean { return this.redoStack.length > 0; }
+    /** t3:mp2 — true while the shared room world (not local storage) is the world. */
+    get remoteActive(): boolean { return this.remoteOn; }
+    /** t3:mp2 — true while a change is on its way to the room server. */
+    get sending(): boolean { return this.remoteBusy; }
+
+    /**
+     * t3:mp2 — use a remote room as the world source. While `link.current()` gives a world, it REPLACES the local
+     * world (nothing is written to local storage) and Apply/Undo/Redo send ops to the room server. When the link
+     * ends (leave/disconnect), the local saved world comes back unchanged.
+     */
+    attachRemote(link: RemoteWorldLink | undefined): void {
+        if (link === this.remote) return;
+        this.offRemote?.(); this.offRemote = undefined; this.remote = link;
+        if (link) this.offRemote = link.onStatus(() => this.remoteChanged());
+        this.remoteChanged();
+    }
+    private remoteChanged(): void {
+        if (this.remoteBusy) return; // the in-flight apply reconciles when it returns
+        const world = this.remote?.current();
+        if (world) {
+            const entering = !this.remoteOn;
+            if (!entering && this.current && this.current.revision === world.revision && sameWorld(this.current, world)) return;
+            if (entering) { this.remoteOn = true; this.pending = undefined; this.previewWorld = undefined; this.undoStack = []; this.redoStack = []; }
+            this.current = clone(world);
+            this.rebase();
+            this.emit('external');
+        } else if (this.remoteOn) {
+            this.remoteOn = false; this.pending = undefined; this.previewWorld = undefined; this.undoStack = []; this.redoStack = [];
+            this.current = undefined;
+            this.load();
+        }
+    }
+    /** t3:mp2 — send ops to the room. The local world changes only when the server accepts them. */
+    private applyRemote(ops: WorldOp[], label: string, kind: 'apply' | 'undo' | 'redo', entry?: HistoryEntry): WorldResult {
+        const link = this.remote!;
+        if (this.remoteBusy) return this.fail('Your last change is still on its way to the room. Wait a moment.');
+        const before = this.world;
+        const local = applyWorldOps(before, ops);
+        if (!local.ok) return this.fail(local.error);
+        const proposal: WorldProposal = { id: this.pending?.id ?? proposalId(), source: this.pending?.source ?? 'build-mode', summary: label, ops: cloneOps(ops), baseRevision: before.revision };
+        this.remoteBusy = true;
+        void link.apply(proposal).then(outcome => {
+            this.remoteBusy = false;
+            if (!this.remoteOn) return;
+            if (outcome.ok) {
+                this.current = clone(outcome.world);
+                if (kind === 'apply') { this.pending = undefined; this.previewWorld = undefined; this.push(this.undoStack, { label, before, after: this.current, ops: proposal.ops }); this.redoStack = []; }
+                else if (kind === 'undo' && entry) { this.undoStack.pop(); this.redoStack.push(entry); }
+                else if (kind === 'redo' && entry) { this.redoStack.pop(); this.push(this.undoStack, { ...entry, before, after: this.current }); }
+                this.lastError = '';
+                this.emit(kind);
+            } else if (outcome.conflict) {
+                // Someone changed the room first: take their world, re-propose this change on top of it, ask again.
+                this.current = clone(outcome.world);
+                if (kind === 'apply' && this.pending) {
+                    this.rebase();
+                    this.fail(this.pending
+                        ? 'Someone changed the room first. Your change is shown again on top of theirs. Check it and press Apply again.'
+                        : `Someone changed the room first, and your change no longer fits. ${this.lastError}`);
+                } else { this.undoStack = []; this.redoStack = []; this.fail('Someone changed the room first, so undo history was cleared. You see the latest room.'); }
+            } else this.fail(outcome.error);
+            this.remoteChanged(); // catch up with pushes that arrived while sending
+        }, error => { this.remoteBusy = false; this.fail(`The room server did not take the change: ${error instanceof Error ? error.message : String(error)}`); });
+        return local;
+    }
     get undoLabel(): string | undefined { return this.undoStack[this.undoStack.length - 1]?.label; }
     get redoLabel(): string | undefined { return this.redoStack[this.redoStack.length - 1]?.label; }
 
@@ -92,6 +176,8 @@ export class WorldStore {
     /** Read the saved v2 world, or migrate the v1 room on first load. Safe to call again (re-reads). */
     load(): WorldSpec {
         this.loadError = '';
+        const shared = this.remoteOn ? this.remote?.current() : undefined; // t3:mp2
+        if (shared) { this.current = clone(shared); this.rebase(); this.emit('load'); return this.current; }
         const raw = this.read(this.key);
         if (raw) {
             const parsed = parseWorld(raw);
@@ -155,6 +241,7 @@ export class WorldStore {
     apply(): WorldResult {
         const pending = this.pending;
         if (!pending) return { ok: false, error: 'There is no change to apply.' };
+        if (this.remoteOn) return this.applyRemote(pending.ops, pending.summary, 'apply'); // t3:mp2
         const before = this.world;
         const result = applyWorldOps(before, pending.ops);
         if (!result.ok) { this.fail(result.error); return result; }
@@ -179,6 +266,7 @@ export class WorldStore {
         const entry = this.undoStack[this.undoStack.length - 1];
         if (!entry) return this.fail('Nothing to undo.');
         const inverse = diffWorlds(entry.after, entry.before);
+        if (this.remoteOn) return this.applyRemote(inverse, `Undo ${entry.label}`, 'undo', entry); // t3:mp2
         const result = applyWorldOps(this.world, inverse);
         if (!result.ok) return this.fail(`Could not undo “${entry.label}”: ${result.error}`);
         if (!this.write(this.key, JSON.stringify(result.world))) return this.fail('The world could not be saved. Check browser storage.');
@@ -192,6 +280,7 @@ export class WorldStore {
         if (this.pending) return this.fail('Apply or discard the pending change first.');
         const entry = this.redoStack[this.redoStack.length - 1];
         if (!entry) return this.fail('Nothing to redo.');
+        if (this.remoteOn) return this.applyRemote(entry.ops, entry.label, 'redo', entry); // t3:mp2
         const result = applyWorldOps(this.world, entry.ops);
         if (!result.ok) return this.fail(`Could not redo “${entry.label}”: ${result.error}`);
         if (!this.write(this.key, JSON.stringify(result.world))) return this.fail('The world could not be saved. Check browser storage.');
@@ -203,6 +292,7 @@ export class WorldStore {
 
     /** Another tab or lane saved this project's world. Re-read it; a pending draft is rebased or dropped. */
     reloadExternal(raw?: string | null): void {
+        if (this.remoteOn) return; // t3:mp2: local storage is not the world while in a remote room
         const text = raw === undefined ? this.read(this.key) : raw;
         if (!text) return;
         const parsed = parseWorld(text);

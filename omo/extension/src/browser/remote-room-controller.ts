@@ -14,7 +14,9 @@
 import type { PlayerPose } from '../common/player-state';
 import type { ChatMessage, ChatSay, OmoPresenceService, PresenceColour, PresenceJoin, RoomSnapshot, VoiceSignal, VoiceSignalEnvelope, VoiceStatus } from '../common/presence-protocol';
 import type { OmoRemoteRoomService, RemoteRoomStatus, SavedRemoteRoom } from '../common/remote-room-protocol';
-import type { AgentStatusSummary } from '../common/room-wire-protocol';
+import type { AgentStatusSummary, RoomInviteRole } from '../common/room-wire-protocol';
+import { remoteRoomVoiceTransport } from '../common/voice-transport'; // t3:mp2
+import type { VoiceSignalTransport, VoiceWireChannel, VoiceWireIn } from '../common/voice-transport'; // t3:mp2
 import type { WorldOp, WorldProposal, WorldSpec } from '../common/world-model';
 import { applyWorldOps } from '../common/world-model';
 import type { AgentPresence } from './agent-avatars';
@@ -80,6 +82,10 @@ export class RemoteWorldSource implements WorldSource {
     readonly kind = 'remote' as const;
     private latest?: WorldSpec;
     private listeners = new Set<(world: WorldSpec) => void>();
+    /** t3:mp2 — WorldStore's RemoteWorldLink: fired on every world change AND when the connection ends (current() undefined). */
+    private statusListeners = new Set<() => void>();
+    onStatus(listener: () => void): () => void { this.statusListeners.add(listener); return () => this.statusListeners.delete(listener); }
+    private status(): void { for (const l of [...this.statusListeners]) { try { l(); } catch { /* listener errors stay local */ } } }
     constructor(private readonly service: OmoRemoteRoomService) {}
     current(): WorldSpec | undefined { return this.latest; }
     /** Called by the controller's poll with the revision the backend reports. */
@@ -100,12 +106,53 @@ export class RemoteWorldSource implements WorldSource {
             : { ok: false, conflict: true, error: `Someone changed the room first, and your change no longer fits: ${preview.error}`, world: result.world };
     }
     onChange(listener: (world: WorldSpec) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
-    clear(): void { this.latest = undefined; }
+    clear(): void { if (this.latest === undefined) return; this.latest = undefined; this.status(); }
     private set(world: WorldSpec): void {
         if (this.latest && this.latest.revision === world.revision && JSON.stringify(this.latest) === JSON.stringify(world)) return;
         this.latest = world;
         for (const l of this.listeners) { try { l(world); } catch { /* listener errors stay local */ } }
+        this.status();
     }
+}
+
+// =================================================================================================
+// t3:mp2 — room voice over the remote room server (VoiceHub.useTransport)
+// =================================================================================================
+
+/**
+ * VoiceWireChannel over the IDE backend's remote room client. The backend owns the socket; the browser
+ * polls it for relayed signals (fast) and the roster (slower) only while voice listens.
+ */
+export function remoteVoiceChannel(service: OmoRemoteRoomService, timers: { every(fn: () => void, ms: number): unknown; stop(handle: unknown): void }): VoiceWireChannel & { dispose(): void } {
+    const listeners = new Set<(message: VoiceWireIn) => void>();
+    const deliver = (message: VoiceWireIn): void => { for (const l of [...listeners]) { try { l(message); } catch { /* listener errors stay local */ } } };
+    let busySignals = false, busyRoster = false, handles: unknown[] = [];
+    const start = (): void => {
+        if (handles.length) return;
+        handles = [
+            timers.every(() => {
+                if (busySignals) return; busySignals = true;
+                service.takeSignals().then(list => { for (const envelope of list) deliver({ type: 'voice.signal', envelope }); }, () => undefined).finally(() => { busySignals = false; });
+            }, 100),
+            timers.every(() => {
+                if (busyRoster) return; busyRoster = true;
+                service.snapshot().then(snap => deliver({ type: 'voice.roster', roster: { selfId: snap.selfId, members: snap.members.map(m => ({ id: m.id, name: m.name, pose: m.pose, ...(m.voice ? { voice: m.voice } : {}) })) } }), () => undefined)
+                    .finally(() => { busyRoster = false; });
+            }, 300)
+        ];
+    };
+    const stop = (): void => { for (const h of handles) timers.stop(h); handles = []; };
+    return {
+        send: message => message.type === 'voice.status' ? service.setVoice(message.status) : service.signal(message.signal),
+        onMessage: listener => { listeners.add(listener); start(); return () => { listeners.delete(listener); if (!listeners.size) stop(); }; },
+        dispose: () => { listeners.clear(); stop(); }
+    };
+}
+
+/** t3:mp2 — the room code inside an owner key printed by `omo-room-server create-room` (omo1.<room>.<member>.<secret>). */
+export function roomIdFromOwnerKey(key: string): string | undefined {
+    const m = /^omo1\.([a-z0-9][a-z0-9-]{2,31})\.[A-Za-z0-9_-]{6,64}\.[A-Za-z0-9_-]{16,}$/.exec(key.trim());
+    return m?.[1];
 }
 
 /** Convenience for callers holding raw ops. */
@@ -130,6 +177,8 @@ export interface RemoteRoomHost {
     schedule(fn: () => void, ms: number): unknown;
     cancel(handle: unknown): void;
     onChange(): void;
+    /** t3:mp2 — switch room voice signalling: a remote-room transport while connected, undefined = local presence again. */
+    voiceTransport?(transport: VoiceSignalTransport | undefined): void;
 }
 
 export interface RemoteRoomView {
@@ -138,7 +187,7 @@ export interface RemoteRoomView {
     busy: boolean;
     error: string;
     saved: SavedRemoteRoom[];
-    invite?: { link: string; expiresAt: number };
+    invite?: { link: string; expiresAt: number; role?: RoomInviteRole };
     /** Seconds until the next automatic retry (reconnecting only). */
     retryIn?: number;
 }
@@ -164,6 +213,7 @@ export class RemoteRoomController {
     private agentsSent = '';
     private disposed = false;
     private name = 'Builder';
+    private voice?: { channel: ReturnType<typeof remoteVoiceChannel> }; // t3:mp2
 
     constructor(private readonly service: OmoRemoteRoomService, private readonly router: RoutedPresenceService, private readonly host: RemoteRoomHost) {
         this.world = new RemoteWorldSource(service);
@@ -190,7 +240,12 @@ export class RemoteRoomController {
     /** Server URL + owner token. The owner token goes to the IDE backend once and is not stored. */
     hostRoom(input: { server: string; ownerToken: string; roomId: string; roomName?: string; seedCurrent: boolean }, name: string): Promise<void> {
         const seedWorld = input.seedCurrent ? this.host.seedWorld() : undefined;
-        return this.connect(name, () => this.service.host({ server: input.server, ownerToken: input.ownerToken, roomId: input.roomId, roomName: input.roomName, seedWorld }, { name: name.trim() }));
+        // t3:mp2: the owner key from `create-room` names its room; the room code field may stay empty.
+        const fromKey = roomIdFromOwnerKey(input.ownerToken);
+        const roomId = input.roomId.trim() || fromKey || '';
+        if (fromKey && input.roomId.trim() && fromKey !== input.roomId.trim()) { this.emit({ error: `This owner key is for room “${fromKey}”, not “${input.roomId.trim()}”. Clear the room code or paste the right key.` }); return Promise.resolve(); }
+        if (!roomId) { this.emit({ error: 'Paste the owner key that “omo-room-server create-room” printed. It names the room.' }); return Promise.resolve(); }
+        return this.connect(name, () => this.service.host({ server: input.server, ownerToken: input.ownerToken.trim(), roomId, roomName: input.roomName, seedWorld }, { name: name.trim() }));
     }
     rejoin(room: SavedRemoteRoom, name: string): Promise<void> {
         return this.connect(name, () => this.service.rejoin(room.server, room.roomId, { name: name.trim() }));
@@ -205,15 +260,35 @@ export class RemoteRoomController {
         catch (error) { this.emit({ error: String((error as Error).message ?? error) }); }
         this.reschedule();
     }
-    async createInvite(): Promise<void> {
-        try { this.emit({ invite: await this.service.createInvite({ ttlMinutes: 60 * 24, maxUses: 10 }), error: '' }); }
+    /** Owner only. t3:mp2: single-use invite with a role (the server's invites are always single use). */
+    async createInvite(role: RoomInviteRole = 'member'): Promise<void> {
+        try { this.emit({ invite: await this.service.createInvite({ ttlMinutes: 60 * 24, role }), error: '' }); }
         catch (error) { this.emit({ error: String((error as Error).message ?? error) }); }
+    }
+    /** t3:mp2 — owner only: change someone's role. */
+    async setMemberRole(memberId: string, role: RoomInviteRole): Promise<void> {
+        try { await this.service.setMemberRole(memberId, role); this.emit({ error: '' }); await this.poll(); }
+        catch (error) { this.emit({ error: String((error as Error).message ?? error) }); }
+    }
+    /** t3:mp2 — voice runs over the room server while connected, over local presence otherwise. */
+    private setVoice(on: boolean): void {
+        if (on === !!this.voice || !this.host.voiceTransport) return;
+        if (on) {
+            const channel = remoteVoiceChannel(this.service, { every: (fn, ms) => setInterval(fn, ms), stop: h => clearInterval(h as ReturnType<typeof setInterval>) });
+            this.voice = { channel };
+            this.host.voiceTransport(remoteRoomVoiceTransport(channel));
+        } else {
+            const old = this.voice; this.voice = undefined;
+            this.host.voiceTransport(undefined);
+            old?.channel.dispose();
+        }
     }
     /** Leave the remote room. PresenceController goes solo; terminals keep running locally. */
     leave(): void {
         // Switch the route first and tell the backend directly; PresenceController's queued leave then
         // lands on the local service (a no-op there), so the order of queued calls cannot leak.
         this.router.route = 'local';
+        this.setVoice(false); // t3:mp2
         void this.service.leave().catch(() => undefined);
         if (this.host.presence().phase !== 'solo') this.host.leavePresence();
         this.world.clear();
@@ -233,6 +308,7 @@ export class RemoteRoomController {
             this.agentsSent = '';
             this.emit({ status, busy: false });
             await this.world.sync(status.worldRevision);
+            this.setVoice(true); // t3:mp2
             if (status.roomId) this.host.joinPresence(status.roomId, this.name);
             await this.loadSaved();
         } catch (error) {
@@ -259,8 +335,10 @@ export class RemoteRoomController {
                 this.router.route = 'local';
                 this.world.clear();
             }
+            this.setVoice(false); // t3:mp2
         } else if (status.phase === 'joined') {
             if (this.router.route !== 'remote') this.router.route = 'remote';
+            this.setVoice(true); // t3:mp2
             // After a reconnect, rejoin PresenceController if it dropped to solo meanwhile.
             if (this.host.presence().phase === 'solo' && status.roomId && was !== 'idle') this.host.joinPresence(status.roomId, this.name);
             await this.world.sync(status.worldRevision).catch(() => undefined);
@@ -274,6 +352,7 @@ export class RemoteRoomController {
 
     dispose(): void {
         this.disposed = true;
+        this.voice?.channel.dispose(); this.voice = undefined; // t3:mp2
         if (this.timer !== undefined) this.host.cancel(this.timer);
         this.timer = undefined;
     }

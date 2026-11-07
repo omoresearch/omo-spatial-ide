@@ -21,7 +21,12 @@ const TO_ACTIVITY = { working: 'working', waiting: 'idle', 'needs-input': 'inter
 const IDE_AGENT_KINDS = ['hermes', 'claude', 'codex', 'dsh'];
 const DEFAULT_POSE = { x: 0, z: 2, yaw: 0, pitch: 0 };
 const RID_RE = /^[A-Za-z0-9_-]{1,40}$/;
-const ideRole = role => (role === 'owner' ? 'owner' : 'member');
+// t3:mp2 — the IDE now sees the real server role (viewer/member/builder/owner), so it can explain refusals.
+const IDE_ROLES = ['viewer', 'member', 'builder', 'owner'];
+const ideRole = role => (IDE_ROLES.includes(role) ? role : 'viewer');
+const INVITE_ROLES = ['viewer', 'member', 'builder'];
+/** t3:mp2 — test-only frame trace: secrets are redacted before anything is written. */
+const redact = text => String(text).replace(/"(ownerToken|token|memberToken|invite)":"[^"]*"/g, '"$1":"<redacted>"').replace(/#invite=[^"\s]*/g, '#invite=<redacted>');
 
 /** Invite link the IDE accepts: <origin>/omo-room/join/<roomId>#invite=<code> (code in the fragment). */
 function ideInviteLink(origin, roomId, token) { return `${origin.replace(/\/+$/, '')}${IDE_INVITE_PATH}${encodeURIComponent(roomId)}#invite=${encodeURIComponent(token)}`; }
@@ -32,7 +37,8 @@ function ideInviteLink(origin, roomId, token) { return `${origin.replace(/\/+$/,
  */
 function serveIdeSocket(ws, ctx) {
     const { hub, ip, origin, authFail, log = () => {} } = ctx;
-    const raw = (frame) => { if (ws.readyState === 1) ws.send(JSON.stringify(frame)); };
+    const trace = typeof ctx.trace === 'function' ? (dir, text) => { try { ctx.trace(dir, redact(text)); } catch { /* trace is best effort */ } } : () => {};
+    const raw = (frame) => { if (ws.readyState === 1) { const text = JSON.stringify(frame); trace('out', text); ws.send(text); } };
     const closeIde = (code, reason) => { try { ws.close(code, String(reason || '').slice(0, 100)); } catch { /* closed */ } };
     let phase = 'hello';          // hello -> authed (welcome sent) -> joined
     let auth = null, conn = null, selfId = '', helloRid, roomId = '';
@@ -84,7 +90,8 @@ function serveIdeSocket(ws, ctx) {
                     const kind = pending.get(m.id); pending.delete(m.id);
                     if (kind === 'world-get') raw({ t: 'world', rid: m.id, world: m.world });
                     else if (kind === 'world-ops') raw({ t: 'world-ack', rid: m.id, revision: m.revision });
-                    else if (kind === 'invite-create') raw({ t: 'invite', rid: m.id, link: ideInviteLink(origin, roomId, m.token), expiresAt: m.invite.expiresAt });
+                    else if (kind === 'invite-create') raw({ t: 'invite', rid: m.id, link: ideInviteLink(origin, roomId, m.token), expiresAt: m.invite.expiresAt, role: m.invite.role });
+                    else if (kind && kind.startsWith('member-role:')) { const [, member, role] = kind.split(':'); raw({ t: 'role-ack', rid: m.id, member, role }); }
                     return;
                 }
                 case 'error': {
@@ -151,6 +158,7 @@ function serveIdeSocket(ws, ctx) {
 
     ws.on('message', async (data, isBinary) => {
         if (isBinary) return closeIde(4005, 'Text frames only');
+        trace('in', data.toString('utf8'));
         let f; try { f = JSON.parse(data.toString('utf8')); } catch { raw({ t: 'error', code: 'bad-frame', message: 'Frame is not JSON.' }); return; }
         if (!f || typeof f !== 'object' || typeof f.t !== 'string') { raw({ t: 'error', code: 'bad-frame', message: 'Frame has no type.' }); return; }
         if (phase === 'hello') { if (f.t !== 'hello') return closeIde(4001, 'Say hello first'); phase = 'authing'; return onHello(f); }
@@ -170,8 +178,13 @@ function serveIdeSocket(ws, ctx) {
             case 'world-ops': if (rid) pending.set(rid, 'world-ops'); return toHub({ type: 'world-ops', id: rid, baseRevision: f.baseRevision, ops: f.ops });
             case 'invite-create': {
                 if (rid) pending.set(rid, 'invite-create');
-                // IDE members may edit the shared world, so IDE invites are builder invites.
-                return toHub({ type: 'invite-create', id: rid, role: 'builder', ttl: Number.isInteger(f.ttlMinutes) ? `${f.ttlMinutes}m` : undefined });
+                // t3:mp2: the owner picks the role (viewer/member/builder). No role = builder (older IDE clients edited the world).
+                const role = INVITE_ROLES.includes(f.role) ? f.role : 'builder';
+                return toHub({ type: 'invite-create', id: rid, role, ttl: Number.isInteger(f.ttlMinutes) ? `${f.ttlMinutes}m` : undefined });
+            }
+            case 'member-role': { // t3:mp2: owner changes a member's role (hub checks owner + valid role)
+                if (rid && typeof f.member === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(f.member) && INVITE_ROLES.includes(f.role)) pending.set(rid, `member-role:${f.member}:${f.role}`);
+                return toHub({ type: 'member-role', id: rid, member: f.member, role: f.role });
             }
             case 'leave': return closeIde(1000, 'left');
             default: return; // unknown types are ignored (forward compatibility)

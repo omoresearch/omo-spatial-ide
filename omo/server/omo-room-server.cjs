@@ -3,7 +3,7 @@
 // Omo room server — shared rooms for people on different computers.
 //
 //   node omo/server/omo-room-server.cjs --data DIR --port N [--host H] [--tls-cert F --tls-key F]
-//        [--public-url https://omo.example.ts.net] [--allow-origin URL]... [--trust-proxy] [--allow-plain-http]
+//        [--public-url https://omo.example.ts.net] [--allow-origin URL]... [--trust-proxy] [--allow-plain-http] [--trace-frames FILE (tests only)]
 //   node omo/server/omo-room-server.cjs create-room --data DIR --id ROOM [--name TEXT] [--owner NAME] [--theme station|jungle] [--world FILE]
 //   node omo/server/omo-room-server.cjs invite      --data DIR --room ROOM [--role member|builder|viewer] [--ttl 24h] [--note TEXT] [--public-url URL]
 //   node omo/server/omo-room-server.cjs invites     --data DIR --room ROOM
@@ -17,7 +17,7 @@ const path = require('path');
 const U = require('./src/util.cjs');
 const { DataDir, createRoom, issueInvite } = require('./src/store.cjs');
 
-const FLAGS_WITH_VALUE = new Set(['data', 'port', 'host', 'tls-cert', 'tls-key', 'public-url', 'allow-origin', 'id', 'name', 'owner', 'theme', 'world', 'room', 'role', 'ttl', 'note', 'invite']);
+const FLAGS_WITH_VALUE = new Set(['data', 'port', 'host', 'tls-cert', 'tls-key', 'public-url', 'allow-origin', 'id', 'name', 'owner', 'theme', 'world', 'room', 'role', 'ttl', 'note', 'invite', 'trace-frames']);
 function parseArgs(argv) {
     const out = { _: [], 'allow-origin': [] };
     for (let i = 0; i < argv.length; i++) {
@@ -129,9 +129,17 @@ async function main() {
     const release = data.acquireLock();
     const quiet = !!a.quiet;
     const log = (...parts) => { if (!quiet) process.stderr.write(`${new Date().toISOString()} ${parts.join(' ')}\n`); };
+    // t3:mp2 — tests only: append every Omo-app socket frame (keys and invite codes redacted) to FILE, so a test can
+    // prove what crossed the server. Never use it on a real room.
+    let trace;
+    if (a['trace-frames']) {
+        const file = path.resolve(a['trace-frames']);
+        log('WARNING: --trace-frames is on; app frames are written to', file);
+        trace = (dir, text) => fs.appendFileSync(file, JSON.stringify({ at: Date.now(), dir, text }) + '\n', { mode: 0o600 });
+    }
     const app = createServer({
         data, port, host, tlsCert: a['tls-cert'], tlsKey: a['tls-key'], publicUrl: a['public-url'],
-        allowOrigins: a['allow-origin'], trustProxy: !!a['trust-proxy'], log
+        allowOrigins: a['allow-origin'], trustProxy: !!a['trust-proxy'], log, trace
     });
     const addr = await app.listen();
     const scheme = tls ? 'https' : 'http';

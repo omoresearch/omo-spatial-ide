@@ -47,7 +47,7 @@ function headers(extra = {}, tls = false) {
 }
 
 function createServer(opts) {
-    const { data, port = 0, host = '127.0.0.1', tlsCert, tlsKey, publicUrl, allowOrigins = [], trustProxy = false, log = () => {} } = opts;
+    const { data, port = 0, host = '127.0.0.1', tlsCert, tlsKey, publicUrl, allowOrigins = [], trustProxy = false, log = () => {}, trace } = opts; // t3:mp2: trace = test-only frame tap
     const tls = !!(tlsCert && tlsKey);
     const hub = new Hub({ data, log, publicUrl });
     const ipConns = new Map();
@@ -154,7 +154,7 @@ function createServer(opts) {
         const beat = setInterval(() => { if (!alive) { ws.terminate(); return; } alive = false; try { ws.ping(); } catch { /* closed */ } }, 30_000);
         ws.on('close', () => { clearInterval(beat); total--; const n = (ipConns.get(ip) || 1) - 1; if (n <= 0) ipConns.delete(ip); else ipConns.set(ip, n); });
         const origin = publicUrl ? new URL(publicUrl).origin : `${tls ? 'https' : 'http'}://${req.headers.host || `${host}:${port}`}`;
-        serveIdeSocket(ws, { hub, ip, origin, authFail, helloTimeoutMs: LIMITS.helloTimeoutMs, log });
+        serveIdeSocket(ws, { hub, ip, origin, authFail, helloTimeoutMs: LIMITS.helloTimeoutMs, log, trace });
     }
 
     function onSocket(ws, ip) {
