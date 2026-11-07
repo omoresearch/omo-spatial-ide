@@ -211,9 +211,11 @@ export class RemoteRoomController {
     }
     /** Leave the remote room. PresenceController goes solo; terminals keep running locally. */
     leave(): void {
-        if (this.router.route === 'remote' && this.host.presence().phase !== 'solo') this.host.leavePresence(); // routes to remote.leave()
-        else void this.service.leave().catch(() => undefined);
+        // Switch the route first and tell the backend directly; PresenceController's queued leave then
+        // lands on the local service (a no-op there), so the order of queued calls cannot leak.
         this.router.route = 'local';
+        void this.service.leave().catch(() => undefined);
+        if (this.host.presence().phase !== 'solo') this.host.leavePresence();
         this.world.clear();
         this.emit({ status: { phase: 'idle', attempt: 0, error: '', members: [] }, invite: undefined, error: '' });
         void this.loadSaved();
