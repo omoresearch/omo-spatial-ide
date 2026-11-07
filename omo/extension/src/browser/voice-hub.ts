@@ -33,8 +33,8 @@ export interface VoiceHubView {
 }
 
 const QUIET_MS = 2500;
-const DESKS: DeskId[] = ['terminal', 'terminal-2'];
-const DESK_NAME: Record<DeskId, string> = { terminal: 'Desk one', 'terminal-2': 'Desk two' };
+// w2:runtime — live station list from the world (chat-mentions keeps DESKS / DESK_NAME in sync with world-stations).
+import { DESKS, DESK_NAME } from './chat-mentions';
 
 /** armedUntil: read-aloud waits for the reply to a dictated draft on this desk, until this time. */
 interface DeskWatch { screen: string; changedAt: number; tabId?: string; quietLines: string[]; working: boolean; armedUntil: number; draft: string }
@@ -54,7 +54,8 @@ export class VoiceHub {
     private timer = 0;
     private sceneRef?: unknown;
     private layoutRef?: RoomLayoutId;
-    private watch: Record<DeskId, DeskWatch> = { terminal: { screen: '', changedAt: 0, quietLines: [], working: false, armedUntil: 0, draft: '' }, 'terminal-2': { screen: '', changedAt: 0, quietLines: [], working: false, armedUntil: 0, draft: '' } };
+    private watches: Record<string, DeskWatch> = {}; // w2:runtime: one watch per station, created on first sight
+    private get watch(): Record<string, DeskWatch> { for (const d of DESKS) this.watches[d] ??= { screen: '', changedAt: 0, quietLines: [], working: false, armedUntil: 0, draft: '' }; return this.watches; }
     private listeners: Array<() => void> = [];
     private dictating?: DeskId;
     private version = '';

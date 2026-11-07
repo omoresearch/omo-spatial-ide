@@ -27,19 +27,14 @@ export function syncStations(list: readonly Pick<StationInfo, 'id' | 'slot' | 'n
     for (const key of Object.keys(DESK_NAME)) delete (DESK_NAME as Record<string, string>)[key];
     for (const key of Object.keys(DESK_ALIASES)) delete DESK_ALIASES[key];
     for (const key of Object.keys(NAME_ALIASES)) delete NAME_ALIASES[key];
-    for (const info of list) {
-        (DESK_NAME as Record<string, string>)[info.id] = info.name;
-        const nameSlug = slug(info.name);
-        for (const alias of stationAliases(info)) {
-            if (KIND_ALIASES[alias]) continue;
-            const isName = alias === nameSlug || alias === nameSlug.replace(/-/g, '');
-            if (isName && alias !== info.id) { if (!NAME_ALIASES[alias]) NAME_ALIASES[alias] = info.id as DeskId; }
-            else if (!DESK_ALIASES[alias]) DESK_ALIASES[alias] = info.id as DeskId;
-        }
-    }
+    // Priority: exact station id > station name > desk-N / N > ordinal (desk-three). First writer wins inside a tier.
+    for (const info of list) { (DESK_NAME as Record<string, string>)[info.id] = info.name; DESK_ALIASES[info.id] = info.id as DeskId; }
+    for (const info of list) { const name = slug(info.name); for (const alias of [name, name.replace(/-/g, '')]) if (alias && !KIND_ALIASES[alias] && !DESK_ALIASES[alias] && !NAME_ALIASES[alias]) NAME_ALIASES[alias] = info.id as DeskId; }
+    for (const info of list) for (const alias of [`desk${info.slot}`, `desk-${info.slot}`, String(info.slot)]) if (!DESK_ALIASES[alias] && !NAME_ALIASES[alias]) DESK_ALIASES[alias] = info.id as DeskId;
+    for (const info of list) for (const alias of stationAliases(info)) if (!KIND_ALIASES[alias] && !DESK_ALIASES[alias] && !NAME_ALIASES[alias]) DESK_ALIASES[alias] = info.id as DeskId;
 }
-/** Station id for a handle: id / desk-N / ordinal first, then station name. */
-export function stationForHandle(handle: string): DeskId | undefined { const h = handle.toLowerCase(); return DESK_ALIASES[h] ?? NAME_ALIASES[h]; }
+/** Station id for a handle (see syncStations for priority). */
+export function stationForHandle(handle: string): DeskId | undefined { const h = handle.toLowerCase(); return (DESKS.includes(h as DeskId) ? h as DeskId : undefined) ?? NAME_ALIASES[h] ?? DESK_ALIASES[h]; }
 syncStations(currentStations());
 onStationDirectory(syncStations);
 
@@ -57,7 +52,7 @@ export function slug(text: string): string {
 /** Every handle a user may type for an agent tab: @desk1, @hermes, @claude, @<tab-name>. */
 export function mentionHandles(desks: DeskTabs[]): string[] {
     const out = new Set<string>(DESKS.map((_, i) => `desk${i + 1}`)); // w2:runtime
-    for (const id of DESKS) { const name = slug(DESK_NAME[id] ?? ''); if (name && NAME_ALIASES[name] === id) out.add(name); }
+    for (const id of DESKS) { const name = slug(DESK_NAME[id] ?? ''); if (name && stationForHandle(name) === id) out.add(name); }
     for (const d of desks) for (const tab of d.tabs) if (tab.kind !== 'shell' && tab.state === 'running') { out.add(tab.kind); const s = slug(tab.name); if (s) out.add(s); }
     return [...out];
 }
@@ -80,8 +75,9 @@ export function isAgentHandle(handle: string, desks: DeskTabs[]): boolean {
 export function resolveHandle(handle: string, desks: DeskTabs[]): MentionTarget | { error: string } {
     const h = handle.toLowerCase();
     // w2:runtime — @desk-3 / @three / @<station-id> / @<station-name>. A running tab with the same name as a station name wins over the station name.
-    const tabNamed = !DESK_ALIASES[h] && desks.some(d => d.live && agentTabs(d).some(tab => slug(tab.name) === h));
-    const desk = DESK_ALIASES[h] ?? (tabNamed ? undefined : NAME_ALIASES[h]);
+    const isId = DESKS.includes(h as DeskId);
+    const tabNamed = !isId && !!NAME_ALIASES[h] && desks.some(d => d.live && agentTabs(d).some(tab => slug(tab.name) === h));
+    const desk = isId ? h as DeskId : (tabNamed ? undefined : NAME_ALIASES[h] ?? DESK_ALIASES[h]);
     if (desk) {
         const d = desks.find(x => x.desk === desk);
         if (!d?.live) return { error: `${DESK_NAME[desk]} is not open. Click its monitor first. Nothing was started.` };

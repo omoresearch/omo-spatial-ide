@@ -15,7 +15,7 @@ import type { RoomLayoutId, RoomKitId, PlayerPose } from '../common/player-state
 import { OmoRuntimeService } from '../common/runtime-protocol';
 import type { RuntimeFrame } from '../common/runtime-protocol';
 import { RuntimeConsoleController, RuntimeConsoleState, StationBinding } from './runtime-console-controller';
-import { WorldStations, StationInfo, WORLD_CHANGED_EVENT, loadWorld, linkedEntities } from './world-stations'; // w2:runtime
+import { WorldStations, StationInfo, WORLD_CHANGED_EVENT, loadWorld, linkedEntities, saveWorldOps } from './world-stations'; // w2:runtime
 import type { WorldChangedDetail } from './world-stations'; // w2:runtime
 import { worldStorageKey } from '../common/world-model'; // w2:runtime
 import { RuntimeConsoleStrip } from './runtime-console-strip';
@@ -146,6 +146,10 @@ export class OmoWorldWidget extends ReactWidget {
     private get stationList(): readonly StationInfo[] { return this.stations?.stations() ?? []; }
     private stationName(id: string): string { return this.stations?.name(id) ?? id; }
     private deskState(id: string): RuntimeConsoleState { return this.stations?.state(id) ?? RuntimeConsoleController.initial(); }
+    /** Last state per station (kept for consoleChanged's frame diff; same shape as the two-desk record). */
+    private consoleStates: Record<string, RuntimeConsoleState> = {};
+    /** Existing controllers by station id (read only; WorldStations creates them). */
+    private get consoles(): { get(id: string): RuntimeConsoleController | undefined } { return { get: id => this.stations?.peek(id) }; }
     private mirrorMonitor?: MonitorFrame;
     private mirrorAttached = false;
     private mirrorAttaching = false;
@@ -282,6 +286,7 @@ export class OmoWorldWidget extends ReactWidget {
     private readWorld(reconnect = true): void {
         const { world, stored } = this.project ? loadWorld(safeStorage(), this.project.toString(), this.room) : { world: undefined, stored: false };
         const { added } = this.stations.setWorld(world, stored);
+        this.syncMirrorLink();
         for (const info of this.stationList) if (!this.monitors[info.id]) this.monitors = { ...this.monitors, [info.id]: { lines: [] } };
         if (reconnect && this.room && added.length) this.stations.reconnectSaved(this.bindingContext());
         this.pushLinkedFrames(); this.update();
@@ -291,15 +296,21 @@ export class OmoWorldWidget extends ReactWidget {
             const monitors = { ...this.monitors }; for (const id of removed) delete monitors[id]; this.monitors = monitors;
             if (removed.includes(this.activeStation)) { const first = this.stationList[0]?.id; if (first) this.chooseStation(first); else { this.console = undefined; this.consoleState = RuntimeConsoleController.initial(); } }
             if (removed.includes(this.mirrorTarget)) { this.mirrorAttached = false; this.mirrorMonitor = undefined; this.worldScene?.setMirrorFrame(undefined); }
+            for (const id of removed) delete this.consoleStates[id];
             this.feedback = `${removed.length === 1 ? 'A desk was' : `${removed.length} desks were`} removed from this world. Their tabs keep running on this computer.`;
         }
     }
-    /** Station the classic mirror follows: the world mirror's link when the world is saved, else the saved Station Link. */
-    private get mirrorTarget(): string {
-        const world = this.stations?.spec, linked = this.stations?.stored ? linkedEntities(world).find(l => l.entity.id === 'mirror')?.station : undefined;
+    /** Station the classic mirror follows (kept in stationLink.targetStationId; see syncMirrorLink). */
+    private get mirrorTarget(): string { return this.stationLink.targetStationId; }
+    /** A saved world's mirror link wins over the browser Station Link; a missing target falls back to the first station. */
+    private syncMirrorLink(): void {
+        const linked = this.stations.stored ? linkedEntities(this.stations.spec).find(l => l.entity.id === 'mirror')?.station : undefined;
         const target = linked ?? this.stationLink.targetStationId;
-        return this.stations?.has(target) ? target : this.stationList[0]?.id ?? 'terminal';
+        const next = this.stations.has(target) ? target : this.stationList[0]?.id ?? 'terminal';
+        if (next !== this.stationLink.targetStationId) { this.stationLink = { ...this.stationLink, targetStationId: next }; this.stations.peek(this.mirrorTargetPrevious ?? '')?.detachMirror(); this.mirrorAttached = false; }
+        this.mirrorTargetPrevious = next;
     }
+    private mirrorTargetPrevious?: string;
     /** Monitor walls / extra mirrors with link=stationId show that station's frame (render lane implements setLinkedFrames). */
     private pushLinkedFrames(): void {
         const frames = this.stations?.linkedFrames(this.monitors) ?? {};
@@ -388,19 +399,18 @@ export class OmoWorldWidget extends ReactWidget {
         return { lines: frame.lines, cells: frame.cells, foreground: frame.foreground, background: frame.background, truecolor: frame.truecolor, palette: frame.palette, cursor: frame.cursor,
             unreadBells: 0, title: state.workspace ? `${state.workspace.name} / ${tab?.name ?? 'Mirror'}` : 'Linked monitor', status: tab?.busy ? 'Process active' : tab?.state === 'interrupted' ? 'interrupted' : 'live' };
     }
-    private lastStates = new Map<string, RuntimeConsoleState>(); // w2:runtime
     private consoleChanged(state: RuntimeConsoleState, station: string): void {
-        const old = this.lastStates.get(station) ?? RuntimeConsoleController.initial();
+        const old = this.consoleStates[station] ?? RuntimeConsoleController.initial(); // w2:runtime: any station id
         const framed = state.lines !== old.lines || state.cursor !== old.cursor || state.truecolor !== old.truecolor || state.statusText !== old.statusText || state.workspace !== old.workspace || state.activeTabId !== old.activeTabId || state.unreadBells !== old.unreadBells;
-        this.lastStates.set(station, state);
-        if (this.stations.stored && this.room) this.stations.maybeOfferSetup(station, state, this.project?.toString()); // w2:runtime: StationConfig tabs, confirm first
-        if (state.phase === 'live' && station === this.mirrorTarget && !this.mirrorAttached && !this.mirrorAttaching) {
+        this.consoleStates[station] = state;
+        if (this.stations?.stored && this.room) this.stations.maybeOfferSetup(station, state, this.project?.toString()); // w2:runtime: StationConfig tabs, confirm first
+        if (state.phase === 'live' && station === this.stationLink.targetStationId && !this.mirrorAttached && !this.mirrorAttaching) {
             // attachMirror clears its old frame synchronously. That is not a
             // disconnect and must not allow the next poll to start another attach.
             this.mirrorAttaching = true;
-            void this.stations.peek(station)?.attachMirror(this.binding(station)?.stationId).then(ok => {
-                if (station !== this.mirrorTarget) {
-                    this.stations.peek(station)?.detachMirror();
+            void this.consoles.get(station)?.attachMirror(this.binding(station)?.stationId).then(ok => {
+                if (station !== this.stationLink.targetStationId) {
+                    this.consoles.get(station)?.detachMirror();
                     this.mirrorAttached = false;
                 } else this.mirrorAttached = ok;
                 this.mirrorAttaching = false;
@@ -411,7 +421,7 @@ export class OmoWorldWidget extends ReactWidget {
             const tab = state.workspace?.tabs.find(t => t.id === state.activeTabId);
             this.monitors = { ...this.monitors, [station]: { lines: state.lines, cells: state.cells, unreadBells: state.unreadBells, foreground: state.foreground, background: state.background, truecolor: state.truecolor, palette: state.palette, cursor: state.cursor,
                 title: tab ? `${state.workspace?.name ?? 'OMO'} / ${tab.name}` : undefined, status: state.phase === 'live' && tab?.state === 'running' ? (tab.busy ? 'Process active' : 'live') : (tab && tab.state !== 'running' ? tab.state : state.statusText) } };
-            this.pushLinkedFrames(); // w2:runtime
+            this.pushLinkedFrames?.(); // w2:runtime
         }
         this.update();
     }
@@ -457,9 +467,15 @@ export class OmoWorldWidget extends ReactWidget {
     };
     private linkMirror = (targetStationId: string): void => {
         if (!this.project || !this.stations.has(targetStationId)) return;
+        const previous = this.stationLink.targetStationId;
         const next: StationLink = { version: 1, mirrorId: 'monitor-mirror', targetStationId };
-        if (!writeStationLink(safeStorage(), this.project.toString(), next)) { this.error = 'The mirror link could not be saved.'; this.update(); return; }
-        this.stationLink = next; this.mirrorAttached = false; void this.stations.controller(targetStationId)?.attachMirror(this.binding(targetStationId)?.stationId); this.feedback = `Mirror linked to ${this.stationName(targetStationId)}.`; this.update();
+        // w2:runtime — a saved world keeps the link in the WorldSpec (WorldOp 'link'); the v1 room keeps the browser Station Link.
+        const saved = this.stations.stored && this.stations.spec?.entities.some(e => e.id === 'mirror') ? saveWorldOps(safeStorage(), this.project.toString(), this.stations.spec, [{ op: 'link', id: 'mirror', to: targetStationId }]) : undefined;
+        if (saved && !saved.ok) { this.error = `The mirror link could not be saved: ${saved.error}`; this.update(); return; }
+        if (!saved && !writeStationLink(safeStorage(), this.project.toString(), next)) { this.error = 'The mirror link could not be saved.'; this.update(); return; }
+        if (previous !== targetStationId) this.stations.peek(previous)?.detachMirror();
+        if (saved?.ok && this.stations.spec?.revision !== saved.world.revision) this.stations.setWorld(saved.world, true);
+        this.stationLink = next; this.mirrorTargetPrevious = targetStationId; this.mirrorAttached = false; void this.stations.controller(targetStationId)?.attachMirror(this.binding(targetStationId)?.stationId); this.feedback = `Mirror linked to ${this.stationName(targetStationId)}.`; this.update();
     };
     private monitorShortcut = (shortcut: 'new-shell' | 'select-tab-2' | 'workspace-picker'): void => {
         if (shortcut === 'new-shell') void this.console?.requestNewTab('shell');

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { createPortal } from '@theia/core/shared/react-dom';
 import type { TerminalWorkstation, Workstation } from './room-scene';
+import { currentStations, stationName } from './world-stations'; // w2:runtime
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';
 import { TAB_NAME_MAX, WORKSPACE_NAME_MAX } from './runtime-console-controller';
 import type { DeskShortcut, DeskShortcutDetail } from './first-person-controls';
@@ -21,8 +22,9 @@ import '../../src/browser/shortcuts.css';
  */
 export const CLOSE_CONFIRM_MS = 5000;
 /** Right-click ▸ Find (focus-overlay.tsx) sends 'omo:find-open' with the selection; the find box opens for the attached desk. */
-const DESK_LABEL: Record<TerminalWorkstation, string> = { terminal: 'Desk one', 'terminal-2': 'Desk two' };
-const isDesk = (station: Workstation | undefined): station is TerminalWorkstation => station === 'terminal' || station === 'terminal-2';
+// w2:runtime — any world station is a desk; labels come from the world.
+const DESK_LABEL: Record<string, string> = new Proxy({ terminal: 'Desk one', 'terminal-2': 'Desk two' } as Record<string, string>, { get: (base, id: string) => stationName(id) || base[id] || id });
+const isDesk = (station: Workstation | undefined): station is TerminalWorkstation => !!station && currentStations().some(s => s.id === station);
 
 type Desk = { state: RuntimeConsoleState; controller?: RuntimeConsoleController };
 export interface ShortcutsLaneProps {
@@ -112,7 +114,7 @@ export function ShortcutsLane(props: ShortcutsLaneProps): React.ReactElement | n
         const p = latest.current;
         const screen = p.focus.state.screen?.id as Workstation | undefined;
         const station = isDesk(screen) ? screen : p.activeDesk();
-        if (!isDesk(station)) { say('Desk keys work on Desk one and Desk two. Nothing was changed.', 'warn'); return; }
+        if (!isDesk(station)) { say('Desk keys work on a desk. Nothing was changed.', 'warn'); return; }
         const desk = p.desk(station), label = DESK_LABEL[station], state = desk.state;
         if (action === 'reconnect') {
             if (state.phase === 'live') { say(`${label} is already live. Nothing was started.`); return; }

@@ -12,8 +12,11 @@ test('station links are project-scoped and bounded', () => {
   assert.equal(writeStationLink(s, 'file:///project/a', link), true);
   assert.deepEqual(readStationLink(s, 'file:///project/a'), link);
   assert.equal(readStationLink(s, 'file:///project/b'), undefined);
-  s.setItem('omo.station-links.v1:"file:///project/a"', JSON.stringify({ version: 1, mirrorId: 'monitor-mirror', targetStationId: 'foreign' }));
+  // w2:runtime — any world station id is a valid link target (the widget falls back when it is not in the world); malformed ids are refused.
+  s.setItem('omo.station-links.v1:"file:///project/a"', JSON.stringify({ version: 1, mirrorId: 'monitor-mirror', targetStationId: '../Foreign desk' }));
   assert.equal(readStationLink(s, 'file:///project/a'), undefined);
+  s.setItem('omo.station-links.v1:"file:///project/a"', JSON.stringify({ version: 1, mirrorId: 'monitor-mirror', targetStationId: 'research' }));
+  assert.equal(readStationLink(s, 'file:///project/a').targetStationId, 'research');
 });
 
 test('distance gain meets the physical room bounds', () => {

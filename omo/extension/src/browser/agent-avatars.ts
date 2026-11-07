@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AgentKind, SessionTab } from '../common/runtime-protocol';
 import { ROOM_LAYOUTS } from '../common/player-state';
 import { drawAgentGlyph } from './agent-glyphs';
+import { currentStations, stationPosition } from './world-stations'; // w2:runtime
 import type { PlayerPose, RoomLayoutId } from '../common/player-state';
 
 /**
@@ -52,8 +53,10 @@ export function deskAgents(desk: DeskId, tabs: SessionTab[] | undefined, activeT
 }
 
 /** Screen-centre of a desk monitor in world space (matches RoomScene.desk geometry). */
+/** w2:runtime — layout desk, else the station's WorldSpec position. */
+function deskAt(layout: RoomLayoutId, desk: DeskId): { x: number; z: number } { return (ROOM_LAYOUTS[layout].desks as Record<string, { x: number; z: number } | undefined>)[desk] ?? stationPosition(desk) ?? { x: 0, z: 0 }; }
 export function deskScreen(desk: DeskId, layout: RoomLayoutId): { x: number; y: number; z: number } {
-    const d = ROOM_LAYOUTS[layout].desks[desk];
+    const d = deskAt(layout, desk);
     return { x: d.x, y: 1.99, z: d.z - 0.296 };
 }
 
@@ -62,7 +65,7 @@ export function deskScreen(desk: DeskId, layout: RoomLayoutId): { x: number; y: 
  * monitor), turned to face the screen. Extra agents on the same desk queue behind.
  */
 export function agentSpot(layout: RoomLayoutId, desk: DeskId, slot: number): { x: number; z: number; yaw: number } {
-    const d = ROOM_LAYOUTS[layout].desks[desk];
+    const d = deskAt(layout, desk); // w2:runtime
     const side = d.x < 0 ? -1 : 1;
     const x = Math.max(-5.4, Math.min(5.4, d.x + side * (2.05 + Math.floor(slot / 2) * 0.55)));
     const z = Math.max(-3.7, Math.min(4.3, d.z + 0.2 + (slot % 2) * 0.6));
@@ -74,7 +77,7 @@ export function agentSpot(layout: RoomLayoutId, desk: DeskId, slot: number): { x
 export function aimedDesk(pose: PlayerPose, layout: RoomLayoutId, maxDistance = 4.5, maxAngle = 0.42): DeskId | undefined {
     const forward = { x: -Math.sin(pose.yaw) * Math.cos(pose.pitch), y: Math.sin(pose.pitch), z: -Math.cos(pose.yaw) * Math.cos(pose.pitch) };
     let best: { desk: DeskId; angle: number } | undefined;
-    for (const desk of ['terminal', 'terminal-2'] as DeskId[]) {
+    for (const desk of currentStations().map(s => s.id as DeskId)) { // w2:runtime
         const s = deskScreen(desk, layout);
         const v = { x: s.x - pose.x, y: s.y - 1.75, z: s.z - pose.z };
         const length = Math.hypot(v.x, v.y, v.z);
@@ -197,9 +200,9 @@ export class AgentAvatars {
         // A closed tab's agent walks out of the door (removed in tick when it gets there).
         for (const [key, agent] of this.agents) if (!keep.has(key)) { this.agents.delete(key); this.walkOut(agent); moved = true; }
         const placeDirect = performance.now() - this.attachedAt < ATTACH_GRACE_MS;
-        const perDesk: Record<DeskId, number> = { terminal: 0, 'terminal-2': 0 };
+        const perDesk: Record<string, number> = {}; // w2:runtime
         for (const presence of list) {
-            const slot = perDesk[presence.desk]++;
+            const slot = (perDesk[presence.desk] = (perDesk[presence.desk] ?? -1) + 1);
             let agent = this.agents.get(presence.key);
             if (!agent || agent.presence.kind !== presence.kind) {
                 if (agent) { this.group.remove(agent.root); disposeTree(agent.root); }

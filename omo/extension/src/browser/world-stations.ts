@@ -17,8 +17,8 @@ import type { OmoRuntimeService, RuntimeFrame, SessionWorkspace } from '../commo
 import type { PresenceJoin } from '../common/presence-protocol';
 import { presenceStation } from '../common/presence-protocol';
 import type { RoomState } from '../common/room-state';
-import type { StationConfig, StationEntity, WorldEntity, WorldSpec } from '../common/world-model';
-import { WORLD_ID_RE, stations as worldStations, validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model';
+import type { StationConfig, StationEntity, WorldEntity, WorldOp, WorldResult, WorldSpec } from '../common/world-model';
+import { WORLD_ID_RE, applyWorldOps, stations as worldStations, validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model';
 import { RuntimeConsoleController, bindingKey } from './runtime-console-controller';
 import type { RuntimeConsoleState, StationBinding, StorageLike } from './runtime-console-controller';
 import type { StationRecipe, StationRecipeTab } from './station-recipe';
@@ -111,6 +111,19 @@ export function loadWorld(storage: StorageLike | undefined, projectUri: string, 
     return room ? { world: worldFromRoomV1(room), stored: false } : { stored: false };
 }
 
+/**
+ * Apply ops through the shared contract (applyWorldOps: atomic + validated), save, and tell other lanes.
+ * Used only for explicit user actions in this lane (re-linking the mirror). Never starts anything.
+ */
+export function saveWorldOps(storage: StorageLike | undefined, projectUri: string, world: WorldSpec | undefined, ops: WorldOp[]): WorldResult {
+    if (!world || !storage) return { ok: false, error: 'This world is not saved on this device.' };
+    const result = applyWorldOps(world, ops);
+    if (!result.ok) return result;
+    try { storage.setItem(worldStorageKey(projectUri), JSON.stringify(result.world)); } catch { return { ok: false, error: 'Browser storage is unavailable.' }; }
+    try { globalThis.dispatchEvent?.(new CustomEvent<WorldChangedDetail>(WORLD_CHANGED_EVENT, { detail: { projectUri, world: result.world } })); } catch { /* no window (tests) */ }
+    return result;
+}
+
 /** Mirror / monitor-wall entities and the station each shows. */
 export function linkedEntities(world: WorldSpec | undefined): Array<{ entity: WorldEntity; station: StationId }> {
     if (!world) return [];
@@ -157,7 +170,8 @@ export class WorldStations {
     /** True when the world came from storage (not a fresh v1 migration). */
     stored = false;
 
-    constructor(private readonly options: WorldStationsOptions) { publishDirectory(this.list); }
+    private readonly options: WorldStationsOptions;
+    constructor(options: WorldStationsOptions) { this.options = options; publishDirectory(this.list); }
 
     get spec(): WorldSpec | undefined { return this.world; }
     stations(): readonly StationInfo[] { return this.list; }
