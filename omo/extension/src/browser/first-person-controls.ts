@@ -190,8 +190,8 @@ export class FirstPersonControls {
             }
             if ((attached || this.typing) && this.tabRequest && event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey && /^Digit[1-9]$/.test(event.code)
                 && this.tabRequest(Number(event.code.slice(5)))) { event.preventDefault(); return; }
-            // omo focus lane: Ctrl+1..4 while attached switches desks. Ctrl+digit sends nothing to a shell, so no input is lost.
-            if (attached && this.deskRequest && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && /^[1-4]$/.test(event.key)) { event.preventDefault(); this.deskRequest(Number(event.key)); return; }
+            // omo focus lane: Ctrl+1..9 while attached switches desks (w2:runtime: N stations). Ctrl+digit sends nothing to a shell, so no input is lost.
+            if (attached && this.deskRequest && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && /^[1-9]$/.test(event.key)) { event.preventDefault(); this.deskRequest(Number(event.key)); return; }
             if (attached && (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
                 event.preventDefault(); this.setFull(!this.focusState.full); return;
             }

@@ -5,7 +5,10 @@ export const STATION_RECIPE_MAX_BYTES = 16 * 1024;
 export const STATION_RECIPE_MAX_COUNT = 12;
 export const STATION_RECIPE_MAX_TABS = 8;
 export const STATION_RECIPE_NAME_MAX = 48;
-export type RecipeStationId = 'terminal' | 'terminal-2';
+/** w2:runtime — any world station id ([a-z0-9-], 'terminal' / 'terminal-2' unchanged for saved recipes). */
+export type RecipeStationId = string;
+const STATION_ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
+export const validRecipeStationId = (value: unknown): value is RecipeStationId => typeof value === 'string' && STATION_ID_RE.test(value);
 
 export interface StationRecipeTab {
     kind: AgentKind;
@@ -42,7 +45,7 @@ export function validateStationRecipe(value: unknown): value is StationRecipe {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     const recipe = value as Partial<StationRecipe>;
     if (recipe.version !== STATION_RECIPE_VERSION || !text(recipe.id, 80) || !text(recipe.name, STATION_RECIPE_NAME_MAX)
-        || (recipe.stationId !== 'terminal' && recipe.stationId !== 'terminal-2') || !text(recipe.profile, 80)
+        || !validRecipeStationId(recipe.stationId) || !text(recipe.profile, 80)
         || !Array.isArray(recipe.tabs) || recipe.tabs.length < 1 || recipe.tabs.length > STATION_RECIPE_MAX_TABS) return false;
     return recipe.tabs.every(tab => !!tab && typeof tab === 'object' && KINDS.includes((tab as StationRecipeTab).kind)
         && ((tab as StationRecipeTab).name === undefined || text((tab as StationRecipeTab).name, 24)));
@@ -74,18 +77,27 @@ export function writeStationRecipes(storage: RecipeStorage | undefined, projectU
  */
 export type StationLocks = Record<RecipeStationId, boolean>;
 const LOCK_PREFIX = 'omo.station-locks.v1:';
+const LOCK_MAX = 64;
 export function stationLockKey(projectUri: string): string { return `${LOCK_PREFIX}${JSON.stringify(projectUri)}`; }
+/** w2:runtime — locks for any station id. The legacy two desks are always present (false when unset). */
 export function readStationLocks(storage: RecipeStorage | undefined, projectUri: string): StationLocks {
-    const none: StationLocks = { terminal: false, 'terminal-2': false };
-    if (!storage || !text(projectUri, 2048)) return none;
+    const locks: StationLocks = { terminal: false, 'terminal-2': false };
+    if (!storage || !text(projectUri, 2048)) return locks;
     try {
         const value = JSON.parse(storage.getItem(stationLockKey(projectUri)) ?? '{}');
-        return { terminal: value?.terminal === true, 'terminal-2': value?.['terminal-2'] === true };
-    } catch { return none; }
+        if (value && typeof value === 'object' && !Array.isArray(value)) for (const [id, on] of Object.entries(value).slice(0, LOCK_MAX)) if (validRecipeStationId(id)) locks[id] = on === true;
+        return locks;
+    } catch { return locks; }
 }
 export function writeStationLocks(storage: RecipeStorage | undefined, projectUri: string, locks: StationLocks): boolean {
     if (!storage || !text(projectUri, 2048)) return false;
-    try { storage.setItem(stationLockKey(projectUri), JSON.stringify({ terminal: locks.terminal === true, 'terminal-2': locks['terminal-2'] === true })); return true; } catch { return false; }
+    const out: Record<string, boolean> = { terminal: locks.terminal === true, 'terminal-2': locks['terminal-2'] === true };
+    for (const [id, on] of Object.entries(locks).slice(0, LOCK_MAX)) if (validRecipeStationId(id) && on === true) out[id] = true;
+    try { storage.setItem(stationLockKey(projectUri), JSON.stringify(out)); return true; } catch { return false; }
+}
+/** w2:runtime — recipes saved for one station (recipes stay per project; each station sees its own). */
+export function recipesForStation(recipes: readonly StationRecipe[], stationId: RecipeStationId): StationRecipe[] {
+    return recipes.filter(recipe => recipe.stationId === stationId);
 }
 
 export function makeStationRecipe(input: { name: string; stationId: RecipeStationId; profile: string; tabs: StationRecipeTab[]; id?: string }): StationRecipe {

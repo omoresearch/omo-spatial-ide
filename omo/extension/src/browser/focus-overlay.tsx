@@ -4,7 +4,7 @@ import type { MonitorFrame, TerminalWorkstation } from './room-scene';
 import { MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';
 import { FocusMode } from './focus-mode';
-import { FOCUS_STATIONS } from './focus-screen';
+import { stationName } from './world-stations'; // w2:runtime
 import { FocusTerminalView, termFont, termGrid, useCellRatio } from './focus-terminal-view';
 import { ConsoleAlerts, FocusTabs } from './runtime-console-strip';
 import { Icon } from './icons';
@@ -16,7 +16,8 @@ export interface FocusOverlayProps {
     desk: (station: TerminalWorkstation) => { state: RuntimeConsoleState; controller?: RuntimeConsoleController };
 }
 
-const DESK_LABEL: Record<TerminalWorkstation, string> = { terminal: 'Desk one', 'terminal-2': 'Desk two' };
+// w2:runtime — labels for any world station (falls back to the legacy names).
+const DESK_LABEL: Record<string, string> = new Proxy({ terminal: 'Desk one', 'terminal-2': 'Desk two' } as Record<string, string>, { get: (base, id: string) => stationName(id) || base[id] || id });
 
 /** Live size of an element, for fitting the terminal text to it. */
 function useSize(ref: React.RefObject<HTMLElement>): { width: number; height: number } | undefined {
@@ -242,7 +243,7 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
     React.useEffect(() => {
         focus.tabRequest = slot => {
             const active = focus.activeStation();
-            if (!(FOCUS_STATIONS as readonly string[]).includes(active)) return false;
+            if (!(focus.stationIds() as readonly string[]).includes(active)) return false; // w2:runtime
             const { state: desk, controller } = deskOf(active as TerminalWorkstation);
             const tabs = desk.workspace?.tabs ?? [];
             if (!controller || !tabs.length || desk.acting || desk.pending) return false;
@@ -293,7 +294,7 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
     };
     const settled = state.phase === 'attached';
     const split = state.full && focus.split;
-    const panes = split ? FOCUS_STATIONS : [station];
+    const panes = split ? focus.stationIds().slice(0, 4) : [station]; // w2:runtime: split shows up to four stations
     const desk = props.desk(station);
     // One bar says it all: project, desk, tabs, live state and bell. Text only when not plainly live.
     const live = desk.state.phase === 'live';
@@ -308,8 +309,8 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
             <span className={`omo-focus-dot ${live ? 'is-live' : ''}`} title={live ? 'Live' : status} aria-hidden="true" />
             <strong className="omo-focus-project" data-testid="focus-project">{desk.state.workspace?.name ?? 'Omo'}</strong>
             <span className="omo-focus-desks" role="group" aria-label="Switch desk">
-                {FOCUS_STATIONS.map((s, i) => <button key={s} type="button" data-testid={`focus-desk-${s}`} aria-pressed={s === station}
-                    title={`${DESK_LABEL[s]} (Ctrl+${i + 1})`} aria-label={DESK_LABEL[s]} onClick={() => focus.switchTo(s)}><span className="omo-focus-desk-name">{DESK_LABEL[s]}</span><span className="omo-focus-desk-short" aria-hidden="true">{i + 1}</span><kbd>⌃{i + 1}</kbd></button>)}
+                {focus.stationIds().map((s, i) => <button key={s} type="button" data-testid={`focus-desk-${s}`} aria-pressed={s === station}
+                    title={i < 9 ? `${DESK_LABEL[s]} (Ctrl+${i + 1})` : DESK_LABEL[s]} aria-label={DESK_LABEL[s]} onClick={() => focus.switchTo(s)}><span className="omo-focus-desk-name">{DESK_LABEL[s]}</span><span className="omo-focus-desk-short" aria-hidden="true">{i + 1}</span><kbd>⌃{i + 1}</kbd></button>)}
             </span>
             {!split && <><span className="omo-focus-sep" aria-hidden="true" /><FocusTabs state={desk.state} controller={desk.controller} onPicked={refocus} /></>}
             <span className="omo-focus-fill" />

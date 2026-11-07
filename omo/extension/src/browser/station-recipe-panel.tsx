@@ -6,6 +6,12 @@ import type { RecipeStationId, StationRecipe, StationRecipeTab } from './station
 export function StationRecipePanel(props: {
     recipes: StationRecipe[];
     stationId: RecipeStationId;
+    /** w2:runtime — display name of this station (any station in the world). */
+    stationName?: string;
+    /** w2:runtime — the station's own StationConfig tabs as a recipe (offered, never auto-applied). */
+    setup?: StationRecipe;
+    /** w2:runtime — locked in the world's Station Setup (unlock there, not here). */
+    worldLocked?: boolean;
     profile: string;
     onSave: (recipe: Omit<StationRecipe, 'version' | 'id'>) => void;
     onApply: (recipe: StationRecipe) => void;
@@ -27,13 +33,16 @@ export function StationRecipePanel(props: {
     const [tabs, setTabs] = React.useState<StationRecipeTab[]>([{ kind: 'shell' }]);
     const add = (kind: AgentKind): void => { if (tabs.length < 8) setTabs([...tabs, { kind }]); };
     return <section className="omo-recipe-panel" data-testid="station-recipe-panel" aria-label="Station recipes">
-        <div className="omo-console-row"><strong>Station recipes · {props.stationId === 'terminal' ? 'Desk one' : 'Desk two'}</strong><button type="button" data-testid="station-recipe-close" onClick={props.onClose}>Close</button></div>
+        <div className="omo-console-row"><strong>Station recipes · {props.stationName ?? (props.stationId === 'terminal' ? 'Desk one' : props.stationId === 'terminal-2' ? 'Desk two' : props.stationId)}</strong><button type="button" data-testid="station-recipe-close" onClick={props.onClose}>Close</button></div>
         <p className="omo-console-hint">Saved for this project only. Save never launches a CLI. Apply shows the exact tabs and asks once before any agent starts.</p>
         <div className="omo-console-row" data-testid="station-lock">
             <label title="Locked desks refuse recipe and room-layout edits and tab close. Nothing running is stopped.">
                 <input type="checkbox" data-testid="station-lock-toggle" disabled={!props.onLock} checked={frozen} onChange={event => props.onLock?.(event.target.checked)} /> Lock this desk</label>
             {frozen && <small data-testid="station-lock-note" role="note">🔒 Locked: recipes, room layout and tab close are blocked for this desk.</small>}
+            {props.worldLocked && <small data-testid="station-world-lock-note" role="note">Locked in Station Setup. Unlock it in build mode.</small>}
         </div>
+        {props.setup && <div className="omo-console-row" data-testid="station-setup-recipe"><span><strong>Station setup</strong> · {props.setup.profile} · {props.setup.tabs.map(tab => tab.name || AGENT_LABELS[tab.kind]).join(', ')}</span>
+            <button type="button" data-testid="station-setup-apply" onClick={() => props.onApply(props.setup!)}>Apply…</button></div>}
         <div className="omo-console-row" data-testid="station-idle-sleep">
             <label title="Off by default. Only idle Hermes tabs you are not watching sleep; busy tabs and drafts block it. Looking at the desk wakes them.">
                 <input type="checkbox" data-testid="station-idle-sleep-toggle" disabled={!props.idleSleep || !props.onIdleSleep} checked={!!props.idleSleep?.authorized}

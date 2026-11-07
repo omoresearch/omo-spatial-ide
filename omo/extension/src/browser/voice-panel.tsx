@@ -3,7 +3,7 @@ import type { VoiceHub, VoiceHubView } from './voice-hub';
 import { AgentGlyph } from './agent-glyphs';
 import '../../src/browser/voice.css';
 
-const DESK_NAME = { terminal: 'Desk one', 'terminal-2': 'Desk two' } as const;
+import { DESK_NAME } from './chat-mentions'; // w2:runtime: names of every world station
 const ACTIVITY: Record<string, string> = { working: 'working', idle: 'idle', background: 'running', sleeping: 'asleep', interrupted: 'interrupted', exited: 'ended' };
 
 /** Room voice, talk-to-agent dictation, read-aloud and the agent roster. Every switch is an explicit click. */

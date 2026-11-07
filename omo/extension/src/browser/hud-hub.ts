@@ -9,7 +9,7 @@ import { ChatController, Toast, ToastKind } from './chat-controller';
 import { NotificationsHub, AgentNotice } from './notifications-hub';
 import { HudPeers } from './hud-peers';
 import { sceneControls } from './focus-screen';
-import { DESK_NAME, slug } from './chat-mentions';
+import { DESKS, DESK_NAME, slug } from './chat-mentions'; // w2:runtime: DESKS
 
 /** What the widget lends the HUD. Getters only; the HUD owns no terminals, rooms or microphones. */
 export interface HudHost {
@@ -85,8 +85,8 @@ export class HudHub {
     private canvas(): HTMLCanvasElement | undefined { return sceneControls(this.host.scene())?.element; }
     private watching(): DeskId | undefined {
         const c = sceneControls(this.host.scene()); const active = this.host.activeDesk();
-        if (active !== 'terminal' && active !== 'terminal-2') return undefined;
-        return c && (c.typing || c.attached) ? active : undefined;
+        if (!(DESKS as string[]).includes(active)) return undefined; // w2:runtime: any world station
+        return c && (c.typing || c.attached) ? active as DeskId : undefined;
     }
 
     private bindKeys(): void {
@@ -152,7 +152,7 @@ export class HudHub {
         this.host.goToDesk(notice.desk);
         if (notice.kind === 'bell') this.host.desk(notice.desk).controller?.acknowledgeBells();
         this.notices.markRead(notice.id);
-        this.toast('info', `At ${DESK_NAME[notice.desk]}. Nothing was typed or started.`);
+        this.toast('info', `At ${DESK_NAME[notice.desk] ?? notice.desk}. Nothing was typed or started.`);
         this.changed();
     }
     markAllRead(): void { this.notices.markRead(); this.changed(); }

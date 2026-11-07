@@ -1,6 +1,7 @@
 import type { RoomScene, TerminalWorkstation, Workstation } from './room-scene';
 import type { FirstPersonControls, FocusState } from './first-person-controls';
 import { FOCUS_STATIONS, nearestStation, sceneControls, stationScreen } from './focus-screen';
+import type { StationInfo } from './world-stations'; // w2:runtime
 
 export interface FocusModeOptions {
     /** The live room scene (changes when the room is rebuilt). */
@@ -10,9 +11,13 @@ export interface FocusModeOptions {
     /** Same path as clicking the monitor: choose the desk and open/reconnect its terminal. Starts no agent. */
     select: (station: TerminalWorkstation) => void;
     message: (text: string) => void;
+    /** w2:runtime — the world's stations in switcher order. Absent = the two legacy desks. */
+    stations?: () => readonly Pick<StationInfo, 'id' | 'name' | 'slot'>[];
 }
 
-const isDesk = (station: Workstation): station is TerminalWorkstation => (FOCUS_STATIONS as readonly string[]).includes(station);
+// w2:runtime — station ids are any world station id; the TerminalWorkstation cast keeps other lanes' types unchanged.
+let stationIds: () => readonly TerminalWorkstation[] = () => FOCUS_STATIONS;
+const isDesk = (station: Workstation | string): station is TerminalWorkstation => (stationIds() as readonly string[]).includes(station);
 
 /** Comfort text sizes, as a share of the 14 px terminal default (TERM_FONT: 10.5 to 21 px). Index 4 is 100%. */
 export const COMFORT_STEPS: readonly number[] = [0.75, 0.8125, 0.875, 0.9375, 1, 1.125, 1.25, 1.375, 1.5];
@@ -24,11 +29,12 @@ function storedComfort(): number {
     return COMFORT_STEPS.includes(value) ? value : 1;
 }
 /** Desk for a quick-switch slot (1-based) or a cycle step from the current desk. */
-export function deskForSlot(current: TerminalWorkstation | undefined, slot: number | 'next' | 'previous'): TerminalWorkstation | undefined {
-    const at = Math.max(0, FOCUS_STATIONS.indexOf(current as TerminalWorkstation)), n = FOCUS_STATIONS.length;
-    if (slot === 'next') return FOCUS_STATIONS[(at + 1) % n];
-    if (slot === 'previous') return FOCUS_STATIONS[(at + n - 1) % n];
-    return FOCUS_STATIONS[slot - 1];
+export function deskForSlot(current: TerminalWorkstation | undefined, slot: number | 'next' | 'previous', list: readonly TerminalWorkstation[] = stationIds()): TerminalWorkstation | undefined {
+    const n = list.length; if (!n) return undefined; // w2:runtime: N stations
+    const at = Math.max(0, list.indexOf(current as TerminalWorkstation));
+    if (slot === 'next') return list[(at + 1) % n];
+    if (slot === 'previous') return list[(at + n - 1) % n];
+    return list[slot - 1];
 }
 
 /**
@@ -48,7 +54,12 @@ export class FocusMode {
     tabRequest?: (slot: number | 'next' | 'previous') => boolean;
     private bound?: { scene: RoomScene; controls: FirstPersonControls; off: () => void };
     private listeners = new Set<() => void>();
-    constructor(private options: FocusModeOptions) {}
+    constructor(private options: FocusModeOptions) {
+        if (options.stations) { const get = options.stations; stationIds = () => get().map(s => s.id as TerminalWorkstation); } // w2:runtime
+    }
+    /** w2:runtime — station ids in switcher order (Ctrl+1..9). */
+    stationIds(): readonly TerminalWorkstation[] { return stationIds(); }
+    stationName(id: string): string { return this.options.stations?.().find(s => s.id === id)?.name ?? (id === 'terminal' ? 'Desk one' : id === 'terminal-2' ? 'Desk two' : id); }
 
     get controls(): FirstPersonControls | undefined { return this.bound?.controls; }
     activeStation(): Workstation { return this.options.activeStation(); }
@@ -89,6 +100,7 @@ export class FocusMode {
     };
     /** omo immersive lane: desk switcher in the immersive HUD. Same path as clicking that desk's monitor; starts no agent. */
     attachTo(station: TerminalWorkstation): void {
+        if (!isDesk(station)) { this.options.message('That desk is not part of this world.'); return; } // w2:runtime
         this.sync();
         const c = this.bound?.controls; if (!c) return;
         if (c.attached) { this.switchTo(station); return; }
@@ -97,7 +109,7 @@ export class FocusMode {
     /** F while walking: the desk monitor in front of the player. */
     fullScreenNearest(): void {
         const c = this.bound?.controls; if (!c || !this.bound) return;
-        const station = nearestStation(this.bound.scene, c.element, c.pose);
+        const station = nearestStation(this.bound.scene, c.element, c.pose, stationIds()); // w2:runtime
         if (!station) { this.options.message('Walk up to a desk monitor, then press F for full screen.'); return; }
         this.open(station, true);
     }
@@ -118,10 +130,10 @@ export class FocusMode {
         if (split !== this.split) { this.split = split; writePref(SPLIT_KEY, String(split)); this.publish(this.state); }
         if (this.controls?.attached) this.controls.focusTerminal();
     }
-    /** Ctrl+1..4 / Tab while attached: ease the camera to that desk's screen and move the keys there. */
+    /** Ctrl+1..9 / Tab while attached: ease the camera to that desk's screen and move the keys there. */
     quickSwitch(slot: number | 'next' | 'previous'): void {
-        const station = deskForSlot(this.state.screen?.id as TerminalWorkstation | undefined, slot);
-        if (!station) { this.options.message(`This room has ${FOCUS_STATIONS.length} desks · Ctrl+1 or Ctrl+2 switches between them.`); return; }
+        const list = stationIds(), station = deskForSlot(this.state.screen?.id as TerminalWorkstation | undefined, slot, list);
+        if (!station) { this.options.message(`This room has ${list.length} desk${list.length === 1 ? '' : 's'} · Ctrl+1${list.length > 1 ? `..${Math.min(9, list.length)}` : ''} switches between them.`); return; }
         this.switchTo(station);
     }
     /** Attached already: move to another desk, keeping full screen. Same path as clicking that monitor; starts no agent. */

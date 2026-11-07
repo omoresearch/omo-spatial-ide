@@ -1,4 +1,6 @@
 import type { RecipeStationId } from './station-recipe';
+// w2:runtime — any world station id (type-only import keeps this file loadable under --experimental-strip-types).
+const validRecipeStationId = (value: unknown): value is RecipeStationId => typeof value === 'string' && /^[a-z0-9][a-z0-9-]{0,47}$/.test(value);
 
 export const STATION_LINK_VERSION = 1 as const;
 export const MIRROR_STATION_ID = 'monitor-mirror';
@@ -15,7 +17,7 @@ export function validStationLink(value: unknown): value is StationLink {
     return !!value && typeof value === 'object' && !Array.isArray(value)
         && (value as StationLink).version === 1
         && (value as StationLink).mirrorId === MIRROR_STATION_ID
-        && ((value as StationLink).targetStationId === 'terminal' || (value as StationLink).targetStationId === 'terminal-2');
+        && validRecipeStationId((value as StationLink).targetStationId); // w2:runtime — any station id
 }
 export function readStationLink(storage: { getItem(key: string): string | null } | undefined, projectUri: string): StationLink | undefined {
     try {
