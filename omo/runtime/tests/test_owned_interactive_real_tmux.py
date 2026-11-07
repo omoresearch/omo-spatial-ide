@@ -24,7 +24,28 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 HOST = ROOT / "runtime" / "omo_spatial_host.py"
-TMUX = os.environ.get("OMO_TEST_TMUX", "/home/harry/.local/share/omo/bin/tmux")
+
+
+def _default_tmux() -> str:
+    """Same search order as the app's runtime discovery, with no developer-specific paths.
+
+    OMO_TEST_TMUX, then OMO_SPATIAL_TMUX, then the app data dir (OMO_SPATIAL_DATA or
+    ~/.local/share/omo-spatial-ide)/bin/tmux, then tmux on PATH, then the launcher's
+    ~/.local/share/omo/bin/tmux. Falls back to plain "tmux" so the error names it.
+    """
+    for key in ("OMO_TEST_TMUX", "OMO_SPATIAL_TMUX"):
+        if os.environ.get(key):
+            return os.environ[key]
+    home = Path.home()
+    data = Path(os.environ.get("OMO_SPATIAL_DATA") or home / ".local" / "share" / "omo-spatial-ide")
+    for candidate in (str(data / "bin" / "tmux"), shutil.which("tmux"),
+                      str(home / ".local" / "share" / "omo" / "bin" / "tmux")):
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return "tmux"
+
+
+TMUX = _default_tmux()
 PYTHON = "/usr/bin/python3" if os.access("/usr/bin/python3", os.X_OK) else sys.executable
 
 SCHEMA = """
