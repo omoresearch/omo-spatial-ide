@@ -9,7 +9,6 @@ import { FileDialogService } from '@theia/filesystem/lib/browser/file-dialog/fil
 import URI from '@theia/core/lib/common/uri';
 import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame, CodeReviewFrame } from './room-scene';
 import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
-import { validateWorld, worldStorageKey } from '../common/world-model'; // w2:render
 import { exportRoomPreset, parseRoomPreset, ROOM_PRESET_FILENAME, ROOM_PRESET_MAX_BYTES } from '../common/room-preset';
 import { exportWorldPreset, exportStationSetupPreset, parseAnyRoomPreset, stationConfigFromSetup, WORLD_PRESET_FILENAME, WORLD_PRESET_MAX_BYTES } from '../common/world-preset'; // w2:templates
 import { validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model'; // w2:templates
@@ -22,7 +21,6 @@ import type { RuntimeFrame } from '../common/runtime-protocol';
 import { RuntimeConsoleController, RuntimeConsoleState, StationBinding } from './runtime-console-controller';
 import { WorldStations, StationInfo, WORLD_CHANGED_EVENT, loadWorld, linkedEntities, saveWorldOps } from './world-stations'; // w2:runtime
 import type { WorldChangedDetail } from './world-stations'; // w2:runtime
-import { worldStorageKey } from '../common/world-model'; // w2:runtime
 import { RuntimeConsoleStrip } from './runtime-console-strip';
 import { OmoWebService, WebSurfaceFrame } from '../common/web-runtime-protocol';
 import { WebSurfaceController, WebWallState } from './web-surface-controller';
@@ -53,7 +51,6 @@ import { VoiceHub } from './voice-hub';
 import { RemoteRoomController, RoutedPresenceService } from './remote-room-controller'; // w2:mp-client
 import { RemoteRoomChip, RemoteRoomPanel, RemoteRoomPopover } from './remote-room-panel'; // w2:mp-client
 import { OmoRemoteRoomService } from '../common/remote-room-protocol'; // w2:mp-client
-import { worldFromRoomV1 } from '../common/world-model'; // w2:mp-client
 import { VoicePanel } from './voice-panel';
 import { OmoVoiceSettingsService } from '../common/voice-settings-protocol'; // w2:voice
 // --- end omo voice lane ---
@@ -777,7 +774,7 @@ export class OmoWorldWidget extends ReactWidget {
     // w2:templates — a locked desk must be identical in the preview (same place, same setup) before Save.
     private draftWorldTouchesLockedDesk(draft: WorldSpec): boolean {
         const saved = this.savedWorld();
-        return TERMINAL_STATIONS.some(id => this.stationLocks[id as keyof StationLocks] && JSON.stringify(saved?.entities.find(e => e.id === id)) !== JSON.stringify(draft.entities.find(e => e.id === id)));
+        return this.stationList.map(info => info.id).some(id => this.stations.locked(id) && JSON.stringify(saved?.entities.find(e => e.id === id)) !== JSON.stringify(draft.entities.find(e => e.id === id)));
     }
     private previewWorld = (world: WorldSpec, source: string): void => { // w2:templates
         if (!this.configuring) return;
