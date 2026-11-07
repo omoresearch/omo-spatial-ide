@@ -200,3 +200,59 @@ test('dsh: launcher listed only when the host reports it, start asks first, web 
   assert.match(old.reason, /Node 24\.9\.0/);
   assert.match(DSH_START_NOTE, /loopback/);
 });
+
+// ---- part 4: Real agent check ----
+test('Real agent check: explicit Run, confirm, one tab per installed agent, sends nothing, saves JSON', async () => {
+  const { AgentCheckController, installedCheckKinds } = loadTs('browser/agent-check.ts');
+  const { backend, dataDir } = fixture({ request: async (op, args) => ({ at: 5, tabs: args.tabIds.map(tabId => ({ tabId, paneAlive: true, agentAlive: true })) }) });
+  const calls = [];
+  let tabs = [{ id: 'eeeeeeeeeeee', name: 'Shell', kind: 'shell', state: 'running', busy: false }];
+  let n = 0;
+  const forbidden = name => async () => { calls.push(name); throw new Error(`${name} must never be called`); };
+  const runtime = {
+    status: async () => ({ available: true, tmux: true, python: true, detail: '', profiles: ['fixture'], agents: [
+      { kind: 'shell', available: true, detail: '' }, { kind: 'hermes', available: true, detail: '' },
+      { kind: 'claude', available: true, detail: '' }, { kind: 'codex', available: false, detail: 'not installed' }] }),
+    newTab: async args => { calls.push(['newTab', args]); const id = String(++n).repeat(12); tabs = [...tabs, { id, name: args.name, kind: args.kind, state: 'running', busy: true, ...(args.kind === 'hermes' ? { profile: args.profile } : {}) }]; return { id: WS, name: 'Room', projectUri: 'file:///p', profile: 'fixture', state: 'running', tabs }; },
+    getWorkspace: async () => ({ id: WS, name: 'Room', projectUri: 'file:///p', profile: 'fixture', state: 'running', tabs }),
+    input: forbidden('input'), paste: forbidden('paste'), resumeAgent: forbidden('resumeAgent'), closeTab: forbidden('closeTab'),
+  };
+  let now = 1000;
+  const states = [];
+  const ctl = new AgentCheckController({ runtime, signals: backend, workspace: () => ({ id: WS, name: 'Room', projectUri: 'file:///p', tabs }), profile: () => 'fixture',
+    now: () => now, sleep: async ms => { now += ms; }, onChange: s => states.push(s.phase), observeMs: 9000, pollMs: 3000 });
+  assert.deepEqual(installedCheckKinds(await runtime.status()), ['hermes', 'claude']);
+  await ctl.confirmRun();
+  assert.equal(calls.length, 0, 'confirm without Run does nothing');
+  await ctl.requestRun();
+  assert.equal(ctl.state.phase, 'confirm');
+  assert.equal(calls.length, 0, 'Run only asks; it starts nothing');
+  ctl.cancel();
+  assert.equal(ctl.state.phase, 'idle');
+  assert.equal(calls.length, 0);
+  await ctl.requestRun();
+  await ctl.confirmRun();
+  assert.equal(ctl.state.phase, 'done', ctl.state.message);
+  const started = calls.filter(c => Array.isArray(c) && c[0] === 'newTab').map(c => c[1]);
+  assert.deepEqual(started.map(a => [a.kind, a.confirmedStart]), [['hermes', true], ['claude', true]]);
+  assert.equal(started[0].profile, 'fixture');
+  assert.ok(!calls.some(c => typeof c === 'string'), 'no input, paste, resume or close');
+  assert.ok(ctl.state.file.startsWith(path.join(dataDir, 'agent-checks') + path.sep));
+  const report = JSON.parse(fs.readFileSync(ctl.state.file, 'utf8'));
+  assert.equal(report.sentNothing, true);
+  assert.deepEqual(report.observations.map(o => [o.kind, o.started]), [['hermes', true], ['claude', true]]);
+  assert.ok(report.observations.every(o => o.states.length >= 1 && o.states[0].tabState === 'running'));
+  assert.equal(fs.statSync(ctl.state.file).mode & 0o777, 0o600);
+  await assert.rejects(backend.recordAgentCheck({ report: { ...report, sentNothing: false } }), /not valid/);
+});
+
+test('panels render: Agents panel shows Claude status and the Real agent check Run button', async () => {
+  const React = require('react');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const { AgentsPanel } = loadTs('browser/agents-panel.tsx');
+  const html = renderToStaticMarkup(React.createElement(AgentsPanel, { signals: { claudeStatus: () => new Promise(() => {}) }, runtime: {},
+    desk: { profile: 'default', workspace: { id: WS, name: 'Room', tabs: [] } }, onOpenWeb: () => {}, onClose: () => {} }));
+  assert.match(html, /data-testid="claude-status"/);
+  assert.match(html, /data-testid="agent-check-run"/);
+  assert.match(html, /types nothing into them/);
+});

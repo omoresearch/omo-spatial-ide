@@ -23,6 +23,32 @@ export const CLAUDE_STATUS_DIR = 'claude-status';
 export const CLAUDE_SETTINGS_FILE = 'settings.json';
 export const CLAUDE_EVENTS_FILE = 'events.jsonl';
 export const HOOK_SCRIPT = 'claude_status_hook.py';
+export const AGENT_CHECKS_DIR = 'agent-checks';
+const REPORT_MAX_BYTES = 512 * 1024;
+
+const str = (v: unknown, max: number): string | undefined => typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, max) : undefined;
+const num = (v: unknown): number => typeof v === 'number' && Number.isFinite(v) ? v : 0;
+/** Keep only the report fields Omo defines, bounded. Throws on a malformed report. */
+export function sanitizeReport(raw: unknown): AgentCheckReport {
+    const r = raw as AgentCheckReport;
+    if (!r || typeof r !== 'object' || !Array.isArray(r.observations) || r.observations.length > 8 || r.sentNothing !== true) {
+        throw new Error('The agent check report is not valid. Nothing was saved.');
+    }
+    const report: AgentCheckReport = {
+        startedAt: num(r.startedAt), finishedAt: num(r.finishedAt) || Date.now(), workspaceId: str(r.workspaceId, 64) ?? '',
+        projectUri: str(r.projectUri, 4096) ?? '', sentNothing: true,
+        observations: r.observations.map(o => ({
+            kind: str(o?.kind, 16) ?? '', ...(str(o?.tabId, 64) ? { tabId: str(o.tabId, 64) } : {}), started: o?.started === true,
+            ...(str(o?.error, 400) ? { error: str(o.error, 400) } : {}),
+            states: (Array.isArray(o?.states) ? o.states : []).slice(0, 500).map(x => ({
+                at: num(x?.at), tabState: str(x?.tabState, 16) ?? '', status: (str(x?.status, 20) ?? 'unknown') as AgentCheckReport['observations'][number]['states'][number]['status'],
+                source: str(x?.source, 16) ?? '', ...(str(x?.detail, 200) ? { detail: str(x.detail, 200) } : {})
+            }))
+        }))
+    };
+    if (Buffer.byteLength(JSON.stringify(report)) > REPORT_MAX_BYTES) throw new Error('The agent check report is too large. Nothing was saved.');
+    return report;
+}
 
 /** POSIX single-quote, the form Claude Code's hook shell runs. */
 export function shellQuote(value: string): string {
@@ -225,7 +251,15 @@ export class AgentSignalsBackend implements AgentSignalsService {
         }
     }
 
-    async recordAgentCheck(_input: { report: AgentCheckReport }): Promise<{ file: string }> {
-        throw new Error('Real agent check reports are not available yet.');
+    /** Saves a Real agent check report to <data>/agent-checks/check-<time>.json (validated, bounded, 0600). */
+    async recordAgentCheck(input: { report: AgentCheckReport }): Promise<{ file: string }> {
+        const report = sanitizeReport(input?.report);
+        const dir = path.join(this.locations.dataDir, AGENT_CHECKS_DIR);
+        fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+        if (fs.lstatSync(dir).isSymbolicLink()) throw new Error('The agent-checks folder is a symbolic link. Nothing was saved.');
+        const stamp = new Date(report.finishedAt).toISOString().replace(/[:.]/g, '-');
+        const file = path.join(dir, `check-${stamp}-${crypto.randomBytes(3).toString('hex')}.json`);
+        fs.writeFileSync(file, JSON.stringify(report, undefined, 2) + '\n', { mode: 0o600, flag: 'wx' });
+        return { file };
     }
 }
