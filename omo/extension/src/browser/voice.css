@@ -21,9 +21,10 @@
 .omo-voice-interim { color:#f4efe3; font-style:italic; max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .omo-agent-chip { padding:2px 7px; border-radius:9px; background:#18222c; color:#f4efe3; border-left:3px solid #9aa7b8; }
 .omo-agent-chip em { font-style:normal; color:#8ea5aa; }
-.omo-agent-chip.is-hermes { border-left-color:#e9b949; }
-.omo-agent-chip.is-claude { border-left-color:#e07a45; }
-.omo-agent-chip.is-codex { border-left-color:#4f8fe8; }
+.omo-agent-chip.is-hermes { border-left-color:var(--omo-agent-hermes, #f7d774); } /* w2:polish: glyph tokens */
+.omo-agent-chip.is-claude { border-left-color:var(--omo-agent-claude, #ebb3e0); }
+.omo-agent-chip.is-codex { border-left-color:var(--omo-agent-codex, #a9cdf5); }
+.omo-agent-chip.is-dsh { border-left-color:var(--omo-agent-dsh, #5ccfe6); }
 .omo-agent-chip.is-working em { color:#ffcf5a; }
 .omo-agent-chip.is-idle em { color:#7fe0a4; }
 .omo-agent-chip.is-interrupted em { color:#ff6b6b; }

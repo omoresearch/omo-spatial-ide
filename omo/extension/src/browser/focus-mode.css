@@ -170,8 +170,8 @@
 .omo-focus-tab-new .omo-tab-plus { color: var(--omo-text-3); margin-right: -1px; }
 .omo-focus-tab-new .omo-agent-glyph { margin-right: 0 !important; }
 /* At rest the add glyphs are quiet (text colour); the agent's own colour shows on hover and focus, as on its tabs. */
-.omo-focus-tab-new:not(:hover):not(:focus-visible) .omo-agent-glyph[data-glyph="hermes"] path { fill: currentColor; }
-.omo-focus-tab-new:not(:hover):not(:focus-visible) .omo-agent-glyph:not([data-glyph="hermes"]) path { stroke: currentColor; }
+/* w2:polish: glyph parts paint with currentColor; the svg carries the kind's token colour inline. */
+.omo-focus-tab-new:not(:hover):not(:focus-visible) .omo-agent-glyph { color: inherit !important; }
 .omo-focus-tab-new:hover .omo-tab-plus { color: var(--omo-text-2); }
 .omo-tab-shell { color: var(--omo-text-3); }
 .omo-focus-tab.is-active .omo-tab-shell, .omo-focus-tab-new:hover .omo-tab-shell { color: var(--omo-text-2); }
