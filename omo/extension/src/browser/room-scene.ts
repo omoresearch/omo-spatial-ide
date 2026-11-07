@@ -81,8 +81,25 @@ const LEGACY_LABELS: Record<string, { text: string; aria: string }> = {
     'terminal-2': { text: '02  Desk two ↗', aria: 'Open second project terminal' },
     web: { text: '03  Web wall ↗', aria: 'Use physical web wall' },
     code: { text: '04  Code review ↗', aria: 'Review project changes' },
-    mirror: { text: '04  Mirror · Desk one ↗', aria: 'Use linked monitor mirror' }
+    mirror: { text: '05  Mirror · Desk one ↗', aria: 'Use linked monitor mirror' } // t3:polish2 — was a second '04' (code review owns 04)
 };
+/**
+ * t3:polish2 — screen-space label layout. Labels are centred boxes; each one keeps its projected spot when free,
+ * else it moves up (away from the screens below it) or down in label-height steps until it no longer touches a
+ * placed label. Front labels (larger y) are placed first so the nearest things keep their exact spot.
+ */
+export function layoutLabels<T extends { x: number; y: number; w: number; h: number }>(items: readonly T[], gap = 4): T[] {
+    const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const hits = (x: number, y: number, w: number, h: number): boolean => placed.some(p => Math.abs(p.x - x) * 2 < p.w + w + gap * 2 && Math.abs(p.y - y) * 2 < p.h + h + gap);
+    const out: T[] = [];
+    for (const item of [...items].sort((a, b) => b.y - a.y || a.x - b.x)) {
+        const step = item.h + gap;
+        let y = item.y;
+        for (const k of [0, -1, -2, 1, -3, 2, -4, 3, -5]) { const c = item.y + k * step; if (!hits(item.x, c, item.w, item.h)) { y = c; break; } }
+        placed.push({ x: item.x, y, w: item.w, h: item.h }); out.push({ ...item, y });
+    }
+    return out;
+}
 /** One built entity: its THREE root, label and the key it was built from (rebuilt only when the key changes). */
 interface SceneEntity { entity: WorldEntity; key: string; built: BuiltEntity; label?: HTMLButtonElement }
 export interface ScreenPoint { x: number; y: number }
@@ -190,6 +207,7 @@ export class RoomScene {
     private readonly smoother = new PoseSmoother();
     private data = new Map<string, string>();
     private labelPos = new WeakMap<HTMLElement, number>();
+    private labelSize = new WeakMap<HTMLElement, { w: number; h: number }>(); // t3:polish2 — measured once per text
     private readonly tmp = { a: new THREE.Vector3(), b: new THREE.Vector3(), region: new THREE.Box2(), at: new THREE.Vector2() };
     /** Frames actually rendered (diagnostics). */
     renders = 0;
@@ -521,8 +539,7 @@ export class RoomScene {
             this.host.appendChild(label); item.label = label;
         }
         const { text, aria } = this.labelText(item);
-        // A live workspace name on a desk label wins until the world changes the desk's own title.
-        if (item.label.dataset.baseText !== text) { item.label.dataset.baseText = text; item.label.textContent = text; }
+        if (item.label.dataset.baseText !== text) { item.label.dataset.baseText = text; item.label.textContent = text; this.labelSize.delete(item.label); } // t3:polish2: re-measure
         item.label.setAttribute('aria-label', aria);
         if (item.entity.kind === 'station') this.deskLabels.set(id, item.label);
     }
@@ -673,7 +690,7 @@ export class RoomScene {
         this.walker?.setEnabled(mode === 'walk');
         if (this.walker) this.smoother.snap(this.walker.pose);
         if (this.renderer) { this.renderer.domElement.dataset.navigation = mode; }
-        this.labels.forEach(label => label.classList.toggle('is-walk', mode === 'walk'));
+        this.labels.forEach(label => { label.classList.toggle('is-walk', mode === 'walk'); this.labelSize.delete(label); this.labelPos.delete(label); }); // t3:polish2: re-measure
         this.positionCamera(); this.invalidate();
     }
     setTerminalLines(lines: string[]): void { this.setTerminalFrame({ ...this.terminalFrames.terminal, lines, cells: undefined, foreground: undefined, background: undefined, cursor: undefined }); }
@@ -689,11 +706,10 @@ export class RoomScene {
         if (input !== previous) { if (frame !== input) sources.set(station, { input, frame }); else sources.delete(station); }
         if (this.terminalSelection?.station === station && (!this.terminalSelection.model.refresh(frame.lines,frame.cells) || previous.title !== frame.title || previous.status !== frame.status)) this.terminalSelection = undefined;
         this.terminalFrames[station] = frame;
+        // t3:polish2 — a connected desk keeps its short desk name on the label; the workspace name goes to the tooltip.
         const workspaceName = frame.title?.split(' / ')[0]?.trim();
         const deskLabel = this.deskLabels.get(station);
-        const number = this.stationNumbers?.get(station) ?? (station === 'terminal-2' ? 2 : 1);
-        const deskText = workspaceName ? `${String(number).padStart(2, '0')}  ${workspaceName.slice(0, 36)} ↗` : undefined;
-        if (deskText && deskLabel && deskLabel.textContent !== deskText) deskLabel.textContent = deskText;
+        if (deskLabel) { const tip = workspaceName ? `Workspace: ${workspaceName.slice(0, 80)}` : ''; if ((deskLabel.title || '') !== tip) { deskLabel.title = tip; deskLabel.dataset.workspace = workspaceName ?? ''; } }
         const surface = this.terminalSurfaces.get(station);
         if (!surface) return;
         const selection = this.terminalSelection?.station === station ? this.terminalSelection.model : undefined;
@@ -1043,6 +1059,8 @@ export class RoomScene {
     }
     private placeLabels(w:number,h:number):void{
         const {a,b}=this.tmp;
+        // t3:polish2 — project every label, then lay the visible ones out in screen space so they never pile up.
+        const items:Array<{label:HTMLButtonElement;x:number;y:number;w:number;h:number}>=[];
         for(const label of this.labels){
             const action = label.dataset.workstation as string;
             const root = this.rootFor(action);
@@ -1051,14 +1069,19 @@ export class RoomScene {
             const mesh = this.screens.get(action);
             const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(b)) : undefined;
             const x=Math.round((p.x*0.5+0.5)*w*2)/2,y=Math.round((-p.y*0.5+0.5)*h*2)/2;
-            const visible=workstationLabelVisible(this.navigation, p.z, distance);
-            const placed=visible?x*65536+y:-1;
-            // Only touch the style when it changed. left/top stay fixed; the move is a compositor-only transform.
-            if(this.labelPos.get(label)!==placed){
-                this.labelPos.set(label,placed);
-                if(visible){label.style.left='0px';label.style.top='0px';label.style.transform=`translate(${x}px, ${y}px) translate(-50%, -50%)`;label.style.visibility='visible';}
-                else label.style.visibility='hidden';
-            }
+            if(!workstationLabelVisible(this.navigation, p.z, distance)){ if(this.labelPos.get(label)!==-1){this.labelPos.set(label,-1);label.style.visibility='hidden';} continue; }
+            let size=this.labelSize.get(label);
+            if(!size||!size.w){size={w:label.offsetWidth||100,h:label.offsetHeight||26};this.labelSize.set(label,size);}
+            items.push({label,x,y,w:size.w,h:size.h});
+        }
+        for(const item of layoutLabels(items))this.applyLabel(item.label,item.x,item.y);
+    }
+    private applyLabel(label:HTMLButtonElement,x:number,y:number):void{
+        const placed=x*65536+y;
+        // Only touch the style when it changed. left/top stay fixed; the move is a compositor-only transform.
+        if(this.labelPos.get(label)!==placed){
+            this.labelPos.set(label,placed);
+            label.style.left='0px';label.style.top='0px';label.style.transform=`translate(${x}px, ${y}px) translate(-50%, -50%)`;label.style.visibility='visible';
         }
     }
     private rootFor(action:string):THREE.Object3D|undefined{return this.entities.get(action)?.built.root;}

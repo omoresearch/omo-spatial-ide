@@ -95,7 +95,7 @@ export function buildShell(shell: WorldShell, blocks: readonly Footprint[], orb:
         core.position.set(0.2, 0.65, 3 * D / 10); root.add(core);
     }
     const landing = new THREE.Mesh(new THREE.PlaneGeometry(130, 130), material(jungle ? 0x101c1a : 0x101622));
-    landing.rotation.x = -Math.PI / 2; landing.position.y = -1.05; landing.receiveShadow = true; root.add(landing);
+    landing.rotation.x = -Math.PI / 2; landing.position.y = -1.05; landing.receiveShadow = false; root.add(landing); // t3:polish2: no shadow wedges outside the floor (walls at the open side cast onto the landing)
     return root;
 }
 
