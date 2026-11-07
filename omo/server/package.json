@@ -1,0 +1,18 @@
+{
+  "name": "omo-room-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Omo room server: shared rooms (world, presence, chat, voice signalling) for people on different computers. Terminals are never shared.",
+  "main": "omo-room-server.cjs",
+  "bin": { "omo-room-server": "omo-room-server.cjs" },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node omo-room-server.cjs",
+    "check": "node scripts/check.cjs",
+    "smoke": "node test/e2e-smoke.cjs",
+    "vendor": "node scripts/vendor-world-model.cjs"
+  },
+  "dependencies": {
+    "ws": "8.22.1"
+  }
+}
