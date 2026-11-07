@@ -31,6 +31,9 @@ const m = (n: number): string => (Math.round(n * 100) / 100).toFixed(2);
 /** Build toggle for the scene toolbar. Shown while a saved room shows. */
 export function BuildToggle(props: { build: BuildMode }): React.ReactElement {
     useBuild(props.build);
+    // Follow a rebuilt room even when nothing else re-renders the widget (same pattern as the focus overlay).
+    React.useEffect(() => { props.build.sync(); });
+    React.useEffect(() => { const id = window.setInterval(() => props.build.sync(), 500); return () => window.clearInterval(id); }, [props.build]);
     const on = props.build.active;
     return <button type="button" className={`omo-build-toggle${on ? ' is-on' : ''}`} data-testid="build-toggle" aria-pressed={on}
         title={on ? 'Leave build mode (B)' : 'Build mode (B)'} onMouseDown={e => e.preventDefault()} onClick={() => props.build.toggle()}>

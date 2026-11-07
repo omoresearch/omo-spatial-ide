@@ -115,10 +115,11 @@ export class BuildMode {
     sync(): void {
         const store = this.options.store();
         if (store !== this.boundStore?.store) {
+            // Room closed or reconfigured: leave build mode (dropping its draft) while the old store is still bound.
+            if (this.state.active) this.exit(true);
             this.boundStore?.off();
             this.boundStore = store ? { store, off: store.onChange(change => this.storeChanged(change)) } : undefined;
             if (store && !store.loaded) store.load();
-            if (!store && this.state.active) this.exit(true);
             this.pushWorld();
         }
         const scene = this.options.scene();
@@ -334,7 +335,8 @@ export class BuildMode {
     click(clientX: number, clientY: number): void {
         if (!this.state.active) return;
         const { tool } = this.state;
-        if (tool === 'place' || tool === 'move') { this.aim(clientX, clientY); this.commitGhost(); return; }
+        // Walking: the ghost sits under the crosshair, so that is where it goes. Overview: under the mouse.
+        if (tool === 'place' || tool === 'move') { this.lastAim.key = ''; if (threeOf(this.bound?.scene).navigation === 'overview') this.aim(clientX, clientY); else this.aim(); this.commitGhost(); return; }
         const id = this.pick(clientX, clientY);
         const e = this.entity(id);
         if (tool === 'link') {
