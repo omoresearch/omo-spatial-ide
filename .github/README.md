@@ -55,11 +55,11 @@ Notes:
 | Area | State |
 |---|---|
 | First-person room, physical terminals, web wall, IDE tooling | Released (v0.1.0) |
-| macOS Apple Silicon download | Released; not code-signed |
-| Agents: Hermes, Claude Code, Codex | Integrated; tested with no-network fixture CLIs; supervised real-agent tests next |
-| Expandable worlds: build mode, Hermes world admin, prompt-to-world onboarding | In development |
-| Multiplayer across computers (room server, invites, voice over the internet) | In development |
-| Intel Mac, Linux and Windows downloads; signed `.app`/`.dmg` | Planned |
+| macOS Apple Silicon download | Released (v0.1.0); not code-signed |
+| Expandable worlds: prompt-to-world onboarding, build mode (B), Hermes world admin (H), any number of desks, templates and room kits | On `master`; tested locally in real Chrome |
+| Multiplayer across computers: room server (`omo-room-server`), invite links, roles, shared world, chat, voice | On `master`; two app instances in one room pass 23/23 checks on one machine. Not yet tried between two real computers. See [`omo/server/DEPLOY-TAILSCALE.md`](../omo/server/DEPLOY-TAILSCALE.md) |
+| Agents: Hermes, Claude Code, Codex, DeepSeek Harness with real status signals | Integrated; tested with no-network fixture CLIs; supervised real-agent session next |
+| Intel Mac and Linux downloads; `.app`/`.dmg`; code signing | Packaging written; Linux tarball tested locally; macOS jobs not yet run |
 
 Omo is early software. Expect rough edges and [tell us what breaks](https://github.com/omoresearch/omo-spatial-ide/issues).
 

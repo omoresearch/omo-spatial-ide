@@ -1,0 +1,12 @@
+..........................Hermes launch denied: an active Hermes turn lease is held.
+...Omo agent launch denied: the agent executable could not be started.
+..<frozen importlib._bootstrap_external>:511: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x79b9c44b31f0>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+................/home/harry/dev/omo-world-v2/omo/runtime/tests/test_owned_v3_regressions.py:646: ResourceWarning: unclosed file <_io.TextIOWrapper name='/proc/2125097/stat' mode='r' encoding='UTF-8'>
+  raw = open(f"/proc/{pid}/stat").read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..................
+----------------------------------------------------------------------
+Ran 65 tests in 56.081s
+
+OK
