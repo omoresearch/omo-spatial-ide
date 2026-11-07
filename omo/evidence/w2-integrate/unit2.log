@@ -1,0 +1,2517 @@
+
+> omo-spatial-ide@0.1.0 test
+> node --experimental-strip-types --test extension/test/*.test.cjs
+
+TAP version 13
+# Subtest: ask → proposed; nothing applied until Apply; Apply saves world v2
+ok 1 - ask → proposed; nothing applied until Apply; Apply saves world v2
+  ---
+  duration_ms: 37.655872
+  type: 'test'
+  ...
+# Subtest: Discard leaves the world unchanged; a new ask replaces the pending plan
+ok 2 - Discard leaves the world unchanged; a new ask replaces the pending plan
+  ---
+  duration_ms: 3.174269
+  type: 'test'
+  ...
+# Subtest: a plan made on an older revision goes stale and cannot apply
+ok 3 - a plan made on an older revision goes stale and cannot apply
+  ---
+  duration_ms: 1.079566
+  type: 'test'
+  ...
+# Subtest: Hermes is never requested unless turned on and confirmed
+ok 4 - Hermes is never requested unless turned on and confirmed
+  ---
+  duration_ms: 2.82226
+  type: 'test'
+  ...
+# Subtest: every kind (Hermes, Claude, Codex, Shell, dsh) has its own glyph, name, shape and colour
+ok 5 - every kind (Hermes, Claude, Codex, Shell, dsh) has its own glyph, name, shape and colour
+  ---
+  duration_ms: 9.188296
+  type: 'test'
+  ...
+# Subtest: Hermes and Claude no longer share a silhouette: different part counts, modes and path data
+ok 6 - Hermes and Claude no longer share a silhouette: different part counts, modes and path data
+  ---
+  duration_ms: 0.320068
+  type: 'test'
+  ...
+# Subtest: glyph colours are design tokens whose defaults match design-tokens.css
+ok 7 - glyph colours are design tokens whose defaults match design-tokens.css
+  ---
+  duration_ms: 0.362689
+  type: 'test'
+  ...
+# Subtest: every path parses to drawable commands within the 24×24 box
+ok 8 - every path parses to drawable commands within the 24×24 box
+  ---
+  duration_ms: 0.369238
+  type: 'test'
+  ...
+# (node:1357855) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: claude session ids match the bridge uuid5
+ok 9 - claude session ids match the bridge uuid5
+  ---
+  duration_ms: 0.808977
+  type: 'test'
+  ...
+# Subtest: Claude status: shows exact JSON + target, writes only after confirmation, never outside the data dir
+ok 10 - Claude status: shows exact JSON + target, writes only after confirmation, never outside the data dir
+  ---
+  duration_ms: 1.626444
+  type: 'test'
+  ...
+# Subtest: Claude status: a foreign file is never overwritten or removed
+ok 11 - Claude status: a foreign file is never overwritten or removed
+  ---
+  duration_ms: 0.593988
+  type: 'test'
+  ...
+# Subtest: the recorder written into the hook command records a real hook payload
+ok 12 - the recorder written into the hook command records a real hook payload
+  ---
+  duration_ms: 21.768499
+  type: 'test'
+  ...
+# Subtest: readSignals: Claude hook events for the tab session, Hermes lease (read-only), process tree
+ok 13 - readSignals: Claude hook events for the tab session, Hermes lease (read-only), process tree
+  ---
+  duration_ms: 93.639885
+  type: 'test'
+  ...
+# Subtest: readSignals: no lease means Hermes is idle; a lease on another conversation does not count
+ok 14 - readSignals: no lease means Hermes is idle; a lease on another conversation does not count
+  ---
+  duration_ms: 88.416004
+  type: 'test'
+  ...
+# Subtest: notifications hub: hook approval and finish come from real signals, screen text is fallback
+ok 15 - notifications hub: hook approval and finish come from real signals, screen text is fallback
+  ---
+  duration_ms: 345.298318
+  type: 'test'
+  ...
+# Subtest: dsh: launcher listed only when the host reports it, start asks first, web wall URL is loopback
+ok 16 - dsh: launcher listed only when the host reports it, start asks first, web wall URL is loopback
+  ---
+  duration_ms: 3.316308
+  type: 'test'
+  ...
+# Subtest: Real agent check: explicit Run, confirm, one tab per installed agent, sends nothing, saves JSON
+ok 17 - Real agent check: explicit Run, confirm, one tab per installed agent, sends nothing, saves JSON
+  ---
+  duration_ms: 25.958874
+  type: 'test'
+  ...
+# Subtest: panels render: Agents panel shows Claude status and the Real agent check Run button
+ok 18 - panels render: Agents panel shows Claude status and the Real agent check Run button
+  ---
+  duration_ms: 29.600621
+  type: 'test'
+  ...
+# Subtest: task drafts round-trip exact text and use separate collision-safe project/station/workspace/tab keys
+ok 19 - task drafts round-trip exact text and use separate collision-safe project/station/workspace/tab keys
+  ---
+  duration_ms: 1.530314
+  type: 'test'
+  ...
+# Subtest: draft size is bounded by UTF-8 bytes and refusal does not persist text
+ok 20 - draft size is bounded by UTF-8 bytes and refusal does not persist text
+  ---
+  duration_ms: 2.663491
+  type: 'test'
+  ...
+# Subtest: invalid targets and text are refused without touching storage
+ok 21 - invalid targets and text are refused without touching storage
+  ---
+  duration_ms: 1.202966
+  type: 'test'
+  ...
+# Subtest: clearing a draft persists the clear instead of restoring the previous task on reload
+ok 22 - clearing a draft persists the clear instead of restoring the previous task on reload
+  ---
+  duration_ms: 0.13105
+  type: 'test'
+  ...
+# Subtest: missing, corrupt, invalid and inaccessible storage read as empty and write false
+ok 23 - missing, corrupt, invalid and inaccessible storage read as empty and write false
+  ---
+  duration_ms: 0.183269
+  type: 'test'
+  ...
+# Subtest: review refresh locks both decision controls until its request settles
+ok 24 - review refresh locks both decision controls until its request settles
+  ---
+  duration_ms: 3.327628
+  type: 'test'
+  ...
+# Subtest: successful lifecycle keeps frozen text, original target evidence, and fresh immutable records
+ok 25 - successful lifecycle keeps frozen text, original target evidence, and fresh immutable records
+  ---
+  duration_ms: 1.040066
+  type: 'test'
+  ...
+# Subtest: impossible transitions and context mismatches fail closed
+ok 26 - impossible transitions and context mismatches fail closed
+  ---
+  duration_ms: 0.620607
+  type: 'test'
+  ...
+# Subtest: terminal decisions are immutable and review receipt never claims task ownership
+ok 27 - terminal decisions are immutable and review receipt never claims task ownership
+  ---
+  duration_ms: 0.608588
+  type: 'test'
+  ...
+# Subtest: review snapshot is bounded, private metadata is not copied, and head is optional
+ok 28 - review snapshot is bounded, private metadata is not copied, and head is optional
+  ---
+  duration_ms: 1.516234
+  type: 'test'
+  ...
+# Subtest: stable keys isolate project, desk, workspace and tab while ignoring transient view
+ok 29 - stable keys isolate project, desk, workspace and tab while ignoring transient view
+  ---
+  duration_ms: 0.332449
+  type: 'test'
+  ...
+# Subtest: storage round trip allows a new view but rejects foreign, malformed, inconsistent and unknown records
+ok 30 - storage round trip allows a new view but rejects foreign, malformed, inconsistent and unknown records
+  ---
+  duration_ms: 0.665817
+  type: 'test'
+  ...
+# Subtest: storage is bounded before parse and denial returns false without throwing
+ok 31 - storage is bounded before parse and denial returns false without throwing
+  ---
+  duration_ms: 3.265758
+  type: 'test'
+  ...
+# Subtest: invalid creation and stored data never echo raw input
+ok 32 - invalid creation and stored data never echo raw input
+  ---
+  duration_ms: 0.879807
+  type: 'test'
+  ...
+# Subtest: handoff storage is exact-worktree scoped and ignores malformed or foreign records
+ok 33 - handoff storage is exact-worktree scoped and ignores malformed or foreign records
+  ---
+  duration_ms: 1.705104
+  type: 'test'
+  ...
+# Subtest: handoff controller does not call authority on project selection and validates the registered worktree before continuation
+ok 34 - handoff controller does not call authority on project selection and validates the registered worktree before continuation
+  ---
+  duration_ms: 0.866577
+  type: 'test'
+  ...
+# Subtest: late and disposed authority results cannot validate a pending handoff
+ok 35 - late and disposed authority results cannot validate a pending handoff
+  ---
+  duration_ms: 0.926407
+  type: 'test'
+  ...
+# Subtest: server-rendered workflow exposes exact new-task selectors but no automatic action control
+ok 36 - server-rendered workflow exposes exact new-task selectors but no automatic action control
+  ---
+  duration_ms: 4.041385
+  type: 'test'
+  ...
+# Subtest: actual room page wires New agent task to the validated workflow and preserves old task controls
+ok 37 - actual room page wires New agent task to the validated workflow and preserves old task controls
+  ---
+  duration_ms: 31.703023
+  type: 'test'
+  ...
+# Subtest: foreground process and task status use honest labels
+ok 38 - foreground process and task status use honest labels
+  ---
+  duration_ms: 0.331439
+  type: 'test'
+  ...
+# Subtest: CI tmux bootstrap rejects corrupt bytes before decompression or execution
+ok 39 - CI tmux bootstrap rejects corrupt bytes before decompression or execution
+  ---
+  duration_ms: 0.849367
+  type: 'test'
+  ...
+# Subtest: CI tmux bootstrap expands only bytes matching the requested checksum
+ok 40 - CI tmux bootstrap expands only bytes matching the requested checksum
+  ---
+  duration_ms: 0.600488
+  type: 'test'
+  ...
+# Subtest: the physical code preview explicitly labels omitted lines and clipped characters
+ok 41 - the physical code preview explicitly labels omitted lines and clipped characters
+  ---
+  duration_ms: 1.501794
+  type: 'test'
+  ...
+# Subtest: short physical previews are still labelled as previews, and Git list limits stay visible
+ok 42 - short physical previews are still labelled as previews, and Git list limits stay visible
+  ---
+  duration_ms: 0.632547
+  type: 'test'
+  ...
+# Subtest: setup doctor finds real filesystem prerequisites without running tools or exposing environment secrets
+ok 43 - setup doctor finds real filesystem prerequisites without running tools or exposing environment secrets
+  ---
+  duration_ms: 10.149752
+  type: 'test'
+  ...
+# Subtest: missing core tools fail; missing optional agents do not block shells
+ok 44 - missing core tools fail; missing optional agents do not block shells
+  ---
+  duration_ms: 2.73127
+  type: 'test'
+  ...
+# Subtest: fresh unbuilt checkout reports failures without creating files
+ok 45 - fresh unbuilt checkout reports failures without creating files
+  ---
+  duration_ms: 0.732817
+  type: 'test'
+  ...
+# Subtest: unsafe runtime settings fail without echoing their value into the report
+ok 46 - unsafe runtime settings fail without echoing their value into the report
+  ---
+  duration_ms: 0.734517
+  type: 'test'
+  ...
+# Subtest: doctor rejects canonical aliases of the Minecraft data directory without creating data
+ok 47 - doctor rejects canonical aliases of the Minecraft data directory without creating data
+  ---
+  duration_ms: 2.055833
+  type: 'test'
+  ...
+# Subtest: doctor fails closed for dangling and looping data symlinks
+ok 48 - doctor fails closed for dangling and looping data symlinks
+  ---
+  duration_ms: 9.732775
+  type: 'test'
+  ...
+# Subtest: agent discovery resolves runtime-relative pins and PATH entries without fallback
+ok 49 - agent discovery resolves runtime-relative pins and PATH entries without fallback
+  ---
+  duration_ms: 2.834289
+  type: 'test'
+  ...
+# Subtest: CLI JSON is parseable and statuses propagate to the real process exit code
+ok 50 - CLI JSON is parseable and statuses propagate to the real process exit code
+  ---
+  duration_ms: 113.101113
+  type: 'test'
+  ...
+# Subtest: a multiline paste cannot execute commands by bypassing Enter on a physical terminal
+ok 51 - a multiline paste cannot execute commands by bypassing Enter on a physical terminal
+  ---
+  duration_ms: 2.148952
+  type: 'test'
+  ...
+# Subtest: paste caps bytes and refuses ESC/control injection while preserving normal single-line text
+ok 52 - paste caps bytes and refuses ESC/control injection while preserving normal single-line text
+  ---
+  duration_ms: 0.585558
+  type: 'test'
+  ...
+# Subtest: Ctrl+V leaves native paste handling available instead of injecting Control+V into the shell
+ok 53 - Ctrl+V leaves native paste handling available instead of injecting Control+V into the shell
+  ---
+  duration_ms: 0.536008
+  type: 'test'
+  ...
+# Subtest: physical-screen focus state is published immediately, not one animation frame late
+ok 54 - physical-screen focus state is published immediately, not one animation frame late
+  ---
+  duration_ms: 0.302269
+  type: 'test'
+  ...
+# Subtest: an explicit safe-paste handler receives clipboard text instead of the raw terminal key stream
+ok 55 - an explicit safe-paste handler receives clipboard text instead of the raw terminal key stream
+  ---
+  duration_ms: 0.369379
+  type: 'test'
+  ...
+# Subtest: terminal Ctrl+C is intercepted at window capture before IDE document shortcuts
+ok 56 - terminal Ctrl+C is intercepted at window capture before IDE document shortcuts
+  ---
+  duration_ms: 0.255749
+  type: 'test'
+  ...
+# Subtest: global interception leaves keyboard input outside the spatial canvas alone
+ok 57 - global interception leaves keyboard input outside the spatial canvas alone
+  ---
+  duration_ms: 0.305849
+  type: 'test'
+  ...
+# Subtest: Shift double and triple native clicks request word and line selection without terminal input
+ok 58 - Shift double and triple native clicks request word and line selection without terminal input
+  ---
+  duration_ms: 2.79029
+  type: 'test'
+  ...
+# Subtest: a native multi-click following a real selection drag must not replace the drag range
+ok 59 - a native multi-click following a real selection drag must not replace the drag range
+  ---
+  duration_ms: 0.730138
+  type: 'test'
+  ...
+# Subtest: Shift+drag selects on the monitor without moving the camera or clicking the terminal
+ok 60 - Shift+drag selects on the monitor without moving the camera or clicking the terminal
+  ---
+  duration_ms: 0.380989
+  type: 'test'
+  ...
+# Subtest: Ctrl+Shift+C invokes copying, never terminal interrupt, including when no text is selected
+ok 61 - Ctrl+Shift+C invokes copying, never terminal interrupt, including when no text is selected
+  ---
+  duration_ms: 0.775458
+  type: 'test'
+  ...
+# Subtest: Ctrl+C still interrupts rather than copying, and Escape clears the selection
+ok 62 - Ctrl+C still interrupts rather than copying, and Escape clears the selection
+  ---
+  duration_ms: 0.501459
+  type: 'test'
+  ...
+# Subtest: modifier key presses preserve a completed selection until the copy chord arrives
+ok 63 - modifier key presses preserve a completed selection until the copy chord arrives
+  ---
+  duration_ms: 0.340879
+  type: 'test'
+  ...
+# Subtest: ordinary drag still changes the first-person view and blur abandons selection
+ok 64 - ordinary drag still changes the first-person view and blur abandons selection
+  ---
+  duration_ms: 0.401078
+  type: 'test'
+  ...
+# Subtest: a real unread bell count exposes a named acknowledge control, without claiming agent completion
+ok 65 - a real unread bell count exposes a named acknowledge control, without claiming agent completion
+  ---
+  duration_ms: 6.456506
+  type: 'test'
+  ...
+# Subtest: quiet or acknowledged desks do not show a fake bell alert
+ok 66 - quiet or acknowledged desks do not show a fake bell alert
+  ---
+  duration_ms: 0.832748
+  type: 'test'
+  ...
+# Subtest: real frame bell increments become unread visual attention without repeating the count
+ok 67 - real frame bell increments become unread visual attention without repeating the count
+  ---
+  duration_ms: 44.244488
+  type: 'test'
+  ...
+# Subtest: acknowledge is local-only and only a genuinely new bell raises attention again
+ok 68 - acknowledge is local-only and only a genuinely new bell raises attention again
+  ---
+  duration_ms: 1.027476
+  type: 'test'
+  ...
+# Subtest: invalid or stale bell counters do not create alerts or poison later valid frames
+ok 69 - invalid or stale bell counters do not create alerts or poison later valid frames
+  ---
+  duration_ms: 2.187251
+  type: 'test'
+  ...
+# Subtest: the manage drawer is closed by default: only its toggle shows
+ok 70 - the manage drawer is closed by default: only its toggle shows
+  ---
+  duration_ms: 5.6302
+  type: 'test'
+  ...
+# Subtest: the open drawer has board, find, scrollback, copy, paste, profile and keep-awake controls
+ok 71 - the open drawer has board, find, scrollback, copy, paste, profile and keep-awake controls
+  ---
+  duration_ms: 3.482967
+  type: 'test'
+  ...
+# Subtest: multi-line paste explains bracketed-paste refusal before sending
+ok 72 - multi-line paste explains bracketed-paste refusal before sending
+  ---
+  duration_ms: 1.546084
+  type: 'test'
+  ...
+# Subtest: the strip source never reads a device clipboard or plays a sound
+ok 73 - the strip source never reads a device clipboard or plays a sound
+  ---
+  duration_ms: 0.378559
+  type: 'test'
+  ...
+# Subtest: frame history, scroll offset, bell and bracketed-paste reach the controller state
+ok 74 - frame history, scroll offset, bell and bracketed-paste reach the controller state
+  ---
+  duration_ms: 68.510618
+  type: 'test'
+  ...
+# Subtest: workspace board lists live metadata; rename and keep-awake update the open workspace
+ok 75 - workspace board lists live metadata; rename and keep-awake update the open workspace
+  ---
+  duration_ms: 1.966512
+  type: 'test'
+  ...
+# Subtest: delete workspace needs confirmation, asks again when work is busy, then detaches the monitor
+ok 76 - delete workspace needs confirmation, asks again when work is busy, then detaches the monitor
+  ---
+  duration_ms: 0.973616
+  type: 'test'
+  ...
+# Subtest: binding the station to an existing workspace calls bindStation, then reopens without starting agents
+ok 77 - binding the station to an existing workspace calls bindStation, then reopens without starting agents
+  ---
+  duration_ms: 1.365565
+  type: 'test'
+  ...
+# Subtest: workspace profile is for future tabs; it is saved, not applied to running tabs
+ok 78 - workspace profile is for future tabs; it is saved, not applied to running tabs
+  ---
+  duration_ms: 0.759957
+  type: 'test'
+  ...
+# Subtest: manual resume: shells, busy and non-running tabs are refused; idle agents need confirmation; Codex says fresh
+ok 79 - manual resume: shells, busy and non-running tabs are refused; idle agents need confirmation; Codex says fresh
+  ---
+  duration_ms: 0.787557
+  type: 'test'
+  ...
+# Subtest: scroll, wheel and find go to the attached view; find reports the match count
+ok 80 - scroll, wheel and find go to the attached view; find reports the match count
+  ---
+  duration_ms: 0.749597
+  type: 'test'
+  ...
+# Subtest: copy returns the selected text to the caller and never uses a clipboard itself
+ok 81 - copy returns the selected text to the caller and never uses a clipboard itself
+  ---
+  duration_ms: 0.757777
+  type: 'test'
+  ...
+# Subtest: clear history needs confirmation
+ok 82 - clear history needs confirmation
+  ---
+  duration_ms: 0.710767
+  type: 'test'
+  ...
+# Subtest: paste: capped at 256 KiB, multi-line refused unless bracketed paste is advertised, single line allowed
+ok 83 - paste: capped at 256 KiB, multi-line refused unless bracketed paste is advertised, single line allowed
+  ---
+  duration_ms: 4.853392
+  type: 'test'
+  ...
+# Subtest: paste fails closed when the frame never reported a paste mode
+ok 84 - paste fails closed when the frame never reported a paste mode
+  ---
+  duration_ms: 1.544074
+  type: 'test'
+  ...
+# Subtest: renaming a tab uses the real runtime action without replacing its process or attached view
+ok 85 - renaming a tab uses the real runtime action without replacing its process or attached view
+  ---
+  duration_ms: 29.308872
+  type: 'test'
+  ...
+# Subtest: invalid tab names are refused without touching the backend
+ok 86 - invalid tab names are refused without touching the backend
+  ---
+  duration_ms: 0.527108
+  type: 'test'
+  ...
+# Subtest: a no-op or failed rename never displays a success or invented name
+ok 87 - a no-op or failed rename never displays a success or invented name
+  ---
+  duration_ms: 0.745047
+  type: 'test'
+  ...
+# Subtest: a rename response from the previous project cannot overwrite the current room
+ok 88 - a rename response from the previous project cannot overwrite the current room
+  ---
+  duration_ms: 0.376749
+  type: 'test'
+  ...
+# Subtest: binding opens the station workspace once, attaches the active tab at 80x22 and polls frames by sequence
+ok 89 - binding opens the station workspace once, attaches the active tab at 80x22 and polls frames by sequence
+  ---
+  duration_ms: 62.41956
+  type: 'test'
+  ...
+# Subtest: stale or older frames never overwrite newer monitor output, and only one poll is in flight
+ok 90 - stale or older frames never overwrite newer monitor output, and only one poll is in flight
+  ---
+  duration_ms: 2.68767
+  type: 'test'
+  ...
+# Subtest: typing forwards to the same attached view; without a view nothing is sent and the UI says so
+ok 91 - typing forwards to the same attached view; without a view nothing is sent and the UI says so
+  ---
+  duration_ms: 1.447305
+  type: 'test'
+  ...
+# Subtest: a refresh reconnects the stored project+station binding to the same tab without new sessions
+ok 92 - a refresh reconnects the stored project+station binding to the same tab without new sessions
+  ---
+  duration_ms: 1.264085
+  type: 'test'
+  ...
+# Subtest: interrupted agents are shown as interrupted and never auto-restarted; dispose only detaches
+ok 93 - interrupted agents are shown as interrupted and never auto-restarted; dispose only detaches
+  ---
+  duration_ms: 0.715438
+  type: 'test'
+  ...
+# Subtest: busy and exited state comes from runtime metadata in poll results
+ok 94 - busy and exited state comes from runtime metadata in poll results
+  ---
+  duration_ms: 0.754568
+  type: 'test'
+  ...
+# Subtest: dispose while the workspace is opening prevents a late attach
+ok 95 - dispose while the workspace is opening prevents a late attach
+  ---
+  duration_ms: 0.602757
+  type: 'test'
+  ...
+# Subtest: a view that attaches after dispose is detached at once and never polled
+ok 96 - a view that attaches after dispose is detached at once and never polled
+  ---
+  duration_ms: 0.705737
+  type: 'test'
+  ...
+# Subtest: switching project detaches the old view, opens the new binding and ignores the old poll result
+ok 97 - switching project detaches the old view, opens the new binding and ignores the old poll result
+  ---
+  duration_ms: 1.254035
+  type: 'test'
+  ...
+# Subtest: switching to a project with no saved binding detaches the old view and opens nothing
+ok 98 - switching to a project with no saved binding detaches the old view and opens nothing
+  ---
+  duration_ms: 0.849717
+  type: 'test'
+  ...
+# Subtest: agent launches need an explicit confirm; only then newTab is sent with confirmedStart true
+ok 99 - agent launches need an explicit confirm; only then newTab is sent with confirmedStart true
+  ---
+  duration_ms: 1.193865
+  type: 'test'
+  ...
+# Subtest: a new shell is started directly by the click, Hermes uses the selected profile
+ok 100 - a new shell is started directly by the click, Hermes uses the selected profile
+  ---
+  duration_ms: 1.674574
+  type: 'test'
+  ...
+# Subtest: unavailable CLIs are disabled with the reason and install hint, and cannot be launched
+ok 101 - unavailable CLIs are disabled with the reason and install hint, and cannot be launched
+  ---
+  duration_ms: 2.446571
+  type: 'test'
+  ...
+# Subtest: a failed launch shows the error and leaves no fake tab or success label
+ok 102 - a failed launch shows the error and leaves no fake tab or success label
+  ---
+  duration_ms: 0.805367
+  type: 'test'
+  ...
+# Subtest: closing and reviving a tab each need explicit confirmation flags
+ok 103 - closing and reviving a tab each need explicit confirmation flags
+  ---
+  duration_ms: 1.685203
+  type: 'test'
+  ...
+# Subtest: poll failures show reconnecting and a detached view is re-attached without new sessions
+ok 104 - poll failures show reconnecting and a detached view is re-attached without new sessions
+  ---
+  duration_ms: 1.471115
+  type: 'test'
+  ...
+# Subtest: an unavailable host is reported honestly and no workspace is opened
+ok 105 - an unavailable host is reported honestly and no workspace is opened
+  ---
+  duration_ms: 0.473658
+  type: 'test'
+  ...
+# Subtest: monitor cell runs map per-cell palette colours and fall back to defaults
+ok 106 - monitor cell runs map per-cell palette colours and fall back to defaults
+  ---
+  duration_ms: 0.586048
+  type: 'test'
+  ...
+# Subtest: closing the project releases the monitor view but a later project can still connect
+ok 107 - closing the project releases the monitor view but a later project can still connect
+  ---
+  duration_ms: 3.338527
+  type: 'test'
+  ...
+# Subtest: the most common background key is treated as the terminal background
+ok 108 - the most common background key is treated as the terminal background
+  ---
+  duration_ms: 1.165626
+  type: 'test'
+  ...
+# Subtest: R2 clipboard notifications use the current view and tab, never frame.osc52
+ok 109 - R2 clipboard notifications use the current view and tab, never frame.osc52
+  ---
+  duration_ms: 0.971057
+  type: 'test'
+  ...
+# Subtest: R2 notification is discarded when the active tab changes during the write-only fetch
+ok 110 - R2 notification is discarded when the active tab changes during the write-only fetch
+  ---
+  duration_ms: 0.744168
+  type: 'test'
+  ...
+# Subtest: R2 truecolour metadata is accepted only as exact safe rows and cells
+ok 111 - R2 truecolour metadata is accepted only as exact safe rows and cells
+  ---
+  duration_ms: 0.663468
+  type: 'test'
+  ...
+# Subtest: render runs use terminal columns for colours and preserve full combining glyphs
+ok 112 - render runs use terminal columns for colours and preserve full combining glyphs
+  ---
+  duration_ms: 61.117124
+  type: 'test'
+  ...
+# Subtest: controller forwards actual cells and drops them when a later legacy frame omits metadata
+ok 113 - controller forwards actual cells and drops them when a later legacy frame omits metadata
+  ---
+  duration_ms: 4.205015
+  type: 'test'
+  ...
+# Subtest: a git command before Git is ready is queued, shows "Git is starting", and runs once Git initializes
+ok 114 - a git command before Git is ready is queued, shows "Git is starting", and runs once Git initializes
+  ---
+  duration_ms: 5.749749
+  type: 'test'
+  ...
+# Subtest: non-git commands are never held
+ok 115 - non-git commands are never held
+  ---
+  duration_ms: 0.317339
+  type: 'test'
+  ...
+# Subtest: ready at start: nothing is held and no listener is kept
+ok 116 - ready at start: nothing is held and no listener is kept
+  ---
+  duration_ms: 0.138599
+  type: 'test'
+  ...
+# Subtest: git missing counts as settled so commands fail fast with the extension's own message
+ok 117 - git missing counts as settled so commands fail fast with the extension's own message
+  ---
+  duration_ms: 0.174359
+  type: 'test'
+  ...
+# Subtest: bounded: a Git that never initializes releases the command after the timeout
+ok 118 - bounded: a Git that never initializes releases the command after the timeout
+  ---
+  duration_ms: 0.266119
+  type: 'test'
+  ...
+# Subtest: several queued commands share one wait and one note
+ok 119 - several queued commands share one wait and one note
+  ---
+  duration_ms: 0.649508
+  type: 'test'
+  ...
+# Subtest: opening review lists the actual requested project without prefetching file contents or invoking any writer
+ok 120 - opening review lists the actual requested project without prefetching file contents or invoking any writer
+  ---
+  duration_ms: 1.799173
+  type: 'test'
+  ...
+# Subtest: closing review drops a late project response instead of restoring its file list
+ok 121 - closing review drops a late project response instead of restoring its file list
+  ---
+  duration_ms: 0.21523
+  type: 'test'
+  ...
+# Subtest: an explicit listed-file selection reads only that literal patch and rejects guessed paths
+ok 122 - an explicit listed-file selection reads only that literal patch and rejects guessed paths
+  ---
+  duration_ms: 0.365569
+  type: 'test'
+  ...
+# Subtest: a late patch cannot restore content after closing the review
+ok 123 - a late patch cannot restore content after closing the review
+  ---
+  duration_ms: 0.243809
+  type: 'test'
+  ...
+# Subtest: reordered selections and refreshed projects cannot display the earlier patch
+ok 124 - reordered selections and refreshed projects cannot display the earlier patch
+  ---
+  duration_ms: 0.262649
+  type: 'test'
+  ...
+# Subtest: project and file context mismatches are refused rather than painted
+ok 125 - project and file context mismatches are refused rather than painted
+  ---
+  duration_ms: 0.997036
+  type: 'test'
+  ...
+# Subtest: lists a tracked working-tree edit and returns its real unified diff
+ok 126 - lists a tracked working-tree edit and returns its real unified diff
+  ---
+  duration_ms: 91.723062
+  type: 'test'
+  ...
+# Subtest: combines staged and unstaged edits, and review does not mutate Git state
+ok 127 - combines staged and unstaged edits, and review does not mutate Git state
+  ---
+  duration_ms: 62.967228
+  type: 'test'
+  ...
+# Subtest: uses NUL-safe literal paths for untracked, deleted, hostile and non-ASCII files
+ok 128 - uses NUL-safe literal paths for untracked, deleted, hostile and non-ASCII files
+  ---
+  duration_ms: 78.80559
+  type: 'test'
+  ...
+# Subtest: reviews an unborn repository without inventing a commit
+ok 129 - reviews an unborn repository without inventing a commit
+  ---
+  duration_ms: 45.764211
+  type: 'test'
+  ...
+# Subtest: scopes a nested project to its directory inside a larger repository
+ok 130 - scopes a nested project to its directory inside a larger repository
+  ---
+  duration_ms: 34.545813
+  type: 'test'
+  ...
+# Subtest: caps the list at 200 changes and marks the snapshot as truncated
+ok 131 - caps the list at 200 changes and marks the snapshot as truncated
+  ---
+  duration_ms: 26.258094
+  type: 'test'
+  ...
+# Subtest: rejects non-Git projects, unsafe selections and outsider symlinks
+ok 132 - rejects non-Git projects, unsafe selections and outsider symlinks
+  ---
+  duration_ms: 41.075699
+  type: 'test'
+  ...
+# Subtest: rejects binary and oversized patches without returning partial output
+ok 133 - rejects binary and oversized patches without returning partial output
+  ---
+  duration_ms: 46.496138
+  type: 'test'
+  ...
+# Subtest: disables repository external diff helpers
+ok 134 - disables repository external diff helpers
+  ---
+  duration_ms: 28.623264
+  type: 'test'
+  ...
+# Subtest: returns plain unified text even when the repository forces coloured diffs
+ok 135 - returns plain unified text even when the repository forces coloured diffs
+  ---
+  duration_ms: 27.25318
+  type: 'test'
+  ...
+# Subtest: review cannot execute a repository clean filter or change its files through that helper
+ok 136 - review cannot execute a repository clean filter or change its files through that helper
+  ---
+  duration_ms: 27.619598
+  type: 'test'
+  ...
+# Subtest: repository paths with a literal trailing space are not repaired or trimmed
+ok 137 - repository paths with a literal trailing space are not repaired or trimmed
+  ---
+  duration_ms: 33.211318
+  type: 'test'
+  ...
+# Subtest: inherited Git directory and index overrides cannot redirect the requested project
+ok 138 - inherited Git directory and index overrides cannot redirect the requested project
+  ---
+  duration_ms: 66.743954
+  type: 'test'
+  ...
+# Subtest: non-UTF-8 file content is refused rather than replaced with guessed characters
+ok 139 - non-UTF-8 file content is refused rather than replaced with guessed characters
+  ---
+  duration_ms: 19.544657
+  type: 'test'
+  ...
+# (node:1358102) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: profile state paths respect the selected runtime home without reading the parent home
+ok 140 - profile state paths respect the selected runtime home without reading the parent home
+  ---
+  duration_ms: 0.703948
+  type: 'test'
+  ...
+# Subtest: lease inspector follows Hermes state.db semantics and sees held then cleared leases
+ok 141 - lease inspector follows Hermes state.db semantics and sees held then cleared leases
+  ---
+  duration_ms: 30.415348
+  type: 'test'
+  ...
+# Subtest: expired rows do not block, but malformed configured lease evidence fails closed
+ok 142 - expired rows do not block, but malformed configured lease evidence fails closed
+  ---
+  duration_ms: 24.840518
+  type: 'test'
+  ...
+# Subtest: malformed expired lease rows fail closed before expiry filtering in Node
+ok 143 - malformed expired lease rows fail closed before expiry filtering in Node
+  ---
+  duration_ms: 19.05754
+  type: 'test'
+  ...
+# Subtest: malformed expired lease rows fail closed in the actual Python guard
+ok 144 - malformed expired lease rows fail closed in the actual Python guard
+  ---
+  duration_ms: 59.381071
+  type: 'test'
+  ...
+# Subtest: service checks the runtime hosts profile scope rather than ambient parent profile state
+ok 145 - service checks the runtime hosts profile scope rather than ambient parent profile state
+  ---
+  duration_ms: 45.749521
+  type: 'test'
+  ...
+# Subtest: held lease denies new, revive and resume before any agent launch request
+ok 146 - held lease denies new, revive and resume before any agent launch request
+  ---
+  duration_ms: 19.350389
+  type: 'test'
+  ...
+# Subtest: cleared lease permits the explicit launch request
+ok 147 - cleared lease permits the explicit launch request
+  ---
+  duration_ms: 27.469199
+  type: 'test'
+  ...
+# Subtest: revive and resume preflight the tab captured profile, not the workspace default
+ok 148 - revive and resume preflight the tab captured profile, not the workspace default
+  ---
+  duration_ms: 42.197354
+  type: 'test'
+  ...
+# ValueError: VSIX extraction refused
+# Subtest: extension lock accepts only pinned bounded HTTPS artifacts from known registries
+ok 149 - extension lock accepts only pinned bounded HTTPS artifacts from known registries
+  ---
+  duration_ms: 0.957167
+  type: 'test'
+  ...
+# Subtest: artifact verification refuses changed or oversized bytes before extraction
+ok 150 - artifact verification refuses changed or oversized bytes before extraction
+  ---
+  duration_ms: 0.427938
+  type: 'test'
+  ...
+# Subtest: offline readiness inspection does not create directories or download anything
+ok 151 - offline readiness inspection does not create directories or download anything
+  ---
+  duration_ms: 1.548034
+  type: 'test'
+  ...
+# Subtest: official Eclipse artifact redirects work but private-host redirects never receive a request
+ok 152 - official Eclipse artifact redirects work but private-host redirects never receive a request
+  ---
+  duration_ms: 48.383712
+  type: 'test'
+  ...
+# Subtest: system plugins are expanded to manifest-root directories rather than unusable VSIX files
+ok 153 - system plugins are expanded to manifest-root directories rather than unusable VSIX files
+  ---
+  duration_ms: 38.834657
+  type: 'test'
+  ...
+# Subtest: prepared bundle rejects unknown files, directories, nested content, special files and symlinks without writes
+ok 154 - prepared bundle rejects unknown files, directories, nested content, special files and symlinks without writes
+  ---
+  duration_ms: 47.423474
+  type: 'test'
+  ...
+# Subtest: VSIX absolute paths hidden behind a doubled separator are refused before any member is written
+ok 155 - VSIX absolute paths hidden behind a doubled separator are refused before any member is written
+  ---
+  duration_ms: 65.703178
+  type: 'test'
+  ...
+# Subtest: archive helper rejects path traversal and links without writing outside its target
+ok 156 - archive helper rejects path traversal and links without writing outside its target
+  ---
+  duration_ms: 43.766999
+  type: 'test'
+  ...
+# Subtest: private runtime copy is separate, writable for debugger IPC, and leaves source immutable
+ok 157 - private runtime copy is separate, writable for debugger IPC, and leaves source immutable
+  ---
+  duration_ms: 67.58844
+  type: 'test'
+  ...
+# Subtest: each boot receives a new clean private copy and cleanup preserves Theia state and adjacent dirs
+ok 158 - each boot receives a new clean private copy and cleanup preserves Theia state and adjacent dirs
+  ---
+  duration_ms: 72.413214
+  type: 'test'
+  ...
+# Subtest: unknown source files prevent a private launch copy and do not create runtime state
+ok 159 - unknown source files prevent a private launch copy and do not create runtime state
+  ---
+  duration_ms: 58.603794
+  type: 'test'
+  ...
+# Subtest: cleanup leaves an unsafe changed-owner runtime directory untouched
+ok 160 - cleanup leaves an unsafe changed-owner runtime directory untouched
+  ---
+  duration_ms: 48.611831
+  type: 'test'
+  ...
+# Subtest: normal startup uses only this bundle and keeps explicit controls, not arbitrary parent env
+ok 161 - normal startup uses only this bundle and keeps explicit controls, not arbitrary parent env
+  ---
+  duration_ms: 0.733537
+  type: 'test'
+  ...
+# Subtest: the application includes a matched-version extension host, language tools and debugger
+ok 162 - the application includes a matched-version extension host, language tools and debugger
+  ---
+  duration_ms: 0.188019
+  type: 'test'
+  ...
+# Subtest: immersive is off by default and needs both the choice and a showing room
+ok 163 - immersive is off by default and needs both the choice and a showing room
+  ---
+  duration_ms: 0.915417
+  type: 'test'
+  ...
+# Subtest: the choice is saved on this device and read back
+ok 164 - the choice is saved on this device and read back
+  ---
+  duration_ms: 0.15065
+  type: 'test'
+  ...
+# Subtest: leaving restores exactly the side panels that were open
+ok 165 - leaving restores exactly the side panels that were open
+  ---
+  duration_ms: 0.177319
+  type: 'test'
+  ...
+# Subtest: a reload while immersive still gives the panels back on leave
+ok 166 - a reload while immersive still gives the panels back on leave
+  ---
+  duration_ms: 0.257509
+  type: 'test'
+  ...
+# Subtest: blocked storage and a broken shell never throw
+ok 167 - blocked storage and a broken shell never throw
+  ---
+  duration_ms: 0.177629
+  type: 'test'
+  ...
+# Subtest: listeners hear changes; dispose gives the chrome back and keeps the choice
+ok 168 - listeners hear changes; dispose gives the chrome back and keeps the choice
+  ---
+  duration_ms: 0.730197
+  type: 'test'
+  ...
+# Subtest: Esc never leaves immersive; G and Alt+Shift+G send the toggle event
+ok 169 - Esc never leaves immersive; G and Alt+Shift+G send the toggle event
+  ---
+  duration_ms: 0.350919
+  type: 'test'
+  ...
+# Subtest: the command, keybinding and service are wired; CSS hides the chrome under the body class
+ok 170 - the command, keybinding and service are wired; CSS hides the chrome under the body class
+  ---
+  duration_ms: 0.707707
+  type: 'test'
+  ...
+# Subtest: selects exact visible characters in either drag direction without mutating a frame
+ok 171 - selects exact visible characters in either drag direction without mutating a frame
+  ---
+  duration_ms: 1.932523
+  type: 'test'
+  ...
+# Subtest: word selection expands paths using the Minecraft bridge token rules and stops at spaces
+ok 172 - word selection expands paths using the Minecraft bridge token rules and stops at spaces
+  ---
+  duration_ms: 0.441238
+  type: 'test'
+  ...
+# Subtest: whole-line selection includes leading spaces and supports reversed multi-row ranges
+ok 173 - whole-line selection includes leading spaces and supports reversed multi-row ranges
+  ---
+  duration_ms: 0.17414
+  type: 'test'
+  ...
+# Subtest: authoritative cells keep wide halves and combining glyphs aligned when selecting and copying
+ok 174 - authoritative cells keep wide halves and combining glyphs aligned when selecting and copying
+  ---
+  duration_ms: 0.223329
+  type: 'test'
+  ...
+# Subtest: word expansion does not include half of an adjacent wide non-word glyph
+ok 175 - word expansion does not include half of an adjacent wide non-word glyph
+  ---
+  duration_ms: 0.706717
+  type: 'test'
+  ...
+# Subtest: provided malformed cell metadata fails closed while a missing matrix keeps legacy text
+ok 176 - provided malformed cell metadata fails closed while a missing matrix keeps legacy text
+  ---
+  duration_ms: 0.10139
+  type: 'test'
+  ...
+# Subtest: copies only the 80 by 22 visible viewport and trims terminal padding, not leading spaces
+ok 177 - copies only the 80 by 22 visible viewport and trims terminal padding, not leading spaces
+  ---
+  duration_ms: 0.296569
+  type: 'test'
+  ...
+# Subtest: new visible output invalidates a selection instead of copying stale text
+ok 178 - new visible output invalidates a selection instead of copying stale text
+  ---
+  duration_ms: 0.13263
+  type: 'test'
+  ...
+# Subtest: cell picking respects physical screen UV, text margins and measured glyph width
+ok 179 - cell picking respects physical screen UV, text margins and measured glyph width
+  ---
+  duration_ms: 0.305479
+  type: 'test'
+  ...
+# (node:1358385) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: owned no-network agent fixture has a real empty profile lease database
+ok 180 - owned no-network agent fixture has a real empty profile lease database
+  ---
+  duration_ms: 25.750526
+  type: 'test'
+  ...
+# Subtest: WASD moves the player through the room in the facing direction
+ok 181 - WASD moves the player through the room in the facing direction
+  ---
+  duration_ms: 20.548265
+  type: 'test'
+  ...
+# Subtest: movement stays inside the room and stops at desks instead of walking through them
+ok 182 - movement stays inside the room and stops at desks instead of walking through them
+  ---
+  duration_ms: 0.680207
+  type: 'test'
+  ...
+# Subtest: presence starts only on explicit join; polling sends poses only; leaving cancels updates
+ok 183 - presence starts only on explicit join; polling sends poses only; leaving cancels updates
+  ---
+  duration_ms: 1.793223
+  type: 'test'
+  ...
+# Subtest: late join response cannot restore a departed room and requests are serialized
+ok 184 - late join response cannot restore a departed room and requests are serialized
+  ---
+  duration_ms: 2.257442
+  type: 'test'
+  ...
+# Subtest: late movement responses cannot resurrect presence after leave or disposal
+ok 185 - late movement responses cannot resurrect presence after leave or disposal
+  ---
+  duration_ms: 0.687587
+  type: 'test'
+  ...
+# Subtest: failed join preserves existing membership, but failed heartbeat clears misleading peers
+ok 186 - failed join preserves existing membership, but failed heartbeat clears misleading peers
+  ---
+  duration_ms: 0.420739
+  type: 'test'
+  ...
+# Subtest: station bindings differ by participant and room but remain stable on reload
+ok 187 - station bindings differ by participant and room but remain stable on reload
+  ---
+  duration_ms: 0.236469
+  type: 'test'
+  ...
+# Subtest: a second Join cannot supersede a pending request or leave a hidden membership
+ok 188 - a second Join cannot supersede a pending request or leave a hidden membership
+  ---
+  duration_ms: 1.217685
+  type: 'test'
+  ...
+# Subtest: two connections share presence but update/leave only their own member
+ok 189 - two connections share presence but update/leave only their own member
+  ---
+  duration_ms: 2.228932
+  type: 'test'
+  ...
+# Subtest: joining another room never exposes previous room members
+ok 190 - joining another room never exposes previous room members
+  ---
+  duration_ms: 0.2499
+  type: 'test'
+  ...
+# Subtest: failed mismatch/full/duplicate joins retain existing memberships
+ok 191 - failed mismatch/full/duplicate joins retain existing memberships
+  ---
+  duration_ms: 0.488908
+  type: 'test'
+  ...
+# Subtest: presence rejects malformed names, codes, IDs, projects, themes, layouts and non-finite/out-of-room poses
+ok 192 - presence rejects malformed names, codes, IDs, projects, themes, layouts and non-finite/out-of-room poses
+  ---
+  duration_ms: 0.411068
+  type: 'test'
+  ...
+# Subtest: stale membership expires, disconnect removes it, and disposed connections cannot rejoin
+ok 193 - stale membership expires, disconnect removes it, and disposed connections cannot rejoin
+  ---
+  duration_ms: 0.20354
+  type: 'test'
+  ...
+# Subtest: empty rooms are reclaimed and live-room count is bounded
+ok 194 - empty rooms are reclaimed and live-room count is bounded
+  ---
+  duration_ms: 0.338038
+  type: 'test'
+  ...
+# Subtest: a suspended but connected browser can renew its own expired visual presence without starting any runtime
+ok 195 - a suspended but connected browser can renew its own expired visual presence without starting any runtime
+  ---
+  duration_ms: 0.16818
+  type: 'test'
+  ...
+# Subtest: expired renewal stops after leave, dispose, or replacement membership during its async gap
+ok 196 - expired renewal stops after leave, dispose, or replacement membership during its async gap
+  ---
+  duration_ms: 0.16494
+  type: 'test'
+  ...
+# Subtest: renewal retains layout identity and rejects an expired classic/wide mismatch
+ok 197 - renewal retains layout identity and rejects an expired classic/wide mismatch
+  ---
+  duration_ms: 0.319309
+  type: 'test'
+  ...
+# Subtest: renewal cannot bypass a changed room project or theme
+ok 198 - renewal cannot bypass a changed room project or theme
+  ---
+  duration_ms: 0.345349
+  type: 'test'
+  ...
+# Subtest: effective classic and wide layouts reject joins and expired renewal
+ok 199 - effective classic and wide layouts reject joins and expired renewal
+  ---
+  duration_ms: 0.176029
+  type: 'test'
+  ...
+# Subtest: classic presence keeps the old payload shape
+ok 200 - classic presence keeps the old payload shape
+  ---
+  duration_ms: 0.06216
+  type: 'test'
+  ...
+# Subtest: exports the frozen classic and wide room layouts
+ok 201 - exports the frozen classic and wide room layouts
+  ---
+  duration_ms: 0.955586
+  type: 'test'
+  ...
+# Subtest: classic keeps the old desk boundary while wide moves both collision boxes
+ok 202 - classic keeps the old desk boundary while wide moves both collision boxes
+  ---
+  duration_ms: 0.822977
+  type: 'test'
+  ...
+# Subtest: wide centre aisle and both monitors are reachable at varied frame phases
+ok 203 - wide centre aisle and both monitors are reachable at varied frame phases
+  ---
+  duration_ms: 3.457117
+  type: 'test'
+  ...
+# Subtest: exports the frozen constants and round-trips the exact preset shape
+ok 204 - exports the frozen constants and round-trips the exact preset shape
+  ---
+  duration_ms: 20.127946
+  type: 'test'
+  ...
+# Subtest: defaults an absent source layout to a fresh Classic preset
+ok 205 - defaults an absent source layout to a fresh Classic preset
+  ---
+  duration_ms: 0.18939
+  type: 'test'
+  ...
+# Subtest: rejects non-objects, unknown keys, unsupported values, and unsafe cameras
+ok 206 - rejects non-objects, unknown keys, unsupported values, and unsafe cameras
+  ---
+  duration_ms: 0.683708
+  type: 'test'
+  ...
+# Subtest: rejects an oversized UTF-8 input before parsing and does not echo it
+ok 207 - rejects an oversized UTF-8 input before parsing and does not echo it
+  ---
+  duration_ms: 0.681647
+  type: 'test'
+  ...
+# Subtest: reads only the appearance allowlist and returns fresh data
+ok 208 - reads only the appearance allowlist and returns fresh data
+  ---
+  duration_ms: 0.419458
+  type: 'test'
+  ...
+# Subtest: does not accept URL, command, profile, or arbitrary string fields
+ok 209 - does not accept URL, command, profile, or arbitrary string fields
+  ---
+  duration_ms: 0.258409
+  type: 'test'
+  ...
+# Subtest: restores a versioned world with stable project and workstation bindings
+ok 210 - restores a versioned world with stable project and workstation bindings
+  ---
+  duration_ms: 19.636168
+  type: 'test'
+  ...
+# Subtest: persists a supplied wide layout and keeps legacy records classic-shaped
+ok 211 - persists a supplied wide layout and keeps legacy records classic-shaped
+  ---
+  duration_ms: 0.686908
+  type: 'test'
+  ...
+# Subtest: rejects corrupt, cross-project, unknown-version, unbounded camera, and unknown layout state
+ok 212 - rejects corrupt, cross-project, unknown-version, unbounded camera, and unknown layout state
+  ---
+  duration_ms: 0.22891
+  type: 'test'
+  ...
+# Subtest: discovery uses its own data dir and socket and refuses the Minecraft ones
+ok 213 - discovery uses its own data dir and socket and refuses the Minecraft ones
+  ---
+  duration_ms: 2.315652
+  type: 'test'
+  ...
+# Subtest: discovery finds tmux on PATH, then the generic per-user Omo install, and a pinned wrong path reads as missing
+ok 214 - discovery finds tmux on PATH, then the generic per-user Omo install, and a pinned wrong path reads as missing
+  ---
+  duration_ms: 50.319155
+  type: 'test'
+  ...
+# Subtest: the host script is found from compiled lib/node and from a bundled browser-app/lib/backend
+ok 215 - the host script is found from compiled lib/node and from a bundled browser-app/lib/backend
+  ---
+  duration_ms: 0.474479
+  type: 'test'
+  ...
+# Subtest: sanitizedEnv strips parent Hermes routing, Omo bridge settings and an enclosing tmux client
+ok 216 - sanitizedEnv strips parent Hermes routing, Omo bridge settings and an enclosing tmux client
+  ---
+  duration_ms: 0.870817
+  type: 'test'
+  ...
+# Subtest: missing tmux gives an honest unavailable status with an install hint and starts nothing
+ok 217 - missing tmux gives an honest unavailable status with an install hint and starts nothing
+  ---
+  duration_ms: 53.005435
+  type: 'test'
+  ...
+# Subtest: RPC arguments are validated before reaching the host
+ok 218 - RPC arguments are validated before reaching the host
+  ---
+  duration_ms: 53.005834
+  type: 'test'
+  ...
+# Subtest: the Theia backend module binds OmoRuntimeService on OMO_RUNTIME_PATH over JSON-RPC
+ok 219 - the Theia backend module binds OmoRuntimeService on OMO_RUNTIME_PATH over JSON-RPC
+  ---
+  duration_ms: 689.935888
+  type: 'test'
+  ...
+# Subtest: seeded fault: a host that drops input is caught by the output round-trip check
+ok 220 - seeded fault: a host that drops input is caught by the output round-trip check
+  ---
+  duration_ms: 2780.486624
+  type: 'test'
+  ...
+# Subtest: lists workspaces from live metadata, renames one, and reports bound stations
+ok 221 - lists workspaces from live metadata, renames one, and reports bound stations
+  ---
+  duration_ms: 207.201296
+  type: 'test'
+  ...
+# Subtest: binds a second station to the existing workspace without a duplicate, and it survives a host restart
+ok 222 - binds a second station to the existing workspace without a duplicate, and it survives a host restart
+  ---
+  duration_ms: 154.375381
+  type: 'test'
+  ...
+# (node:1358553) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: workspace profile applies to future tabs only; the running agent keeps its process
+ok 223 - workspace profile applies to future tabs only; the running agent keeps its process
+  ---
+  duration_ms: 550.912019
+  type: 'test'
+  ...
+# Subtest: keep-awake is metadata only and starts nothing
+ok 224 - keep-awake is metadata only and starts nothing
+  ---
+  duration_ms: 18.023223
+  type: 'test'
+  ...
+# Subtest: manual agent resume: refused without confirmation, while busy, and on shells; resumes an idle agent shell
+ok 225 - manual agent resume: refused without confirmation, while busy, and on shells; resumes an idle agent shell
+  ---
+  duration_ms: 492.916204
+  type: 'test'
+  ...
+# Subtest: frames report history, scroll offset, bell and bracketed-paste mode
+ok 226 - frames report history, scroll offset, bell and bracketed-paste mode
+  ---
+  duration_ms: 83.294223
+  type: 'test'
+  ...
+# Subtest: scrollback moves through history and find locates a line in the whole history
+ok 227 - scrollback moves through history and find locates a line in the whole history
+  ---
+  duration_ms: 34.693532
+  type: 'test'
+  ...
+# Subtest: copy returns selected text to the caller and never touches the host clipboard
+ok 228 - copy returns selected text to the caller and never touches the host clipboard
+  ---
+  duration_ms: 55.666135
+  type: 'test'
+  ...
+# Subtest: clear history needs confirmation and empties scrollback
+ok 229 - clear history needs confirmation and empties scrollback
+  ---
+  duration_ms: 8.966047
+  type: 'test'
+  ...
+# Subtest: safe paste: bracketed multi-line waits for Enter, escape injection is stripped, size is capped
+ok 230 - safe paste: bracketed multi-line waits for Enter, escape injection is stripped, size is capped
+  ---
+  duration_ms: 1062.210216
+  type: 'test'
+  ...
+# Subtest: safe paste refuses multi-line text when the app did not enable bracketed paste
+ok 231 - safe paste refuses multi-line text when the app did not enable bracketed paste
+  ---
+  duration_ms: 363.294801
+  type: 'test'
+  ...
+# Subtest: delete workspace needs explicit confirmation, refuses busy work unless confirmed, and drops its stations
+ok 232 - delete workspace needs explicit confirmation, refuses busy work unless confirmed, and drops its stations
+  ---
+  duration_ms: 38.046909
+  type: 'test'
+  ...
+# Subtest: a second host on the same data directory refuses to start and leaves the first host's records intact
+ok 233 - a second host on the same data directory refuses to start and leaves the first host's records intact
+  ---
+  duration_ms: 350.23403
+  type: 'test'
+  ...
+# Subtest: the data-directory lock is released when the host exits, even though its tmux server keeps running
+ok 234 - the data-directory lock is released when the host exits, even though its tmux server keeps running
+  ---
+  duration_ms: 470.485417
+  type: 'test'
+  ...
+# Subtest: a Hermes tab under a custom Hermes root launches Hermes pinned to that root
+ok 235 - a Hermes tab under a custom Hermes root launches Hermes pinned to that root
+  ---
+  duration_ms: 307.298898
+  type: 'test'
+  ...
+# Subtest: real Hermes profile selection: the recorded launch environment resolves the custom-root profile
+ok 236 - real Hermes profile selection: the recorded launch environment resolves the custom-root profile
+  ---
+  duration_ms: 356.354897
+  type: 'test'
+  ...
+# Subtest: opens a project workspace whose first shell starts in the project directory
+ok 237 - opens a project workspace whose first shell starts in the project directory
+  ---
+  duration_ms: 259.071546
+  type: 'test'
+  ...
+# Subtest: shells never inherit parent Hermes routing or the Minecraft bridge settings
+ok 238 - shells never inherit parent Hermes routing or the Minecraft bridge settings
+  ---
+  duration_ms: 58.759573
+  type: 'test'
+  ...
+# Subtest: detach keeps the shell; reattach finds the same PID and exported environment
+ok 239 - detach keeps the shell; reattach finds the same PID and exported environment
+  ---
+  duration_ms: 432.621686
+  type: 'test'
+  ...
+# Subtest: reopening the same station and project reuses the workspace; another station gets its own
+ok 240 - reopening the same station and project reuses the workspace; another station gets its own
+  ---
+  duration_ms: 27.934677
+  type: 'test'
+  ...
+# Subtest: status reports tmux, profile names only, and missing agents with install hints
+ok 241 - status reports tmux, profile names only, and missing agents with install hints
+  ---
+  duration_ms: 1.818473
+  type: 'test'
+  ...
+# Subtest: agent tabs never start without an explicit confirmed start
+ok 242 - agent tabs never start without an explicit confirmed start
+  ---
+  duration_ms: 4.458324
+  type: 'test'
+  ...
+# (node:1358626) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: confirmed agent tabs start their CLI in the project directory
+ok 243 - confirmed agent tabs start their CLI in the project directory
+  ---
+  duration_ms: 139.026298
+  type: 'test'
+  ...
+# Subtest: rename and close: closing needs confirmation and only then ends the tab
+ok 244 - rename and close: closing needs confirmation and only then ends the tab
+  ---
+  duration_ms: 23.920492
+  type: 'test'
+  ...
+# Subtest: backend host stop leaves tmux running; a new host reattaches to the same shell
+ok 245 - backend host stop leaves tmux running; a new host reattaches to the same shell
+  ---
+  duration_ms: 219.84987
+  type: 'test'
+  ...
+# Subtest: a lost session server reads as interrupted; only a confirmed revive restarts an agent
+ok 246 - a lost session server reads as interrupted; only a confirmed revive restarts an agent
+  ---
+  duration_ms: 545.893488
+  type: 'test'
+  ...
+# Subtest: the runtime never touched the Minecraft omo socket or data directory
+ok 247 - the runtime never touched the Minecraft omo socket or data directory
+  ---
+  duration_ms: 0.290438
+  type: 'test'
+  ...
+# Subtest: standalone HTTP and WS guards fail closed on non-loopback authority
+ok 248 - standalone HTTP and WS guards fail closed on non-loopback authority
+  ---
+  duration_ms: 3.722527
+  type: 'test'
+  ...
+# Subtest: the guard is exercised on real HTTP requests and WebSocket upgrades
+ok 249 - the guard is exercised on real HTTP requests and WebSocket upgrades
+  ---
+  duration_ms: 13.821719
+  type: 'test'
+  ...
+# Subtest: R2 protocol is additive and host contains the safety boundaries
+ok 250 - R2 protocol is additive and host contains the safety boundaries
+  ---
+  duration_ms: 0.385728
+  type: 'test'
+  ...
+# Subtest: vendored bridge remains outside the R2 source edit set
+ok 251 - vendored bridge remains outside the R2 source edit set
+  ---
+  duration_ms: 3.369667
+  type: 'test'
+  ...
+# Subtest: real tmux captures cwd, preserves truecolour and offers OSC52 write-only notification
+ok 252 - real tmux captures cwd, preserves truecolour and offers OSC52 write-only notification
+  ---
+  duration_ms: 2249.66401
+  type: 'test'
+  ...
+# Subtest: real tmux tab cap denies max+1 without creating a tab
+ok 253 - real tmux tab cap denies max+1 without creating a tab
+  ---
+  duration_ms: 130.312581
+  type: 'test'
+  ...
+# Subtest: real tmux workspace and view caps deny max+1 with readable errors
+ok 254 - real tmux workspace and view caps deny max+1 with readable errors
+  ---
+  duration_ms: 14934.689915
+  type: 'test'
+  ...
+# Subtest: desk and mirror attach use the same station id but keep requested dimensions
+ok 255 - desk and mirror attach use the same station id but keep requested dimensions
+  ---
+  duration_ms: 1.698084
+  type: 'test'
+  ...
+# Subtest: recipe apply is pending until one explicit confirmation
+ok 256 - recipe apply is pending until one explicit confirmation
+  ---
+  duration_ms: 0.412059
+  type: 'test'
+  ...
+# Subtest: real tmux tab restore keeps first marker visible and preserves the original shell
+ok 257 - real tmux tab restore keeps first marker visible and preserves the original shell
+  ---
+  duration_ms: 1296.985721
+  type: 'test'
+  ...
+# Subtest: source controller restores the first real tmux tab after the exact browser sequence
+ok 258 - source controller restores the first real tmux tab after the exact browser sequence
+  ---
+  duration_ms: 1500.5073
+  type: 'test'
+  ...
+# Subtest: real controller mirror auto-attach stays single-shot while the primary view polls
+ok 259 - real controller mirror auto-attach stays single-shot while the primary view polls
+  ---
+  duration_ms: 1021.819805
+  type: 'test'
+  ...
+# Subtest: concurrent mirror requests coalesce before the first real view is ready
+ok 260 - concurrent mirror requests coalesce before the first real view is ready
+  ---
+  duration_ms: 675.103971
+  type: 'test'
+  ...
+# Subtest: replacing a real mirror keeps the widget latch set while the primary polls
+ok 261 - replacing a real mirror keeps the widget latch set while the primary polls
+  ---
+  duration_ms: 1231.096204
+  type: 'test'
+  ...
+# Subtest: concurrent mirror failure is shared and allows a later retry
+ok 262 - concurrent mirror failure is shared and allows a later retry
+  ---
+  duration_ms: 540.512098
+  type: 'test'
+  ...
+# Subtest: late mirror attach is rejected after release and same-binding rebind
+ok 263 - late mirror attach is rejected after release and same-binding rebind
+  ---
+  duration_ms: 507.429241
+  type: 'test'
+  ...
+# Subtest: taskTarget is an exact snapshot only for the live attached running non-shell tab
+ok 264 - taskTarget is an exact snapshot only for the live attached running non-shell tab
+  ---
+  duration_ms: 22.841996
+  type: 'test'
+  ...
+# Subtest: taskTarget refuses pending, acting and non-running tabs
+ok 265 - taskTarget refuses pending, acting and non-running tabs
+  ---
+  duration_ms: 0.678547
+  type: 'test'
+  ...
+# Subtest: a foreground-process busy flag does not prevent draft preparation or synthesize submission
+ok 266 - a foreground-process busy flag does not prevent draft preparation or synthesize submission
+  ---
+  duration_ms: 0.686128
+  type: 'test'
+  ...
+# Subtest: prepareTask uses semantic paste only, never terminal input or an Enter action
+ok 267 - prepareTask uses semantic paste only, never terminal input or an Enter action
+  ---
+  duration_ms: 0.834656
+  type: 'test'
+  ...
+# Subtest: prepareTask refuses empty, unsafe, malformed, oversized and unsafe multiline text before paste
+ok 268 - prepareTask refuses empty, unsafe, malformed, oversized and unsafe multiline text before paste
+  ---
+  duration_ms: 2.822
+  type: 'test'
+  ...
+# Subtest: LF, CRLF and tab are sent through the existing bracketed semantic paste guard
+ok 269 - LF, CRLF and tab are sent through the existing bracketed semantic paste guard
+  ---
+  duration_ms: 1.185816
+  type: 'test'
+  ...
+# Subtest: stale targets are refused and a late paste cannot update another tab notice
+ok 270 - stale targets are refused and a late paste cannot update another tab notice
+  ---
+  duration_ms: 0.821157
+  type: 'test'
+  ...
+# Subtest: paste errors return false and keep the draft available to the caller
+ok 271 - paste errors return false and keep the draft available to the caller
+  ---
+  duration_ms: 0.502738
+  type: 'test'
+  ...
+# Subtest: actual tmux output retains wide continuations and combining sequences as terminal cells
+ok 272 - actual tmux output retains wide continuations and combining sequences as terminal cells
+  ---
+  duration_ms: 249.964229
+  type: 'test'
+  ...
+# Subtest: starting a text selection chooses the desk locally, not the action that binds or starts its runtime
+ok 273 - starting a text selection chooses the desk locally, not the action that binds or starts its runtime
+  ---
+  duration_ms: 0.880947
+  type: 'test'
+  ...
+# Subtest: standalone contribution guards HTTP before the next handler
+ok 274 - standalone contribution guards HTTP before the next handler
+  ---
+  duration_ms: 2.323831
+  type: 'test'
+  ...
+# Subtest: standalone contribution uses Theia central WebSocket validator and retains duplicate header values
+ok 275 - standalone contribution uses Theia central WebSocket validator and retains duplicate header values
+  ---
+  duration_ms: 44.988083
+  type: 'test'
+  ...
+# Subtest: team mode delegates HTTP and WebSocket authorization instead of applying loopback policy
+ok 276 - team mode delegates HTTP and WebSocket authorization instead of applying loopback policy
+  ---
+  duration_ms: 0.09581
+  type: 'test'
+  ...
+# Subtest: portable launcher uses the real bundled project without a developer-specific path
+ok 277 - portable launcher uses the real bundled project without a developer-specific path
+  ---
+  duration_ms: 0.537378
+  type: 'test'
+  ...
+# Subtest: launcher accepts a chosen existing workspace and explicit port without shell parsing
+ok 278 - launcher accepts a chosen existing workspace and explicit port without shell parsing
+  ---
+  duration_ms: 0.160619
+  type: 'test'
+  ...
+# Subtest: launcher rejects invalid ports, non-directories, network-bind overrides and incomplete flags
+ok 279 - launcher rejects invalid ports, non-directories, network-bind overrides and incomplete flags
+  ---
+  duration_ms: 0.419669
+  type: 'test'
+  ...
+# Subtest: launcher help is executable and invalid options fail with a real nonzero exit
+ok 280 - launcher help is executable and invalid options fail with a real nonzero exit
+  ---
+  duration_ms: 35.808398
+  type: 'test'
+  ...
+# Subtest: automatic station mirror attaches once rather than replacing its PTY on every live poll
+ok 281 - automatic station mirror attaches once rather than replacing its PTY on every live poll
+  ---
+  duration_ms: 2.980189
+  type: 'test'
+  ...
+# Subtest: a pending mirror attachment cannot be reentered by later live polls
+ok 282 - a pending mirror attachment cannot be reentered by later live polls
+  ---
+  duration_ms: 0.940266
+  type: 'test'
+  ...
+# Subtest: a late mirror attach cannot claim a station that was relinked while it waited
+ok 283 - a late mirror attach cannot claim a station that was relinked while it waited
+  ---
+  duration_ms: 0.658878
+  type: 'test'
+  ...
+# Subtest: station recipe component is wired to storage and explicit apply confirmation
+ok 284 - station recipe component is wired to storage and explicit apply confirmation
+  ---
+  duration_ms: 0.727357
+  type: 'test'
+  ...
+# Subtest: physical room selectors and shortcut ownership are wired
+ok 285 - physical room selectors and shortcut ownership are wired
+  ---
+  duration_ms: 0.927017
+  type: 'test'
+  ...
+# Subtest: station links are project-scoped and bounded
+ok 286 - station links are project-scoped and bounded
+  ---
+  duration_ms: 0.858427
+  type: 'test'
+  ...
+# Subtest: distance gain meets the physical room bounds
+ok 287 - distance gain meets the physical room bounds
+  ---
+  duration_ms: 0.10361
+  type: 'test'
+  ...
+# Subtest: station recipes save exact tabs without launching anything
+ok 288 - station recipes save exact tabs without launching anything
+  ---
+  duration_ms: 0.327439
+  type: 'test'
+  ...
+# Subtest: room kits persist in room state but never enter the appearance preset
+ok 289 - room kits persist in room state but never enter the appearance preset
+  ---
+  duration_ms: 0.370059
+  type: 'test'
+  ...
+# Subtest: reviews committed, staged, unstaged and untracked task edits against captured base
+ok 290 - reviews committed, staged, unstaged and untracked task edits against captured base
+  ---
+  duration_ms: 138.822168
+  type: 'test'
+  ...
+# Subtest: refuses detached or mismatched task branches and unsafe review paths
+ok 291 - refuses detached or mismatched task branches and unsafe review paths
+  ---
+  duration_ms: 50.415554
+  type: 'test'
+  ...
+# Subtest: does not run external filters or hooks while reviewing
+ok 292 - does not run external filters or hooks while reviewing
+  ---
+  duration_ms: 90.524606
+  type: 'test'
+  ...
+# Subtest: collects only exact-project records without reading foreign task text
+ok 293 - collects only exact-project records without reading foreign task text
+  ---
+  duration_ms: 1.327625
+  type: 'test'
+  ...
+# Subtest: ignores malformed keys and records, bounds raw data, and sorts deterministically
+ok 294 - ignores malformed keys and records, bounds raw data, and sorts deterministically
+  ---
+  duration_ms: 0.948336
+  type: 'test'
+  ...
+# Subtest: reports deterministic truncation for key and record bounds
+ok 295 - reports deterministic truncation for key and record bounds
+  ---
+  duration_ms: 29.90892
+  type: 'test'
+  ...
+# Subtest: distinguishes empty available storage from unavailable storage
+ok 296 - distinguishes empty available storage from unavailable storage
+  ---
+  duration_ms: 0.376708
+  type: 'test'
+  ...
+# Subtest: does not expose mutable storage objects and does not write or migrate
+ok 297 - does not expose mutable storage objects and does not write or migrate
+  ---
+  duration_ms: 0.168329
+  type: 'test'
+  ...
+# Subtest: server-rendered panel has readable controls, honest phases, and no execution controls
+ok 298 - server-rendered panel has readable controls, honest phases, and no execution controls
+  ---
+  duration_ms: 20.556275
+  type: 'test'
+  ...
+# Subtest: the actual world widget imports and renders the overview for its current project
+ok 299 - the actual world widget imports and renders the overview for its current project
+  ---
+  duration_ms: 0.163279
+  type: 'test'
+  ...
+# Subtest: overview open, close, and project-switch paths only change panel state
+ok 300 - overview open, close, and project-switch paths only change panel state
+  ---
+  duration_ms: 0.198579
+  type: 'test'
+  ...
+# Subtest: existing task composer and Git review selectors remain present
+ok 301 - existing task composer and Git review selectors remain present
+  ---
+  duration_ms: 0.177809
+  type: 'test'
+  ...
+# Subtest: overview list uses a bounded preview while details keep the full task text
+ok 302 - overview list uses a bounded preview while details keep the full task text
+  ---
+  duration_ms: 0.633208
+  type: 'test'
+  ...
+# Subtest: registered task review uses server authority for committed and uncommitted branch changes
+ok 303 - registered task review uses server authority for committed and uncommitted branch changes
+  ---
+  duration_ms: 130.832559
+  type: 'test'
+  ...
+# Subtest: ordinary project review stays on its own HEAD when no registered task exists
+ok 304 - ordinary project review stays on its own HEAD when no registered task exists
+  ---
+  duration_ms: 67.345652
+  type: 'test'
+  ...
+# Subtest: review RPC facade exposes only list and diff and has no promotion writer
+ok 305 - review RPC facade exposes only list and diff and has no promotion writer
+  ---
+  duration_ms: 0.292799
+  type: 'test'
+  ...
+# Subtest: host scope blocks old handlers before React effects observe a project change
+ok 306 - host scope blocks old handlers before React effects observe a project change
+  ---
+  duration_ms: 1.055346
+  type: 'test'
+  ...
+# Subtest: host scope rejects receipts after the project changes or the panel closes
+ok 307 - host scope rejects receipts after the project changes or the panel closes
+  ---
+  duration_ms: 0.333929
+  type: 'test'
+  ...
+# Subtest: project selection does not call services; explicit load gives immutable independent data
+ok 308 - project selection does not call services; explicit load gives immutable independent data
+  ---
+  duration_ms: 0.618207
+  type: 'test'
+  ...
+# Subtest: list rejects foreign, duplicate, oversized and malformed replies without exposing an open target
+ok 309 - list rejects foreign, duplicate, oversized and malformed replies without exposing an open target
+  ---
+  duration_ms: 1.015647
+  type: 'test'
+  ...
+# Subtest: creation needs a loaded exact project, valid literal name, and explicit confirmation
+ok 310 - creation needs a loaded exact project, valid literal name, and explicit confirmation
+  ---
+  duration_ms: 0.465268
+  type: 'test'
+  ...
+# Subtest: a double create or refresh during creation cannot send another request or lose its receipt
+ok 311 - a double create or refresh during creation cannot send another request or lose its receipt
+  ---
+  duration_ms: 0.347329
+  type: 'test'
+  ...
+# Subtest: late load responses cannot cross a project switch or replace a newer load
+ok 312 - late load responses cannot cross a project switch or replace a newer load
+  ---
+  duration_ms: 0.329629
+  type: 'test'
+  ...
+# Subtest: late create receipts stay with their original project and cannot open from the new one
+ok 313 - late create receipts stay with their original project and cannot open from the new one
+  ---
+  duration_ms: 0.125729
+  type: 'test'
+  ...
+# Subtest: dispose invalidates callbacks and open targets
+ok 314 - dispose invalidates callbacks and open targets
+  ---
+  duration_ms: 0.335639
+  type: 'test'
+  ...
+# Subtest: service errors stay generic; failed creation never claims that no resource exists
+ok 315 - service errors stay generic; failed creation never claims that no resource exists
+  ---
+  duration_ms: 0.546928
+  type: 'test'
+  ...
+# Subtest: a malformed or duplicate create receipt is not usable as a project-opening capability
+ok 316 - a malformed or duplicate create receipt is not usable as a project-opening capability
+  ---
+  duration_ms: 0.477278
+  type: 'test'
+  ...
+# Subtest: server-rendered workspace controls never create, load, open, or start anything
+ok 317 - server-rendered workspace controls never create, load, open, or start anything
+  ---
+  duration_ms: 3.126989
+  type: 'test'
+  ...
+# Subtest: RPC facade exposes only the exact three read/create/lookup methods
+ok 318 - RPC facade exposes only the exact three read/create/lookup methods
+  ---
+  duration_ms: 95.521118
+  type: 'test'
+  ...
+# Subtest: lookup is registered, canonical and read-only; unknown worktrees return undefined
+ok 319 - lookup is registered, canonical and read-only; unknown worktrees return undefined
+  ---
+  duration_ms: 60.328708
+  type: 'test'
+  ...
+# Subtest: creates a confirmed persisted worktree from captured HEAD and records dirty-source warning
+ok 320 - creates a confirmed persisted worktree from captured HEAD and records dirty-source warning
+  ---
+  duration_ms: 81.951787
+  type: 'test'
+  ...
+# Subtest: worktree edits are independent and list survives service recreation
+ok 321 - worktree edits are independent and list survives service recreation
+  ---
+  duration_ms: 80.838562
+  type: 'test'
+  ...
+# Subtest: preserves a repository top-level directory that ends in a space
+ok 322 - preserves a repository top-level directory that ends in a space
+  ---
+  duration_ms: 54.930268
+  type: 'test'
+  ...
+# Subtest: lists only registered worktrees for the exact canonical source project
+ok 323 - lists only registered worktrees for the exact canonical source project
+  ---
+  duration_ms: 90.627566
+  type: 'test'
+  ...
+# Subtest: rejects parent-repo fallback, missing confirmation, unsafe names and non-repositories
+ok 324 - rejects parent-repo fallback, missing confirmation, unsafe names and non-repositories
+  ---
+  duration_ms: 19.632098
+  type: 'test'
+  ...
+# Subtest: refuses malformed, oversized, symlinked and unknown state paths without recovery
+ok 325 - refuses malformed, oversized, symlinked and unknown state paths without recovery
+  ---
+  duration_ms: 140.554372
+  type: 'test'
+  ...
+# Subtest: refuses a manifest worktree traversal record and never follows it
+ok 326 - refuses a manifest worktree traversal record and never follows it
+  ---
+  duration_ms: 22.160008
+  type: 'test'
+  ...
+# Subtest: concurrent creates use unique server paths and branches
+ok 327 - concurrent creates use unique server paths and branches
+  ---
+  duration_ms: 470.727695
+  type: 'test'
+  ...
+# Subtest: real hook and filter sentinels stay silent during checkout
+ok 328 - real hook and filter sentinels stay silent during checkout
+  ---
+  duration_ms: 86.019443
+  type: 'test'
+  ...
+# Subtest: discovers filters enabled only by a new-worktree gitdir include
+ok 329 - discovers filters enabled only by a new-worktree gitdir include
+  ---
+  duration_ms: 64.256373
+  type: 'test'
+  ...
+# Subtest: refuses configured partial clones before any remote helper can run
+ok 330 - refuses configured partial clones before any remote helper can run
+  ---
+  duration_ms: 23.883801
+  type: 'test'
+  ...
+# Subtest: an unread real-terminal bell turns the actual desk material orange until acknowledged
+ok 331 - an unread real-terminal bell turns the actual desk material orange until acknowledged
+  ---
+  duration_ms: 1.314425
+  type: 'test'
+  ...
+# Subtest: terminal errors retain priority over the bell lamp
+ok 332 - terminal errors retain priority over the bell lamp
+  ---
+  duration_ms: 0.303498
+  type: 'test'
+  ...
+# Subtest: attached text is a normal 14px at 100% and never grows with the box
+ok 333 - attached text is a normal 14px at 100% and never grows with the box
+  ---
+  duration_ms: 0.572727
+  type: 'test'
+  ...
+# Subtest: the grid follows the box: a 1440x900 full window gets a large real grid, not bigger letters
+ok 334 - the grid follows the box: a 1440x900 full window gets a large real grid, not bigger letters
+  ---
+  duration_ms: 0.672547
+  type: 'test'
+  ...
+# Subtest: a narrow box keeps a sane minimum grid and a huge one stops at the host limit
+ok 335 - a narrow box keeps a sane minimum grid and a huge one stops at the host limit
+  ---
+  duration_ms: 0.16145
+  type: 'test'
+  ...
+# Subtest: split view: each half gets its own grid
+ok 336 - split view: each half gets its own grid
+  ---
+  duration_ms: 0.10113
+  type: 'test'
+  ...
+# Subtest: the attached view renders every column of a wide frame
+ok 337 - the attached view renders every column of a wide frame
+  ---
+  duration_ms: 0.209139
+  type: 'test'
+  ...
+# Subtest: resizeView sends the clamped grid to the attached view, once per change
+ok 338 - resizeView sends the clamped grid to the attached view, once per change
+  ---
+  duration_ms: 3.970845
+  type: 'test'
+  ...
+# Subtest: a view attached while focus mode is open gets the focus grid; frames report their size
+ok 339 - a view attached while focus mode is open gets the focus grid; frames report their size
+  ---
+  duration_ms: 0.889097
+  type: 'test'
+  ...
+# Subtest: a failed resize does not break the view and is tried again
+ok 340 - a failed resize does not break the view and is tried again
+  ---
+  duration_ms: 0.648148
+  type: 'test'
+  ...
+# Subtest: the in-world monitor crops a larger grid to its 80 x 22 window and never crashes
+ok 341 - the in-world monitor crops a larger grid to its 80 x 22 window and never crashes
+  ---
+  duration_ms: 1.157786
+  type: 'test'
+  ...
+# Subtest: visible links show an explicit web-wall action and the actual destination, never an external-browser href
+ok 342 - visible links show an explicit web-wall action and the actual destination, never an external-browser href
+  ---
+  duration_ms: 5.974998
+  type: 'test'
+  ...
+# Subtest: links are disabled while an agent confirmation is pending, and credentials are absent
+ok 343 - links are disabled while an agent confirmation is pending, and credentials are absent
+  ---
+  duration_ms: 1.235895
+  type: 'test'
+  ...
+# Subtest: visible terminal links are explicit HTTP(S), deduplicated and preserve their displayed token
+ok 344 - visible terminal links are explicit HTTP(S), deduplicated and preserve their displayed token
+  ---
+  duration_ms: 3.274917
+  type: 'test'
+  ...
+# Subtest: unsafe schemes, URL credentials, malformed hosts and control bytes never become terminal actions
+ok 345 - unsafe schemes, URL credentials, malformed hosts and control bytes never become terminal actions
+  ---
+  duration_ms: 0.234689
+  type: 'test'
+  ...
+# Subtest: only complete URLs on the physical 80 by 22 viewport are offered, with a bounded list
+ok 346 - only complete URLs on the physical 80 by 22 viewport are offered, with a bounded list
+  ---
+  duration_ms: 0.406489
+  type: 'test'
+  ...
+# Subtest: a URL touching physical column 80 is refused even when wide glyphs make its plain string shorter
+ok 347 - a URL touching physical column 80 is refused even when wide glyphs make its plain string shorter
+  ---
+  duration_ms: 1.150546
+  type: 'test'
+  ...
+# Subtest: default network is public STUN only, no relay
+ok 348 - default network is public STUN only, no relay
+  ---
+  duration_ms: 0.896986
+  type: 'test'
+  ...
+# Subtest: ICE urls are validated strictly
+ok 349 - ICE urls are validated strictly
+  ---
+  duration_ms: 0.528358
+  type: 'test'
+  ...
+# Subtest: merge keeps stored secrets when left empty, and rejects incomplete TURN
+ok 350 - merge keeps stored secrets when left empty, and rejects incomplete TURN
+  ---
+  duration_ms: 0.360488
+  type: 'test'
+  ...
+# Subtest: coturn REST credentials: expiry:label user, base64 HMAC-SHA1 of the user with the secret
+ok 351 - coturn REST credentials: expiry:label user, base64 HMAC-SHA1 of the user with the secret
+  ---
+  duration_ms: 0.407039
+  type: 'test'
+  ...
+# Subtest: store writes 0600 JSON in the Theia config dir and never returns secrets in the view
+ok 352 - store writes 0600 JSON in the Theia config dir and never returns secrets in the view
+  ---
+  duration_ms: 3.791186
+  type: 'test'
+  ...
+# Subtest: voice settings are not part of the shared WorldSpec contract
+ok 353 - voice settings are not part of the shared WorldSpec contract
+  ---
+  duration_ms: 0.225089
+  type: 'test'
+  ...
+# Subtest: local presence transport maps 1:1 onto the presence service
+ok 354 - local presence transport maps 1:1 onto the presence service
+  ---
+  duration_ms: 0.312369
+  type: 'test'
+  ...
+# Subtest: remote room transport validates, queues (bounded) and exposes the room roster
+ok 355 - remote room transport validates, queues (bounded) and exposes the room roster
+  ---
+  duration_ms: 1.070926
+  type: 'test'
+  ...
+# Subtest: spatial math: facing, azimuth left/right/behind, proximity floor
+ok 356 - spatial math: facing, azimuth left/right/behind, proximity floor
+  ---
+  duration_ms: 0.355389
+  type: 'test'
+  ...
+# Subtest: each browser connection rejects another connection page before backend dispatch
+ok 357 - each browser connection rejects another connection page before backend dispatch
+  ---
+  duration_ms: 1.205756
+  type: 'test'
+  ...
+# Subtest: late browser open after a client disconnect closes its actual returned page
+ok 358 - late browser open after a client disconnect closes its actual returned page
+  ---
+  duration_ms: 0.170399
+  type: 'test'
+  ...
+# Subtest: owned-page cleanup attempts every page even if one close fails
+ok 359 - owned-page cleanup attempts every page even if one close fails
+  ---
+  duration_ms: 0.139009
+  type: 'test'
+  ...
+# Subtest: URL policy: http(s) only, no credentials, bare domains to https and loopback to http
+ok 360 - URL policy: http(s) only, no credentials, bare domains to https and loopback to http
+  ---
+  duration_ms: 2.116972
+  type: 'test'
+  ...
+# Subtest: Chrome discovery: OMO_SPATIAL_CHROME, then CHROME_PATH, then installed paths; a pinned wrong path is missing
+ok 361 - Chrome discovery: OMO_SPATIAL_CHROME, then CHROME_PATH, then installed paths; a pinned wrong path is missing
+  ---
+  duration_ms: 2.79517
+  type: 'test'
+  ...
+# Subtest: profile lives in Omo app data and never in a personal Chrome or the Minecraft Omo data
+ok 362 - profile lives in Omo app data and never in a personal Chrome or the Minecraft Omo data
+  ---
+  duration_ms: 1.266245
+  type: 'test'
+  ...
+# Subtest: missing Chrome: status is honest with an install hint, open refuses, nothing is launched
+ok 363 - missing Chrome: status is honest with an install hint, open refuses, nothing is launched
+  ---
+  duration_ms: 16.528719
+  type: 'test'
+  ...
+# Subtest: real Chrome: status never launches; open renders a real JPEG; click/type/key/scroll change what the user sees
+ok 364 - real Chrome: status never launches; open renders a real JPEG; click/type/key/scroll change what the user sees
+  ---
+  duration_ms: 1224.128629
+  type: 'test'
+  ...
+# Subtest: arguments are validated: ids, sizes, coordinates, text size, key enum, and no generic CDP/evaluate API
+ok 365 - arguments are validated: ids, sizes, coordinates, text size, key enum, and no generic CDP/evaluate API
+  ---
+  duration_ms: 224.551352
+  type: 'test'
+  ...
+# Subtest: caps: at most 4 surfaces; closing one frees a slot; ids from closed surfaces are refused
+ok 366 - caps: at most 4 surfaces; closing one frees a slot; ids from closed surfaces are refused
+  ---
+  duration_ms: 657.860346
+  type: 'test'
+  ...
+# Subtest: navigation failures are honest and bounded; the surface survives and keeps working
+ok 367 - navigation failures are honest and bounded; the surface survives and keeps working
+  ---
+  duration_ms: 1816.644325
+  type: 'test'
+  ...
+# Subtest: a 404 is reported as an HTTP error, not success
+ok 368 - a 404 is reported as an HTTP error, not success
+  ---
+  duration_ms: 193.565717
+  type: 'test'
+  ...
+# Subtest: popups and target=_blank open as tabs of the same surface (max 6); select/close tabs; unsafe links stay inert
+ok 369 - popups and target=_blank open as tabs of the same surface (max 6); select/close tabs; unsafe links stay inert
+  ---
+  duration_ms: 14143.544941
+  type: 'test'
+  ...
+# Subtest: leak guard: at most 12 live pages; the least recently used hidden tab sleeps and reloads when picked
+ok 370 - leak guard: at most 12 live pages; the least recently used hidden tab sleeps and reloads when picked
+  ---
+  duration_ms: 21743.532535
+  type: 'test'
+  ...
+# Subtest: lifecycle: closeAll ends only our Chrome; a crashed browser is reported exactly and open relaunches
+ok 371 - lifecycle: closeAll ends only our Chrome; a crashed browser is reported exactly and open relaunches
+  ---
+  duration_ms: 842.056927
+  type: 'test'
+  ...
+# Subtest: a second backend on the same profile is refused instead of hijacking the running one
+ok 372 - a second backend on the same profile is refused instead of hijacking the running one
+  ---
+  duration_ms: 196.026577
+  type: 'test'
+  ...
+# Subtest: audio: muted by default even if the page unmutes itself; setAudio clamps and applies to own frames and new media
+ok 373 - audio: muted by default even if the page unmutes itself; setAudio clamps and applies to own frames and new media
+  ---
+  duration_ms: 376.818491
+  type: 'test'
+  ...
+# Subtest: multiline browser text insertion never synthesizes Enter or submits a form
+ok 374 - multiline browser text insertion never synthesizes Enter or submits a form
+  ---
+  duration_ms: 371.542641
+  type: 'test'
+  ...
+# Subtest: a web wall starts no browser until explicit open, then polls real backend frames through its service
+ok 375 - a web wall starts no browser until explicit open, then polls real backend frames through its service
+  ---
+  duration_ms: 20.527465
+  type: 'test'
+  ...
+# Subtest: a missing browser fails honestly and never tries to open a page
+ok 376 - a missing browser fails honestly and never tries to open a page
+  ---
+  duration_ms: 0.334989
+  type: 'test'
+  ...
+# Subtest: closing a wall during a pending open closes the late page and never starts a poll
+ok 377 - closing a wall during a pending open closes the late page and never starts a poll
+  ---
+  duration_ms: 2.41491
+  type: 'test'
+  ...
+# Subtest: physical screen input reaches browser text and allowed keys, never a terminal shell
+ok 378 - physical screen input reaches browser text and allowed keys, never a terminal shell
+  ---
+  duration_ms: 0.325769
+  type: 'test'
+  ...
+# Subtest: failed navigation keeps the actual last page rather than inventing a successful URL
+ok 379 - failed navigation keeps the actual last page rather than inventing a successful URL
+  ---
+  duration_ms: 0.270589
+  type: 'test'
+  ...
+# Subtest: old and disposed screenshot responses cannot overwrite the current wall
+ok 380 - old and disposed screenshot responses cannot overwrite the current wall
+  ---
+  duration_ms: 0.634818
+  type: 'test'
+  ...
+# Subtest: click and scroll target the owned page; invalid coordinates are not forwarded
+ok 381 - click and scroll target the owned page; invalid coordinates are not forwarded
+  ---
+  duration_ms: 0.326499
+  type: 'test'
+  ...
+# Subtest: browser paste is text insertion, not Enter keys, and size/control guards refuse unsafe input
+ok 382 - browser paste is text insertion, not Enter keys, and size/control guards refuse unsafe input
+  ---
+  duration_ms: 0.323919
+  type: 'test'
+  ...
+# Subtest: audio updates use the owned page and only display acknowledged volume/mute state
+ok 383 - audio updates use the owned page and only display acknowledged volume/mute state
+  ---
+  duration_ms: 0.426719
+  type: 'test'
+  ...
+# Subtest: wheel over the wall scrolls at the pointer pixel, with no click first
+ok 384 - wheel over the wall scrolls at the pointer pixel, with no click first
+  ---
+  duration_ms: 0.994026
+  type: 'test'
+  ...
+# Subtest: a fast wheel burst merges into one request at a time and keeps the newest point
+ok 385 - a fast wheel burst merges into one request at a time and keeps the newest point
+  ---
+  duration_ms: 2.282612
+  type: 'test'
+  ...
+# Subtest: wheel with no page, off the page, or with bad numbers sends nothing and shows no error
+ok 386 - wheel with no page, off the page, or with bad numbers sends nothing and shows no error
+  ---
+  duration_ms: 0.255279
+  type: 'test'
+  ...
+# Subtest: PageUp, PageDown and Space reach the page as allow-listed keys; Space is never typed text
+ok 387 - PageUp, PageDown and Space reach the page as allow-listed keys; Space is never typed text
+  ---
+  duration_ms: 0.239369
+  type: 'test'
+  ...
+# Subtest: the physical monitor sends PageUp/PageDown escape codes while typing
+ok 388 - the physical monitor sends PageUp/PageDown escape codes while typing
+  ---
+  duration_ms: 1.103985
+  type: 'test'
+  ...
+# Subtest: walk labels are visible for a finite screen distance at or below reach
+ok 389 - walk labels are visible for a finite screen distance at or below reach
+  ---
+  duration_ms: 0.503338
+  type: 'test'
+  ...
+# Subtest: walk labels are hidden when the screen is missing or unreachable
+ok 390 - walk labels are hidden when the screen is missing or unreachable
+  ---
+  duration_ms: 0.498009
+  type: 'test'
+  ...
+# Subtest: walk labels are hidden for invalid screen distances
+ok 391 - walk labels are hidden for invalid screen distances
+  ---
+  duration_ms: 0.11035
+  type: 'test'
+  ...
+# Subtest: labels outside projected clip depth are hidden in every mode
+ok 392 - labels outside projected clip depth are hidden in every mode
+  ---
+  duration_ms: 0.07381
+  type: 'test'
+  ...
+# Subtest: overview labels stay visible in the frustum regardless of reach data
+ok 393 - overview labels stay visible in the frustum regardless of reach data
+  ---
+  duration_ms: 0.080989
+  type: 'test'
+  ...
+# Subtest: rules: add a third desk for Codex and a big monitor wall linked to it
+ok 394 - rules: add a third desk for Codex and a big monitor wall linked to it
+  ---
+  duration_ms: 9.256257
+  type: 'test'
+  ...
+# Subtest: rules: add 2 shell desks named Ops
+ok 395 - rules: add 2 shell desks named Ops
+  ---
+  duration_ms: 4.036925
+  type: 'test'
+  ...
+# Subtest: rules: add a web wall showing https://example.com/docs?token=abc&page=2
+ok 396 - rules: add a web wall showing https://example.com/docs?token=abc&page=2
+  ---
+  duration_ms: 1.231206
+  type: 'test'
+  ...
+# Subtest: rules: add a plant and a lamp
+ok 397 - rules: add a plant and a lamp
+  ---
+  duration_ms: 1.859953
+  type: 'test'
+  ...
+# Subtest: rules: move desk two left 2 m
+ok 398 - rules: move desk two left 2 m
+  ---
+  duration_ms: 1.422495
+  type: 'test'
+  ...
+# Subtest: rules: rename desk one to Build
+ok 399 - rules: rename desk one to Build
+  ---
+  duration_ms: 0.638308
+  type: 'test'
+  ...
+# Subtest: rules: lock desk two
+ok 400 - rules: lock desk two
+  ---
+  duration_ms: 0.340159
+  type: 'test'
+  ...
+# Subtest: rules: remove the mirror
+ok 401 - rules: remove the mirror
+  ---
+  duration_ms: 0.317268
+  type: 'test'
+  ...
+# Subtest: rules: link the mirror to desk two
+ok 402 - rules: link the mirror to desk two
+  ---
+  duration_ms: 0.480898
+  type: 'test'
+  ...
+# Subtest: rules: arrange the desks in a row
+ok 403 - rules: arrange the desks in a row
+  ---
+  duration_ms: 0.777567
+  type: 'test'
+  ...
+# Subtest: rules: switch to the jungle theme
+ok 404 - rules: switch to the jungle theme
+  ---
+  duration_ms: 0.240029
+  type: 'test'
+  ...
+# Subtest: rules: rename the world to "Night Shift"
+ok 405 - rules: rename the world to "Night Shift"
+  ---
+  duration_ms: 0.325209
+  type: 'test'
+  ...
+# Subtest: rules: U-shape with six desks grows the room if needed and stays valid
+ok 406 - rules: U-shape with six desks grows the room if needed and stays valid
+  ---
+  duration_ms: 7.164784
+  type: 'test'
+  ...
+# Subtest: rules: a locked desk refuses move and explains
+ok 407 - rules: a locked desk refuses move and explains
+  ---
+  duration_ms: 0.557649
+  type: 'test'
+  ...
+# Subtest: rules: nonsense gives no proposal and a helpful answer
+ok 408 - rules: nonsense gives no proposal and a helpful answer
+  ---
+  duration_ms: 0.16816
+  type: 'test'
+  ...
+# (node:1366323) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: rules planner is the default and never runs hermes
+ok 409 - rules planner is the default and never runs hermes
+  ---
+  duration_ms: 21.527891
+  type: 'test'
+  ...
+# Subtest: hermes without confirmation is refused and nothing starts
+ok 410 - hermes without confirmation is refused and nothing starts
+  ---
+  duration_ms: 14.140937
+  type: 'test'
+  ...
+# Subtest: confirmed hermes: argv-only, no tools, ignore rules, sanitised env, empty cwd, valid proposal
+ok 411 - confirmed hermes: argv-only, no tools, ignore rules, sanitised env, empty cwd, valid proposal
+  ---
+  duration_ms: 34.764832
+  type: 'test'
+  ...
+# Subtest: a live turn lease blocks hermes
+ok 412 - a live turn lease blocks hermes
+  ---
+  duration_ms: 59.54291
+  type: 'test'
+  ...
+# Subtest: invalid hermes answers are rejected with a readable error
+ok 413 - invalid hermes answers are rejected with a readable error
+  ---
+  duration_ms: 229.488384
+  type: 'test'
+  ...
+# Subtest: hard timeout kills hermes
+ok 414 - hard timeout kills hermes
+  ---
+  duration_ms: 3031.955317
+  type: 'test'
+  ...
+# Subtest: real-app walking targets are reachable before collision even with the capped low-FPS timestep
+ok 415 - real-app walking targets are reachable before collision even with the capped low-FPS timestep
+  ---
+  duration_ms: 4.407664
+  type: 'test'
+  ...
+1..415
+# tests 415
+# suites 0
+# pass 415
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 52131.488453

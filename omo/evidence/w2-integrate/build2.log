@@ -1,0 +1,26 @@
+
+> omo-spatial-ide@0.1.0 build
+> npm run prepare:ide && npm run compile && npm run build --workspace=omo-browser
+
+
+> omo-spatial-ide@0.1.0 prepare:ide
+> node scripts/prepare-ide.cjs
+
+Pinned IDE extensions are ready (8643 files).
+
+> omo-spatial-ide@0.1.0 compile
+> tsc -p extension
+
+
+> omo-browser@0.1.0 build
+> theia build --mode development
+
+Could not resolve optional peer dependency '@theia/electron'. Skipping...
+[build/browser] Build started
+
+[build/browser] Finished with 0 errors in 1228ms.
+
+[build/node] Build started
+
+[build/node] Finished with 0 errors in 583ms.
+
