@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
+import { injectable, inject, postConstruct, optional } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import type { Message } from '@theia/core/shared/@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
@@ -74,6 +74,12 @@ import { sceneControls as adminSceneControls } from './focus-screen';
 import { WorldStore } from './world-store'; // w2:build
 import { BuildMode } from './build-mode'; // w2:build
 import { BuildPanel, BuildToggle } from './build-panel'; // w2:build
+// --- w2:onboard (mount hook): prompt-to-world onboarding; see onboarding-flow.tsx ---
+import { OnboardingFlow } from './onboarding-flow';
+import { OnboardingPlanBackend } from './onboarding-admin';
+import { OnboardingWorldSink, saveOnboardingWorld, readLocalWorld } from './onboarding-store';
+import { v1RoomFor } from './onboarding-planner';
+// --- end w2:onboard ---
 
 export const TERMINAL_STATION_ID = 'terminal-1';
 // w2:runtime — stations come from the WorldSpec (WorldStations). Ids are strings; the scene/focus types keep
@@ -156,6 +162,38 @@ export class OmoWorldWidget extends ReactWidget {
         return this.adminLocalStore;
     };
     // --- end w2:admin ---
+    // --- w2:onboard: optional admin planner + WorldStore sink (unbound = offline planner + localStorage) ---
+    @inject(OnboardingPlanBackend) @optional() protected readonly onboardingPlanner?: OnboardingPlanBackend;
+    @inject(OnboardingWorldSink) @optional() protected readonly onboardingSink?: OnboardingWorldSink;
+    private onboardingClassic = false;
+    private onboardingSaved?: { key: string; world?: WorldSpec };
+    private savedOnboardingWorld(): WorldSpec | undefined {
+        if (!this.project) return undefined;
+        const key = `${this.project.toString()}:${this.onboardingEpoch}`;
+        if (this.onboardingSaved?.key !== key) this.onboardingSaved = { key, world: readLocalWorld(safeStorage(), this.project.toString()) };
+        return this.onboardingSaved.world;
+    }
+    private onboardingEpoch = 0;
+    private onboardingWorld?: WorldSpec;
+    private onboardingPreview = (world: WorldSpec): void => {
+        this.onboardingWorld = world;
+        const v1 = v1RoomFor(world);
+        const scene = this.worldScene as unknown as { setWorld?: (w: WorldSpec) => void } | undefined;
+        if (v1.theme !== this.draftTheme || v1.layout !== this.draftLayout || v1.kit !== this.draftKit) {
+            if (this.anyStationLocked && v1.layout !== (this.room?.layout ?? 'classic')) v1.layout = this.room?.layout ?? 'classic';
+            this.draftTheme = v1.theme; this.draftLayout = v1.layout; this.draftKit = v1.kit; this.update();
+        }
+        scene?.setWorld?.(world);
+    };
+    private onboardingCreate = async (world: WorldSpec): Promise<void> => {
+        if (!this.project) throw new Error('Choose a project folder first.');
+        const saved = await saveOnboardingWorld(world, this.project.toString(), this.onboardingSink, safeStorage());
+        this.onboardingPreview(world); this.draftName = world.name;
+        this.createRoom();
+        if (this.configuring) throw new Error(this.error || 'The room could not be saved.');
+        this.feedback = `World saved on this device${saved.via === 'local-storage' ? '' : ' (world store)'}. Nothing was started. Click a desk to open it.`; this.update();
+    };
+    // --- end w2:onboard ---
     private project?: URI;
     private room?: RoomState;
     private draftTheme: RoomTheme = 'station';
@@ -436,6 +474,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.project = next;
         this.readWebBinding();
         this.readStationSettings();
+        this.onboardingClassic = false; this.onboardingEpoch++; this.onboardingWorld = undefined; // w2:onboard
         this.room = undefined; this.configuring = true; this.draftLayout = 'classic'; this.draftKit = 'hermes-desk'; this.draftName = next?.path.base || 'My workspace';
         if (next) {
             try {
@@ -786,7 +825,7 @@ export class OmoWorldWidget extends ReactWidget {
         } catch { this.error = 'Those saved appearance settings could not be exported.'; this.update(); }
     };
     private cancelConfiguration = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetRevision++; this.presetStatus = ''; this.error = ''; this.configuring = false; this.update(); };
-    private configure = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.update(); };
+    private configure = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.onboardingEpoch++; this.onboardingClassic = !!this.room; /* w2:onboard */ this.update(); };
 
     protected render(): React.ReactNode {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;
@@ -805,7 +844,14 @@ export class OmoWorldWidget extends ReactWidget {
             {this.taskWorkspacesOpen&&this.project&&this.room&&<div className="omo-task-overview-view"><TaskWorkspacePanel projectUri={this.project.toString()} service={this.taskWorkspaceUiService} onClose={this.closeTaskWorkspaces} onOpen={uri=>this.openTaskProject(uri,taskSourceUri)}/></div>}
             <div className={`omo-body ${this.configuring ? 'is-onboarding' : ''}`} style={this.reviewOpen||this.taskOverviewOpen||this.taskWorkspacesOpen?{display:'none'}:undefined}>
                 {/* design lane (omo/build-design): setup markup + classNames only — scroll body + pinned action footer */}
-                {this.configuring ? <section className="omo-onboarding" data-testid="omo-onboarding"><div className="omo-setup-scroll">
+                {/* w2:onboard (mount hook): new 3-step flow; the classic form below stays reachable via "Room settings" */}
+                {this.configuring && !this.onboardingClassic && <OnboardingFlow key={`${this.project?.toString() ?? ''}:${this.onboardingEpoch}`} initialName={this.draftName} initialTheme={this.draftTheme}
+                    savedWorld={this.savedOnboardingWorld()} projectPath={this.project?.path.toString()} hasRoom={!!this.room} busy={this.busy || this.presetLoading}
+                    hermes={this.onboardingPlanner} fullPreview={typeof (this.worldScene as unknown as { setWorld?: unknown } | undefined)?.setWorld === 'function'}
+                    onPreview={this.onboardingPreview} onCreate={this.onboardingCreate} onChooseProject={this.chooseProject} onCancel={this.cancelConfiguration}
+                    onClassic={() => { this.onboardingClassic = true; this.update(); }}/>}
+                {this.configuring && this.onboardingClassic ? <section className="omo-onboarding" data-testid="omo-onboarding"><div className="omo-setup-scroll">
+                    <button type="button" className="omo-ob-link" data-testid="onboarding-describe" onClick={() => { this.onboardingClassic = false; this.update(); }}>← Describe a world instead</button>{/* w2:onboard */}
                     <span className="omo-kicker">YOUR WORK, SOMEWHERE YOU REMEMBER</span>
                     <h1>A place for<br/>your next idea.</h1>
                     <p className="omo-intro">Make this workspace feel like you.<br/>Your code and tools are already at home.</p>
@@ -847,7 +893,7 @@ export class OmoWorldWidget extends ReactWidget {
                         {this.recipeOpen&&<StationRecipePanel key={this.activeStation} recipes={recipesForStation(this.recipes,this.activeStation)} stationId={this.activeStation} stationName={this.stationName(this.activeStation)} setup={this.stations.setupRecipeFor(this.activeStation)} worldLocked={this.stations.configLocked(this.activeStation)} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} locked={this.stations.locked(this.activeStation)} onLock={locked=>this.setStationLock(this.activeStation,locked)} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)}/>}
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.stationName(this.activeStation)} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>}
                     </div>}
-                    <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;this.drawStoredWorld(scene);/* w2:render */this.pushLinkedFrames();/* w2:runtime */scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
+                    <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;this.drawStoredWorld(scene);/* w2:render */this.pushLinkedFrames();/* w2:runtime */scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);if(this.configuring&&this.onboardingWorld)scene?.setWorld(this.onboardingWorld);/* w2:onboard */}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
                         {/* omo immersive lane (mount hook) */}{this.room && !this.configuring && (this.immersive.mode.active
                             ? <ImmersivePill roomName={this.room.projectName} activeDesk={this.activeMode as Workstation} focus={this.focusMode} hud={this.hudHub} voice={this.voiceHub}
                                 desks={this.stationList.map(info => ({ id: info.id, label: info.name, slot: info.slot }))}
