@@ -14,11 +14,19 @@ import { OmoImmersiveService } from './immersive-service';
 import { WorldAdminService, OMO_WORLD_ADMIN_PATH } from '../common/world-admin-protocol'; // w2:admin
 import '../../src/browser/omo-world.css';
 import '../../src/browser/git-review.css';
+import { OmoRemoteRoomService, OMO_REMOTE_ROOM_PATH } from '../common/remote-room-protocol'; // w2:mp-client
+import { OmoLocalPresenceService, RoutedPresenceService } from './remote-room-controller'; // w2:mp-client
+import '../../src/browser/remote-room.css'; // w2:mp-client
 
 export default new ContainerModule(bind => {
     bind(OmoRuntimeService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<OmoRuntimeService>(ctx.container, OMO_RUNTIME_PATH)).inSingletonScope();
     bind(OmoWebService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<OmoWebService>(ctx.container, OMO_WEB_PATH)).inSingletonScope();
-    bind(OmoPresenceService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<OmoPresenceService>(ctx.container, OMO_PRESENCE_PATH)).inSingletonScope();
+    // w2:mp-client: OmoPresenceService is now the ROUTED service (local room-presence or remote room), so
+    // PresenceController, VoiceHub, HudHub, chat and avatars work unchanged for both kinds of room.
+    bind(OmoLocalPresenceService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<OmoPresenceService>(ctx.container, OMO_PRESENCE_PATH)).inSingletonScope();
+    bind(OmoRemoteRoomService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<OmoRemoteRoomService>(ctx.container, OMO_REMOTE_ROOM_PATH)).inSingletonScope();
+    bind(RoutedPresenceService).toDynamicValue(ctx => new RoutedPresenceService(ctx.container.get<OmoPresenceService>(OmoLocalPresenceService), ctx.container.get<OmoRemoteRoomService>(OmoRemoteRoomService))).inSingletonScope();
+    bind(OmoPresenceService).toService(RoutedPresenceService);
     bind(GitReviewService).toDynamicValue(ctx=>ServiceConnectionProvider.createProxy<GitReviewService>(ctx.container,OMO_GIT_REVIEW_PATH)).inSingletonScope();
     bind(TaskWorkspaceService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<TaskWorkspaceService>(ctx.container, OMO_TASK_WORKSPACE_PATH)).inSingletonScope();
     bind(OmoImmersiveService).toSelf().inSingletonScope(); // omo immersive lane
