@@ -94,8 +94,8 @@ export default new ContainerModule(bind => {
     // --- end w2:mp-client ---
     // w2:voice — one settings store per backend; the TURN secret stays here.
     bind(OmoVoiceSettingsStore).toDynamicValue(ctx => {
-        const env = ctx.container.get<EnvVariablesServer>(EnvVariablesServer);
-        return new VoiceSettingsStore(async () => FileUri.fsPath(await env.getConfigDirUri()));
+        // Resolved lazily (like remote rooms): only a real voice-settings call needs the config dir.
+        return new VoiceSettingsStore(async () => FileUri.fsPath(await ctx.container.get<EnvVariablesServer>(EnvVariablesServer).getConfigDirUri()));
     }).inSingletonScope();
     bind(ConnectionHandler).toDynamicValue(ctx => {
         const store = ctx.container.get<VoiceSettingsStore>(OmoVoiceSettingsStore);
