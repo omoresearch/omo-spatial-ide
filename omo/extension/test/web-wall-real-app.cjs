@@ -11,7 +11,7 @@ const { openWorld, walkTo, pause, CANVAS } = require('./world-test-driver.cjs');
    res.setHeader('Content-Type', 'text/html');
    res.end(`<!doctype html><title>OMO LOCAL WEB FIXTURE</title><style>body{margin:0;background:#135ce0;color:white;font:30px monospace}button{position:absolute;left:360px;top:240px;width:240px;height:120px;font:24px monospace}input{position:absolute;left:100px;top:80px;width:700px;height:50px;font:30px monospace}</style><input aria-label="Local fixture input"><button onclick="document.body.style.background='#20cf40';fetch('/clicked');this.textContent='CLICKED'">Real page button</button>`);
  });
- await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+ await new Promise(resolve => server.listen(Number(process.env.OMO_TEST_FIXTURE_PORT || 0), '127.0.0.1', resolve));
  const url = `http://127.0.0.1:${server.address().port}/`;
  let world;
  try {

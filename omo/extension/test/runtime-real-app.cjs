@@ -16,7 +16,7 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const checks = [];
 const proofs = ['first', 'second', 'after-refresh', 'after-restart', 'away', 'paste-good', 'paste-bad'].map(s => path.join(PROJECT, `.omo-runtime-${RUN}-${s}`));
 function check(name, value) { assert.ok(value, name); checks.push({ name, pass: true }); console.log('PASS:', name); }
-async function waitFile(file, timeout = 20000) { const end = Date.now() + timeout; while (!fs.existsSync(file) && Date.now() < end) await wait(100); assert.ok(fs.existsSync(file), `Actual shell must create ${path.basename(file)}`); return fs.readFileSync(file, 'utf8').trim(); }
+async function waitFile(file, timeout = 20000) { const end = Date.now() + timeout; while (!(fs.existsSync(file) && fs.statSync(file).size > 0) && Date.now() < end) await wait(100); /* t2:regress: the shell's > redirect creates the file before printf writes it */ assert.ok(fs.existsSync(file), `Actual shell must create ${path.basename(file)}`); return fs.readFileSync(file, 'utf8').trim(); }
 async function binding(page) { return page.evaluate(() => { const key = Object.keys(localStorage).find(k => k.startsWith('omo.runtime.v1:')); return key ? JSON.parse(localStorage.getItem(key)) : undefined; }); }
 async function move(page, key, predicate, ...args) {
     await page.focus(CANVAS); await page.keyboard.down(key);

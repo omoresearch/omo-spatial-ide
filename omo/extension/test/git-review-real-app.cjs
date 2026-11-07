@@ -15,7 +15,7 @@ const {ROOT,CANVAS,openWorld,walkTo,clickStation,pause}=require('./world-test-dr
   assert.equal(git(['rev-parse','--show-toplevel']).trim(),repo,'The fixture must have its own Git repository, not the developer repo');
   fs.writeFileSync(file,first+'\n');fs.writeFileSync(path.join(repo,'outside-project.txt'),'OUTSIDE_EDIT_MUST_NOT_BE_LISTED\n');
   const head=git(['rev-parse','HEAD']).trim(),indexFile=path.join(repo,'.git','index'),indexHash=()=>crypto.createHash('sha256').update(fs.readFileSync(indexFile)).digest('hex'),beforeIndex=indexHash();
-  const listener=net.createServer();await new Promise((resolve,reject)=>{listener.once('error',reject);listener.listen(0,'127.0.0.1',resolve);});const port=listener.address().port;await new Promise(resolve=>listener.close(resolve));
+  const listener=net.createServer();await new Promise((resolve,reject)=>{listener.once('error',reject);listener.listen(Number(process.env.OMO_TEST_GIT_REVIEW_PORT||0),'127.0.0.1',resolve);/* t2:regress owned-port override */});const port=listener.address().port;await new Promise(resolve=>listener.close(resolve));
   childEnv={...process.env,THEIA_CONFIG_DIR:path.join(owned,'theia'),OMO_SPATIAL_DATA:path.join(owned,'runtime'),OMO_SPATIAL_TMUX_SOCKET:socket,OMO_SPATIAL_TMUX:process.env.OMO_SPATIAL_TEST_TMUX||process.env.OMO_SPATIAL_TMUX,OMO_URL:`http://127.0.0.1:${port}`};
   const log=fs.openSync(path.join(ROOT,'evidence/change-review-owned-server.log'),'a');
   server=spawn(process.execPath,[path.join(ROOT,'scripts/start.cjs'),'--workspace',project,'--port',String(port)],{cwd:ROOT,env:childEnv,detached:true,shell:false,stdio:['ignore',log,log]});fs.closeSync(log);let spawnError;server.on('error',error=>{spawnError=error;});

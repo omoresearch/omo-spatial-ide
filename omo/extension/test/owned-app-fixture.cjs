@@ -48,7 +48,12 @@ for line in sys.stdin: pass
 `;
         for (const kind of ['hermes', 'claude', 'codex']) fs.writeFileSync(path.join(bin, kind), recorder, { mode: 0o755 });
         const listener = net.createServer();
-        await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(0, '127.0.0.1', resolve); });
+        // t2:regress — optional owned-port list (comma separated, e.g. a lane range); first free one wins. Default: any free port.
+        const candidates = (process.env.OMO_TEST_OWNED_APP_PORTS || '0').split(',').map(Number);
+        for (const candidate of candidates) {
+            try { await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(candidate, '127.0.0.1', resolve); }); break; }
+            catch (error) { if (error.code !== 'EADDRINUSE' || candidate === candidates[candidates.length - 1]) throw error; }
+        }
         const port = listener.address().port; await new Promise(resolve => listener.close(resolve));
         env = { ...process.env, THEIA_CONFIG_DIR: path.join(owned, 'theia'), OMO_SPATIAL_DATA: path.join(owned, 'runtime'),
             OMO_SPATIAL_TMUX_SOCKET: socket, OMO_SPATIAL_TMUX: process.env.OMO_SPATIAL_TEST_TMUX || process.env.OMO_SPATIAL_TMUX,

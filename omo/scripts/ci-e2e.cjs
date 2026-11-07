@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { spawn, spawnSync } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
 const evidence = path.join(ROOT, 'evidence');
-const port = '3199';
+const port = process.env.OMO_CI_PORT || '3199'; // t2:regress lanes pass their owned port
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 (async () => {
     fs.mkdirSync(evidence, { recursive: true });

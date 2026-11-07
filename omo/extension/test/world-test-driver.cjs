@@ -59,5 +59,5 @@ async function command(page, station, text) {
     await page.waitForSelector('[data-testid="in-world-terminal-output"][data-ready="true"]', { timeout: 30000 });
     await page.keyboard.type(text); await page.keyboard.press('Enter');
 }
-async function fileContents(file) { for (let i = 0; i < 200 && !fs.existsSync(file); i++) await pause(100); if (!fs.existsSync(file)) throw new Error(`The real process did not create ${path.basename(file)}`); return fs.readFileSync(file, 'utf8').trim(); }
+async function fileContents(file) { for (let i = 0; i < 200 && !(fs.existsSync(file) && fs.statSync(file).size > 0); i++) await pause(100); /* t2:regress: > creates before write */ if (!fs.existsSync(file)) throw new Error(`The real process did not create ${path.basename(file)}`); return fs.readFileSync(file, 'utf8').trim(); }
 module.exports = { ROOT, CANVAS, pause, openWorld, walkTo, clickStation, command, fileContents };

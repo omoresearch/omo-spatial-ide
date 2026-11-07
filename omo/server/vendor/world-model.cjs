@@ -1,4 +1,4 @@
-// GENERATED from omo/extension/src/common/world-model.ts (sha256 835f3c401afc8058870fe63f630209ec393889c32a2bd54dbf6d69d8529bc994). Do not edit.
+// GENERATED from omo/extension/src/common/world-model.ts (sha256 ed61d5f3ef80dfb814498592fcb749ce2d48191986b5c16fbaf2bfa3402e15ce). Do not edit.
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.worldStorageKey = exports.WORLD_ID_RE = exports.WORLD_MAX_BYTES = exports.WORLD_MAX_STATIONS = exports.WORLD_MAX_ENTITIES = exports.WORLD_VERSION = void 0;
@@ -179,11 +179,11 @@ function worldFromRoomV1(room) {
     const entities = [
         { id: 'terminal', kind: 'station', label: 'Desk one', transform: { x: d1.x, z: d1.z, rotation: 0 }, station: defaultStation('Desk one') },
         { id: 'terminal-2', kind: 'station', label: 'Desk two', transform: { x: d2.x, z: d2.z, rotation: 0 }, station: defaultStation('Desk two', 'shell') },
-        { id: 'code', kind: 'review-screen', label: 'Code review', transform: { x: 4.6, z: 1.2, rotation: -Math.PI / 2 } }
+        { id: 'code', kind: 'review-screen', label: 'Code review', transform: { x: -4.8, z: -3.9, rotation: 0 } } // t2:regress: exact v1 back-left spot (CHANGE-REVIEW.md)
     ];
     if (kit !== 'terminal-nook')
         entities.push({ id: 'web', kind: 'web-wall', label: 'Web wall', transform: { x: 0, z: -4.12, rotation: 0 }, width: 3.9, height: 2.44, elevation: 0.68 });
-    entities.push({ id: 'mirror', kind: 'mirror', label: 'Mirror · Desk one', link: 'terminal', transform: { x: -4.6, z: 1.2, rotation: Math.PI / 2 } });
+    entities.push({ id: 'mirror', kind: 'mirror', label: 'Mirror · Desk one', link: 'terminal', transform: { x: 4.7, z: -3.98, rotation: 0 } }); // t2:regress: exact v1 back-right spot
     return { version: exports.WORLD_VERSION, name: room.projectName, shell: { theme: room.theme, width: 12, depth: 10 }, entities, revision: 0 };
 }
 /** Storage key per project, next to the v1 room key. */

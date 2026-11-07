@@ -164,10 +164,6 @@ export function entityTitle(entity: WorldEntity, world: WorldSpec): string {
  * room looks unchanged until the widget passes a stored world.
  */
 export function legacyRoomWorld(room: { theme: RoomTheme; layout?: RoomLayoutId; kit?: RoomKitId; projectName?: string }): WorldSpec {
-    const world = worldFromRoomV1({ theme: room.theme, projectName: room.projectName ?? 'Omo room', layout: room.layout, kit: room.kit });
-    for (const e of world.entities) {
-        if (e.id === 'mirror') e.transform = { x: 4.7, z: -3.98, rotation: 0 };
-        if (e.id === 'code') e.transform = { x: -4.8, z: -3.9, rotation: 0 };
-    }
-    return world;
+    // t2:regress: worldFromRoomV1 itself now keeps the v1 mirror/code spots, so stored and legacy worlds match.
+    return worldFromRoomV1({ theme: room.theme, projectName: room.projectName ?? 'Omo room', layout: room.layout, kit: room.kit });
 }

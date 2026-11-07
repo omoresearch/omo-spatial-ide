@@ -12,7 +12,7 @@ import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
 import { exportRoomPreset, parseRoomPreset, ROOM_PRESET_FILENAME, ROOM_PRESET_MAX_BYTES } from '../common/room-preset';
 import { exportWorldPreset, exportStationSetupPreset, parseAnyRoomPreset, stationConfigFromSetup, WORLD_PRESET_FILENAME, WORLD_PRESET_MAX_BYTES } from '../common/world-preset'; // w2:templates
 import { validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model'; // w2:templates
-import type { WorldSpec } from '../common/world-model'; // w2:templates
+import type { WorldOp, WorldSpec } from '../common/world-model'; // w2:templates; t2:regress WorldOp
 import { WorldPresetPanel } from './world-preset-panel'; // w2:templates
 import { ROOM_LAYOUTS, ROOM_KITS } from '../common/player-state';
 import type { RoomLayoutId, RoomKitId, PlayerPose } from '../common/player-state';
@@ -430,6 +430,7 @@ export class OmoWorldWidget extends ReactWidget {
     /** Read the saved WorldSpec (or migrate the v1 room). Removed stations are detached; tabs keep running. */
     private readWorld(reconnect = true): void {
         const { world, stored } = this.project ? loadWorld(safeStorage(), this.project.toString(), this.room) : { world: undefined, stored: false };
+        if (stored && this.worldStore?.projectUri === this.project?.toString()) this.worldStore?.reloadExternal(); // t2:regress: same-tab saves (saveWorldOps) must refresh build mode's cached world
         const { added } = this.stations.setWorld(world, stored);
         this.syncMirrorLink();
         for (const info of this.stationList) if (!this.monitors[info.id]) this.monitors = { ...this.monitors, [info.id]: { lines: [] } };
@@ -598,8 +599,32 @@ export class OmoWorldWidget extends ReactWidget {
         }
         if (!this.save(next)) return;
         if (world) { try { localStorage.setItem(worldStorageKey(next.projectUri), JSON.stringify(world)); } catch { this.error = 'The world could not be saved. Check browser storage.'; } this.draftWorld = undefined; this.draftWorldSource = undefined; } // w2:templates
-        this.room = next; this.configuring = false; this.feedback = world ? 'Room and world saved on this device. No agent was started.' : 'Room saved on this device.'; this.update();
+        const previous = this.room;
+        this.room = next; this.configuring = false; this.feedback = world ? 'Room and world saved on this device. No agent was started.' : 'Room saved on this device.';
+        if (!world && previous) this.syncSavedWorldToRoom(previous, next); // t2:regress
+        this.update();
     };
+    /**
+     * t2:regress — the classic form edits theme/layout of the v1 room. When a v2 world is saved for this project it is what
+     * the 3D room draws, so carry the same change into it (move the two v1 desks, set the shell theme). Starts nothing.
+     */
+    private syncSavedWorldToRoom(previous: RoomState, next: RoomState): void {
+        if (!this.project) return;
+        const saved = loadWorld(safeStorage(), this.project.toString(), next);
+        if (!saved.stored || !saved.world) return;
+        const ops: WorldOp[] = [];
+        if (saved.world.shell.theme !== next.theme) ops.push({ op: 'shell', shell: { theme: next.theme } });
+        if ((previous.layout ?? 'classic') !== (next.layout ?? 'classic')) {
+            const desks = ROOM_LAYOUTS[next.layout ?? 'classic'].desks;
+            for (const id of ['terminal', 'terminal-2'] as const) {
+                const e = saved.world.entities.find(item => item.id === id && item.kind === 'station');
+                if (e) ops.push({ op: 'move', id, transform: { ...e.transform, x: desks[id].x, z: desks[id].z } });
+            }
+        }
+        if (!ops.length) return;
+        const result = saveWorldOps(safeStorage(), this.project.toString(), saved.world, ops);
+        if (!result.ok) this.error = `The room was saved, but the world could not follow it: ${result.error}`;
+    }
     private cameraChanged = (camera: RoomState['camera']): void => {
         if (this.configuring) { this.draftCamera = { ...camera }; return; }
         if (!this.room) return;
@@ -923,7 +948,7 @@ export class OmoWorldWidget extends ReactWidget {
                         {this.recipeOpen&&<StationRecipePanel key={this.activeStation} recipes={recipesForStation(this.recipes,this.activeStation)} stationId={this.activeStation} stationName={this.stationName(this.activeStation)} setup={this.stations.setupRecipeFor(this.activeStation)} worldLocked={this.stations.configLocked(this.activeStation)} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} locked={this.stations.locked(this.activeStation)} onLock={locked=>this.setStationLock(this.activeStation,locked)} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)}/>}
                         {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.stationName(this.activeStation)} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>}
                     </div>}
-                    <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;this.drawStoredWorld(scene);/* w2:render */this.pushLinkedFrames();/* w2:runtime */scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);if(this.configuring&&this.onboardingWorld)scene?.setWorld(this.onboardingWorld);/* w2:onboard */}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
+                    <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;this.drawStoredWorld(scene);/* w2:render */this.pushLinkedFrames();/* w2:runtime */scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);if(this.configuring&&!this.onboardingClassic&&this.onboardingWorld)scene?.setWorld(this.onboardingWorld);/* w2:onboard; t2:regress: not under the classic form */}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
                         {/* omo immersive lane (mount hook) */}{this.room && !this.configuring && (this.immersive.mode.active
                             ? <ImmersivePill roomName={this.room.projectName} activeDesk={this.activeMode as Workstation} focus={this.focusMode} hud={this.hudHub} voice={this.voiceHub}
                                 desks={this.stationList.map(info => ({ id: info.id, label: info.name, slot: info.slot }))}

@@ -4,7 +4,7 @@ const{openWorld,walkTo,command,CANVAS}=require('./world-test-driver.cjs');
 const{DESK_ONE}=require('./world-navigation-targets.cjs');
 (async()=>{
  let hits=0;const server=http.createServer((req,res)=>{if(req.url==='/linked')hits++;res.setHeader('Content-Type','text/html');res.end('<!doctype html><title>OMO TERMINAL LINK FIXTURE</title><body style="background:#1ba9c9;font:30px monospace">REAL PAGE OPENED FROM A TERMINAL LINK</body>');});
- await new Promise(r=>server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}/linked`;let w;
+ await new Promise(r=>server.listen(Number(process.env.OMO_TEST_FIXTURE_PORT||0),'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}/linked`;let w;
  try{
   w=await openWorld('terminal-link');const p=w.page;await walkTo(p,DESK_ONE.x,DESK_ONE.z);
   await command(p,'terminal',`printf '\\n%s%s\\n' 'http' '://127.0.0.1:${server.address().port}/linked'`);

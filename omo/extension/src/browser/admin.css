@@ -77,9 +77,12 @@
 .omo-admin-ask button { min-width: 64px; background: var(--omo-accent); color: var(--omo-accent-ink); border: 0; border-radius: var(--omo-r-md); font-weight: 600; }
 
 .omo-admin-toggle {
-    position: absolute; z-index: 6; right: var(--omo-sp-4); top: calc(var(--omo-sp-4) + 40px); display: inline-flex; align-items: center; gap: 6px;
+    /* t2:regress: was top-anchored and covered the voice tools row; now stacked above Build at the canvas's bottom-right */
+    position: absolute; z-index: 6; right: var(--omo-sp-4); bottom: calc(98px + 3 * var(--omo-control-h) + 3 * var(--omo-sp-2)); display: inline-flex; align-items: center; gap: 6px;
     height: 30px; padding: 0 12px; background: var(--omo-glass); backdrop-filter: var(--omo-glass-blur);
     border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-pill); color: var(--omo-text); box-shadow: var(--omo-shadow-2); font-size: var(--omo-fs-sm);
 }
 .omo-admin-toggle.active { border-color: var(--omo-accent-line); color: var(--omo-accent); }
 .omo-admin-toggle kbd { font-size: var(--omo-fs-2xs); color: var(--omo-text-3); }
+.omo-root[data-focus="attaching"] .omo-admin-toggle,
+.omo-root[data-focus="attached"] .omo-admin-toggle { display: none; } /* t2:regress: same as Build/Immersive */

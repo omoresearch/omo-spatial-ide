@@ -51,7 +51,7 @@ while True:
         const head = git(['rev-parse', 'HEAD']);
         const index = fs.readFileSync(path.join(project, '.git', 'index'));
         const listener = net.createServer();
-        await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(0, '127.0.0.1', resolve); });
+        await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(Number(process.env.OMO_TEST_AGENT_TASK_PORT || 0), '127.0.0.1', resolve); /* t2:regress owned-port override */ });
         const port = listener.address().port; await new Promise(resolve => listener.close(resolve));
         env = { ...process.env, THEIA_CONFIG_DIR: path.join(owned, 'theia'),
             OMO_SPATIAL_DATA: path.join(owned, 'runtime'), OMO_SPATIAL_TMUX_SOCKET: socket,
