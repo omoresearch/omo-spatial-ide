@@ -44,9 +44,10 @@ EOF
 chmod +x "$APPDIR/AppRun"
 
 # appimagetool is itself an AppImage: extract-and-run so FUSE is not needed on build hosts/CI.
+# Its runtime leaves the extract folder behind, so extract it inside $WORK (removed by the trap).
 cp "$TOOL" "$WORK/appimagetool"; chmod +x "$WORK/appimagetool"
 rm -f "$OUT"
-APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 "$WORK/appimagetool" --no-appstream --runtime-file "$RUNTIME" "$APPDIR" "$OUT" >"$WORK/appimagetool.log" 2>&1 \
+TMPDIR="$WORK" APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 "$WORK/appimagetool" --no-appstream --runtime-file "$RUNTIME" "$APPDIR" "$OUT" >"$WORK/appimagetool.log" 2>&1 \
     || { cat "$WORK/appimagetool.log" >&2; exit 1; }
 chmod +x "$OUT"
 echo "$OUT"
