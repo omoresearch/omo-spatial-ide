@@ -1,0 +1,39 @@
+{
+  "pass": true,
+  "checks": [
+    {
+      "name": "Using desk one in the classic room asks nothing",
+      "pass": true
+    },
+    {
+      "name": "After admin Apply adds a desk, no setup prompt opens (desk one keeps working)",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "Build mode placed a ghost agent desk",
+      "pass": true
+    },
+    {
+      "name": "After build-mode Apply adds a desk, no setup prompt opens (desk one keeps working)",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "First open of the new desk (desk switcher) offers its setup and waits for confirmation",
+      "pass": true,
+      "detail": "Set up demo-project · Codex desk as this station is configured? It will use profile “default” and start exactly these tabs: Codex. Nothing launches until you confirm; Cancel keeps just the shell.Start station tabsCancel"
+    },
+    {
+      "name": "Nothing started before confirmation: the new desk has only its shell tab",
+      "pass": true,
+      "detail": [
+        "Shell"
+      ]
+    },
+    {
+      "name": "Cancel keeps just the shell and the prompt is gone",
+      "pass": true
+    }
+  ]
+}

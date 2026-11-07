@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { WorldOp } from '../common/world-model';
-import { ADMIN_EXAMPLES } from '../common/world-admin-rules';
+import { ADMIN_EXAMPLES, ADMIN_PROMPT_PLACEHOLDER } from '../common/world-admin-rules';
 import { WORLD_ADMIN_PROMPT_MAX } from '../common/world-admin-protocol';
 import type { AdminController, AdminEntry, AdminState } from './admin-controller';
 import '../../src/browser/admin.css';
@@ -90,7 +90,7 @@ export function AdminPanel(props: { controller: AdminController; state: AdminSta
             </div>
         </div>}
         <form className="omo-admin-ask" onSubmit={event => { event.preventDefault(); submit(); }}>
-            <textarea ref={input} data-testid="admin-prompt" rows={2} maxLength={WORLD_ADMIN_PROMPT_MAX} value={text} placeholder="add a third desk for Codex and a big monitor wall linked to it"
+            <textarea ref={input} data-testid="admin-prompt" rows={2} maxLength={WORLD_ADMIN_PROMPT_MAX} value={text} placeholder={ADMIN_PROMPT_PLACEHOLDER}
                 onChange={event => setText(event.currentTarget.value)}
                 onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} />
             <button type="submit" data-testid="admin-ask" disabled={!text.trim() || state.busy}>{state.busy ? '…' : 'Plan'}</button>

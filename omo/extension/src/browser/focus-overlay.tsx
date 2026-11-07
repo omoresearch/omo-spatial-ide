@@ -304,7 +304,7 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
     const keepFocus = (event: React.MouseEvent): void => { if (event.target === event.currentTarget) event.preventDefault(); };
     const layer = <div ref={box} className={`omo-focus-layer ${state.full ? 'is-full' : 'is-screen'} ${settled ? 'is-settled' : ''} ${split ? 'is-split' : ''}`}
         data-testid="focus-layer" data-station={station} data-phase={state.phase} data-full={String(state.full)} data-split={String(split)}
-        data-comfort={String(focus.comfort)} onMouseDown={keepFocus}>
+        data-comfort={String(focus.comfort)} data-many={focus.stationIds().length > 3 ? 'true' : undefined} onMouseDown={keepFocus}>{/* t4:polish: 4+ desks shed bar text earlier */}
         <div className="omo-focus-bar" role="toolbar" aria-label="Attached screen" onMouseDown={keepFocus}>
             <span className={`omo-focus-dot ${live ? 'is-live' : ''}`} title={live ? 'Live' : status} aria-hidden="true" />
             <strong className="omo-focus-project" data-testid="focus-project">{desk.state.workspace?.name ?? 'Omo'}</strong>

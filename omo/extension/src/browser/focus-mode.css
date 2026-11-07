@@ -244,6 +244,25 @@
     .omo-focus-bar .omo-focus-desks button { padding: 0 8px; }
 }
 @container omo-focus (max-width: 900px) { .omo-focus-layer.is-split .omo-focus-panes { flex-direction: column; } }
+/* t4:polish — 4+ desks: the desk group is wider, so the same steps start earlier (Walk / More stayed off the edge at 1440 px).
+   Last resort for long desk names: the desk group shrinks and names end in an ellipsis (full name in title and aria-label);
+   Full screen, Walk and More never shrink. */
+.omo-focus-bar .omo-focus-desks { flex: 0 0.001 auto; min-width: 0; } /* shrinks only after the keys chip has given way */
+.omo-focus-bar .omo-focus-desks button { flex: 0 1 auto; min-width: 28px; }
+.omo-focus-desk-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.omo-focus-bar .omo-focus-desks kbd, .omo-focus-desk-short { flex: 0 0 auto; }
+@container omo-focus (max-width: 1640px) { .omo-focus-layer[data-many="true"] .omo-focus-bar .omo-focus-desks kbd { display: none; } }
+@container omo-focus (max-width: 1500px) {
+    .omo-focus-layer[data-many="true"] .omo-focus-tab-new .omo-focus-tab-label { display: none; }
+    .omo-focus-layer[data-many="true"] .omo-focus-bar .omo-focus-tab-new { padding: 0 6px; }
+    .omo-focus-layer[data-many="true"] .omo-focus-keys:not(.is-on) { display: none; }
+}
+@container omo-focus (max-width: 1380px) { .omo-focus-layer[data-many="true"] .omo-focus-bar .omo-focus-label { display: none; } }
+@container omo-focus (max-width: 1120px) {
+    .omo-focus-layer[data-many="true"] .omo-focus-desk-name, .omo-focus-layer[data-many="true"] .omo-focus-keys-lead,
+    .omo-focus-layer[data-many="true"] .omo-focus-bar [data-testid="focus-exit"] kbd { display: none; }
+    .omo-focus-layer[data-many="true"] .omo-focus-desk-short { display: inline; min-width: 10px; text-align: center; }
+}
 /* Overview camera: attaching needs first person, so the launcher hides. */
 .omo-scene-wrap:not(.omo-walking) .omo-focus-launch { display: none; }
 

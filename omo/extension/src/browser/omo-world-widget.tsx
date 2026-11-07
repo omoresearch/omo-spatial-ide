@@ -19,7 +19,7 @@ import type { RoomLayoutId, RoomKitId, PlayerPose } from '../common/player-state
 import { OmoRuntimeService } from '../common/runtime-protocol';
 import type { RuntimeFrame } from '../common/runtime-protocol';
 import { RuntimeConsoleController, RuntimeConsoleState, StationBinding } from './runtime-console-controller';
-import { WorldStations, StationInfo, WORLD_CHANGED_EVENT, loadWorld, linkedEntities, saveWorldOps, stationInfos } from './world-stations'; // w2:runtime
+import { WorldStations, StationInfo, WORLD_CHANGED_EVENT, loadWorld, linkedEntities, saveWorldOps, stationInfos, lockedLayoutReason } from './world-stations'; // w2:runtime
 import type { WorldChangedDetail } from './world-stations'; // w2:runtime
 import { RuntimeConsoleStrip } from './runtime-console-strip';
 import { OmoWebService, WebSurfaceFrame } from '../common/web-runtime-protocol';
@@ -267,6 +267,8 @@ export class OmoWorldWidget extends ReactWidget {
     private recipes: StationRecipe[]=[];
     private stationLocks: StationLocks={ terminal: false, 'terminal-2': false };
     private get anyStationLocked(): boolean { return this.stationList.some(s => this.stations.locked(s.id)); } // w2:runtime
+    /** t4:polish — the room layout lock note names every locked desk. */
+    private get layoutLockReason(): string { return lockedLayoutReason(this.stationList.filter(s => this.stations.locked(s.id)).map(s => ({ name: s.name, inSetup: this.stations.configLocked(s.id) }))); }
     private pushStationLocks(): void { this.stations?.pushLocks(); } // w2:runtime
     private setStationLock = (station: string, locked: boolean): void => {
         if (!this.project) return;
@@ -499,12 +501,12 @@ export class OmoWorldWidget extends ReactWidget {
         }
         this.update();
     }
-    private joinPresence=(roomId:string,name:string):void=>{
+    private joinPresence=(roomId:string,name:string):void=>{this.stations.disarmSetup(); /* t4:polish */
         if(!this.room||!this.project)return;
         this.worldScene?.releaseTyping();
         void this.presence?.join({roomId,name,projectUri:this.project.toString(),theme:this.room.theme,layout:this.room.layout??'classic',clientId:this.tabIdentity}).catch(error=>{this.error=String(error);this.update();});
     };
-    private leavePresence=():void=>{this.worldScene?.releaseTyping();void this.presence?.leave().catch(error=>{this.error=String(error);this.update();});};
+    private leavePresence=():void=>{this.stations.disarmSetup(); /* t4:polish */this.worldScene?.releaseTyping();void this.presence?.leave().catch(error=>{this.error=String(error);this.update();});};
     private projectChanged(next: URI | undefined): void {
         if (next?.toString() === this.project?.toString()) return;
         this.invalidatePresetRead(); this.draftCamera = undefined; this.presetStatus = ''; this.draftWorld = undefined; this.draftWorldSource = undefined; // w2:templates
@@ -525,6 +527,7 @@ export class OmoWorldWidget extends ReactWidget {
             } catch { /* storage errors were reported at start-up */ }
         }
         void this.web?.close();
+        this.stations.disarmSetup(); // t4:polish: a project change never carries a first-open arm
         this.readWorld(false); // w2:runtime
         this.stations.forEach((controller, id) => { const binding = this.binding(id); if (binding) void controller.reconnect(binding); else controller.release(); });
         if (this.room) this.stations.reconnectSaved(this.bindingContext());
@@ -571,7 +574,7 @@ export class OmoWorldWidget extends ReactWidget {
         const old = this.consoleStates[station] ?? RuntimeConsoleController.initial(); // w2:runtime: any station id
         const framed = state.lines !== old.lines || state.cursor !== old.cursor || state.truecolor !== old.truecolor || state.statusText !== old.statusText || state.workspace !== old.workspace || state.activeTabId !== old.activeTabId || state.unreadBells !== old.unreadBells;
         this.consoleStates[station] = state;
-        if (this.stations?.stored && this.room) this.stations.maybeOfferSetup(station, state, this.project?.toString()); // w2:runtime: StationConfig tabs, confirm first
+        if (this.stations && this.room) this.stations.maybeOfferSetup(station, state, this.project?.toString()); // w2:runtime: StationConfig tabs, confirm first; t4:polish: only after an explicit first open
         if (state.phase === 'live' && station === this.stationLink.targetStationId && !this.mirrorAttached && !this.mirrorAttaching) {
             // attachMirror clears its old frame synchronously. That is not a
             // disconnect and must not allow the next poll to start another attach.
@@ -599,7 +602,7 @@ export class OmoWorldWidget extends ReactWidget {
     }
     private createRoom = (): void => {
         if (!this.project || !this.draftName.trim() || this.presetLoading) return;
-        if (this.anyStationLocked && this.room && this.draftLayout !== (this.room.layout ?? 'classic')) { this.error = 'A desk is locked, so the room layout was not changed. Unlock it in Station recipes first.'; this.update(); return; }
+        if (this.anyStationLocked && this.room && this.draftLayout !== (this.room.layout ?? 'classic')) { this.error = `Not saved: ${this.layoutLockReason}`; this.update(); return; }
         this.invalidatePresetRead();
         const next: RoomState = { version: 1, theme: this.draftTheme, layout: this.draftLayout, kit: this.draftKit, projectUri: this.project.toString(),
             projectName: this.draftName.trim().slice(0, 120), camera: { ...(this.draftCamera ?? this.room?.camera ?? CAMERA) } };
@@ -734,7 +737,10 @@ export class OmoWorldWidget extends ReactWidget {
     private async openTerminal(station: string): Promise<void> {
         const binding = this.binding(station);
         if (!binding) throw new Error('Choose a project folder first.');
-        const controller = this.stations.controller(station); await controller?.bind(binding);
+        const controller = this.stations.controller(station);
+        if (!this.stations.hasSavedBinding(binding)) this.stations.armSetup(station); // t4:polish: the first explicit open of this desk may offer its setup (confirm first)
+        try { await controller?.bind(binding); } catch (error) { this.stations.disarmSetup(station); throw error; }
+        if (controller?.state.phase !== 'live') this.stations.disarmSetup(station); // t4:polish: a failed first open must not offer setup later on a reconnect
         if (this.activeMode === station) { this.feedback = controller?.state.phase === 'live' ? 'Live terminal on this monitor · Type here. Esc to walk away.' : controller?.state.error || controller?.state.statusText || ''; this.update(); }
     }
     private async openReviewSnapshot(): Promise<GitReviewSnapshot | undefined> {
@@ -949,7 +955,7 @@ export class OmoWorldWidget extends ReactWidget {
                     <div className="omo-step-title"><span>02</span> Make it yours</div>
                     <label className="omo-field">Room layout<select data-testid="room-layout" aria-label="Room layout" value={layout} disabled={this.presetLoading || this.busy || this.anyStationLocked} onChange={event => { this.draftLayout = event.target.value as RoomLayoutId; this.update(); }}>
                         {(Object.keys(ROOM_LAYOUTS) as RoomLayoutId[]).map(key => <option key={key} value={key}>{ROOM_LAYOUTS[key].label}</option>)}
-                    </select><small>{ROOM_LAYOUTS[layout].description}</small>{this.anyStationLocked && <small data-testid="room-layout-locked" role="note">🔒 A desk is locked, so the room layout cannot change. Unlock it in Station recipes.</small>}</label>
+                    </select><small>{ROOM_LAYOUTS[layout].description}</small>{this.anyStationLocked && <small data-testid="room-layout-locked" role="note">🔒 {this.layoutLockReason}</small>}</label>
                     <label className="omo-field">Room kit<select data-testid="room-kit" aria-label="Room kit" value={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} disabled={this.presetLoading || this.busy} onChange={event => { this.draftKit = event.target.value as RoomKitId; this.update(); }}>
                         {(Object.keys(ROOM_KITS) as RoomKitId[]).map(key => <option key={key} value={key}>{ROOM_KITS[key].label}</option>)}
                     </select><small>{ROOM_KITS[this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'].description}</small></label>
