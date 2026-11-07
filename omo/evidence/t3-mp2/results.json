@@ -1,8 +1,39 @@
 {
   "lane": "t3-mp2",
-  "code_commit": "cd1481ce1",
-  "status": "INCOMPLETE: code parts 1-3 written, type-check clean, NOT verified end to end; part 4 two-app test not written",
-  "ran": { "tsc -p extension": "exit 0", "node --check server ide-wire, server, cli": "ok" },
-  "not_run": ["npm run build (browser bundle not rebuilt)", "server/test/ide-client-smoke.cjs", "remote-two-app-real.cjs (not written)", "voice getStats", "screenshots", "npm test"],
-  "known_risk": "ide-client-smoke.cjs line 56 expects role member from an IDE invite with no role; the server now gives builder in that case and the welcome now carries the real server role"
+  "status": "PASS: two-app multiplayer verified in real Chrome through the real UI (23/23)",
+  "two_app_test": {
+    "script": "omo/extension/test/remote-two-app-real.cjs",
+    "summary": "23/23 checks passed",
+    "pass": true,
+    "results": "omo/evidence/t3-mp2/remote-two-app-results.json",
+    "room_server": "plain http on 127.0.0.1:3540 (loopback only) with --trace-frames test tap",
+    "apps": "127.0.0.1:3541 (A) and :3542 (B), separate THEIA_CONFIG_DIR/OMO_SPATIAL_DATA/tmux socket/project",
+    "screenshots": [
+      "evidence/t3-mp2/mp2-B-member-refused.png",
+      "evidence/t3-mp2/mp2-A-room-sees-B.png",
+      "evidence/t3-mp2/mp2-B-room-sees-A.png",
+      "evidence/t3-mp2/mp2-voice-panel.png"
+    ]
+  },
+  "fix_in_this_lane": "voice-controller.ts (t3:mp2): mute / push-to-talk release now detaches the mic from each RTCRtpSender (replaceTrack(null)); before, track.enabled=false still sent silence frames, so A's outbound bytes kept growing (run 1: 21/22). After fix: outbound bytes and packets frozen while muted, grow again after unmute.",
+  "run1_failure": "mute stops A outbound bytes: A_outboundBytes 16985 -> 17459, packetsSent 298 -> 456 while muted",
+  "regression_after_fix": {
+    "tsc -p extension": "exit 0",
+    "npm test": "418/418",
+    "npm run build": "exit 0 (evidence/t3-mp2/build.log)",
+    "voice-mesh-real-chrome.cjs": "pass (evidence/t3-mp2/voice-mesh-regress.log)"
+  },
+  "earlier": {
+    "server check": "ok",
+    "server e2e": "60/60",
+    "client": "7/7",
+    "ide-client-smoke": "19/19"
+  },
+  "not_covered": [
+    "Tailscale Serve/cert/Funnel",
+    "two physical computers",
+    "TURN relay in the two-app run"
+  ],
+  "docs": "omo/server/DEPLOY-TAILSCALE.md: Known blocker removed, in-app host/join steps added, verified table added",
+  "cleanup": "all started processes stopped (no listeners on 3540-3569 after run)"
 }

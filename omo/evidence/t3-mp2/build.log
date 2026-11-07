@@ -18,9 +18,9 @@ Pinned IDE extensions are ready (8643 files).
 Could not resolve optional peer dependency '@theia/electron'. Skipping...
 [build/browser] Build started
 
-[build/browser] Finished with 0 errors in 1522ms.
+[build/browser] Finished with 0 errors in 960ms.
 
 [build/node] Build started
 
-[build/node] Finished with 0 errors in 648ms.
+[build/node] Finished with 0 errors in 485ms.
 

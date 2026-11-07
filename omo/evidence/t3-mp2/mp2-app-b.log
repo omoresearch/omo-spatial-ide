@@ -1,0 +1,74 @@
+Backend main: entry point loaded [0.164 s since backend process start]
+Backend server: loading modules... [0.167 s since backend process start]
+Backend server: container created [0.264 s since backend process start]
+Backend server: modules loaded [0.361 s since backend process start]
+Configuration directory URI: 'file:///home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia'
+Backend server: resolving application [0.380 s since backend process start]
+Configuring to accept webviews on '^.+\.webview\..+$' hostname.
+2026-11-07T06:23:48.893Z root WARN Backend DefaultMessagingService.initialize took longer than the expected maximum 50 milliseconds: 91.2 ms [0.483 s since backend process start]
+2026-11-07T06:23:48.893Z root WARN Backend Object.initialize took longer than the expected maximum 50 milliseconds: 89.6 ms [0.483 s since backend process start]
+2026-11-07T06:23:48.894Z root WARN Backend PluginLocalizationServer.initialize took longer than the expected maximum 50 milliseconds: 100.4 ms [0.494 s since backend process start]
+2026-11-07T06:23:48.898Z core:BackendApplication INFO configured all backend app contributions
+2026-11-07T06:23:48.903Z core:BackendApplication INFO Theia app listening on http://127.0.0.1:3542.
+2026-11-07T06:23:48.903Z root INFO Settings file not found at '/home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia/backend-settings.json'. Falling back to defaults.
+2026-11-07T06:23:48.905Z root INFO Backend application startup sequence completed (async work may still be pending): 9.3 ms [0.509 s since backend process start]
+2026-11-07T06:23:48.905Z root INFO All backend contributions settled: 128.0 ms [0.509 s since backend process start]
+2026-11-07T06:23:48.907Z root WARN The local plugin referenced by local-dir:/home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia/plugins does not exist.
+2026-11-07T06:23:48.907Z root WARN The local plugin referenced by local-dir:/home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia/deployedPlugins does not exist.
+2026-11-07T06:23:48.909Z plugin-ext:PluginDeployerImpl WARN Only user plugins will be handled by file handlers, please unpack the plugin '.omo-ide-bundle.json' manually.
+2026-11-07T06:23:48.974Z root INFO Resolve plugins list: 69.7 ms [0.578 s since backend process start]
+2026-11-07T06:23:48.976Z root ERROR Failed to load plugin localization bundles from file:///home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia/.omo-ide-runtime-R2jybz/ms-python.debugpy/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia/.omo-ide-runtime-R2jybz/ms-python.debugpy/./l10n'
+2026-11-07T06:23:48.978Z root ERROR Failed to load plugin localization bundles from file:///home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia/.omo-ide-runtime-R2jybz/ms-python.python/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia/.omo-ide-runtime-R2jybz/ms-python.python/./l10n'
+2026-11-07T06:23:49.077Z root ERROR Failed to load plugin localization bundles from file:///home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia/.omo-ide-runtime-R2jybz/ms-python.python/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/app-b/theia/.omo-ide-runtime-R2jybz/ms-python.python/./l10n'
+2026-11-07T06:23:49.091Z root INFO Deploy plugins list: 187.5 ms [0.696 s since backend process start]
+2026-11-07T06:23:55.810Z root INFO creating connection for d0b1c607-1220-48c9-beed-d38fe33ae1fc
+2026-11-07T06:23:56.405Z root INFO Detected keyboard layout from browser API: US (PC)
+2026-11-07T06:23:56.680Z root WARN Linked preference "workbench.colorCustomizations" not found.
+2026-11-07T06:23:56.680Z root WARN Linked preference "editor.experimental.preferTreeSitter" not found.
+2026-11-07T06:23:56.692Z SkillService INFO Loaded 21 skills
+2026-11-07T06:23:56.694Z root WARN Frontend SkillPromptCoordinator.onStart took longer than the expected maximum 100 milliseconds: 259.3 ms [1.669 s since frontend page start]
+2026-11-07T06:23:56.703Z root INFO Start frontend contributions: 422.6 ms [1.672 s since frontend page start]
+2026-11-07T06:23:56.704Z root INFO Changed application state from 'init' to 'started_contributions'.
+2026-11-07T06:23:56.704Z root INFO Changed application state from 'started_contributions' to 'attached_shell'.
+2026-11-07T06:23:56.704Z root INFO >>> Restoring the layout state...
+2026-11-07T06:23:56.704Z root INFO <<< Nothing to restore.
+2026-11-07T06:23:56.709Z root INFO [dedaf457-9cf9-4099-9926-17e14d1cb933] Waiting for backend deployment: 11.3 ms [1.683 s since frontend page start]
+2026-11-07T06:23:56.889Z root INFO [hosted-plugin: 1830338] PLUGIN_HOST(1830338) starting instance
+2026-11-07T06:23:56.926Z root INFO [dedaf457-9cf9-4099-9926-17e14d1cb933] Sync of 93 plugins: 208.7 ms [1.891 s since frontend page start]
+2026-11-07T06:23:57.074Z root INFO [dedaf457-9cf9-4099-9926-17e14d1cb933] Loading plugin contributions
+2026-11-07T06:23:57.074Z root WARN Property with id 'python.venvPath' already exists
+2026-11-07T06:23:57.074Z root WARN Trying to register default override for non-existent preference: workbench.editor.restoreViewState
+2026-11-07T06:23:57.074Z root WARN Trying to register default override for non-existent preference: workbench.editor.restoreViewState
+2026-11-07T06:23:57.074Z root INFO [dedaf457-9cf9-4099-9926-17e14d1cb933] Load contributions of 93 plugins: 94.1 ms [2.045 s since frontend page start]
+2026-11-07T06:23:57.079Z root WARN 'cpp' language is remapped from 'source.cpp.embedded.macro' to 'source.cpp' scope
+2026-11-07T06:23:57.080Z root WARN a registered grammar configuration for 'cpp' language is overridden
+2026-11-07T06:23:57.080Z plugin-ext:PluginContributionHandler WARN [dedaf457-9cf9-4099-9926-17e14d1cb933][vscode.html]: Language for 'source.smarty' not found.
+2026-11-07T06:23:57.080Z plugin-ext:PluginContributionHandler WARN [dedaf457-9cf9-4099-9926-17e14d1cb933][vscode.markdown]: Language for 'meta.embedded.block.vs_net' not found.
+2026-11-07T06:23:57.080Z plugin-ext:PluginContributionHandler WARN [dedaf457-9cf9-4099-9926-17e14d1cb933][vscode.markdown]: Language for 'meta.embedded.block.dosbatch' not found.
+2026-11-07T06:23:57.084Z plugin-ext:PluginContributionHandler WARN [dedaf457-9cf9-4099-9926-17e14d1cb933][vscode.markdown]: Language for 'meta.embedded.block.coffee' not found.
+2026-11-07T06:23:57.084Z plugin-ext:PluginContributionHandler WARN [dedaf457-9cf9-4099-9926-17e14d1cb933][vscode.markdown]: Language for 'meta.embedded.block.objc' not found.
+2026-11-07T06:23:57.084Z plugin-ext:PluginContributionHandler WARN [dedaf457-9cf9-4099-9926-17e14d1cb933][vscode.markdown]: Language for 'meta.embedded.block.perl6' not found.
+2026-11-07T06:23:57.084Z plugin-ext:PluginContributionHandler WARN [dedaf457-9cf9-4099-9926-17e14d1cb933][vscode.markdown]: Language for 'meta.embedded.block.scala' not found.
+2026-11-07T06:23:57.084Z root WARN 'php' language is remapped from 'source.php' to 'text.html.php' scope
+2026-11-07T06:23:57.084Z root WARN a registered grammar configuration for 'php' language is overridden
+2026-11-07T06:23:57.350Z root WARN Linked preference "debug.node.autoAttach" not found.
+2026-11-07T06:23:57.469Z root WARN Frontend TerminalFrontendContribution.initializeLayout took longer than the expected maximum 100 milliseconds: 762.0 ms [2.443 s since frontend page start]
+2026-11-07T06:23:57.532Z root INFO Initialize the workbench layout: 823.3 ms [2.504 s since frontend page start]
+2026-11-07T06:23:57.536Z root INFO Changed application state from 'attached_shell' to 'initialized_layout'.
+2026-11-07T06:23:58.924Z plugin-host INFO PLUGIN_HOST(1830338): PluginManagerExtImpl/init()
+2026-11-07T06:23:59.042Z plugin-manager WARN Unsupported activation events: onLanguageModelTool:get_python_environment_details, onLanguageModelTool:get_python_executable_details, onLanguageModelTool:install_python_packages, onLanguageModelTool:configure_python_environment, onLanguageModelTool:create_virtual_environment, onTerminalShellIntegration:python, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T06:23:59.042Z plugin-manager WARN Unsupported activation events: onProfile, onProfile:github, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T06:23:59.042Z plugin-manager WARN Unsupported activation events: onOpenExternalUri:http, onOpenExternalUri:https, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T06:23:59.042Z plugin-manager WARN Unsupported activation events: onWalkthrough:nodejsWelcome, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T06:23:59.043Z plugin-manager WARN Unsupported activation events: onEditSession:file, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T06:23:59.043Z plugin-manager WARN Unsupported activation events: onTerminalShellIntegration:*, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T06:23:59.043Z plugin-manager WARN Unsupported activation events: onTunnel, please open an issue: https://github.com/eclipse-theia/theia/issues/new
+2026-11-07T06:23:59.221Z root INFO [dedaf457-9cf9-4099-9926-17e14d1cb933] Starting plugins.
+2026-11-07T06:23:59.346Z root INFO [dedaf457-9cf9-4099-9926-17e14d1cb933] Start of 93 plugins: 2276.3 ms [4.323 s since frontend page start]
+2026-11-07T06:23:59.639Z core:ApplicationShell WARN Widget was activated, but did not accept focus after 2000ms: omo-world
+2026-11-07T06:23:59.808Z root WARN Frontend OmoWorldContribution.onDidInitializeLayout took longer than the expected maximum 100 milliseconds: 2265.9 ms [4.784 s since frontend page start]
+2026-11-07T06:24:00.615Z root INFO Frontend application startup sequence completed (async work may still be pending): 4265.1 ms [12.219 s since backend process start]
+2026-11-07T06:24:00.615Z root INFO Replace loading indicator with ready workbench UI (animation): 806.3 ms [5.590 s since frontend page start]
+2026-11-07T06:24:00.615Z root INFO Changed application state from 'initialized_layout' to 'ready'.
+2026-11-07T06:24:00.615Z root INFO All frontend contributions settled: 4341.5 ms [5.591 s since frontend page start]
+2026-11-07T06:24:18.803Z root WARN [omo] remote room: your role is now member

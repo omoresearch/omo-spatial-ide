@@ -1,0 +1,253 @@
+{
+  "lane": "t3-mp2",
+  "test": "extension/test/remote-two-app-real.cjs",
+  "startedAt": "2026-11-07T06:23:45.542Z",
+  "setup": {
+    "roomServer": "http://127.0.0.1:3540 (plain http, loopback only, --trace-frames test tap)",
+    "appA": "http://127.0.0.1:3541",
+    "appB": "http://127.0.0.1:3542",
+    "chrome": "/opt/google/chrome/chrome",
+    "modelCalls": 0
+  },
+  "checks": {
+    "create-room printed an owner key": {
+      "pass": true,
+      "detail": "Room created: two-app-room (Two app room)"
+    },
+    "room server up on loopback plain http": {
+      "pass": true,
+      "detail": "http://127.0.0.1:3540/healthz"
+    },
+    "two separate Omo apps serve": {
+      "pass": true,
+      "detail": {
+        "A": "http://127.0.0.1:3541",
+        "B": "http://127.0.0.1:3542",
+        "socketA": "omo-2app-app-a-1826726",
+        "socketB": "omo-2app-app-b-1826726"
+      }
+    },
+    "both apps opened in their own headless Chrome and created a local room": {
+      "pass": true
+    },
+    "A hosts through \"Host a room\" (server URL + owner key)": {
+      "pass": true,
+      "detail": "Connected to Two app room on http://127.0.0.1:3540 · you host this room."
+    },
+    "A creates an invite link": {
+      "pass": true,
+      "detail": {
+        "link": "http://127.0.0.1:3540/omo-room/join/two-app-room#invite=<redacted>",
+        "uiDefaultInviteRole": "member",
+        "chosen": "builder"
+      }
+    },
+    "B joins by pasting the invite link (role builder)": {
+      "pass": true,
+      "detail": "Connected to Two app room on http://127.0.0.1:3540 · your role: builder."
+    },
+    "presence list both ways": {
+      "pass": true,
+      "detail": {
+        "A_strip": "Harry (you)Kaviru",
+        "B_strip": "HarryKaviru (you)",
+        "A_panel": "Harry (you) · host | Kaviru · builder | viewer · looks only | member · chat, voice, agent status | builder · also edits the room",
+        "B_panel": "Harry · host | Kaviru (you) · builder"
+      }
+    },
+    "avatars both ways + peer avatar moves when A walks": {
+      "pass": true,
+      "detail": {
+        "A_sees": [
+          "Kaviru"
+        ],
+        "B_sees": [
+          "Harry"
+        ],
+        "A_on_B_before": {
+          "x": 0,
+          "z": 4.1
+        },
+        "A_on_B_after": {
+          "x": -1.3598769345700854,
+          "z": 4.1
+        }
+      }
+    },
+    "chat both ways": {
+      "pass": true,
+      "detail": {
+        "A_to_B": "hello from Harry",
+        "B_to_A": "hi Harry, Kaviru here"
+      }
+    },
+    "unique string typed into A's real terminal and echoed by the shell": {
+      "pass": true,
+      "detail": "omo-term-only-347a7b50bc88"
+    },
+    "A desk -> B within 10 s": {
+      "pass": true,
+      "detail": {
+        "placedAt": {
+          "x": 451,
+          "y": 752,
+          "ghost": "-5,4.7,0,true"
+        },
+        "newStation": "desk-1",
+        "msToB": 1038,
+        "A": [
+          "terminal",
+          "terminal-2",
+          "desk-1"
+        ],
+        "B": [
+          "terminal",
+          "terminal-2",
+          "desk-1"
+        ],
+        "notice": ""
+      }
+    },
+    "B builder edit -> A": {
+      "pass": true,
+      "detail": {
+        "placedAt": {
+          "x": 451,
+          "y": 719,
+          "ghost": "-3,4.7,0,true"
+        },
+        "newEntity": "plant-1",
+        "msToA": 1033
+      }
+    },
+    "member-role edit refused with readable message": {
+      "pass": true,
+      "detail": {
+        "bStatus": "Connected to Two app room on http://127.0.0.1:3540 · your role: member.",
+        "message": "Your role in this room is “member”: you can chat, talk and share agent status, but only builders and the owner can change the room. Ask the room owner to make you a builder. Nothing was changed.",
+        "roomRevisionUnchanged": "2 -> 2"
+      }
+    },
+    "screenshots A and B rooms": {
+      "pass": true,
+      "detail": {
+        "A_peers": [
+          {
+            "name": "Kaviru",
+            "visible": true
+          }
+        ],
+        "B_peers": [
+          {
+            "name": "Harry",
+            "visible": true
+          }
+        ]
+      }
+    },
+    "voice connected + audio both ways": {
+      "pass": true,
+      "detail": {
+        "A": {
+          "states": [
+            "connected"
+          ],
+          "inboundBytes": [
+            1226,
+            14291
+          ],
+          "outboundBytes": [
+            1230,
+            14296
+          ]
+        },
+        "B": {
+          "states": [
+            "connected"
+          ],
+          "inboundBytes": [
+            1719,
+            14620
+          ],
+          "outboundBytes": [
+            1708,
+            14615
+          ]
+        },
+        "signalFramesThroughRoomServer": 262
+      }
+    },
+    "mute stops A outbound bytes": {
+      "pass": true,
+      "detail": {
+        "A_outboundBytes": [
+          16726,
+          16726
+        ],
+        "A_packetsSent": [
+          206,
+          206
+        ],
+        "B_inboundBytes": [
+          16726,
+          16726
+        ]
+      }
+    },
+    "unmute: A outbound bytes grow again and B receives them": {
+      "pass": true,
+      "detail": {
+        "A_outboundBytes": [
+          24826,
+          35923
+        ],
+        "B_inboundBytes": [
+          25393,
+          36247
+        ],
+        "A_states": [
+          "connected"
+        ]
+      }
+    },
+    "B leaves -> A drops B": {
+      "pass": true,
+      "detail": {
+        "A_strip": "Harry (you)",
+        "B_chip": "Remote room"
+      }
+    },
+    "terminal string never in server log or any relayed frame": {
+      "pass": true,
+      "detail": {
+        "unique": "omo-term-only-347a7b50bc88",
+        "framesTraced": 1027,
+        "inTrace": false,
+        "inServerLog": false,
+        "serverLogBytes": 508
+      }
+    },
+    "no owner key in trace or server log": {
+      "pass": true
+    },
+    "no fixture agent started": {
+      "pass": true
+    },
+    "no page errors": {
+      "pass": true,
+      "detail": {
+        "A": [],
+        "B": []
+      }
+    }
+  },
+  "screenshots": [
+    "evidence/t3-mp2/mp2-B-member-refused.png",
+    "evidence/t3-mp2/mp2-A-room-sees-B.png",
+    "evidence/t3-mp2/mp2-B-room-sees-A.png",
+    "evidence/t3-mp2/mp2-voice-panel.png"
+  ],
+  "pass": true,
+  "finishedAt": "2026-11-07T06:24:45.162Z",
+  "summary": "23/23 checks passed"
+}

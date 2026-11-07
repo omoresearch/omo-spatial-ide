@@ -212,7 +212,8 @@ async function step(name, fn) {
         await step('presence list both ways', async () => {
             const both = p => p.waitForFunction(() => { const t = document.querySelector('[data-testid="presence-members"]')?.textContent || ''; return t.includes('Harry') && t.includes('Kaviru') ? t : false; }, { timeout: 15000 }).then(h => h.jsonValue());
             const ta = await both(A.page), tb = await both(B.page);
-            const ra = await A.page.$eval('[data-testid="remote-room-members"]', e => e.innerText), rb = await B.page.$eval('[data-testid="remote-room-members"]', e => e.innerText);
+            const panelBoth = p => p.waitForFunction(() => { const t = document.querySelector('[data-testid="remote-room-members"]')?.innerText || ''; return t.includes('Harry') && t.includes('Kaviru') ? t : false; }, { timeout: 15000 }).then(h => h.jsonValue());
+            const ra = await panelBoth(A.page), rb = await panelBoth(B.page);
             check('presence list both ways', true, { A_strip: ta, B_strip: tb, A_panel: ra.replace(/\n+/g, ' | '), B_panel: rb.replace(/\n+/g, ' | ') });
         });
         await panel(A.page, false); await panel(B.page, false);
@@ -344,11 +345,11 @@ async function step(name, fn) {
             const m1 = await voiceStats(A.page), bIn1 = await voiceStats(B.page);
             await pause(3000);
             const m2 = await voiceStats(A.page), bIn2 = await voiceStats(B.page);
-            check('mute stops A outbound bytes', m2.bytesSent === m1.bytesSent, { A_outboundBytes: [m1.bytesSent, m2.bytesSent], A_packetsSent: [m1.packetsSent, m2.packetsSent], B_inboundBytes: [bIn1.bytesReceived, bIn2.bytesReceived] });
+            check('mute stops A outbound bytes', m2.bytesSent === m1.bytesSent && m2.packetsSent === m1.packetsSent, { A_outboundBytes: [m1.bytesSent, m2.bytesSent], A_packetsSent: [m1.packetsSent, m2.packetsSent], B_inboundBytes: [bIn1.bytesReceived, bIn2.bytesReceived] });
             await click(A.page, '[data-testid="voice-mute"]');
             await pause(2000);
-            const u1 = await voiceStats(A.page); await pause(2000); const u2 = await voiceStats(A.page);
-            results.checks['mute stops A outbound bytes'].detail.afterUnmuteOutbound = [u1.bytesSent, u2.bytesSent];
+            const u1 = await voiceStats(A.page), ub1 = await voiceStats(B.page); await pause(2500); const u2 = await voiceStats(A.page), ub2 = await voiceStats(B.page);
+            check('unmute: A outbound bytes grow again and B receives them', u2.bytesSent > u1.bytesSent && ub2.bytesReceived > ub1.bytesReceived && u2.states.includes('connected'), { A_outboundBytes: [u1.bytesSent, u2.bytesSent], B_inboundBytes: [ub1.bytesReceived, ub2.bytesReceived], A_states: u2.states });
         });
 
         // ---------- B leaves ----------

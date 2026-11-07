@@ -401,7 +401,7 @@ export class RoomVoiceController {
         const old = this.stream; this.stream = next;
         const track = next.getAudioTracks()[0];
         for (const peer of this.peers.values()) {
-            if (peer.sender) await peer.sender.replaceTrack(track).catch(() => undefined);
+            if (peer.sender) await peer.sender.replaceTrack(this.transmitting() ? track : null).catch(() => undefined); // t3:mp2
             else if (track) peer.sender = peer.pc.addTrack(track, next);
         }
         old.getTracks().forEach(t => t.stop());
@@ -444,8 +444,16 @@ export class RoomVoiceController {
     private applyTrack(force = false): void {
         const on = this.transmitting();
         this.stream?.getAudioTracks().forEach(track => { track.enabled = on; });
+        // t3:mp2 — a disabled track still sends silence frames; detach it from every sender so mute sends nothing.
+        for (const peer of this.peers.values()) this.syncSender(peer);
         if (force || on !== this.state.transmitting) this.emit({ transmitting: on, speaking: on ? this.state.speaking : false });
         void this.publish();
+    }
+    /** t3:mp2 — the sender carries the microphone only while transmitting (mute / push-to-talk released = no RTP). */
+    private syncSender(peer: Peer): void {
+        if (!peer.sender) return;
+        const want = this.transmitting() ? this.stream?.getAudioTracks()[0] ?? null : null;
+        if (peer.sender.track !== want) void peer.sender.replaceTrack(want).catch(() => undefined);
     }
     private async publish(force = false): Promise<void> {
         if (this.state.phase !== 'on' || !this.session) return;
@@ -569,7 +577,7 @@ export class RoomVoiceController {
         };
         pc.onconnectionstatechange = () => { if (!live()) return; if (pc.connectionState === 'connected') { peer.healthyAt = this.now(); peer.offerResends = 0; peer.everConnected = true; } this.applyVolumes(); };
         const track = this.stream?.getAudioTracks()[0];
-        if (track) peer.sender = pc.addTrack(track, this.stream!);
+        if (track) { peer.sender = pc.addTrack(track, this.stream!); this.syncSender(peer); } // t3:mp2
         else pc.addTransceiver('audio', { direction: 'recvonly' });
         return peer;
     }
