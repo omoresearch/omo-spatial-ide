@@ -42,6 +42,10 @@ import { defaultStationLink, readStationLink, writeStationLink, webWallDistance 
 import type { StationLink } from './station-link';
 // --- omo voice lane (mount hook): room voice, talk-to-agent dictation, agent avatars ---
 import { VoiceHub } from './voice-hub';
+import { RemoteRoomController, RoutedPresenceService } from './remote-room-controller'; // w2:mp-client
+import { RemoteRoomChip, RemoteRoomPanel } from './remote-room-panel'; // w2:mp-client
+import { OmoRemoteRoomService } from '../common/remote-room-protocol'; // w2:mp-client
+import { worldFromRoomV1 } from '../common/world-model'; // w2:mp-client
 import { VoicePanel } from './voice-panel';
 // --- end omo voice lane ---
 // --- omo parity2 lane (mount hook): room chat, agent notifications, follow/teleport, name colours, speaking HUD ---
@@ -115,6 +119,11 @@ export class OmoWorldWidget extends ReactWidget {
     @inject(FileService) protected readonly files!: FileService;
     @inject(FileDialogService) protected readonly dialogs!: FileDialogService;
     @inject(OmoImmersiveService) protected readonly immersive!: OmoImmersiveService; // omo immersive lane
+    @inject(OmoRemoteRoomService) protected readonly remoteRoomService!: OmoRemoteRoomService; // w2:mp-client
+    @inject(RoutedPresenceService) protected readonly presenceRouter!: RoutedPresenceService; // w2:mp-client
+    /** w2:mp-client: remote room lifecycle; `remoteRoom.world` is the WorldSource for the WorldStore while connected. */
+    remoteRoom?: RemoteRoomController;
+    private remotePanelOpen = false; // w2:mp-client
     private project?: URI;
     private room?: RoomState;
     private draftTheme: RoomTheme = 'station';
@@ -209,6 +218,12 @@ export class OmoWorldWidget extends ReactWidget {
             voice:()=>this.voiceHub?.state.voice,goToDesk:desk=>{this.chooseStation(desk);this.focusMode.sync();if(this.consoleStates[desk].phase==='live')this.focusMode.attachActive();else{this.feedback=`${desk==='terminal'?'Desk one':'Desk two'} is not connected. Click its monitor to reconnect. Nothing was started.`;this.update();}},onChange:()=>this.update()});
         this.toDispose.push({dispose:()=>{this.hudHub?.dispose();this.hudHub=undefined;}});
         // --- end omo parity2 lane ---
+        // --- w2:mp-client (mount hook): remote rooms reuse the same presence path; terminals stay local. Starts nothing. ---
+        this.remoteRoom=new RemoteRoomController(this.remoteRoomService,this.presenceRouter,{joinPresence:(roomId,name)=>this.joinPresence(roomId,name),leavePresence:()=>this.leavePresence(),
+            presence:()=>this.presenceState,agents:()=>this.voiceHub?.state.agents??[],seedWorld:()=>this.room?worldFromRoomV1({theme:this.room.theme,projectName:this.room.projectName,layout:this.room.layout,kit:this.room.kit}):undefined,
+            schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:()=>this.update()});
+        this.toDispose.push({dispose:()=>{this.remoteRoom?.dispose();this.remoteRoom=undefined;}});
+        // --- end w2:mp-client ---
         this.review=new GitReviewController(this.gitReviewService,state=>{
             this.reviewState=state;
             if(state.phase!=='idle'){
@@ -265,7 +280,8 @@ export class OmoWorldWidget extends ReactWidget {
         const old=this.personalRoom;
         this.presenceState=state;
         // Leave/connection loss removes presence, NOT the participant's current terminal bindings.
-        if(state.phase==='joined'&&state.join)this.personalRoom=state.join;
+        // w2:mp-client: a remote room keeps this person's own desks (their own backend), so no per-room desk scoping.
+        if(state.phase==='joined'&&state.join&&this.presenceRouter.route!=='remote')this.personalRoom=state.join;
         this.worldScene?.setPeers(state.snapshot?.members.filter(m=>m.id!==state.snapshot?.selfId)??[]);
         if(this.personalRoom&&(old?.roomId!==this.personalRoom.roomId||old?.clientId!==this.personalRoom.clientId)){
             this.worldScene?.releaseTyping();
@@ -626,6 +642,8 @@ export class OmoWorldWidget extends ReactWidget {
                     </div>
                     {this.room && !this.configuring && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
                         <PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>
+                        {/* w2:mp-client (mount hook) */}{this.remoteRoom&&<RemoteRoomChip view={this.remoteRoom.state} open={this.remotePanelOpen} onToggle={()=>{this.remotePanelOpen=!this.remotePanelOpen;this.update();}}/>}
+                        {/* w2:mp-client (mount hook) */}{this.remoteRoom&&this.remotePanelOpen&&<RemoteRoomPanel controller={this.remoteRoom} view={this.remoteRoom.state} onClose={()=>{this.remotePanelOpen=false;this.update();}}/>}
                         {/* omo voice lane (mount hook) */}{this.voiceHub&&<VoicePanel hub={this.voiceHub} view={this.voiceHub.state}/>}
                         <nav className="omo-station-switch" aria-label="Physical workstations"><button data-testid="station-one-controls" aria-pressed={this.activeMode === 'terminal'} onClick={()=>this.chooseStation('terminal')}>Desk one{this.consoleStates.terminal.unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-one-bell" role="status"> · Bell {this.consoleStates.terminal.unreadBells}</strong>}</button><button data-testid="station-two-controls" aria-pressed={this.activeMode === 'terminal-2'} onClick={()=>this.chooseStation('terminal-2')}>Desk two{this.consoleStates['terminal-2'].unreadBells > 0 && <strong className="omo-bell-alert" data-testid="station-two-bell" role="status"> · Bell {this.consoleStates['terminal-2'].unreadBells}</strong>}</button>{ROOM_KITS[this.room?.kit ?? 'hermes-desk'].webWall && <button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button>}<button data-testid="station-mirror-controls" onClick={()=>this.selectStation('mirror')}>Mirror · {this.stationLink.targetStationId === 'terminal' ? 'Desk one' : 'Desk two'}</button><button data-testid="station-recipe-toggle" aria-expanded={this.recipeOpen} onClick={()=>{this.recipeOpen=!this.recipeOpen;this.update();}}>Station recipes</button></nav>
                         {this.recipeOpen&&<StationRecipePanel recipes={this.recipes} stationId={this.activeStation} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} locked={this.stationLocks[this.activeStation]} onLock={locked=>this.setStationLock(this.activeStation,locked)} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)}/>}
