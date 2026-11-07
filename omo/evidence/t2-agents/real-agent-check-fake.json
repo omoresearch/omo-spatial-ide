@@ -1,0 +1,61 @@
+{
+  "startedAt": 1794023127630,
+  "finishedAt": 1794023137068,
+  "workspaceId": "f24718cc6bfc",
+  "projectUri": "file:///home/harry/.hermes/profiles/omo-dev/cache/scratch/t2a-explore/project",
+  "sentNothing": true,
+  "observations": [
+    {
+      "kind": "hermes",
+      "tabId": "a05a903ddc98",
+      "started": true,
+      "states": [
+        {
+          "at": 1794023127940,
+          "tabState": "running",
+          "status": "unknown",
+          "source": "none"
+        }
+      ]
+    },
+    {
+      "kind": "claude",
+      "tabId": "9ca28b4fab59",
+      "started": true,
+      "states": [
+        {
+          "at": 1794023127940,
+          "tabState": "running",
+          "status": "unknown",
+          "source": "none"
+        }
+      ]
+    },
+    {
+      "kind": "codex",
+      "tabId": "9fee9445cf7c",
+      "started": true,
+      "states": [
+        {
+          "at": 1794023127940,
+          "tabState": "running",
+          "status": "unknown",
+          "source": "none"
+        }
+      ]
+    },
+    {
+      "kind": "dsh",
+      "tabId": "62a18729eeae",
+      "started": true,
+      "states": [
+        {
+          "at": 1794023127940,
+          "tabState": "running",
+          "status": "unknown",
+          "source": "none"
+        }
+      ]
+    }
+  ]
+}

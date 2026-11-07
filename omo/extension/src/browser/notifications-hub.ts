@@ -22,6 +22,8 @@ export interface NoticeInputs {
     now(): number;
     /** w2:agents: real readings (hook, lease, process) for one agent key; the screen text stays the fallback. */
     signals?(key: string): AgentStatusReading[];
+    /** t2:agents: false until the first real-signal poll answered; screen-text approval hints wait for it. */
+    signalsReady?(): boolean;
 }
 
 const SOURCE_TEXT: Record<AgentStatusReading['source'], string> = { hook: 'reported by the agent', lease: 'Hermes turn state', process: 'process ended', screen: 'check the screen' };
@@ -48,7 +50,7 @@ export function looksLikeApproval(lines: string[]): boolean {
     return APPROVAL.test(lines.slice(-12).join('\n'));
 }
 
-interface Track { activity?: AgentPresence['activity']; since: number; approval: boolean; state?: SessionTab['state']; real?: AgentStatus; realSince?: number }
+interface Track { activity?: AgentPresence['activity']; since: number; approval: boolean; state?: SessionTab['state']; real?: AgentStatus; realSince?: number; ready?: boolean; idleSeen?: boolean /* t2:agents */ }
 
 let seq = 0;
 
@@ -87,18 +89,20 @@ export class NotificationsHub {
             // w2:agents: a real signal (hook > lease > process) decides when there is one; the screen text is the fallback.
             const real = realAgentStatus(this.inputs.signals?.(agent.key) ?? [], approval, now);
             const track: Track = { activity: agent.activity, since: old && old.activity === agent.activity ? old.since : now, approval, state: tab?.state,
-                real: real?.status, realSince: old && old.real === real?.status ? old.realSince : now };
+                real: real?.status, realSince: old && old.real === real?.status ? old.realSince : now, ready: this.inputs.signalsReady?.() ?? true,
+                idleSeen: !!old?.idleSeen || (!!old && agent.activity === 'idle') };
             this.tracks.set(agent.key, track);
             if (!old || !this.primed) continue; // first sight is history, not news
             const label = `${agentLabel(agent.kind, agent.tabName)} (${DESK_NAME[agent.desk] ?? agent.desk})`;
             const quiet = watching === agent.desk;
-            if (real) {
+            if (real && old.ready !== false) { // t2:agents: the first real reading after load is history, not news
                 if (old.real === 'working' && real.status === 'idle' && now - (old.realSince ?? now) >= FINISH_MIN_MS && !quiet) this.add('finished', agent.desk, label, tab?.id);
                 if (real.status === 'waiting-approval' && old.real !== 'waiting-approval') this.add('approval', agent.desk, label, tab?.id, SOURCE_TEXT[real.source]);
                 if (real.status === 'exited' && old.real !== 'exited' && old.state === 'running' && tab?.state === 'running') this.add('ended', agent.desk, label, tab?.id, SOURCE_TEXT[real.source]);
-            } else {
-                if (old.activity === 'working' && agent.activity === 'idle' && now - old.since >= FINISH_MIN_MS && !quiet) this.add('finished', agent.desk, label, tab?.id);
-                if (approval && !old.approval) this.add('approval', agent.desk, label, tab?.id, 'check the screen');
+            } else if (!real) {
+                // t2:agents: the screen guess needs one quiet moment first: a start-up banner is not a finished run.
+                if (old.activity === 'working' && agent.activity === 'idle' && now - old.since >= FINISH_MIN_MS && !quiet && old.idleSeen) this.add('finished', agent.desk, label, tab?.id);
+                if (approval && !old.approval && (this.inputs.signalsReady?.() ?? true)) this.add('approval', agent.desk, label, tab?.id, 'check the screen'); // t2:agents: a stale prompt of an ended agent is not news before its process reading arrives
             }
             if (old.state === 'running' && tab?.state === 'interrupted') this.add('interrupted', agent.desk, label, tab.id);
             if (old.state === 'running' && tab?.state === 'exited') this.add('ended', agent.desk, label, tab.id);

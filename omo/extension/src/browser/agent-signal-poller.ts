@@ -24,6 +24,7 @@ export class AgentSignalPoller {
     private handle: unknown;
     private disposed = false;
     private inFlight = false;
+    private polled = false; // t2:agents
 
     constructor(private readonly options: SignalPollerOptions) {
         this.handle = options.schedule(() => void this.loop(), 0);
@@ -31,6 +32,8 @@ export class AgentSignalPoller {
 
     /** Real readings for one agent key (`${desk}:${tabId}`); [] when none. */
     get(key: string): AgentStatusReading[] { return this.readings.get(key) ?? []; }
+    /** t2:agents: true after the first answered poll (before it, "no reading" only means "not asked yet"). */
+    get ready(): boolean { return this.polled; }
 
     /** One poll. Exposed for tests and for an explicit refresh. */
     async poll(): Promise<void> {
@@ -54,6 +57,7 @@ export class AgentSignalPoller {
             }
             const changed = JSON.stringify([...next]) !== JSON.stringify([...this.readings]);
             this.readings = next;
+            this.polled = true; // t2:agents
             if (changed) this.options.onChange?.();
         } catch {
             // backend unavailable: keep the last readings; the screen hint still works

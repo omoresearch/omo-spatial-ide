@@ -3,6 +3,7 @@ import type { AgentKind, SessionTab } from '../common/runtime-protocol';
 import { ROOM_LAYOUTS } from '../common/player-state';
 import { drawAgentGlyph } from './agent-glyphs';
 import { currentStations, stationPosition } from './world-stations'; // w2:runtime
+import { AgentStatus, AgentStatusReading, mergeStatus } from '../common/agent-status-signals'; // t2:agents
 import type { PlayerPose, RoomLayoutId } from '../common/player-state';
 
 /**
@@ -14,7 +15,7 @@ import type { PlayerPose, RoomLayoutId } from '../common/player-state';
  */
 
 export type DeskId = 'terminal' | 'terminal-2';
-export type AgentActivity = 'working' | 'idle' | 'background' | 'sleeping' | 'interrupted' | 'exited';
+export type AgentActivity = 'working' | 'idle' | 'approval' | 'background' | 'sleeping' | 'interrupted' | 'exited'; // t2:agents: approval
 export interface AgentPresence {
     key: string;
     desk: DeskId;
@@ -29,8 +30,8 @@ export interface VoiceIndicator { id: string; name: string; pose: PlayerPose; sp
 
 export const AGENT_KIND_LABEL: Record<Exclude<AgentKind, 'shell'>, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex', dsh: 'dsh' }; // w2:agents
 const KIND_COLOR: Record<Exclude<AgentKind, 'shell'>, number> = { hermes: 0xe9b949, claude: 0xe07a45, codex: 0x4f8fe8, dsh: 0x4d6bfe }; // w2:agents
-const ACTIVITY_COLOR: Record<AgentActivity, string> = { working: '#ffcf5a', idle: '#7fe0a4', background: '#b9c6d6', sleeping: '#9aa7b8', interrupted: '#ff6b6b', exited: '#9aa7b8' };
-const ACTIVITY_TEXT: Record<AgentActivity, string> = { working: 'working', idle: 'idle', background: 'running · other tab', sleeping: 'asleep', interrupted: 'interrupted', exited: 'ended' };
+const ACTIVITY_COLOR: Record<AgentActivity, string> = { working: '#ffcf5a', idle: '#7fe0a4', approval: '#ff9e4a', background: '#b9c6d6', sleeping: '#9aa7b8', interrupted: '#ff6b6b', exited: '#9aa7b8' };
+const ACTIVITY_TEXT: Record<AgentActivity, string> = { working: 'working', idle: 'idle', approval: 'waiting for approval', background: 'running · other tab', sleeping: 'asleep', interrupted: 'interrupted', exited: 'ended' };
 
 /** "Hermes · Research" — the mod pack's name-tag convention, with the tab name. */
 export function agentLabel(kind: Exclude<AgentKind, 'shell'>, tabName: string): string {
@@ -50,6 +51,15 @@ export function deskAgents(desk: DeskId, tabs: SessionTab[] | undefined, activeT
             : tab.id === activeTabId ? (screenWorking ? 'working' : 'idle') : 'background';
         return { key: `${desk}:${tab.id}`, desk, kind: tab.kind, tabName: tab.name, label: agentLabel(tab.kind, tab.name), activity };
     });
+}
+
+// t2:agents — the desk state follows the strongest REAL signal (Claude hook > Hermes lease > process tree)
+// when one exists; the screen-change guess above stays the fallback. Never overrides asleep/interrupted/ended tabs.
+const REAL_ACTIVITY: Partial<Record<AgentStatus, AgentActivity>> = { working: 'working', 'waiting-approval': 'approval', idle: 'idle', exited: 'exited' };
+export function withRealStatus(agent: AgentPresence, readings: readonly AgentStatusReading[], now: number): AgentPresence {
+    if (!readings.length || agent.activity === 'sleeping' || agent.activity === 'interrupted' || agent.activity === 'exited') return agent;
+    const activity = REAL_ACTIVITY[mergeStatus([...readings], now).status];
+    return activity && activity !== agent.activity ? { ...agent, activity } : agent;
 }
 
 /** Screen-centre of a desk monitor in world space (matches RoomScene.desk geometry). */

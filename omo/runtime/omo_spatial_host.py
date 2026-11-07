@@ -206,6 +206,7 @@ ob.tab_env = _tab_env_with_status
 DSH_PINNED_VERSION = "0.2.2-rc.1"
 DSH_INSTALL = f"npm install -g @deepseek-ai/dsh@{DSH_PINNED_VERSION}  (needs Node 24.9 or newer)"
 DSH_LAUNCH = os.path.join(HERE, "dsh_web_launch.py")
+DSH_NODE_INSTALL = "Install Node 24.9 or newer (for example: brew install node, or nvm install 24), then reopen Omo. Nothing was started."  # t2:agents
 RESERVED_PORTS = {3190, 3192, 3195, 3198, 3199}
 ob.TAB_KINDS = tuple(ob.TAB_KINDS) + (("dsh",) if "dsh" not in ob.TAB_KINDS else ())
 ob.TAB_NAMES = dict(ob.TAB_NAMES, dsh="dsh")
@@ -396,8 +397,11 @@ def agents():
     # w2:agents: dsh is optional and listed only when it is installed (it is never installed by Omo).
     if info.get("dsh", {}).get("found"):
         problem = dsh_node_problem()
-        out.append({"kind": "dsh", "available": not problem,
-                    "detail": problem or f"dsh found (Omo is tested with {DSH_PINNED_VERSION}); a dsh tab runs dsh web on a loopback port"})
+        entry = {"kind": "dsh", "available": not problem,
+                 "detail": problem.replace(dsh_launch.REVIVE_HINT, "") or f"dsh found (Omo is tested with {DSH_PINNED_VERSION}); a dsh tab runs dsh web on a loopback port"}
+        if problem:      # t2:agents: shown in the desk's hint row, not only in a disabled button's tooltip
+            entry["installHint"] = entry["detail"] + " " + DSH_NODE_INSTALL
+        out.append(entry)
     return out
 
 

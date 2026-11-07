@@ -1,0 +1,47 @@
+module.exports = async (ctx) => {
+    const { page, pause, fs } = ctx;
+    const CANVAS = 'canvas[data-testid="omo-world-canvas"]';
+    const S = '/home/harry/.hermes/profiles/omo-dev/cache/scratch/t2a-explore';
+    await require('./t2a-step1.js')(ctx);
+    const out = {};
+    await page.click('[data-testid="agents-toggle"]');
+    await page.waitForSelector('[data-testid="claude-status-enable"]', { timeout: 15000 });
+    out.before = await page.$eval('[data-testid="claude-status"]', e => e.innerText);
+    await page.click('[data-testid="claude-status-enable"]');
+    await page.waitForSelector('[data-testid="claude-status-confirm"]');
+    out.file = await page.$eval('[data-testid="claude-status-file"]', e => e.textContent);
+    out.json = await page.$eval('[data-testid="claude-status-json"]', e => e.textContent);
+    out.existsBeforeConfirm = fs.existsSync(S + '/data/claude-status/settings.json');
+    await page.screenshot({ path: __dirname + '/t2a-claude-confirm.png' });
+    await page.click('[data-testid="claude-status-confirm-yes"]');
+    await page.waitForSelector('[data-testid="claude-status-disable"]', { timeout: 10000 });
+    out.existsAfter = fs.existsSync(S + '/data/claude-status/settings.json');
+    out.sameContent = out.existsAfter && fs.readFileSync(S + '/data/claude-status/settings.json', 'utf8') === out.json;
+    // start Claude
+    await page.click('[data-testid="runtime-new-claude"]');
+    await page.waitForSelector('[data-testid="runtime-confirm"]');
+    out.confirmText = await page.$eval('[data-testid="runtime-confirm"]', e => e.innerText);
+    await pause(1500);
+    out.argvBefore = fs.readFileSync(S + '/fake/argv.jsonl', 'utf8');
+    await page.click('[data-testid="runtime-confirm-yes"]');
+    for (let i = 0; i < 50 && !fs.readFileSync(S + '/fake/argv.jsonl', 'utf8').includes('claude'); i++) await pause(200);
+    out.argvAfter = fs.readFileSync(S + '/fake/argv.jsonl', 'utf8');
+    await pause(4000);
+    const pid = JSON.parse(out.argvAfter.trim().split('\n').pop()).pid;
+    const ctl = S + '/fake/ctl/' + pid;
+    const snap = async (label) => {
+        const d = await page.$eval(CANVAS, c => ({ avatars: c.dataset.agentAvatars }));
+        const hud = await page.$eval('[data-testid="hud-layer"]', e => e.innerText).catch(() => '');
+        out[label] = { ...d, hud, events: fs.existsSync(S + '/data/claude-status/events.jsonl') ? fs.readFileSync(S + '/data/claude-status/events.jsonl', 'utf8') : '' };
+    };
+    await snap('start');
+    fs.appendFileSync(ctl, 'prompt\n'); await pause(7000); await snap('prompt');
+    fs.appendFileSync(ctl, 'approve\n'); await pause(7000); await snap('approve');
+    await page.screenshot({ path: __dirname + '/t2a-approve.png' });
+    fs.appendFileSync(ctl, 'stop\n'); await pause(7000); await snap('stop');
+    fs.appendFileSync(ctl, 'exit\n'); await pause(7000); await snap('exit');
+    out.stdin = fs.readFileSync(S + '/fake/stdin.jsonl', 'utf8');
+    out.hooks = fs.readFileSync(S + '/fake/hooks.jsonl', 'utf8');
+    out.console = await page.$eval('[data-testid="runtime-console"]', e => e.innerText).catch(() => '');
+    return out;
+};

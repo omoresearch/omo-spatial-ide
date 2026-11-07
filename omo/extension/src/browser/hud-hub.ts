@@ -24,6 +24,7 @@ export interface HudHost {
     agents(): AgentPresence[];
     /** w2:agents: real status readings per agent key (optional; the screen hint is the fallback). */
     signals?(key: string): AgentStatusReading[];
+    signalsReady?(): boolean; // t2:agents
     /** Existing room voice state (read only). */
     voice(): RoomVoiceState | undefined;
     /** Choose the desk that receives keys and frame its screen. Opens/starts nothing new. */
@@ -74,7 +75,7 @@ export class HudHub {
             command: (name, arg) => this.command(name, arg), onChange: () => this.changed()
         });
         this.notices = new NotificationsHub({
-            desk: desk => host.desk(desk).state, agents: () => host.agents(), now: () => Date.now(), signals: key => host.signals?.(key) ?? [], // w2:agents
+            desk: desk => host.desk(desk).state, agents: () => host.agents(), now: () => Date.now(), signals: key => host.signals?.(key) ?? [], signalsReady: () => host.signalsReady?.() ?? true, // w2:agents, t2:agents
             watching: () => this.watching()
         }, notice => this.toast('info', notice.text, undefined, notice.kind === 'approval' ? 'alert' : notice.kind === 'finished' ? 'check' : 'bell'));
         this.view = this.compute();
