@@ -64,8 +64,8 @@ export const ROOM_AGENTS_MAX = 16;
 export const ROOM_ID_RE = /^[a-z0-9][a-z0-9-]{2,31}$/;
 /** Server-issued member ids. */
 export const ROOM_MEMBER_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
-/** Invite codes, member tokens and owner tokens: opaque URL-safe strings. */
-export const ROOM_SECRET_RE = /^[A-Za-z0-9_-]{16,256}$/;
+/** Invite codes, member tokens and owner tokens: opaque URL-safe strings. t2:pkg: '.' allowed (the room server's keys are `omo1.<room>.<member>.<secret>`, invites `omoinv1.<payload>.<sig>`). */
+export const ROOM_SECRET_RE = /^[A-Za-z0-9_.-]{16,256}$/;
 const RID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 /** Half of the largest WorldShell size (40 m): poses are room-space metres, clamped by the world, not the v1 room. */
 export const ROOM_POSE_LIMIT_M = 20;

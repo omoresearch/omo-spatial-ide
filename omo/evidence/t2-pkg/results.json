@@ -1,0 +1,21 @@
+{
+  "lane": "t2-pkg",
+  "results": {
+    "tarball ./omo smoke (bundled tmux only)": "PASS",
+    "tarball ./omo-app smoke --expect-bundled-tmux": "PASS",
+    "AppImage smoke --expect-bundled-tmux": "PASS",
+    "packaged omo-room-server starts (healthz)": "PASS",
+    "real IDE client vs real room server (ide-client-smoke 17 checks)": "PASS",
+    "server e2e 60 / client 7 / remote-room-probe 27": "PASS",
+    "unit 415/415": "PASS",
+    "workflow yaml": {
+      "yaml_parses": true,
+      "jobs": [
+        "package",
+        "attach"
+      ],
+      "missing_refs": []
+    },
+    "packaged-world smoke (onboarding/build/admin/desk3/second instance in browser)": "NOT DONE"
+  }
+}

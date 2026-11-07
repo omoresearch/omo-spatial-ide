@@ -13,7 +13,13 @@ const [dir, pptrDir, chromeArg] = process.argv.slice(2);
 const { launch } = require(pptrDir);
 const pause = ms => new Promise(r => setTimeout(r, ms));
 const CANVAS = 'canvas[data-testid="omo-world-canvas"]';
-const freePort = () => new Promise(res => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
+const isFree = port => new Promise(res => { const s = net.createServer().once('error', () => res(false)).listen(port, '127.0.0.1', () => s.close(() => res(true))); });
+/** OMO_SMOKE_PORTS=3590-3609 keeps the smoke inside an owned port range (shared test hosts); default: any free port. */
+const freePort = async () => {
+    const range = /^(\d+)-(\d+)$/.exec(process.env.OMO_SMOKE_PORTS || '');
+    if (range) { for (let p = Number(range[1]); p <= Number(range[2]); p++) if (await isFree(p)) return p; throw new Error(`no free port in ${process.env.OMO_SMOKE_PORTS}`); }
+    return new Promise(res => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
+};
 const chrome = chromeArg || process.env.CHROME_PATH || (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '/opt/google/chrome/chrome');
 (async () => {
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'omo-smoke-'));

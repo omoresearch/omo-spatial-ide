@@ -9,6 +9,7 @@ const U = require('./util.cjs');
 const { Hub, CLOSE } = require('./hub.cjs');
 const { PROTOCOL_VERSION, LIMITS, parseClient, pose: checkPose } = require('./protocol.cjs');
 const { Buckets } = require('./rate.cjs');
+const { IDE_WS_PATH, IDE_INVITE_PATH, serveIdeSocket } = require('./ide-wire.cjs'); // t2:pkg
 
 const MAX_BODY = 4 * 1024;
 const LOOPBACK_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/;
@@ -97,7 +98,7 @@ function createServer(opts) {
         if (!originOk(req.headers.origin)) { send(res, 403, { error: 'Origin not allowed.' }); return; }
         try {
             if (req.method === 'GET' && url.pathname === '/healthz') { send(res, 200, { ok: true, service: 'omo-room-server', protocol: PROTOCOL_VERSION }); return; }
-            if (req.method === 'GET' && url.pathname === '/join') { send(res, 200, joinPage(), 'text/html; charset=utf-8', { 'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'" }); return; }
+            if (req.method === 'GET' && (url.pathname === '/join' || url.pathname.startsWith(IDE_INVITE_PATH))) { /* t2:pkg: Omo app invite links open the same page */ send(res, 200, joinPage(), 'text/html; charset=utf-8', { 'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'" }); return; }
             if (req.method === 'GET' && url.pathname === '/join.js') { send(res, 200, JOIN_JS, 'text/javascript; charset=utf-8'); return; }
             if (req.method === 'GET' && url.pathname === '/join.css') { send(res, 200, JOIN_CSS, 'text/css; charset=utf-8'); return; }
             if (req.method === 'POST' && url.pathname === '/api/join') {
@@ -137,12 +138,24 @@ function createServer(opts) {
         const reject = (code, text) => { socket.write(`HTTP/1.1 ${code} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`); socket.destroy(); };
         let pathname = '';
         try { pathname = new URL(req.url, 'http://x').pathname; } catch { /* fallthrough */ }
-        if (pathname !== '/ws') return reject(404, 'Not Found');
+        if (pathname !== '/ws' && pathname !== IDE_WS_PATH) return reject(404, 'Not Found');
         if (!originOk(req.headers.origin)) return reject(403, 'Forbidden');
         if (!upgradeRate.take(ip)) return reject(429, 'Too Many Requests');
         if (total >= LIMITS.maxSocketsTotal || (ipConns.get(ip) || 0) >= LIMITS.maxSocketsPerIp) return reject(503, 'Service Unavailable');
+        if (pathname === IDE_WS_PATH) { wss.handleUpgrade(req, socket, head, ws => onIdeSocket(ws, ip, req)); return; } // t2:pkg
         wss.handleUpgrade(req, socket, head, ws => onSocket(ws, ip));
     });
+
+    /** t2:pkg: the Omo IDE wire protocol (room-wire-protocol.ts) on the same hub, accounts and limits. */
+    function onIdeSocket(ws, ip, req) {
+        total++; ipConns.set(ip, (ipConns.get(ip) || 0) + 1);
+        let alive = true;
+        ws.on('pong', () => { alive = true; });
+        const beat = setInterval(() => { if (!alive) { ws.terminate(); return; } alive = false; try { ws.ping(); } catch { /* closed */ } }, 30_000);
+        ws.on('close', () => { clearInterval(beat); total--; const n = (ipConns.get(ip) || 1) - 1; if (n <= 0) ipConns.delete(ip); else ipConns.set(ip, n); });
+        const origin = publicUrl ? new URL(publicUrl).origin : `${tls ? 'https' : 'http'}://${req.headers.host || `${host}:${port}`}`;
+        serveIdeSocket(ws, { hub, ip, origin, authFail, helloTimeoutMs: LIMITS.helloTimeoutMs, log });
+    }
 
     function onSocket(ws, ip) {
         total++; ipConns.set(ip, (ipConns.get(ip) || 0) + 1);
