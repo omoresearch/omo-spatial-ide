@@ -212,6 +212,7 @@ export class VoiceHub {
         const scene = this.host.scene(), layout = this.host.layout();
         if (scene !== this.sceneRef || layout !== this.layoutRef) { this.sceneRef = scene; this.layoutRef = layout; this.avatars.attach(this.threeScene(), layout, this.canvas()); }
         this.watchDesks();
+        const c = this.canvas(); if (c && this.voice && c.dataset.voiceTransport !== this.voice.transportKind) c.dataset.voiceTransport = this.voice.transportKind; // t3:mp2: inspection
         this.view = this.compute();
         this.avatars.setAgents(this.view.agents);
         this.avatars.setPeers(this.peerIndicators(presence));

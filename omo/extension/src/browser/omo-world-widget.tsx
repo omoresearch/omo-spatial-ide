@@ -304,6 +304,7 @@ export class OmoWorldWidget extends ReactWidget {
             store.onChange(change => {
                 if (['apply', 'undo', 'redo', 'external'].includes(change.reason)) { try { window.dispatchEvent(new CustomEvent(WORLD_CHANGED_EVENT, { detail: { projectUri: uri, world: change.world } })); } catch { /* no window */ } } });
         }
+        this.worldStore.attachRemote(this.remoteRoom?.world); // t3:mp2: the shared room world replaces local storage while connected
         return this.worldStore;
     }
     // --- end w2:build ---
@@ -354,7 +355,9 @@ export class OmoWorldWidget extends ReactWidget {
         // --- w2:mp-client (mount hook): remote rooms reuse the same presence path; terminals stay local. Starts nothing. ---
         this.remoteRoom=new RemoteRoomController(this.remoteRoomService,this.presenceRouter,{joinPresence:(roomId,name)=>this.joinPresence(roomId,name),leavePresence:()=>this.leavePresence(),
             presence:()=>this.presenceState,agents:()=>this.voiceHub?.state.agents??[],seedWorld:()=>this.room?worldFromRoomV1({theme:this.room.theme,projectName:this.room.projectName,layout:this.room.layout,kit:this.room.kit}):undefined,
-            schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:()=>this.update()});
+            schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:()=>this.update(),
+            voiceTransport:t=>{void this.voiceHub?.useTransport(t);}/* t3:mp2 */});
+        this.currentWorldStore(); // t3:mp2: bind the store to the remote world source now
         this.toDispose.push({dispose:()=>{this.remoteRoom?.dispose();this.remoteRoom=undefined;}});
         // --- end w2:mp-client ---
         this.review=new GitReviewController(this.gitReviewService,state=>{
@@ -398,6 +401,7 @@ export class OmoWorldWidget extends ReactWidget {
      */
     private drawStoredWorld(scene: RoomScene | undefined): void {
         if (!scene || !this.project || this.configuring) return;
+        if (this.worldStore?.remoteActive) { scene.setWorld(this.worldStore.world); return; } // t3:mp2
         let raw: string | null = null;
         try { raw = safeStorage()?.getItem(worldStorageKey(this.project.toString())) ?? null; } catch { return; }
         if (!raw) return;
@@ -430,7 +434,8 @@ export class OmoWorldWidget extends ReactWidget {
     }
     /** Read the saved WorldSpec (or migrate the v1 room). Removed stations are detached; tabs keep running. */
     private readWorld(reconnect = true): void {
-        const { world, stored } = this.project ? loadWorld(safeStorage(), this.project.toString(), this.room) : { world: undefined, stored: false };
+        const shared = this.worldStore?.remoteActive ? this.worldStore.world : undefined; // t3:mp2: in a remote room the room's world is the world
+        const { world, stored } = shared ? { world: shared, stored: true } : this.project ? loadWorld(safeStorage(), this.project.toString(), this.room) : { world: undefined, stored: false };
         if (stored && this.worldStore?.projectUri === this.project?.toString()) this.worldStore?.reloadExternal(); // t2:regress: same-tab saves (saveWorldOps) must refresh build mode's cached world
         const { added } = this.stations.setWorld(world, stored);
         this.syncMirrorLink();

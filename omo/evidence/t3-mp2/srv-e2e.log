@@ -1,0 +1,62 @@
+ok   create-room prints a one-time owner key
+ok   owner secret is not stored (only scrypt hash)
+ok   room file 0600, data dir 0700
+ok   serve refuses plain HTTP on a non-loopback host
+ok   server listening over TLS on 44271
+ok   second server on the same data dir is refused (lock)
+ok   healthz + HSTS
+ok   foreign Origin refused on HTTP
+ok   join page with strict CSP, no inline script
+ok   builder invite redeemed -> member key
+ok   invite is single-use
+ok   tampered invite signature refused
+ok   duplicate display name refused (case-insensitive)
+ok   member invite redeemed
+ok   viewer invite redeemed
+ok   revoked invite refused (CLI revoke while server runs)
+ok   request body size cap (413)
+ok   no member secret on disk
+ok   GET /api/world with bearer key
+ok   bad key -> 401
+ok   owner welcome: world rev 0, 4 members
+ok   Bob sees Harry presence (pose, colour)
+ok   owner sees Bob join as a distinct member (not "you")
+ok   pose relayed
+ok   out-of-room pose refused
+ok   chat relayed to viewer
+ok   viewer cannot chat
+ok   viewer emote relayed
+ok   secret-looking chat blocked
+ok   WebRTC offer relayed member -> member
+ok   video offer refused (audio only)
+ok   viewer cannot signal
+ok   agent status summary relayed
+ok   agent status with host path refused
+ok   no terminal relay message exists
+ok   member cannot edit the world
+ok   builder applies a batch -> revision 1
+ok   world broadcast to everyone
+ok   stale baseRevision -> conflict
+ok   invalid batch rejected atomically
+ok   secret-looking world label refused
+ok   only owner locks desks
+ok   owner move ok
+ok   world persisted at rev 2, unknown keys stripped
+ok   owner creates invite link over WS
+ok   builder cannot invite
+ok   owner demotes Bob to viewer live
+ok   demoted Bob can no longer build
+ok   member rotates own key
+ok   old key dead after rotation
+ok   removed member is disconnected (4040)
+ok   removed member key no longer works
+ok   second login of same member replaces the first (4009)
+ok   oversized frame closes socket (1009)
+ok   foreign Origin refused on WebSocket upgrade
+ok   bad key on socket -> 4001
+ok   chat rate limit hit (14 refusals)
+ok   lock released on SIGTERM
+ok   no temp files left behind
+ok   audit log holds no keys or invite codes
+
+60 checks passed

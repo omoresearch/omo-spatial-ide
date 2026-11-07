@@ -53,7 +53,7 @@ const until = async (fn, what, ms = 5000) => { const end = Date.now() + ms; whil
         ok(page.status === 200 && /Join an Omo room/.test(await page.text()), 'invite link opens the join page in a browser');
         const B = new RemoteRoomClient({ store: storeB, handshakeMs: 5000 }); clients.push(B);
         const sb = await B.joinInvite(inv.link, { name: 'Ben' });
-        ok(sb.phase === 'joined' && sb.role === 'member', 'second IDE client joins with the invite link');
+        ok(sb.phase === 'joined' && sb.role === 'builder', 'second IDE client joins with the invite link (no role asked = builder, as older IDE clients edited the world)');
         await until(() => A.status().members.some(m => m.name === 'Ben') && B.status().members.some(m => m.name === 'Ana'), 'both see each other');
         ok(true, 'both members see each other (presence)');
         const before = A.world().revision;
@@ -73,6 +73,12 @@ const until = async (fn, what, ms = 5000) => { const end = Date.now() + ms; whil
         const reuse = new RemoteRoomClient({ store: memStore(), handshakeMs: 5000 }); clients.push(reuse);
         const again = await reuse.joinInvite(inv.link, { name: 'Cy' }).then(() => 'joined', e => e.message);
         ok(/invalid|expired|used/i.test(again), 'invite is single use');
+        const mInv = await A.createInvite({ ttlMinutes: 30, role: 'member' });
+        const M = new RemoteRoomClient({ store: memStore(), handshakeMs: 5000 }); clients.push(M);
+        const sm = await M.joinInvite(mInv.link, { name: 'Mo' });
+        ok(sm.phase === 'joined' && sm.role === 'member', 'member-role invite joins as member');
+        const memberEdit = await M.applyWorldOps(M.world().revision, [{ op: 'rename', id: 'terminal', label: 'Nope' }]);
+        ok(!memberEdit.ok && /builder|owner|permission|not allowed|cannot|role/i.test(String(memberEdit.error ?? memberEdit.message ?? '')), 'member world edit is refused readably: ' + String(memberEdit.error ?? memberEdit.message ?? ''));
         const bad = new RemoteRoomClient({ store: memStore(), handshakeMs: 5000 }); clients.push(bad);
         const refused = await bad.host({ server: info.url, ownerToken: owner.replace(/.$/, c => (c === 'A' ? 'B' : 'A')), roomId: 'ide-room' }, { name: 'Eve' }).then(() => 'joined', e => e.message);
         ok(/not accepted/i.test(refused), 'wrong owner key refused');

@@ -1,0 +1,4 @@
+2026-11-07T06:23:45.730Z WARNING: --trace-frames is on; app frames are written to /home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/frames.jsonl
+{"service":"omo-room-server","url":"http://127.0.0.1:3540","ws":"ws://127.0.0.1:3540/ws","port":3540,"pid":1826804,"data":"/home/harry/.hermes/profiles/omo-dev/cache/scratch/omo-2app-rmECqm/rooms","rooms":1}
+2026-11-07T06:24:01.205Z join two-app-room m_79acd9264533cebd owner
+2026-11-07T06:24:02.148Z join two-app-room m_08ac4656b8976237 builder

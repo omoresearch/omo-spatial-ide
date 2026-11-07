@@ -1,0 +1,9 @@
+ok   loopback plain mode (for Tailscale Serve / TLS proxy in front)
+ok   redeemInvite helper
+ok   RoomClient connect + welcome
+ok   RoomClient request world-ops
+ok   other client tracks the new world
+ok   presence pose tracked
+ok   bad key rejected with 4001
+
+7 checks passed

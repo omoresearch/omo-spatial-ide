@@ -1,10 +1,9 @@
 # Host an Omo room on Harry's Linux PC for Kaviru's Mac (Tailscale)
 
-> STATUS (t2 multiplayer test, 2026-11-07): the room server below works on its own
-> (`node server/scripts/check.cjs` 16/16, `node server/test/e2e-smoke.cjs` 60/60 over real TLS).
-> BUT the Omo app at commit a2f2e5586 can NOT connect to it yet: the app's remote-room client
-> (`extension/src/common/room-wire-protocol.ts`) and this server (`server/src/protocol.cjs`) use
-> different wire protocols (see "Known blocker" at the end). Do these steps only after that is fixed.
+> STATUS (t3 mp2, 2026-11-07): verified end to end with two separate Omo apps in real Chrome
+> (`node extension/test/remote-two-app-real.cjs`, 23/23, results in `evidence/t3-mp2/remote-two-app-results.json`).
+> The test ran the room server on plain http on 127.0.0.1 (loopback only), the same as step 2 below.
+> The Tailscale part (Serve / cert / Funnel) was NOT run in that test; it only changes the address in front of the server.
 
 ## 0. What you need
 
@@ -66,7 +65,23 @@ Anyone on the internet can then reach the join page and the socket. Room keys an
 protect the room, and the server rate-limits failed sign-ins, but you lose the tailnet boundary.
 Use only for a short session and turn it off after: `tailscale funnel --https=443 off`.
 
+## 3b. Host the room from Omo (Harry)
+
+In Omo: click the **Remote room** chip (top of the room) -> **Host a room**.
+- Your name: `Harry`
+- Room server: `https://$HOST` (the Serve address from step 3)
+- Owner key: the `omo1.…` key from step 1. The room code may stay empty: the key names the room.
+- Leave "If the room is still empty, start it from my current room layout" on, the first time only.
+- Click **Host room**. The chip shows `Harry's room · 1 here`.
+
+The owner key goes to the Omo backend once and is kept in a private file (0600), not in the browser.
+
 ## 4. Invite Kaviru
+
+From Omo (simplest): Remote room panel -> choose the role -> **Create invite link** -> copy the link.
+The role list defaults to **member** (chat, voice, agent status). Choose **builder** if Kaviru should also edit the room.
+
+From the command line instead:
 
 ```sh
 node server/omo-room-server.cjs invite --data $DATA --room harry-room --role builder --ttl 2h \
@@ -77,17 +92,49 @@ Send the link privately (Signal/iMessage, not a public channel). It is signed, s
 Roles: `viewer` (look only), `member` (chat, voice, agent status), `builder` (also edit the shared world).
 List / revoke: `invites --room harry-room`, `revoke --room harry-room --invite i_...`.
 
+Use the line `Omo app link (paste into Remote room → Join)` (it needs `--public-url`).
+The owner can change a role later in the Remote room panel (role list next to each person).
+
 ## 5. Kaviru (Mac)
 
 1. Check reach: `curl https://<host>.<tailnet>.ts.net/healthz` -> `{"ok":true,...}`.
-2. Open the invite link, choose a name, copy the room key (shown once).
-3. In Omo: Room -> Remote room -> paste the link / key.
+2. In Omo: click the **Remote room** chip -> **Join a remote room** -> type a name -> paste the invite link -> **Join room**.
+3. The chip shows the room and `2 here`. Next time, use **Rooms you joined before** (no new invite needed).
+4. To leave: Remote room panel -> **Leave room**. Your local room and terminals come back unchanged.
 
 ## 6. Voice
 
 Audio is peer to peer (WebRTC); the server only relays small signalling messages.
 Between two tailnet devices, ICE usually connects over the Tailscale 100.x addresses directly.
 If "Voice check -> Test network" shows no working path, add a TURN server you own; do not use a public one.
+
+## What was verified (t3 mp2, 2026-11-07)
+
+`node omo/extension/test/remote-two-app-real.cjs` (needs `npm run build` first). It starts the room server
+(`--host 127.0.0.1`, plain http, loopback only), runs `create-room`, starts TWO separate Omo apps (own port,
+config dir, data dir, tmux socket and project; fixture agent CLIs, no model calls) and two headless Chromes
+with fake microphones, then uses only the real UI:
+
+| Check | Result |
+|---|---|
+| A: Host a room with server URL + owner key | pass |
+| A: Create invite link; B: Join by pasting it (builder) | pass |
+| Presence strip and Remote room member list show both people, on both sides | pass |
+| Avatars both ways; B sees A's avatar move when A walks (x 0 -> -1.36) | pass |
+| Chat A -> B and B -> A | pass |
+| A adds a desk in build mode + Apply -> B's room has the new station | pass, about 1 s |
+| B (builder) adds a plant + Apply -> A sees it | pass, about 1 s |
+| Owner makes B a member -> B's Apply is refused: "Your role in this room is “member”: … Ask the room owner to make you a builder. Nothing was changed." Room revision unchanged | pass |
+| Text typed into A's real terminal never appears in the server log or in any of ~1000 traced frames | pass |
+| Owner key never in server log or frame trace | pass |
+| Voice on in both apps: RTCPeerConnection `connected`, inbound-rtp audio bytes grow on both sides, signalling relayed by the room server | pass |
+| Mute in A: A's outbound audio bytes and packets stop; unmute: they grow again and B receives them | pass (fixed in this lane: mute now detaches the microphone from the sender) |
+| B: Leave room -> A's presence and avatars drop B | pass |
+| No page errors; no agent started | pass |
+
+Evidence: `omo/evidence/t3-mp2/` (results JSON, screenshots `mp2-A-room-sees-B.png`, `mp2-B-room-sees-A.png`,
+`mp2-voice-panel.png`, `mp2-B-member-refused.png`, server log, frame-type summary).
+Not covered by that test: Tailscale Serve/cert/Funnel, two physical computers, a TURN server.
 
 ## Security notes
 
@@ -100,18 +147,3 @@ If "Voice check -> Test network" shows no working path, add a TURN server you ow
 - Back up `~/.omo-rooms` like a secret (invite signing key + key hashes). Mode 0700/0600 is enforced.
 - `audit.log` records room/invite/role/world events, never keys.
 - SDP in voice signalling contains network addresses; this is why voice is members-only.
-
-## Known blocker (found in t2 test, not yet fixed)
-
-| | App client (`room-wire-protocol.ts`, `remote-room-client.ts`) | Room server (`server/src`) |
-|---|---|---|
-| Socket path | `/omo-room/v1/ws` | `/ws` |
-| Frame key | `t` | `type` |
-| Auth | `hello.auth {kind: invite/member/owner}`; owner token may create the room | `hello.token` = `omo1.<room>.<member>.<secret>`; invites redeemed only via `POST /api/join` |
-| Join | `welcome` then `join` then `room` | single `welcome` with world + presence |
-| Invite link | `/omo-room/join/<room>#invite=` | `/join#invite=` |
-| Roles | `owner`, `member` | `viewer`, `member`, `builder`, `owner` |
-
-Also: the build-mode WorldStore writes only browser localStorage (RemoteWorldSource is never used),
-and `VoiceHub.useTransport(remoteRoomVoiceTransport(...))` is never called, so remote voice falls back
-to the local-presence transport.

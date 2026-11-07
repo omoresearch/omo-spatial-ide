@@ -1,0 +1,146 @@
+{
+  "pass": true,
+  "startedAt": "2026-11-07T06:25:04.952Z",
+  "steps": {
+    "mesh3": {
+      "connectedMs": 4032,
+      "paths": [
+        [
+          "peer-a",
+          [
+            "Bob:host/host",
+            "Cleo:?"
+          ]
+        ],
+        [
+          "peer-b",
+          [
+            "Alice:prflx/host",
+            "Cleo:host/host"
+          ]
+        ],
+        [
+          "peer-c",
+          [
+            "Alice:?",
+            "Bob:prflx/host"
+          ]
+        ]
+      ],
+      "politeness": [
+        [
+          "peer-b:impolite",
+          "peer-c:impolite"
+        ],
+        [
+          "peer-a:polite",
+          "peer-c:impolite"
+        ],
+        [
+          "peer-a:polite",
+          "peer-b:polite"
+        ]
+      ]
+    },
+    "glare": {
+      "stillConnected": true,
+      "restarts": [
+        [
+          "peer-a",
+          [
+            1,
+            1
+          ]
+        ],
+        [
+          "peer-b",
+          [
+            1,
+            1
+          ]
+        ],
+        [
+          "peer-c",
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "errors": []
+    },
+    "audioAndSpatial": {
+      "rtpPackets": 201,
+      "aliceOnRight": {
+        "left": 0.2277092109553373,
+        "right": 0.40182517029223164
+      },
+      "afterTurnAliceOnLeft": {
+        "left": 0.4002915237308958,
+        "right": 0.2277092109553373
+      },
+      "personalMuted": {
+        "left": 0,
+        "right": 0
+      },
+      "direction": -90
+    },
+    "reloadAndLateJoin": {
+      "audibleAfter": {
+        "left": 0.3404979553726363,
+        "right": 0.6028479958807104
+      },
+      "reconnectedMs": 7652,
+      "peers": 4,
+      "links": 6
+    },
+    "leave": {
+      "ok": true
+    },
+    "voiceCheck": {
+      "stun": {
+        "counts": {
+          "host": 30,
+          "srflx": 12,
+          "prflx": 0,
+          "relay": 0
+        },
+        "sample": [
+          {
+            "type": "host",
+            "protocol": "udp",
+            "address": "172.24.x.x"
+          },
+          {
+            "type": "host",
+            "protocol": "udp",
+            "address": "172.22.x.x"
+          },
+          {
+            "type": "host",
+            "protocol": "udp",
+            "address": "172.20.x.x"
+          }
+        ],
+        "errors": []
+      },
+      "loopback": {
+        "path": "host/host",
+        "level": 0.25729431193739777
+      },
+      "record": {
+        "bytes": 48605,
+        "mime": "audio/webm;codecs=opus"
+      }
+    }
+  },
+  "relayedSignals": {
+    "offer": 20,
+    "ice": 678,
+    "answer": 11,
+    "bye": 6,
+    "drop-to:offer": 2,
+    "drop-to:ice": 60,
+    "drop-to:bye": 3
+  }
+}

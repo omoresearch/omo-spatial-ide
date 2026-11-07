@@ -1,0 +1,11 @@
+ok   room server listening http://127.0.0.1:38227
+ok   IDE client hosts with the create-room owner key
+ok   owner seeds the untouched room with the IDE world
+ok   owner key stored as the member token (0600 store in the IDE)
+ok   owner mints an IDE invite link
+ok   invite link opens the join page in a browser
+FAIL second IDE client joins with the invite link
+Error: second IDE client joins with the invite link
+    at ok (/home/harry/dev/omo-t3-mp2/omo/server/test/ide-client-smoke.cjs:20:68)
+    at /home/harry/dev/omo-t3-mp2/omo/server/test/ide-client-smoke.cjs:56:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
