@@ -55,6 +55,13 @@ import { ShortcutsLane } from './shortcuts-lane'; // omo keys6 lane
 import { OmoImmersiveService } from './immersive-service'; // omo immersive lane
 import { ImmersivePill } from './immersive-hud'; // omo immersive lane
 import { Icon } from './icons'; // omo immersive lane
+// w2:admin (mount hook) — in-world World admin console
+import { AdminController, AdminState, LocalAdminWorldStore, ADMIN_TOGGLE_EVENT, bindAdminKeys } from './admin-controller';
+import type { AdminWorldStore } from './admin-controller';
+import { AdminPanel, AdminButton } from './admin-panel';
+import { WorldAdminService } from '../common/world-admin-protocol';
+import { sceneControls as adminSceneControls } from './focus-screen';
+// end w2:admin
 // --- end omo focus lane ---
 
 export const TERMINAL_STATION_ID = 'terminal-1';
@@ -115,6 +122,20 @@ export class OmoWorldWidget extends ReactWidget {
     @inject(FileService) protected readonly files!: FileService;
     @inject(FileDialogService) protected readonly dialogs!: FileDialogService;
     @inject(OmoImmersiveService) protected readonly immersive!: OmoImmersiveService; // omo immersive lane
+    // --- w2:admin (mount hook) ---
+    @inject(WorldAdminService) protected readonly worldAdminService!: WorldAdminService;
+    private admin?: AdminController;
+    private adminState?: AdminState;
+    private adminLocalStore?: LocalAdminWorldStore;
+    /** STUB until the build lane's WorldStore is mounted here: replace with that store. */
+    private adminStore = (): AdminWorldStore | undefined => {
+        if (!this.project || !this.room || this.configuring) return undefined;
+        const uri = this.project.toString();
+        if (!this.adminLocalStore || this.adminLocalStore.projectUri !== uri) this.adminLocalStore = new LocalAdminWorldStore(safeStorage(), uri, this.room);
+        else this.adminLocalStore.syncRoom(this.room);
+        return this.adminLocalStore;
+    };
+    // --- end w2:admin ---
     private project?: URI;
     private room?: RoomState;
     private draftTheme: RoomTheme = 'station';
@@ -199,6 +220,16 @@ export class OmoWorldWidget extends ReactWidget {
         this.toDispose.push({dispose:()=>{this.voiceHub?.dispose();this.voiceHub=undefined;}});
         // --- end omo voice lane ---
         this.toDispose.push({ dispose: () => this.focusMode.dispose() }); // omo focus lane
+        // --- w2:admin (mount hook): the admin only plans; Apply goes through the world store. Starts nothing. ---
+        this.admin = new AdminController({ service: this.worldAdminService, store: this.adminStore, storage: safeStorage(),
+            onChange: state => { this.adminState = state; this.update(); }, message: text => { this.feedback = text; this.update(); } });
+        this.adminState = this.admin.state;
+        const adminToggle = (): void => { if (this.room && !this.configuring) { this.worldScene?.releaseTyping(); this.admin?.toggle(); } };
+        window.addEventListener(ADMIN_TOGGLE_EVENT, adminToggle);
+        const offAdminKeys = bindAdminKeys(() => { const c = adminSceneControls(this.worldScene); return !!c?.enabled && document.activeElement === c.element && !c.typing && !c.cameraOwned; },
+            target => target instanceof Node && this.node.contains(target));
+        this.toDispose.push({ dispose: () => { window.removeEventListener(ADMIN_TOGGLE_EVENT, adminToggle); offAdminKeys(); this.admin?.dispose(); this.admin = undefined; } });
+        // --- end w2:admin ---
         // --- omo immersive lane (mount hook): the room fills the window while a saved room shows. ---
         const offImmersive = this.immersive.mode.subscribe(() => this.update());
         this.toDispose.push({ dispose: () => { offImmersive(); this.immersive.mode.setEngaged(false); } });
@@ -638,6 +669,9 @@ export class OmoWorldWidget extends ReactWidget {
                             : <button type="button" className="omo-immersive-launch" data-testid="immersive-launch" title="Immersive world (G)" onMouseDown={event => event.preventDefault()} onClick={this.toggleImmersiveButton}>
                                 <Icon name="expand" size={14} />Immersive world <kbd>G</kbd></button>)}
                     </SceneView>
+                    {/* w2:admin (mount hook) */}{this.room && !this.configuring && this.admin && this.adminState && <>
+                        {!this.adminState.open && <AdminButton open={false} onClick={() => { this.worldScene?.releaseTyping(); this.admin?.toggle(true); }}/>}
+                        <AdminPanel controller={this.admin} state={this.adminState} worldName={this.room.projectName} previewSupported={!!this.adminStore()?.preview}/></>}
                     {/* omo parity2 lane (mount hook) */}{this.room && !this.configuring && this.hudHub && <HudOverlay hub={this.hudHub} view={this.hudHub.state} chat={this.hudHub.chat.state}/>}
                     {/* omo focus lane (mount hook) */}{this.room && !this.configuring && <FocusOverlay focus={this.focusMode} frames={this.monitors} desk={station => ({ state: this.consoleStates[station], controller: this.consoles.get(station) })}/>}
                     {/* omo keys6 lane (mount hook) */}{this.room && !this.configuring && <ShortcutsLane focus={this.focusMode} activeDesk={() => this.activeMode} desk={station => ({ state: this.consoleStates[station], controller: this.consoles.get(station) })} reconnect={station => this.selectStation(station)}/>}
