@@ -34,7 +34,7 @@ export interface RulePlanOptions {
 }
 
 export const ADMIN_EXAMPLES: readonly string[] = [
-    'add a third desk for Codex and a big monitor wall linked to it',
+    'add a desk for Codex and a big monitor wall linked to it', // t4:polish: no ordinal ('third' was wrong once a world had 4+ desks)
     'add 2 shell desks named Ops',
     'add a web wall showing https://example.com',
     'add a plant and a lamp',
@@ -44,6 +44,8 @@ export const ADMIN_EXAMPLES: readonly string[] = [
     'arrange the desks in a U-shape',
     'remove the mirror'
 ];
+/** t4:polish — the admin prompt's empty-box hint. Neutral: it never names an ordinal that can disagree with the room. */
+export const ADMIN_PROMPT_PLACEHOLDER = 'Describe a change, e.g. add a desk for Codex';
 
 // ---------------------------------------------------------------------------------------------
 // Small text helpers
