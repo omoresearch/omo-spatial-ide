@@ -43,6 +43,7 @@ import type { StationLink } from './station-link';
 // --- omo voice lane (mount hook): room voice, talk-to-agent dictation, agent avatars ---
 import { VoiceHub } from './voice-hub';
 import { VoicePanel } from './voice-panel';
+import { OmoVoiceSettingsService } from '../common/voice-settings-protocol'; // w2:voice
 // --- end omo voice lane ---
 // --- omo parity2 lane (mount hook): room chat, agent notifications, follow/teleport, name colours, speaking HUD ---
 import { HudHub } from './hud-hub';
@@ -115,6 +116,7 @@ export class OmoWorldWidget extends ReactWidget {
     @inject(FileService) protected readonly files!: FileService;
     @inject(FileDialogService) protected readonly dialogs!: FileDialogService;
     @inject(OmoImmersiveService) protected readonly immersive!: OmoImmersiveService; // omo immersive lane
+    @inject(OmoVoiceSettingsService) protected readonly voiceSettings!: OmoVoiceSettingsService; // w2:voice
     private project?: URI;
     private room?: RoomState;
     private draftTheme: RoomTheme = 'station';
@@ -193,7 +195,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.presence=new PresenceController({service:this.presenceService,pose:()=>this.worldScene?.getPlayerPose()??{...PLAYER_HOME},schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:state=>this.presenceChanged(state)});
         this.toDispose.push({dispose:()=>{void this.presence?.dispose().catch(()=>undefined);}});
         // --- omo voice lane (mount hook): read-only access to presence, scene and desks. Starts nothing. ---
-        this.voiceHub=new VoiceHub({presenceService:this.presenceService,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',
+        this.voiceHub=new VoiceHub({presenceService:this.presenceService,voiceSettings:this.voiceSettings/* w2:voice */,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',
             desk:desk=>({state:this.consoleStates[desk],controller:this.consoles.get(desk)}),activeDesk:()=>this.activeStation,
             onChange:()=>this.update(),message:text=>{this.feedback=text;this.update();}});
         this.toDispose.push({dispose:()=>{this.voiceHub?.dispose();this.voiceHub=undefined;}});

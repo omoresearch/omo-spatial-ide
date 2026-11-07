@@ -4,7 +4,9 @@ import type { PlayerPose, RoomLayoutId } from '../common/player-state';
 import { PLAYER_HOME } from '../common/player-state';
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';
 import type { PresenceState } from './presence-controller';
-import { RoomVoiceController, RoomVoiceState, browserVoiceMedia } from './voice-controller';
+import { RoomVoiceController, RoomVoiceState, browserVoiceMedia, VoiceStorage } from './voice-controller';
+import { VoiceSignalTransport, localPresenceTransport } from '../common/voice-transport';
+import type { OmoVoiceSettingsService } from '../common/voice-settings-protocol';
 import { DictationController, DictationState, recognitionCtor } from './voice-dictation';
 import { ReadAloud, replyText } from './voice-readaloud';
 import { AgentAvatars, AgentPresence, DeskId, agentLabel, aimedDesk, deskAgents } from './agent-avatars';
@@ -12,6 +14,8 @@ import { AgentAvatars, AgentPresence, DeskId, agentLabel, aimedDesk, deskAgents 
 /** What the widget lends the hub. Read-only getters; the hub never owns terminals or rooms. */
 export interface VoiceHubHost {
     presenceService: Pick<OmoPresenceService, 'setVoice' | 'signal' | 'takeSignals'>;
+    /** Backend STUN/TURN settings (Theia config dir). Optional: without it voice uses public STUN. */
+    voiceSettings?: OmoVoiceSettingsService;
     presence(): PresenceState;
     /** The live RoomScene instance (or undefined while the scene is rebuilt). */
     scene(): unknown;
@@ -33,6 +37,12 @@ export interface VoiceHubView {
 }
 
 const QUIET_MS = 2500;
+const OFF_STATE: RoomVoiceState = { phase: 'off', mode: 'push', muted: false, transmitting: false, pushHeld: false, speaking: false, level: 0, proximity: true, spatial: true, spatialSupported: false, peers: [],
+    prefs: { inputId: '', outputId: '', echoCancellation: true, noiseSuppression: true, autoGainControl: true, mode: 'push', proximity: true, spatial: true, people: {} },
+    devices: { inputs: [], outputs: [], outputSelectable: false }, transport: 'local-presence', network: { hasTurn: false, relayOnly: false, stunServers: 0 }, error: '', notice: '' };
+function voiceStorage(): VoiceStorage | undefined {
+    try { const s = window.localStorage; return { get: k => s.getItem(k), set: (k, v) => s.setItem(k, v) }; } catch { return undefined; }
+}
 const DESKS: DeskId[] = ['terminal', 'terminal-2'];
 const DESK_NAME: Record<DeskId, string> = { terminal: 'Desk one', 'terminal-2': 'Desk two' };
 
@@ -59,11 +69,19 @@ export class VoiceHub {
     private dictating?: DeskId;
     private version = '';
     private disposed = false;
+    private readonly localTransport: VoiceSignalTransport;
 
     constructor(private host: VoiceHubHost) {
         const media = browserVoiceMedia();
-        if (media) this.voice = new RoomVoiceController({ service: host.presenceService, media, pose: () => this.pose(),
+        this.localTransport = localPresenceTransport(host.presenceService);
+        const settings = host.voiceSettings;
+        if (media) this.voice = new RoomVoiceController({ transport: this.localTransport, media, pose: () => this.pose(), storage: voiceStorage(),
+            iceConfig: settings ? () => settings.iceConfig() : undefined,
             schedule: (fn, ms) => window.setTimeout(fn, ms), cancel: id => window.clearTimeout(id as number), onChange: () => this.changed() });
+        // A network change (Wi-Fi switch, VPN, sleep/wake) restarts ICE on every link at once.
+        const online = (): void => this.voice?.restartAll();
+        window.addEventListener('online', online);
+        this.listeners.push(() => window.removeEventListener('online', online));
         this.dictation = new DictationController({ ctor: recognitionCtor(), onChange: () => this.changed() });
         this.readAloud = new ReadAloud(typeof speechSynthesis === 'undefined' ? undefined : speechSynthesis, () => this.changed());
         this.view = this.compute();
@@ -72,6 +90,17 @@ export class VoiceHub {
     }
 
     get state(): VoiceHubView { return this.view; }
+    get settings(): OmoVoiceSettingsService | undefined { return this.host.voiceSettings; }
+
+    /**
+     * Multiplayer hook (mp-client lane): run room voice over the remote room server instead of local
+     * presence. Pass `remoteRoomVoiceTransport(channel)`; pass undefined to go back to local presence.
+     * Voice turns off when the transport changes; the user turns it on again with a click.
+     */
+    async useTransport(transport: VoiceSignalTransport | undefined): Promise<void> {
+        await this.voice?.setTransport(transport ?? this.localTransport);
+        this.changed();
+    }
 
     private pose(): PlayerPose {
         const scene = this.host.scene() as { getPlayerPose?(): PlayerPose } | undefined;
@@ -161,7 +190,7 @@ export class VoiceHub {
             }
         }
         return {
-            voice: this.voice?.state ?? { phase: 'off', mode: 'push', muted: false, transmitting: false, pushHeld: false, speaking: false, level: 0, proximity: true, peers: [], error: '', notice: '' },
+            voice: this.voice?.state ?? OFF_STATE,
             dictation: this.dictation.state,
             readAloud: { supported: this.readAloud.supported, enabled: this.readAloud.enabled, speaking: this.readAloud.speakingKey },
             agents, aimed: this.aimed(), joined: presence.phase === 'joined' && !!presence.snapshot, supported: !!this.voice
@@ -171,7 +200,8 @@ export class VoiceHub {
     private tick(): void {
         if (this.disposed) return;
         const presence = this.host.presence();
-        this.voice?.roomChanged(presence.phase === 'joined' ? presence.snapshot : undefined);
+        // Local presence supplies the roster here; a remote-room transport supplies its own.
+        if (this.voice && this.voice.transportKind === 'local-presence') this.voice.roomChanged(presence.phase === 'joined' ? presence.snapshot : undefined);
         // Re-attach avatars when the RoomScene is rebuilt (theme/layout/kit change).
         const scene = this.host.scene(), layout = this.host.layout();
         if (scene !== this.sceneRef || layout !== this.layoutRef) { this.sceneRef = scene; this.layoutRef = layout; this.avatars.attach(this.threeScene(), layout, this.canvas()); }
@@ -183,6 +213,7 @@ export class VoiceHub {
         if (version !== this.version) { this.version = version; this.host.onChange(); }
     }
 
+    /** Voice peers for in-world rings: local presence snapshot, or the remote room roster. */
     private peerIndicators(presence: PresenceState): Array<{ id: string; name: string; pose: PlayerPose; speaking: boolean; muted: boolean }> {
         const snap = presence.phase === 'joined' ? presence.snapshot : undefined;
         if (!snap) return [];
