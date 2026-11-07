@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Omo Spatial IDE app icon: a lit room corner with one agent standing in it.
+       macOS icon grid: 824x824 rounded square inset 100px. Colours: omo design tokens.
+       Flat fills only (no gradients/filters) so sips/qlmanage, rsvg and ImageMagick render it alike. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="#141c26"/>
+  <rect x="100" y="512" width="824" height="412" rx="185" ry="185" fill="#0e141c"/>
+  <rect x="100" y="512" width="824" height="200" fill="#0e141c"/>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="184" ry="184" fill="none" stroke="#2a3a4c" stroke-width="3"/>
+  <!-- floor, then the two walls of the room corner -->
+  <polygon points="512,536 262,680 512,824 762,680" fill="#17302b"/>
+  <polygon points="512,226 262,370 262,680 512,536" fill="#2b5a4f"/>
+  <polygon points="512,226 762,370 762,680 512,536" fill="#1f423b"/>
+  <!-- glowing desk monitor on the left wall -->
+  <polygon points="318,430 438,361 438,445 318,514" fill="#8fe3c4"/>
+  <polygon points="334,452 422,401 422,412 334,463" fill="#3c7a65"/>
+  <polygon points="334,474 398,437 398,448 334,485" fill="#3c7a65"/>
+  <!-- room edges -->
+  <g fill="none" stroke="#8fe3c4" stroke-width="22" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="262,370 512,226 762,370"/>
+    <line x1="512" y1="226" x2="512" y2="536"/>
+    <polyline points="262,370 262,680 512,824 762,680 762,370"/>
+    <polyline points="262,680 512,536 762,680"/>
+  </g>
+  <!-- the agent: an "o" standing on the floor -->
+  <ellipse cx="560" cy="716" rx="70" ry="22" fill="#0a0f15"/>
+  <circle cx="560" cy="636" r="74" fill="#b4f0da"/>
+  <circle cx="560" cy="636" r="30" fill="#0e141c"/>
+</svg>
