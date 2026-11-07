@@ -150,7 +150,7 @@ Third-party licenses for bundled runtimes: vendor/node/LICENSE, vendor/tmux/LICE
 const PAYLOAD_REQUIRED = [
     'omo', 'omo-app', 'omo-room-server', 'scripts/start.cjs', 'scripts/desktop-launch.cjs', 'scripts/runtime-ide-plugins.cjs', 'ide-extensions.lock.json',
     'browser-app/lib/backend/main.js', 'browser-app/lib/frontend/index.html', 'browser-app/src-gen/backend/main.js',
-    'runtime/omo_spatial_host.py', 'runtime/claude_status_hook.py', 'runtime/claude_with_status.sh', 'runtime/dsh_web_launch.py',
+    'runtime/omo_spatial_host.py', 'runtime/prompt_env.py', 'runtime/claude_status_hook.py', 'runtime/claude_with_status.sh', 'runtime/dsh_web_launch.py',
     'runtime/guarded_hermes_exec.py', 'runtime/owned_agent_exec.py', 'runtime/owned_agent_launch.py', 'runtime/owned_pty_process.py', 'runtime/process_identity.py',
     'runtime/bridge/omobridge.py', 'runtime/bridge/tmux.conf',
     'server/omo-room-server.cjs', 'server/src/server.cjs', 'server/src/hub.cjs', 'server/vendor/world-model.cjs', 'server/vendor/presence-protocol.cjs',

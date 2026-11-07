@@ -130,8 +130,13 @@ HERMES_ROOT_PIN = os.path.abspath(ob.HERMES_ROOT) if os.environ.get("OMO_HERMES_
 _bridge_tab_env = ob.tab_env
 
 
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)  # final:fix — the host runs with python -I, which leaves its own folder off sys.path
+from prompt_env import prompt_safe as _prompt_safe  # noqa: E402 — final:fix, see prompt_env.py
+
+
 def _tab_env(ws, tab, autorun=True):
-    env = _bridge_tab_env(ws, tab, autorun)
+    env = _prompt_safe(_bridge_tab_env(ws, tab, autorun))
     if HERMES_ROOT_PIN:
         env += ["-e", "HERMES_HOME=" + (HERMES_ROOT_PIN if tab.get("kind") == "hermes" else "")]
     return env

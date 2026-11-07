@@ -220,6 +220,9 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await page.waitForFunction(() => document.querySelector('[data-testid="omo-world"]')?.dataset.focusFull === 'true', { timeout: 10000 });
         check('full-screen terminal engaged', true);
         await hold(1500);
+        { const dom = await page.evaluate(() => { const v = document.querySelector('.omo-focus-pane'); return v ? v.innerText.split('\n').map(l => l.trim()).filter(Boolean) : []; });
+          check('full-screen shows the command output line', dom.some(l => l === 'hello from the Codex desk'), dom.slice(0, 6)); }
+        await hold(1500);
         await page.evaluate(() => { const c = document.getElementById('demo-cap'); if (c) { c.style.top = 'auto'; c.style.bottom = '24px'; } }); await cap('Full-screen terminal (F)', 'Same live shell. Agent tabs start only after you confirm.');
         await hold(4500);
 
@@ -235,6 +238,9 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await page.waitForFunction(() => document.querySelector('[data-testid="omo-world"]')?.dataset.immersive === 'true' && document.body.classList.contains('omo-immersive-world'), { timeout: 10000 });
         await hold(1200);
         check('immersive mode engaged', true);
+        await hold(1500);
+        { const txt = (JSON.parse((await ds()).stationText || '{}')[target] || []).map(l => l.trim()).filter(Boolean);
+          check('immersive monitor keeps the command output line', txt.some(l => l === 'hello from the Codex desk'), txt.slice(0, 6)); }
         check('viewport still 1440x900', JSON.stringify(await page.evaluate(() => [innerWidth, innerHeight])) === '[1440,900]', await page.evaluate(() => [innerWidth, innerHeight]));
         await hold(1500);
         await page.evaluate(() => { const c = document.getElementById('demo-cap'); if (c) { c.style.top = 'auto'; c.style.bottom = '110px'; } }); await cap('Immersive world (G)', 'The room fills the whole window.');
