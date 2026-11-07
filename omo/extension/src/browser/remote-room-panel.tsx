@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import type { RemoteRoomController, RemoteRoomView } from './remote-room-controller';
 import type { SavedRemoteRoom } from '../common/remote-room-protocol';
 
@@ -20,6 +21,18 @@ export function RemoteRoomChip(props: { view: RemoteRoomView; open: boolean; onT
         title={s.server ? `${s.server} · room ${s.roomId}` : 'Join or host a remote room'} onClick={props.onToggle}>
         <i aria-hidden="true" className="omo-remote-dot" />{s.phase === 'idle' ? 'Remote room' : label}
     </button>;
+}
+
+/** Floating layer on document.body under the chip, so no dock or HUD layer can cover it. */
+export function RemoteRoomPopover(props: { anchor: HTMLElement | null; children: React.ReactNode }): React.ReactElement | null {
+    const [pos, setPos] = React.useState<{ top: number; left: number }>();
+    React.useLayoutEffect(() => {
+        const place = (): void => { const r = props.anchor?.getBoundingClientRect(); if (r) setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 436)) }); };
+        place(); window.addEventListener('resize', place); const t = window.setInterval(place, 500);
+        return () => { window.removeEventListener('resize', place); window.clearInterval(t); };
+    }, [props.anchor]);
+    if (!pos || typeof document === 'undefined') return null;
+    return createPortal(<div className="omo-world-widget omo-remote-layer" style={{ top: pos.top, left: pos.left }}>{props.children}</div>, document.body);
 }
 
 export function RemoteRoomPanel(props: { controller: RemoteRoomController; view: RemoteRoomView; onClose(): void }): React.ReactElement {

@@ -47,7 +47,7 @@ export interface RemoteRoomClientOptions {
     log?: (message: string) => void;
 }
 
-interface Target { server: string; socketUrl: string; roomId: string; join: RemoteJoinRequest; auth: RoomAuth }
+interface Target { server: string; socketUrl: string; roomId: string; join: RemoteJoinRequest; auth: RoomAuth; memberId?: string }
 interface Pending { resolve(frame: RoomServerFrame): void; reject(error: Error): void; timer: unknown }
 
 /** Exponential backoff with jitter: 1s, 2s, 4s … capped at 30s. */
@@ -88,6 +88,8 @@ export class RemoteRoomClient {
     private colour?: PresenceColour;
     private agents: AgentStatusSummary[] = [];
     private disposed = false;
+    /** Identity of this connection for membership claims in the shared token store. */
+    private readonly claimId = Symbol('remote-room-connection');
     private readonly now: () => number;
     private readonly schedule: (fn: () => void, ms: number) => unknown;
     private readonly cancel: (handle: unknown) => void;
@@ -118,9 +120,9 @@ export class RemoteRoomClient {
         const invite = parseInviteLink(link);
         const clean = this.cleanJoin(join);
         // Already a member of that room? Reuse the stored token instead of burning the invite.
-        const saved = await this.options.store.token(invite.server, invite.roomId);
+        const saved = await this.options.store.token(invite.server, invite.roomId, this.claimId);
         const auth: RoomAuth = saved ? { kind: 'member', roomId: invite.roomId, token: saved.token } : { kind: 'invite', roomId: invite.roomId, invite: invite.invite };
-        return this.start({ server: invite.server, socketUrl: invite.socketUrl, roomId: invite.roomId, join: clean, auth });
+        return this.start({ server: invite.server, socketUrl: invite.socketUrl, roomId: invite.roomId, join: clean, auth, memberId: saved?.memberId });
     }
 
     async host(input: RemoteHostRequest, join: RemoteJoinRequest): Promise<RemoteRoomStatus> {
@@ -135,9 +137,9 @@ export class RemoteRoomClient {
 
     async rejoin(serverUrl: string, roomId: string, join: RemoteJoinRequest): Promise<RemoteRoomStatus> {
         const server = roomServerOrigin(serverUrl);
-        const saved = await this.options.store.token(server, roomId);
-        if (!saved) throw new Error('This IDE has no saved membership for that room. Use an invite link.');
-        return this.start({ server, socketUrl: roomSocketUrl(server), roomId, join: this.cleanJoin(join), auth: { kind: 'member', roomId, token: saved.token } });
+        const saved = await this.options.store.token(server, roomId, this.claimId);
+        if (!saved) throw new Error('This IDE has no free saved membership for that room (another tab may be using it). Use an invite link.');
+        return this.start({ server, socketUrl: roomSocketUrl(server), roomId, join: this.cleanJoin(join), auth: { kind: 'member', roomId, token: saved.token }, memberId: saved.memberId });
     }
 
     async reconnectNow(): Promise<RemoteRoomStatus> {
@@ -158,6 +160,7 @@ export class RemoteRoomClient {
         this.target = undefined; this.phase = 'idle'; this.error = ''; this.attempt = 0; this.retryAt = undefined;
         this.members = []; this.worldSpec = undefined; this.selfId = undefined; this.role = undefined; this.roomName = '';
         this.voice = null; this.signals = []; this.chat = [];
+        this.options.store.release(this.claimId);
     }
 
     dispose(): void {
@@ -167,6 +170,7 @@ export class RemoteRoomClient {
         const ws = this.ws; this.epoch++; this.teardown('Disconnected.');
         try { ws?.close(ROOM_CLOSE.normal, 'client closed'); } catch { /* ignore */ }
         this.target = undefined; this.phase = 'idle';
+        this.options.store.release(this.claimId);
     }
 
     saved(): Promise<SavedRemoteRoom[]> { return this.options.store.list(); }
@@ -350,9 +354,15 @@ export class RemoteRoomClient {
                 try { frame = parseServerFrame(event.data); } catch (error) { this.log(`remote room: dropped bad frame: ${String(error)}`); return; }
                 if (!frame) return;
                 if (frame.t === 'welcome') {
+                    if (!this.options.store.claim(target.server, target.roomId, frame.memberId, this.claimId)) {
+                        // Another tab of this IDE is already this member; joining would kick it out.
+                        this.phase = 'failed'; this.error = 'Another tab of this IDE is already in this room as you. Use a new invite link for a second person.';
+                        try { ws.close(ROOM_CLOSE.normal, 'duplicate'); } catch { /* ignore */ }
+                        done(new Error(this.error)); return;
+                    }
                     this.selfId = frame.memberId; this.role = frame.role; this.roomName = frame.roomName;
                     // From now on reconnect with the member token, never the invite/owner token again.
-                    target.auth = { kind: 'member', roomId: target.roomId, token: frame.memberToken };
+                    target.auth = { kind: 'member', roomId: target.roomId, token: frame.memberToken }; target.memberId = frame.memberId;
                     void this.options.store.save({ server: target.server, roomId: target.roomId, roomName: frame.roomName, role: frame.role, memberId: frame.memberId, token: frame.memberToken })
                         .catch(error => this.log(`remote room: could not save member token: ${String(error)}`));
                     const join: RoomClientFrame = { t: 'join', rid: 'join', name: target.join.name };
@@ -402,7 +412,7 @@ export class RemoteRoomClient {
     }
 
     private dropBadToken(target: Target, code: string): void {
-        if (target.auth.kind === 'member' && code === 'auth') void this.options.store.remove(target.server, target.roomId).catch(() => undefined);
+        if (target.auth.kind === 'member' && code === 'auth' && target.memberId) void this.options.store.remove(target.server, target.roomId, target.memberId).catch(() => undefined);
     }
 
     private scheduleReconnect(epoch: number): void {

@@ -178,6 +178,14 @@ let port;
     const rj = await B.rejoin(saved[0].server, saved[0].roomId, { name: 'Bob' });
     ok(rj.phase === 'joined', 'rejoin from saved membership');
 
+    // Two tabs on ONE IDE backend (shared token store) join the same room as two distinct members
+    const A2 = remoteRoomConnection(storeA);
+    const inv2 = await A.createInvite({});
+    const s2 = await A2.joinInvite(inv2.link, { name: 'Harry tab 2' });
+    await until(async () => (await A.status()).members.length === 3, 3000, 'third member');
+    ok(s2.phase === 'joined' && s2.selfId !== (await A.status()).selfId && (await A.status()).phase === 'joined', 'second tab on the same IDE joins as a new member without kicking the first');
+    await A2.leave(); A2.dispose();
+
     // Fatal auth: no retry
     const C = remoteRoomConnection(new RemoteRoomTokenStore(async () => path.join(dir, 'c', 'r.json')));
     let err = ''; try { await C.host({ server: `http://127.0.0.1:${port}`, ownerToken: 'wrong-token-0123456789', roomId: 'harry-room' }, { name: 'Eve' }); } catch (e) { err = e.message; }

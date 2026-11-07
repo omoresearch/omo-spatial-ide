@@ -1,4 +1,6 @@
 /* w2 mp-client lane: remote room chip + panel. Uses design tokens only. */
+.omo-root .omo-console-dock > .omo-remote-anchor { position: relative; justify-self: start; margin-bottom: 4px; }
+.omo-world-widget.omo-remote-layer { position: fixed; z-index: 10000; font-family: var(--omo-font); min-width: 0; overflow: visible; background: transparent; color: var(--omo-text); }
 .omo-remote-chip {
     display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 var(--omo-sp-3, 12px);
     border: 1px solid var(--omo-line-2); border-radius: 999px; background: var(--omo-surface-1); color: var(--omo-text-2);
@@ -15,7 +17,7 @@
 @keyframes omo-remote-pulse { 50% { opacity: .35; } }
 
 .omo-remote-panel {
-    position: absolute; top: 64px; right: var(--omo-sp-4, 16px); z-index: 30; width: min(420px, calc(100% - 32px)); max-height: calc(100% - 80px); overflow: auto;
+    width: min(420px, 90vw); max-height: 70vh; overflow: auto;
     padding: var(--omo-sp-3, 12px) var(--omo-sp-4, 16px); border: 1px solid var(--omo-line-2); border-radius: 12px;
     background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur); color: var(--omo-text); font-size: var(--omo-fs-md);
     box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
