@@ -40,7 +40,7 @@ const fs = require('fs');
 fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd(), env: Object.keys(process.env).filter(k => /^(HERMES_|OMO_)/.test(k)), home: process.env.HERMES_HOME }));
 setTimeout(() => { process.stdout.write(fs.readFileSync(${JSON.stringify(answerFile)}, 'utf8')); process.exit(${exit}); }, ${sleep});
 `, { mode: 0o755 });
-  const env = { PATH: process.env.PATH, HOME: root, OMO_HERMES_BIN: bin, OMO_SPATIAL_HERMES_ROOT: hermesRoot, HERMES_SECRET_LEAK: 'x', OMO_OTHER: 'y' };
+  const env = { PATH: process.env.PATH, HOME: root, OMO_SPATIAL_HERMES_BIN: bin, OMO_SPATIAL_HERMES_ROOT: hermesRoot, HERMES_SECRET_LEAK: 'x', OMO_OTHER: 'y' };
   const backend = new admin.WorldAdminBackend({ env, timeoutMs: 3000 });
   return { backend, record, root, hermesRoot };
 }

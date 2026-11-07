@@ -57,9 +57,12 @@ export interface WorldAdminBackendOptions {
     findHermes?: () => string | undefined;
 }
 
-/** Same lookup the runtime uses: OMO_HERMES_BIN (absolute or a name on PATH), else `hermes` on PATH. */
+/**
+ * Same binary the runtime host pins for Hermes tabs: OMO_SPATIAL_HERMES_BIN (what the launcher
+ * sets; runtime-host.ts passes it on as OMO_HERMES_BIN), then OMO_HERMES_BIN, else `hermes` on PATH.
+ */
 export function findHermesExecutable(env: NodeJS.ProcessEnv = process.env): string | undefined {
-    const configured = (env.OMO_HERMES_BIN || 'hermes').trim();
+    const configured = (env.OMO_SPATIAL_HERMES_BIN || env.OMO_HERMES_BIN || 'hermes').trim();
     const candidate = path.isAbsolute(configured) ? configured : which(configured, env.PATH);
     if (!isExecutable(candidate)) return undefined;
     try { return fs.realpathSync(candidate); } catch { return undefined; }
