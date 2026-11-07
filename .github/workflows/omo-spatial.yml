@@ -2,7 +2,7 @@ name: Omo spatial IDE
 
 on:
   push:
-    branches: ['omo/**']
+    branches: ['omo/**', 'master']
     paths: ['omo/**', '.github/workflows/omo-spatial.yml']
   pull_request:
     branches: ['omo/**', 'master']
@@ -18,7 +18,8 @@ concurrency:
 
 jobs:
   local-runtime:
-    if: github.repository == 'omoresearch/theia' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    # Rename-safe: runs only in the omoresearch repository (the self-hosted pool is org-scoped), never for forks.
+    if: github.repository_owner == 'omoresearch' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, ci-shared]
     # Full browser coverage exceeded 25 minutes with every check passing;
     # leave headroom for shared-runner load, setup and cleanup.
