@@ -16,6 +16,8 @@ import { OMO_GIT_REVIEW_PATH } from '../common/git-review-protocol';
 import { ProjectGitReviewBackend, projectGitReviewConnection } from './git-review';
 import { StandaloneSecurityContribution } from './standalone-security';
 import { WsRequestValidatorContribution } from '@theia/core/lib/node/ws-request-validators';
+import { OMO_WORLD_ADMIN_PATH } from '../common/world-admin-protocol'; // w2:admin
+import { WorldAdminBackend, worldAdminConnection } from './world-admin-service'; // w2:admin
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
 export const OmoManagedWeb = Symbol('OmoManagedWeb');
@@ -58,6 +60,13 @@ export default new ContainerModule(bind => {
             return connection;
         });
     }).inSingletonScope();
+    // w2:admin — Hermes world admin: plans WorldProposals only; Hermes runs only on explicit, confirmed opt-in.
+    bind(ConnectionHandler).toDynamicValue(ctx => {
+        const host = ctx.container.get<RuntimeHost>(OmoRuntimeHost);
+        const admin = new WorldAdminBackend({ leaseEnv: () => host.hermesLeaseEnvironment });
+        return new RpcConnectionHandler<object>(OMO_WORLD_ADMIN_PATH, () => worldAdminConnection(admin));
+    }).inSingletonScope();
+    // end w2:admin
     bind(OmoRuntimeLifecycle).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(OmoRuntimeLifecycle);
     bind(ConnectionHandler).toDynamicValue(ctx => {
