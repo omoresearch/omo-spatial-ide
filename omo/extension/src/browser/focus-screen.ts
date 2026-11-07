@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { RoomScene, TerminalWorkstation } from './room-scene';
 import type { FirstPersonControls, FocusScreen } from './first-person-controls';
 import type { PlayerPose } from '../common/player-state';
+import { currentStations } from './world-stations'; // w2:runtime
 
 export const FOCUS_STATIONS: readonly TerminalWorkstation[] = ['terminal', 'terminal-2'];
 /** Same reach as clicking a monitor in the room. */
@@ -31,7 +32,11 @@ export function stationScreen(scene: RoomScene | undefined, canvas: HTMLCanvasEl
     }
     try {
         const desk = (JSON.parse(canvas?.dataset.deskPositions || '{}') as Record<string, { x: number; z: number }>)[station];
-        if (!desk) return undefined;
+        if (!desk) { // w2:runtime — a world station without a published spot: use its WorldSpec transform.
+            const at = currentStations().find(s => s.id === station)?.position; if (!at) return undefined;
+            const sin = Math.sin(at.rotation), cos = Math.cos(at.rotation);
+            return { id: station, center: { x: at.x + DESK_SCREEN.z * sin, y: DESK_SCREEN.y, z: at.z + DESK_SCREEN.z * cos }, normal: { x: sin, z: cos }, width: DESK_SCREEN.width, height: DESK_SCREEN.height };
+        }
         return { id: station, center: { x: desk.x, y: DESK_SCREEN.y, z: desk.z + DESK_SCREEN.z }, normal: { x: 0, z: 1 }, width: DESK_SCREEN.width, height: DESK_SCREEN.height };
     } catch { return undefined; }
 }
