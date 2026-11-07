@@ -116,3 +116,25 @@ test('(1) the widget arms setup only from an explicit open, never from a world c
   assert.doesNotMatch(readWorld, /armSetup|maybeOfferSetup|requestRecipeApply/, 'a world change never offers setup');
 });
 
+
+test('(1) a failed first open, a project change or a presence change clears the first-open arm (no later unprompted setup)', async () => {
+  const r = rig();
+  const { world, added } = worldWithNewDesk();
+  r.stations.setWorld(world, true);
+  r.stations.armSetup(added);
+  r.stations.disarmSetup(added); // openTerminal: the bind did not go live
+  await r.open(added);
+  assert.equal(r.offer(added), false, 'a reconnect after a failed first open asks nothing');
+  r.stations.armSetup(added);
+  r.stations.disarmSetup(); // project switch / join / leave a room
+  assert.equal(r.stations.isSetupArmed(added), false);
+  assert.equal(r.offer(added), false);
+  assert.deepEqual(r.calls.filter(c => c[0] !== 'openWorkspace'), [], 'no tab or profile change: nothing started');
+  const src = fs.readFileSync(path.join(SRC, 'omo-world-widget.tsx'), 'utf8');
+  const openTerminal = src.slice(src.indexOf('private async openTerminal('), src.indexOf('private async openReviewSnapshot('));
+  assert.match(openTerminal, /catch \(error\) \{ this\.stations\.disarmSetup\(station\)/, 'a thrown open disarms');
+  assert.match(openTerminal, /phase !== 'live'\) this\.stations\.disarmSetup\(station\)/, 'an open that is not live disarms');
+  assert.match(src, /joinPresence=\([^)]*\):void=>\{this\.stations\.disarmSetup\(\)/);
+  assert.match(src, /leavePresence=\(\):void=>\{this\.stations\.disarmSetup\(\)/);
+  assert.match(src, /this\.stations\.disarmSetup\(\); \/\/ t4:polish: a project change/);
+});

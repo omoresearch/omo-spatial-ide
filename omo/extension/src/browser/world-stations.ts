@@ -274,6 +274,9 @@ export class WorldStations {
      * desk switcher). Only an armed desk may be offered its setup; adding a desk to the world never arms one.
      */
     armSetup(id: StationId): void { if (this.has(id)) this.armed.add(id); }
+    /** t4:polish — forget pending first-open arms (failed open, project or presence change), so only a fresh explicit open can offer setup. */
+    disarmSetup(id?: StationId): void { if (id === undefined) this.armed.clear(); else this.armed.delete(id); }
+    isSetupArmed(id: StationId): boolean { return this.armed.has(id); }
     /**
      * Offer the station's StationConfig tabs once per (station, workspace) when the user's first open of a desk
      * goes live. Offering = the controller's pending confirmation; nothing starts until the user confirms.

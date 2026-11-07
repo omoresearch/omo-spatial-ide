@@ -501,12 +501,12 @@ export class OmoWorldWidget extends ReactWidget {
         }
         this.update();
     }
-    private joinPresence=(roomId:string,name:string):void=>{
+    private joinPresence=(roomId:string,name:string):void=>{this.stations.disarmSetup(); /* t4:polish */
         if(!this.room||!this.project)return;
         this.worldScene?.releaseTyping();
         void this.presence?.join({roomId,name,projectUri:this.project.toString(),theme:this.room.theme,layout:this.room.layout??'classic',clientId:this.tabIdentity}).catch(error=>{this.error=String(error);this.update();});
     };
-    private leavePresence=():void=>{this.worldScene?.releaseTyping();void this.presence?.leave().catch(error=>{this.error=String(error);this.update();});};
+    private leavePresence=():void=>{this.stations.disarmSetup(); /* t4:polish */this.worldScene?.releaseTyping();void this.presence?.leave().catch(error=>{this.error=String(error);this.update();});};
     private projectChanged(next: URI | undefined): void {
         if (next?.toString() === this.project?.toString()) return;
         this.invalidatePresetRead(); this.draftCamera = undefined; this.presetStatus = ''; this.draftWorld = undefined; this.draftWorldSource = undefined; // w2:templates
@@ -527,6 +527,7 @@ export class OmoWorldWidget extends ReactWidget {
             } catch { /* storage errors were reported at start-up */ }
         }
         void this.web?.close();
+        this.stations.disarmSetup(); // t4:polish: a project change never carries a first-open arm
         this.readWorld(false); // w2:runtime
         this.stations.forEach((controller, id) => { const binding = this.binding(id); if (binding) void controller.reconnect(binding); else controller.release(); });
         if (this.room) this.stations.reconnectSaved(this.bindingContext());
@@ -738,7 +739,8 @@ export class OmoWorldWidget extends ReactWidget {
         if (!binding) throw new Error('Choose a project folder first.');
         const controller = this.stations.controller(station);
         if (!this.stations.hasSavedBinding(binding)) this.stations.armSetup(station); // t4:polish: the first explicit open of this desk may offer its setup (confirm first)
-        await controller?.bind(binding);
+        try { await controller?.bind(binding); } catch (error) { this.stations.disarmSetup(station); throw error; }
+        if (controller?.state.phase !== 'live') this.stations.disarmSetup(station); // t4:polish: a failed first open must not offer setup later on a reconnect
         if (this.activeMode === station) { this.feedback = controller?.state.phase === 'live' ? 'Live terminal on this monitor · Type here. Esc to walk away.' : controller?.state.error || controller?.state.statusText || ''; this.update(); }
     }
     private async openReviewSnapshot(): Promise<GitReviewSnapshot | undefined> {
