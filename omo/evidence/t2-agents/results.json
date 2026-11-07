@@ -1,0 +1,19 @@
+{"lane":"t2:agents","ports":"3570 only","fakeClisOnly":true,"modelCalls":0,
+ "results":{
+  "agent buttons ask first, start only after confirm (claude, codex, hermes, dsh)":"PASS (argv.jsonl empty before confirm, 1 line after)",
+  "Enable Claude status shows exact JSON + path, writes only after confirm":"PASS (file absent before, byte-identical to shown JSON after, inside OMO data dir)",
+  "Turn off removes the file; next Claude tab has no --settings":"PASS",
+  "~/.claude untouched":"PASS (sha256 of settings.json 6ad7fd78... before and after; all top-level files identical)",
+  "Claude tab after enabling gets --settings":"PASS (argv: --settings <data>/claude-status/settings.json --session-id <uuid5>)",
+  "hook events reach events.jsonl and notifications":"PASS (approval notice 'reported by the agent', ended notice)",
+  "hook events drive the DESK state working->approval->idle":"FAIL before fix (desk avatar stayed 'idle'); FIXED in code, tsc 0 + unit 415/415 + browser build 0; NOT re-run in real app (time)",
+  "SessionStart -> idle":"FIXED (SessionStart was not in the hook config or the mapping)",
+  "Go to desk on desk 3 of a 4-station world":"PARTIAL (desk 3 'Research' opens live in a 4-station world; jump click not exercised)",
+  "Hermes lease read-only":"PASS (state.db sha256 unchanged across 3 polls); lease drives notices (approval 'Hermes turn state', finished, ended)",
+  "process exit -> exited/ended":"PASS (ended notices for Claude and Hermes)",
+  "dsh with node 22.11 shows clear message, starts nothing":"PASS, message only in disabled-button tooltip -> FIXED: hint row now shows it",
+  "dsh with node 24.10 runs dsh web --no-open --port N, Open on web wall":"PASS (argv web --no-open --port 44015; wall at http://127.0.0.1:44015/?token=...)",
+  "Real agent check: Run->confirm list->tabs->nothing typed->JSON":"PASS (0 starts before confirm, 4 after, stdin.jsonl empty, report saved, sentNothing:true)",
+  "spurious notices":"FAIL before fix: 'Hermes finished' at start-up banner, stale 'approval · check the screen' after reload; FIXED (not re-run in real app)",
+  "agent glyphs screenshot + vision":"NOT DONE (time)"
+ }}

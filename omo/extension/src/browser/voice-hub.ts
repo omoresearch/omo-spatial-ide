@@ -9,7 +9,8 @@ import { VoiceSignalTransport, localPresenceTransport } from '../common/voice-tr
 import type { OmoVoiceSettingsService } from '../common/voice-settings-protocol';
 import { DictationController, DictationState, recognitionCtor } from './voice-dictation';
 import { ReadAloud, replyText } from './voice-readaloud';
-import { AgentAvatars, AgentPresence, DeskId, agentLabel, aimedDesk, deskAgents } from './agent-avatars';
+import { AgentAvatars, AgentPresence, DeskId, agentLabel, aimedDesk, deskAgents, withRealStatus } from './agent-avatars'; // t2:agents: withRealStatus
+import type { AgentStatusReading } from '../common/agent-status-signals'; // t2:agents
 
 /** What the widget lends the hub. Read-only getters; the hub never owns terminals or rooms. */
 export interface VoiceHubHost {
@@ -22,6 +23,8 @@ export interface VoiceHubHost {
     layout(): RoomLayoutId;
     desk(desk: DeskId): { state: RuntimeConsoleState; controller?: RuntimeConsoleController };
     activeDesk(): DeskId;
+    /** t2:agents: real status readings per agent key (hook, lease, process); the screen guess is the fallback. */
+    signals?(key: string): AgentStatusReading[];
     onChange(): void;
     message(text: string): void;
 }
@@ -185,7 +188,8 @@ export class VoiceHub {
         for (const desk of DESKS) {
             const { state } = this.host.desk(desk);
             const working = now - this.watch[desk].changedAt < QUIET_MS;
-            for (const agent of deskAgents(desk, state.workspace?.tabs, state.activeTabId, working)) {
+            for (const guessed of deskAgents(desk, state.workspace?.tabs, state.activeTabId, working)) {
+                const agent = withRealStatus(guessed, this.host.signals?.(guessed.key) ?? [], now); // t2:agents
                 agent.speaking = this.readAloud.speakingKey === agent.key;
                 agents.push(agent);
             }

@@ -1,0 +1,38 @@
+module.exports = async (ctx) => {
+    const { page, pause, fs } = ctx;
+    const CANVAS = 'canvas[data-testid="omo-world-canvas"]';
+    const S = '/home/harry/.hermes/profiles/omo-dev/cache/scratch/t2a-explore';
+    await require('./t2a-step1.js')(ctx);
+    const out = {};
+    out.tabs = await page.$$eval('[data-testid^="runtime-tab-"]', bs => bs.map(b => b.getAttribute('title') + ' | ' + b.textContent));
+    await page.click('[data-testid="hud-notices-toggle"]').catch(e => out.noToggle = String(e));
+    await pause(500);
+    out.notices = await page.$eval('[data-testid="hud-notices"]', e => e.innerText).catch(() => 'none');
+    await page.click('[data-testid="hud-notices-toggle"]').catch(() => {});
+    out.avatars = await page.$eval(CANVAS, c => c.dataset.agentAvatars);
+    // hermes
+    await page.click('[data-testid="runtime-new-hermes"]');
+    await page.waitForSelector('[data-testid="runtime-confirm"]');
+    out.hermesConfirm = await page.$eval('[data-testid="runtime-confirm"]', e => e.innerText);
+    await page.click('[data-testid="runtime-confirm-yes"]');
+    for (let i = 0; i < 60 && !fs.readFileSync(S + '/fake/argv.jsonl', 'utf8').includes('"hermes"'); i++) await pause(200);
+    const line = fs.readFileSync(S + '/fake/argv.jsonl', 'utf8').trim().split('\n').map(JSON.parse).filter(r => r.kind === 'hermes').pop();
+    out.hermesArgv = line;
+    await pause(4000);
+    const ctl = S + '/fake/ctl/' + line.pid;
+    const sum = () => require('child_process').execSync(`sha256sum ${S}/hermes/state.db; ls -la ${S}/hermes`).toString();
+    const snap = async (label) => { out[label] = { avatars: await page.$eval(CANVAS, c => c.dataset.agentAvatars), hud: await page.$eval('[data-testid="hud-layer"]', e => e.innerText).catch(() => '') }; };
+    await snap('hStart');
+    fs.appendFileSync(ctl, 'turn-start\n'); await pause(3000);
+    out.sumAfterWrite = sum();
+    await pause(9000); await snap('hWorking');
+    out.sumAfterPolls = sum();
+    fs.appendFileSync(ctl, 'turn-approval\n'); await pause(8000); await snap('hApproval');
+    fs.appendFileSync(ctl, 'turn-end\n'); await pause(8000); await snap('hEnd');
+    fs.appendFileSync(ctl, 'exit\n'); await pause(8000); await snap('hExit');
+    out.tabsEnd = await page.$$eval('[data-testid^="runtime-tab-"]', bs => bs.map(b => b.getAttribute('title') + ' | ' + b.textContent));
+    await page.click('[data-testid="hud-notices-toggle"]').catch(() => {}); await pause(400);
+    out.noticesEnd = await page.$eval('[data-testid="hud-notices"]', e => e.innerText).catch(() => 'none');
+    out.stdin = fs.readFileSync(S + '/fake/stdin.jsonl', 'utf8');
+    return out;
+};

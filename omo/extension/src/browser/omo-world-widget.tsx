@@ -319,7 +319,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.toDispose.push({dispose:()=>{void this.presence?.dispose().catch(()=>undefined);}});
         // --- omo voice lane (mount hook): read-only access to presence, scene and desks. Starts nothing. ---
         this.voiceHub=new VoiceHub({presenceService:this.presenceService,voiceSettings:this.voiceSettings/* w2:voice */,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',
-            desk:desk=>({state:this.deskState(desk),controller:this.stations?.peek(desk)}),activeDesk:()=>asDesk(this.activeStation),
+            desk:desk=>({state:this.deskState(desk),controller:this.stations?.peek(desk)}),activeDesk:()=>asDesk(this.activeStation),signals:key=>this.agentSignalPoller?.get(key)??[]/* t2:agents */,
             onChange:()=>this.update(),message:text=>{this.feedback=text;this.update();}});
         this.toDispose.push({dispose:()=>{this.voiceHub?.dispose();this.voiceHub=undefined;}});
         // --- end omo voice lane ---
@@ -345,7 +345,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.agentSignalPoller=new AgentSignalPoller({service:this.agentSignals,desks:()=>this.stationList.map(info=>({desk:info.id as DeskId,workspace:this.deskState(info.id).workspace})),
             schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number)});
         this.toDispose.push({dispose:()=>{this.agentSignalPoller?.dispose();this.agentSignalPoller=undefined;}});
-        this.hudHub=new HudHub({presenceService:this.presenceService,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',signals:key=>this.agentSignalPoller?.get(key)??[],
+        this.hudHub=new HudHub({presenceService:this.presenceService,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',signals:key=>this.agentSignalPoller?.get(key)??[],signalsReady:()=>!!this.agentSignalPoller?.ready/* t2:agents */,
             desk:desk=>({state:this.deskState(desk),controller:this.stations?.peek(desk)}),activeDesk:()=>this.activeMode,agents:()=>this.voiceHub?.state.agents??[],
             voice:()=>this.voiceHub?.state.voice,goToDesk:desk=>{if(!this.stations.has(desk)){this.feedback='That desk is no longer in this world.';this.update();return;}this.chooseStation(desk);this.focusMode.sync();if(this.deskState(desk).phase==='live')this.focusMode.attachActive();else{this.feedback=`${this.stationName(desk)} is not connected. Click its monitor to reconnect. Nothing was started.`;this.update();}},onChange:()=>this.update()});
         this.toDispose.push({dispose:()=>{this.hudHub?.dispose();this.hudHub=undefined;}});

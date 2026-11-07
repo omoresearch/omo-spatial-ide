@@ -20,6 +20,7 @@ export interface HookEvent { event: string; notificationType?: string; sessionId
 /** Map a Claude Code hook event to a status. Event names verified in Claude Code 2.1.318 docs/binary. */
 export function statusFromClaudeHook(e: HookEvent): AgentStatus | undefined {
     switch (e.event) {
+        case 'SessionStart': return 'idle'; // t2:agents: a fresh or resumed session waits for the user
         case 'UserPromptSubmit': case 'PreToolUse': case 'PostToolUse': case 'SubagentStart': return 'working';
         case 'PermissionRequest': return 'waiting-approval';
         case 'Notification': return e.notificationType === 'permission_prompt' ? 'waiting-approval' : e.notificationType === 'idle_prompt' ? 'idle' : undefined;
@@ -67,7 +68,7 @@ export function mergeStatus(readings: AgentStatusReading[], now: number): AgentS
  */
 export function claudeHookConfig(hookCommand: string): object {
     const cmd = [{ type: 'command', command: hookCommand, async: true }];
-    const events = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PermissionRequest', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'];
+    const events = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PermissionRequest', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'];
     return { hooks: Object.fromEntries(events.map(e => [e, [{ hooks: cmd }]])) };
 }
 

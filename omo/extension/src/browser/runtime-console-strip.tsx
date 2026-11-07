@@ -226,7 +226,7 @@ export function RuntimeConsoleStrip(props: { state: RuntimeConsoleState; control
         </div>}
         {ws && task && <AgentTaskDrawer state={state} controller={controller} onReview={props.onReview} />}
         {ws && drawer && <ManageDrawer state={state} controller={controller} locked={locked} onOpenLink={props.onOpenLink} />}
-        {ws && hint && <div className="omo-console-hint" data-testid="runtime-install-hint">Not installed — {hint}</div>}
+        {ws && hint && <div className="omo-console-hint" data-testid="runtime-install-hint">Not available — {hint}</div>} {/* t2:agents: dsh can be installed but blocked by an old Node */}
         {state.pending && <div className="omo-console-confirm" role="alertdialog" aria-label="Confirm" data-testid="runtime-confirm">
             <p>{state.pending.message}</p>
             <button className="omo-console-go" data-testid="runtime-confirm-yes" onClick={() => void controller?.confirmPending()}>{state.pending.confirmLabel}</button>

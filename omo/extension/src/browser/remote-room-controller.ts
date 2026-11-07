@@ -153,7 +153,7 @@ export function agentSummary(agents: AgentPresence[]): AgentStatusSummary[] {
         desk: a.desk,
         kind: a.kind,
         label: `${KIND_LABEL[a.kind] ?? 'Agent'} · ${DESK_LABEL[a.desk] ?? 'Desk'}`,
-        activity: a.activity
+        activity: a.activity === 'approval' ? 'idle' : a.activity // t2:agents: the wire vocabulary is closed; approval is local only
     }));
 }
 

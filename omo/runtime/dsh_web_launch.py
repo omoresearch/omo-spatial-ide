@@ -19,6 +19,7 @@ import subprocess
 import sys
 
 NODE_MIN = (24, 9, 0)
+REVIVE_HINT = " Install a newer Node, then revive this tab."   # t2:agents: the host drops this outside a tab
 
 
 def parse_version(text):
@@ -48,7 +49,7 @@ def node_problem(path_env=None):
         return f"dsh needs Node {want} or newer. The version of {node} could not be read."
     if version < NODE_MIN:
         have = ".".join(str(n) for n in version)
-        return f"dsh needs Node {want} or newer. The node on PATH ({node}) is {have}. Install a newer Node, then revive this tab."
+        return f"dsh needs Node {want} or newer. The node on PATH ({node}) is {have}.{REVIVE_HINT}"
     return ""
 
 
