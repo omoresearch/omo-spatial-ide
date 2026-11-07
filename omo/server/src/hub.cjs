@@ -54,7 +54,6 @@ class Hub {
         r.saveTimer = setTimeout(() => {
             r.saveTimer = null;
             try { this.data.write(r.rec); } catch (e) { this.log('save failed', r.rec.id, e.message); }
-            if (r.conns.size === 0 && this.rooms.get(r.rec.id) === r) this.rooms.delete(r.rec.id); // unload idle rooms
         }, 2000);
         r.saveTimer.unref?.();
     }
@@ -158,7 +157,7 @@ class Hub {
         r.agents.delete(member.id);
         member.lastSeenAt = Date.now(); this.saveSoon(r);
         this.broadcast(r, { type: 'presence-leave', id: member.id });
-        if (r.conns.size === 0 && !r.saveTimer) this.rooms.delete(r.rec.id); // unload idle rooms (chat backlog is memory-only)
+        // Rooms stay loaded (<= 64 KiB world each) so an in-flight join never writes to a stale copy.
     }
 
     reply(conn, id, body) { this.send(conn, { type: 'reply', id, ok: true, ...body }); }
