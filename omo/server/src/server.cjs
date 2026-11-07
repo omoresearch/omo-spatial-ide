@@ -51,11 +51,12 @@ function createServer(opts) {
     const hub = new Hub({ data, log, publicUrl });
     const ipConns = new Map();
     let total = 0;
-    const joinRate = new Buckets({ capacity: 5, perSecond: 1 / 60 });       // 5 join attempts, then 1/min per IP
+    const joinFail = new Buckets({ capacity: 8, perSecond: 1 / 60 });       // 8 failed joins, then 1/min per IP
+    const joinRate = new Buckets({ capacity: 30, perSecond: 1 / 10 });      // all join attempts per IP
     const authFail = new Buckets({ capacity: 10, perSecond: 1 / 30 });      // bad tokens per IP
     const upgradeRate = new Buckets({ capacity: 20, perSecond: 1 });
     const httpRate = new Buckets({ capacity: 60, perSecond: 5 });
-    const sweeper = setInterval(() => { for (const b of [joinRate, authFail, upgradeRate, httpRate, ...Object.values(hub.rate)]) b.sweep(); }, 60_000);
+    const sweeper = setInterval(() => { for (const b of [joinRate, joinFail, authFail, upgradeRate, httpRate, ...Object.values(hub.rate)]) b.sweep(); }, 60_000);
     sweeper.unref();
 
     const clientIp = req => {
@@ -80,8 +81,10 @@ function createServer(opts) {
         res.end(text);
     };
     const readBody = req => new Promise((resolve, reject) => {
-        let size = 0; const chunks = [];
-        req.on('data', c => { size += c.length; if (size > MAX_BODY) { reject(Object.assign(new Error('Request too large.'), { status: 413 })); req.destroy(); } else chunks.push(c); });
+        const tooBig = () => Object.assign(new Error('Request too large.'), { status: 413, close: true });
+        if (Number(req.headers['content-length'] || 0) > MAX_BODY) { req.resume(); reject(tooBig()); return; }
+        let size = 0, done = false; const chunks = [];
+        req.on('data', c => { if (done) return; size += c.length; if (size > MAX_BODY) { done = true; chunks.length = 0; reject(tooBig()); } else chunks.push(c); });
         req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch { reject(Object.assign(new Error('Body must be JSON.'), { status: 400 })); } });
         req.on('error', reject);
     });
@@ -99,9 +102,10 @@ function createServer(opts) {
             if (req.method === 'GET' && url.pathname === '/join.css') { send(res, 200, JOIN_CSS, 'text/css; charset=utf-8'); return; }
             if (req.method === 'POST' && url.pathname === '/api/join') {
                 if (!/^application\/json\b/i.test(req.headers['content-type'] || '')) { send(res, 415, { error: 'Send JSON.' }); return; }
-                if (!joinRate.take(ip)) { send(res, 429, { error: 'Too many join attempts. Wait a minute.' }, undefined, { 'retry-after': '60' }); return; }
+                if (!joinFail.has(ip) || !joinRate.take(ip)) { send(res, 429, { error: 'Too many join attempts. Wait a minute.' }, undefined, { 'retry-after': '60' }); return; }
                 const body = await readBody(req);
-                const out = await hub.redeemInvite(String(body.invite || ''), body.name);
+                let out;
+                try { out = await hub.redeemInvite(String(body.invite || ''), body.name); } catch (e) { joinFail.take(ip); throw e; }
                 log('invite redeemed', out.roomId, out.memberId, out.role);
                 send(res, 201, { ...out, wsUrl: wsUrlFor(req), protocol: PROTOCOL_VERSION });
                 return;
@@ -116,7 +120,8 @@ function createServer(opts) {
             }
             send(res, 404, { error: 'Not found.' });
         } catch (e) {
-            send(res, e.status || 400, { error: e.status ? e.message : (e.message || 'Request failed.') });
+            send(res, e.status || 400, { error: e.message || 'Request failed.' }, undefined, e.close ? { connection: 'close' } : {});
+            if (e.close) res.on('finish', () => req.socket.destroy());
         }
     }
 
