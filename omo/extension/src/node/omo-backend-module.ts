@@ -16,12 +16,18 @@ import { OMO_GIT_REVIEW_PATH } from '../common/git-review-protocol';
 import { ProjectGitReviewBackend, projectGitReviewConnection } from './git-review';
 import { StandaloneSecurityContribution } from './standalone-security';
 import { WsRequestValidatorContribution } from '@theia/core/lib/node/ws-request-validators';
+// w2:voice — STUN/TURN settings in the Theia config dir
+import { EnvVariablesServer } from '@theia/core/lib/common/env-variables';
+import { FileUri } from '@theia/core/lib/common/file-uri';
+import { OMO_VOICE_SETTINGS_PATH } from '../common/voice-settings-protocol';
+import { VoiceSettingsStore } from './voice-settings-store';
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
 export const OmoManagedWeb = Symbol('OmoManagedWeb');
 const OmoRoomPresence = Symbol('OmoRoomPresence');
 const OmoTaskWorkspaceBackend = Symbol('OmoTaskWorkspaceBackend');
 const OmoStandaloneSecurity = Symbol('OmoStandaloneSecurity');
+const OmoVoiceSettingsStore = Symbol('OmoVoiceSettingsStore'); // w2:voice
 
 /** Stops the runtime host with the backend. The tmux server and every tab keep running. */
 @injectable()
@@ -57,6 +63,15 @@ export default new ContainerModule(bind => {
             proxy.onDidCloseConnection(()=>connection.dispose());
             return connection;
         });
+    }).inSingletonScope();
+    // w2:voice — one settings store per backend; the TURN secret stays here.
+    bind(OmoVoiceSettingsStore).toDynamicValue(ctx => {
+        const env = ctx.container.get<EnvVariablesServer>(EnvVariablesServer);
+        return new VoiceSettingsStore(async () => FileUri.fsPath(await env.getConfigDirUri()));
+    }).inSingletonScope();
+    bind(ConnectionHandler).toDynamicValue(ctx => {
+        const store = ctx.container.get<VoiceSettingsStore>(OmoVoiceSettingsStore);
+        return new RpcConnectionHandler<object>(OMO_VOICE_SETTINGS_PATH, () => ({ get: () => store.get(), save: (u: never) => store.save(u), iceConfig: () => store.iceConfig() }));
     }).inSingletonScope();
     bind(OmoRuntimeLifecycle).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(OmoRuntimeLifecycle);
