@@ -50,7 +50,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             const mount = () => {
                 if (document.getElementById('demo-cap')) return;
                 const st = document.createElement('style');
-                st.textContent = `#demo-cap{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147483647;max-width:1100px;padding:10px 20px;border-radius:999px;background:rgba(10,14,22,.86);color:#eafff6;font:600 19px/1.35 Inter,system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);border:1px solid rgba(110,231,183,.45);pointer-events:none;text-align:center}
+                st.textContent = `#demo-cap{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147483647;max-width:min(1100px,86vw);white-space:normal;padding:10px 20px;border-radius:999px;background:rgba(10,14,22,.86);color:#eafff6;font:600 19px/1.35 Inter,system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);border:1px solid rgba(110,231,183,.45);pointer-events:none;text-align:center}
                 #demo-cap small{display:block;font-weight:500;font-size:14px;color:#a7f3d0;opacity:.9}
                 #demo-dot{position:fixed;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:rgba(110,231,183,.55);border:2px solid #fff;z-index:2147483646;pointer-events:none;transition:transform .15s,left .25s,top .25s;left:-50px;top:-50px}
                 #demo-card{position:fixed;inset:0;z-index:2147483647;background:#0b1220;color:#e5e7eb;display:flex;flex-direction:column;justify-content:center;padding:0 160px;font:500 22px/1.55 Inter,system-ui,sans-serif}
@@ -81,7 +81,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         // ---- start filming
         cdp = await page.createCDPSession();
         cdp.on('Page.screencastFrame', async f => {
-            if (recording) fs.writeFileSync(path.join(OUT, 'frames', `${String(frameNo++).padStart(6, '0')}.jpg`), Buffer.from(f.data, 'base64'));
+            if (recording) { const n = String(frameNo++).padStart(6, '0'); fs.writeFileSync(path.join(OUT, 'frames', `${n}.jpg`), Buffer.from(f.data, 'base64')); fs.appendFileSync(path.join(OUT, 'frames.txt'), `${n} ${f.metadata.timestamp}\n`); }
             try { await cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }); } catch {}
         });
         const t0 = Date.now(); const timeline = [];
@@ -98,22 +98,24 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await hold(1400);
         const understood = await page.$eval('[data-testid="onboarding-understood"]', e => e.innerText).catch(() => '');
         check('planner understood the plan', /3/.test(understood) || /desk/i.test(understood), understood.slice(0, 160));
-        await clickSel('[data-testid="onboarding-next"]');
-        await hold(1800);
-        mark('preview');
         await cap('2 · Your world, before it exists', 'Floor plan + live 3D preview. Rename, remove or add desks here.');
+        await clickSel('[data-testid="onboarding-next"]');
+        mark('preview');
+        await hold(1200);
         const ents = await page.$$eval('[data-testid="onboarding-entity-list"] li[data-kind="station"]', ls => ls.length);
         check('preview lists 3 desks', ents === 3, { ents });
-        await hold(3200);
-        await clickSel('[data-testid="onboarding-next"]');
-        await hold(1200);
+        await hold(4200);
         await cap('3 · Create', 'Nothing starts: agents only launch when you confirm them at a desk.');
-        await hold(1400);
+        await clickSel('[data-testid="onboarding-next"]');
+        await hold(2600);
         await clickSel('[data-testid="create-room"]');
         await page.waitForSelector(`${CANVAS}[data-navigation="walk"]`, { timeout: 30000 });
-        await hold(1500);
+        await cap('Your room, built from the plan', 'Created. Walk with WASD, or look from above.');
+        await hold(2200);
         let d = await ds();
         check('room has the 3 planned desks', JSON.parse(d.worldStations || '[]').length === 3, d.worldStations);
+        const tabs = await page.$$eval('.omo-station-switch button[data-station]', bs => bs.map(b => b.textContent.trim()));
+        check('desk switcher shows the planned desk names', ['Literature', 'Data', 'Writing'].every(n => tabs.some(t => t.includes(n))) && !tabs.some(t => /Desk two/.test(t)), tabs);
 
         // Scene 2: overview of the built room
         mark('overview');
@@ -137,12 +139,12 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             if (/true$/.test(ghost)) { await clickAt(x, y); placed = true; break; }
         }
         check('ghost desk placed', placed);
-        await hold(1200);
-        await cap('Every change is a proposal', 'You see the diff. Nothing is saved until you press Apply.');
-        await hold(2200);
+        await cap('Every change is a proposal', 'You see the diff (1 pending change). Nothing is saved until you press Apply.');
+        await hold(3200);
         const applyBtn = await page.$('[data-testid="build-apply"]');
         if (applyBtn) await clickSel('[data-testid="build-apply"]');
-        await hold(1500);
+        await cap('Applied: a 4th desk joins the room', 'Undo / redo with Ctrl+Z, Ctrl+Shift+Z');
+        await hold(2500);
         d = await ds();
         check('applied: 4 desks in the world', JSON.parse(d.worldStations || '[]').length === 4, d.worldStations);
         if (await page.$('[data-testid="build-exit"]')) await clickSel('[data-testid="build-exit"]');
@@ -159,15 +161,18 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await typeSlow('add a desk for Codex and a big monitor wall linked to it');
         await page.keyboard.press('Enter');
         await page.waitForFunction(() => { const es = [...document.querySelectorAll('[data-testid="admin-entry"]')]; const l = es[es.length - 1]; return l && l.dataset.status !== 'thinking'; }, { timeout: 20000 });
-        await hold(1800);
+        await cap('A proposal, not a change', 'Here is my plan: 2 changes. The saved world stays the same until you press Apply.');
+        await hold(400);
         const status = await page.$$eval('[data-testid="admin-entry"]', es => es[es.length - 1].dataset.status);
         check('admin returned a proposal', status === 'proposed', { status });
         const before = JSON.parse((await ds()).worldStations || '[]').length;
-        await cap('A proposal, not a change', 'The saved world stays the same until you press Apply.');
-        await hold(2200);
+        await hold(3600);
         const applies = await page.$$('[data-testid="admin-apply"]');
-        const ab = await applies[applies.length - 1].boundingBox(); await clickAt(ab.x + ab.width / 2, ab.y + ab.height / 2);
-        await hold(1800);
+        const ab = await applies[applies.length - 1].boundingBox();
+        await dot(ab.x + ab.width / 2, ab.y + ab.height / 2); await pause(350);
+        await cap('Apply', 'Now the world changes.');
+        await clickAt(ab.x + ab.width / 2, ab.y + ab.height / 2);
+        await hold(1200);
         d = await ds();
         const after = JSON.parse(d.worldStations || '[]').length;
         check('admin Apply added the Codex desk', after === before + 1, { before, after });
@@ -179,20 +184,20 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         // Scene 5: real shell on desk 3
         mark('desk3');
         await clickSel('[data-testid="walk-mode"]'); await hold(900);
-        const pos = JSON.parse((await ds()).deskPositions || '{}');
-        const target = pos['desk-3'] ? 'desk-3' : Object.keys(pos)[2];
-        await cap('Walk to desk 3 and use its monitor', 'Every desk has its own real shell, running in its own persistent session');
-        const axis = async (key, field, goal, dir) => {
-            const reached = () => page.$eval(CANVAS, (c, f, g, d) => { const n = Number(c.dataset[f]); return d > 0 ? n >= g : n <= g; }, field, goal, dir);
-            const deadline = Date.now() + 30000;
-            while (!await reached()) { if (Date.now() > deadline) throw new Error('walk stuck'); await page.focus(CANVAS); await page.keyboard.down(key); try { for (let t = 0; t < 20 && !await reached(); t++) await pause(40); } finally { await page.keyboard.up(key); } }
-        };
-        const goal = pos[target];
-        let p = await page.$eval(CANVAS, e => ({ x: +e.dataset.playerX, z: +e.dataset.playerZ }));
-        const gz = goal.z + 2.2;
-        if (Math.abs(p.z - gz) > .12) await axis(p.z < gz ? 's' : 'w', 'playerZ', gz, p.z < gz ? 1 : -1);
-        p = await page.$eval(CANVAS, e => ({ x: +e.dataset.playerX, z: +e.dataset.playerZ }));
-        if (Math.abs(p.x - goal.x) > .12) await axis(p.x < goal.x ? 'd' : 'a', 'playerX', goal.x, p.x < goal.x ? 1 : -1);
+        // Use the desk the admin just added (the newest station): walk toward it until its monitor target is near the screen centre.
+        const stations = JSON.parse((await ds()).worldStations || '[]');
+        const target = stations[stations.length - 1];
+        await cap('Walk to the new Codex desk', 'Every desk has its own real shell in a persistent session');
+        const centred = async () => { const t = JSON.parse((await ds()).stationTargets || '{}')[target]; const c = await page.$eval(CANVAS, e => [e.clientWidth, e.clientHeight]); return t && Math.abs(t.x - c[0] / 2) < c[0] * 0.25 && Math.abs(t.y - c[1] / 2) < c[1] * 0.3 ? t : undefined; };
+        // Turn toward the target by dragging until its projected target is roughly centred, then step forward a little.
+        for (let i = 0; i < 40 && !await centred(); i++) {
+            const t = JSON.parse((await ds()).stationTargets || '{}')[target]; const box = await page.$eval(CANVAS, e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+            const dx = t ? Math.max(-120, Math.min(120, (t.x - box[2] / 2) * 0.5)) : 120;
+            const cx = box[0] + box[2] / 2, cy = box[1] + box[3] / 2;
+            await page.mouse.move(cx, cy); await page.mouse.down(); await page.mouse.move(cx + dx, cy, { steps: 6 }); await page.mouse.up(); await pause(120);
+        }
+        const quadW = async () => { const q = JSON.parse((await ds()).terminalQuads || '{}')[target]; return q ? Math.abs(q[1].x - q[0].x) : 0; };
+        for (let i = 0; i < 14; i++) { if (await quadW() > 300) break; await page.focus(CANVAS); await page.keyboard.down('w'); await pause(180); await page.keyboard.up('w'); await pause(80); }
         await hold(600);
         const t = JSON.parse((await ds()).stationTargets)[target];
         const r = await page.$eval(CANVAS, c => { const b = c.getBoundingClientRect(); return [b.left, b.top]; });
@@ -203,19 +208,38 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const cancel = await page.$$eval('button', bs => { const b = bs.find(b => b.textContent.trim() === 'Cancel' && b.closest('[class*="setup"],[class*="recipe"],[class*="confirm"]')); if (b) { b.click(); return true; } return false; });
         if (cancel) await hold(600);
         await page.focus(CANVAS).catch(() => {});
-        await typeSlow("echo hello from desk 3 && ls"); await page.keyboard.press('Enter');
-        await page.waitForFunction(id => (JSON.parse(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.stationText || '{}')[id] || []).some(l => l.trim().startsWith('hello from desk 3')), { timeout: 20000 }, target);
-        check('real shell output on desk 3', true, target);
-        await cap('Real shell, on a physical screen in the world', `${target}: typed here, output on this desk only`);
-        await hold(3500);
+        await typeSlow("echo hello from the Codex desk"); await page.keyboard.press('Enter');
+        await page.waitForFunction(id => (JSON.parse(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.stationText || '{}')[id] || []).some(l => l.trim().startsWith('hello from the Codex desk')), { timeout: 20000 }, target);
+        check('real shell output on the new Codex desk', true, target);
+        await cap('A real shell at the Codex desk', 'The output shows on this desk\'s monitor only');
+        await hold(2500);
+        // Leave the desk (two Esc), then use the Full-screen terminal button: same path as the probe.
+        for (let i = 0; i < 2; i++) { await page.keyboard.press('Escape'); await hold(500); }
+        await page.waitForFunction(() => document.querySelector('[data-testid="omo-world"]')?.dataset.focus === 'walk', { timeout: 10000 }).catch(() => {});
+        await clickSel('[data-testid="focus-full-launch"]');
+        await page.waitForFunction(() => document.querySelector('[data-testid="omo-world"]')?.dataset.focusFull === 'true', { timeout: 10000 });
+        check('full-screen terminal engaged', true);
+        await hold(1500);
+        await page.evaluate(() => { const c = document.getElementById('demo-cap'); if (c) { c.style.top = 'auto'; c.style.bottom = '24px'; } }); await cap('Full-screen terminal (F)', 'Same live shell. Agent tabs start only after you confirm.');
+        await hold(4500);
 
         // Scene 6: immersive
         mark('immersive');
-        await page.keyboard.press('Escape'); await hold(500); await page.keyboard.press('Escape'); await hold(700);
-        await page.focus(CANVAS); await page.keyboard.press('g'); await hold(1500);
-        await cap('Immersive world (G)', 'The room fills the window. Multiplayer, voice and agent status work the same here.');
-        await hold(3500);
-        await page.keyboard.press('g'); await hold(800);
+        await page.evaluate(() => { const c = document.getElementById('demo-cap'); if (c) { c.style.top = '14px'; c.style.bottom = 'auto'; } });
+        for (let i = 0; i < 2; i++) { await page.keyboard.press('Escape'); await hold(500); }
+        await page.waitForFunction(() => document.querySelector('[data-testid="omo-world"]')?.dataset.focus === 'walk', { timeout: 10000 });
+        await hold(500);
+        await cap('');
+        // The button also asks the browser for full screen; headless answers by resizing the page. Use the G key path (same mode, no fullscreen request) so the recorded viewport stays 1440x900.
+        await page.focus(CANVAS); await page.keyboard.press('g');
+        await page.waitForFunction(() => document.querySelector('[data-testid="omo-world"]')?.dataset.immersive === 'true' && document.body.classList.contains('omo-immersive-world'), { timeout: 10000 });
+        await hold(1200);
+        check('immersive mode engaged', true);
+        check('viewport still 1440x900', JSON.stringify(await page.evaluate(() => [innerWidth, innerHeight])) === '[1440,900]', await page.evaluate(() => [innerWidth, innerHeight]));
+        await hold(1500);
+        await page.evaluate(() => { const c = document.getElementById('demo-cap'); if (c) { c.style.top = 'auto'; c.style.bottom = '110px'; } }); await cap('Immersive world (G)', 'The room fills the whole window.');
+        await hold(4000);
+        await page.focus(CANVAS).catch(() => {}); await page.keyboard.press('g'); await hold(800);
 
         // Closing card
         mark('card');

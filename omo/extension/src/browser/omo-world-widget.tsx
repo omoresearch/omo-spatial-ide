@@ -19,7 +19,7 @@ import type { RoomLayoutId, RoomKitId, PlayerPose } from '../common/player-state
 import { OmoRuntimeService } from '../common/runtime-protocol';
 import type { RuntimeFrame } from '../common/runtime-protocol';
 import { RuntimeConsoleController, RuntimeConsoleState, StationBinding } from './runtime-console-controller';
-import { WorldStations, StationInfo, WORLD_CHANGED_EVENT, loadWorld, linkedEntities, saveWorldOps } from './world-stations'; // w2:runtime
+import { WorldStations, StationInfo, WORLD_CHANGED_EVENT, loadWorld, linkedEntities, saveWorldOps, stationInfos } from './world-stations'; // w2:runtime
 import type { WorldChangedDetail } from './world-stations'; // w2:runtime
 import { RuntimeConsoleStrip } from './runtime-console-strip';
 import { OmoWebService, WebSurfaceFrame } from '../common/web-runtime-protocol';
@@ -197,6 +197,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.onboardingPreview(world); this.draftName = world.name;
         this.createRoom();
         if (this.configuring) throw new Error(this.error || 'The room could not be saved.');
+        this.refreshDesksIfChanged(); // final:fix — onboarding saved the world itself; the desk switcher must show its desks now, not the old defaults
         this.feedback = `World saved on this device${saved.via === 'local-storage' ? '' : ' (world store)'}. Nothing was started. Click a desk to open it.`; this.update();
     };
     // --- end w2:onboard ---
@@ -433,6 +434,13 @@ export class OmoWorldWidget extends ReactWidget {
         return { projectUri: this.project.toString(), roomName: this.room?.projectName ?? this.draftName ?? this.project.path.base, personal: this.personalRoom };
     }
     /** Read the saved WorldSpec (or migrate the v1 room). Removed stations are detached; tabs keep running. */
+    /** final:fix — re-read the saved world only when its desks (ids or names) differ from the ones shown; an unchanged world keeps every live controller untouched. */
+    private refreshDesksIfChanged(): void {
+        if (!this.project || this.worldStore?.remoteActive) return;
+        const { world } = loadWorld(safeStorage(), this.project.toString(), this.room);
+        const sig = (list: readonly { id: string; name: string }[]) => list.map(i => `${i.id}=${i.name}`).join('|');
+        if (sig(stationInfos(world)) !== sig(this.stationList)) this.readWorld(false);
+    }
     private readWorld(reconnect = true): void {
         const shared = this.worldStore?.remoteActive ? this.worldStore.world : undefined; // t3:mp2: in a remote room the room's world is the world
         const { world, stored } = shared ? { world: shared, stored: true } : this.project ? loadWorld(safeStorage(), this.project.toString(), this.room) : { world: undefined, stored: false };
@@ -608,6 +616,7 @@ export class OmoWorldWidget extends ReactWidget {
         const previous = this.room;
         this.room = next; this.configuring = false; this.feedback = world ? 'Room and world saved on this device. No agent was started.' : 'Room saved on this device.';
         if (!world && previous) this.syncSavedWorldToRoom(previous, next); // t2:regress
+        if (world) this.refreshDesksIfChanged(); // final:fix — desk switcher, stations and mentions follow the world just saved (onboarding / template), not the old two desks
         this.update();
     };
     /**

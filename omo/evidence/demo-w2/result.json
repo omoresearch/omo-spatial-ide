@@ -1,0 +1,125 @@
+{
+ "pass": true,
+ "frames": 2379,
+ "seconds": 81.834,
+ "timeline": [
+  {
+   "t": 0,
+   "label": "describe"
+  },
+  {
+   "t": 7.473,
+   "label": "preview"
+  },
+  {
+   "t": 18.84,
+   "label": "overview"
+  },
+  {
+   "t": 23.351,
+   "label": "build"
+  },
+  {
+   "t": 35.194,
+   "label": "admin"
+  },
+  {
+   "t": 49.892,
+   "label": "desk3"
+  },
+  {
+   "t": 66.698,
+   "label": "immersive"
+  },
+  {
+   "t": 75.831,
+   "label": "card"
+  }
+ ],
+ "checks": [
+  {
+   "name": "planner understood the plan",
+   "pass": true,
+   "detail": "OMO UNDERSTOOD\n3 desks · 1 monitor wall · 1 web wall · 1 review screen · 1 decor piece"
+  },
+  {
+   "name": "preview lists 3 desks",
+   "pass": true,
+   "detail": {
+    "ents": 3
+   }
+  },
+  {
+   "name": "room has the 3 planned desks",
+   "pass": true,
+   "detail": "[\"terminal\",\"terminal-2\",\"desk-3\"]"
+  },
+  {
+   "name": "desk switcher shows the planned desk names",
+   "pass": true,
+   "detail": [
+    "Literature",
+    "Data",
+    "Writing"
+   ]
+  },
+  {
+   "name": "build mode opens with B",
+   "pass": true
+  },
+  {
+   "name": "ghost desk placed",
+   "pass": true
+  },
+  {
+   "name": "applied: 4 desks in the world",
+   "pass": true,
+   "detail": "[\"terminal\",\"terminal-2\",\"desk-3\",\"desk-1\"]"
+  },
+  {
+   "name": "admin opens",
+   "pass": true
+  },
+  {
+   "name": "admin returned a proposal",
+   "pass": true,
+   "detail": {
+    "status": "proposed"
+   }
+  },
+  {
+   "name": "admin Apply added the Codex desk",
+   "pass": true,
+   "detail": {
+    "before": 4,
+    "after": 5
+   }
+  },
+  {
+   "name": "real shell output on the new Codex desk",
+   "pass": true,
+   "detail": "codex-desk"
+  },
+  {
+   "name": "full-screen terminal engaged",
+   "pass": true
+  },
+  {
+   "name": "immersive mode engaged",
+   "pass": true
+  },
+  {
+   "name": "viewport still 1440x900",
+   "pass": true,
+   "detail": [
+    1440,
+    900
+   ]
+  },
+  {
+   "name": "no page errors",
+   "pass": true,
+   "detail": []
+  }
+ ]
+}
