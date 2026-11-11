@@ -107,7 +107,7 @@ function SceneView(props: { theme: RoomTheme; layout: RoomLayoutId; kit: RoomKit
     const [ready, setReady] = React.useState(false);
     const [mode,setMode]=React.useState<'walk'|'overview'>(props.walk?'walk':'overview');
     React.useEffect(()=>{setMode(props.walk?'walk':'overview');},[props.walk]);
-    React.useEffect(()=>{instance.current?.setNavigation(mode);},[mode]);
+    React.useEffect(()=>{instance.current?.setNavigation(mode);if(instance.current)callbacks.current.onPose?.(instance.current.getPlayerPose());/* w3:perf: overview <-> walk re-ranks desks via poseChanged */},[mode]);
     React.useEffect(()=>{instance.current?.setTerminalFrames(props.terminalFrames);},[props.terminalFrames]);
     React.useEffect(()=>{if(props.webFrame)instance.current?.setWebFrame(props.webFrame);else instance.current?.clearWebFrame();},[props.webFrame]);
     React.useEffect(() => {
