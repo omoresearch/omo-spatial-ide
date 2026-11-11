@@ -21,6 +21,7 @@ import type { OrbSpot } from './world-scene-shell';
 import { BuiltEntity, placeRoot, buildDecorEntity, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
 import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, worldHome, worldMover } from './world-scene-collision';
+import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -223,6 +224,7 @@ export class RoomScene {
     private webSurface?: HTMLCanvasElement;
     private mirrorSurface?: HTMLCanvasElement;
     private mirrorTexture?: THREE.CanvasTexture;
+    private paintBudget?: MonitorPaintBudget;
     private mirrorFrame: MonitorFrame = { lines: [] };
     /** Last full-size frame per desk and its 80 x 22 monitor window, so a re-render reuses the same object. */
     private terminalSources?: Map<string, { input: MonitorFrame; frame: MonitorFrame }>;
@@ -703,7 +705,7 @@ export class RoomScene {
         if (surface.frame === frame && surface.selection === selectionKey) return;
         const frameChanged = surface.frame !== frame;
         surface.frame = frame; surface.selection = selectionKey;
-        if (this.paintTerminal(surface, frame, spans)) this.invalidate();
+        if ((this.paintBudget ??= new MonitorPaintBudget({ alive: () => !this.disposed, onPainted: () => this.invalidate() })).request(station, () => this.terminalSurfaces.get(station) === surface && surface.frame === frame && this.paintTerminal(surface, frame, spans))) this.invalidate(); // w3:perf: active desk at once; near/far max 6 per frame round-robin; hidden waits
         this.paintLamp(station);
         if (!this.renderer) return;
         this.setData('terminalSelection', this.terminalSelection?.model.text() ?? '');
