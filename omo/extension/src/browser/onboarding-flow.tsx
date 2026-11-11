@@ -11,7 +11,7 @@
  */
 import * as React from 'react';
 import type { RoomTheme } from '../common/room-state';
-import { WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS, stations } from '../common/world-model';
+import { WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS, roomRect, rooms, stations } from '../common/world-model';
 import type { WorldEntity, WorldOp, WorldSpec, StationEntity } from '../common/world-model';
 import {
     ONBOARDING_TEMPLATES, AGENT_LABEL, planWorld, planTitle, applyOnboardingEdit, agentOf, stationForAgent, nextStationId, nextId, deskName, describeWorld
@@ -64,8 +64,23 @@ function FloorPlan(props: { world: WorldSpec; selected?: string; onSelect: (id: 
         <defs><pattern id="omo-ob-grid" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M 1 0 L 0 0 0 1" fill="none" className="omo-ob-grid-line" /></pattern></defs>
         <rect x={-w / 2} y={-d / 2} width={w} height={d} rx={0.3} className="omo-ob-floor" />
         <rect x={-w / 2} y={-d / 2} width={w} height={d} rx={0.3} fill="url(#omo-ob-grid)" />
-        <rect x={-0.9} y={d / 2 - 0.08} width={1.8} height={0.16} className="omo-ob-door" />
-        {props.world.entities.map(e => {
+        {!props.world.shell.open && <rect x={-0.9} y={d / 2 - 0.08} width={1.8} height={0.16} className="omo-ob-door" />}
+        {rooms(props.world).map(r => { // w3:admin — rooms: outline plus a doorway mark on each door side
+            const b = roomRect(r);
+            return <g key={`room-${r.id}`} className="omo-ob-room" data-entity={r.id} onClick={() => props.onSelect(r.id)}>
+                <title>{labelOf(r)}</title>
+                <rect x={b.minX} y={b.minZ} width={b.maxX - b.minX} height={b.maxZ - b.minZ} rx={0.2} fill="none" strokeWidth={0.12} stroke="currentColor" opacity={0.55} />
+                {(r.doors ?? ['front']).map(side => {
+                    const v = { back: [0, -1], front: [0, 1], left: [-1, 0], right: [1, 0] }[side];
+                    const c = Math.cos(r.transform.rotation), s = Math.sin(r.transform.rotation);
+                    const wx = Math.round(v[0] * c + v[1] * s), wz = Math.round(-v[0] * s + v[1] * c);
+                    const x = wx === 0 ? r.transform.x : wx < 0 ? b.minX : b.maxX, z = wz === 0 ? r.transform.z : wz < 0 ? b.minZ : b.maxZ;
+                    return wx === 0 ? <rect key={side} x={x - 0.8} y={z - 0.08} width={1.6} height={0.16} className="omo-ob-door" /> : <rect key={side} x={x - 0.08} y={z - 0.8} width={0.16} height={1.6} className="omo-ob-door" />;
+                })}
+                <text x={r.transform.x} y={b.minZ + 0.9} className="omo-ob-label" textAnchor="middle">{labelOf(r).slice(0, 18)}</text>
+            </g>;
+        })}
+        {props.world.entities.filter(e => e.kind !== 'room').map(e => {
             const t = e.transform, sel = props.selected === e.id;
             const deg = -t.rotation * 180 / Math.PI;
             const common = { key: e.id, transform: `translate(${t.x} ${t.z}) rotate(${deg})`, className: `omo-ob-ent omo-ob-${e.kind}${sel ? ' is-selected' : ''}`, onClick: () => props.onSelect(e.id), 'data-entity': e.id } as const;
@@ -127,7 +142,7 @@ export function OnboardingFlow(props: OnboardingFlowProps): React.ReactElement {
         edit([{ op: 'add', entity: { id, kind: 'station', label, transform: { x: 0, z: 0, rotation: 0 }, station: stationForAgent(label, 'hermes') } }]); setSelected(id);
     };
     const addWall = (kind: 'monitor-wall' | 'web-wall'): void => {
-        if (full) { setError('A world holds at most 64 things.'); return; }
+        if (full) { setError(`A world holds at most ${WORLD_MAX_ENTITIES} things.`); return; }
         const id = nextId(taken(), kind === 'web-wall' ? 'web' : 'monitor-wall');
         const entity: WorldEntity = kind === 'web-wall'
             ? { id, kind, label: 'Web wall', transform: { x: 0, z: 0, rotation: 0 }, width: 3.9, height: 2.44, elevation: 0.68 }
@@ -135,7 +150,7 @@ export function OnboardingFlow(props: OnboardingFlowProps): React.ReactElement {
         edit([{ op: 'add', entity }]); setSelected(id);
     };
     const addPlant = (): void => {
-        if (full) { setError('A world holds at most 64 things.'); return; }
+        if (full) { setError(`A world holds at most ${WORLD_MAX_ENTITIES} things.`); return; }
         const id = nextId(taken(), 'plant');
         edit([{ op: 'add', entity: { id, kind: 'decor', decor: 'plant', label: 'Plant', transform: { x: 0, z: 0, rotation: 0 } } }]);
     };
