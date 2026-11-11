@@ -336,7 +336,7 @@ export function parseWorld(raw: string): WorldResult {
 // ---------------------------------------------------------------- diff + description helpers
 
 const ENTITY_NOUN: Record<WorldEntity['kind'], string> = {
-    station: 'desk', 'monitor-wall': 'monitor wall', 'web-wall': 'web wall', mirror: 'mirror', 'review-screen': 'review screen', decor: 'decor'
+    station: 'desk', 'monitor-wall': 'monitor wall', 'web-wall': 'web wall', mirror: 'mirror', 'review-screen': 'review screen', decor: 'decor', room: 'room'
 };
 /** The name a person reads for an entity. */
 export function entityTitle(entity: WorldEntity | undefined, fallbackId = ''): string {

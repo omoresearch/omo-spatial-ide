@@ -58,6 +58,7 @@ export function footprint(entity: WorldEntity): Footprint {
             const [w, d, h] = DECOR_SIZE[entity.decor], s = entity.scale ?? 1;
             return { width: w * s, depth: d * s, offsetZ: 0, height: h * s, elevation: entity.decor === 'window' ? 1.0 : 0 };
         }
+        case 'room': return { width: entity.width, depth: entity.depth, offsetZ: 0, height: 3, elevation: 0 }; // w3:expand (placeholder; w3-build lane refines)
     }
 }
 

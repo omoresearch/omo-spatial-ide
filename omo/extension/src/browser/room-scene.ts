@@ -480,6 +480,7 @@ export class RoomScene {
             case 'mirror': return buildMirror(entity, entity.id === 'mirror' ? this.mirrorTexture! : this.linkedSurface(entity.id).texture, standing);
             case 'monitor-wall': return buildMonitorWall(entity, this.linkedSurface(entity.id).texture, standing);
             case 'decor': return buildDecorEntity(entity, jungle);
+            case 'room': { const root = new THREE.Group(); root.name = `omo-room-${entity.id}`; return { root }; } // w3:expand placeholder (w3-render lane builds real rooms)
         }
     }
     private linkedSurface(id: string): ScreenSurface {

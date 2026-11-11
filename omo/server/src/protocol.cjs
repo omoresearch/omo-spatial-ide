@@ -6,7 +6,7 @@ const U = require('./util.cjs');
 
 const PROTOCOL_VERSION = 1;
 const LIMITS = Object.freeze({
-    maxFrameBytes: 96 * 1024,       // ws maxPayload (a 64 KiB world op batch plus envelope)
+    maxFrameBytes: 256 * 1024,      // ws maxPayload (a 192 KiB world / op batch plus envelope) — w3:expand
     maxSmallFrameBytes: 24 * 1024,  // every message type except world-ops and signal
     helloTimeoutMs: 10_000,
     maxOnlinePerRoom: 32,

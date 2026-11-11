@@ -11,7 +11,7 @@ import '../../src/browser/admin.css';
  * Nothing changes without Apply. Hermes is used only after "Use Hermes" + confirm.
  */
 const OP_ICON: Record<WorldOp['op'], string> = {
-    add: '+', remove: '−', move: '↔', 'update-station': '⚙', resize: '⤢', link: '⛓', rename: '✎', shell: '▢', name: '✎'
+    add: '+', remove: '−', move: '↔', 'update-station': '⚙', resize: '⤢', link: '⛓', rename: '✎', shell: '▢', name: '✎', reshape: '⤡'
 };
 
 function time(at: number): string { return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }

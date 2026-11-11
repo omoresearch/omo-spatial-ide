@@ -155,6 +155,7 @@ export function entityTitle(entity: WorldEntity, world: WorldSpec): string {
         case 'mirror': return entity.label ?? `Mirror · ${station(entity.link) ?? 'unlinked'}`;
         case 'monitor-wall': return entity.label ?? (entity.link ? `Monitor wall · ${station(entity.link) ?? entity.link}` : 'Monitor wall');
         case 'decor': return entity.label ?? entity.decor;
+        case 'room': return entity.label ?? 'Room';
     }
 }
 

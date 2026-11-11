@@ -42,7 +42,8 @@ const ENTITY_KEYS: Record<WorldEntity['kind'], readonly string[]> = {
     'web-wall': ['id', 'kind', 'transform', 'label', 'width', 'height', 'elevation', 'home'],
     'mirror': ['id', 'kind', 'transform', 'label', 'link'],
     'review-screen': ['id', 'kind', 'transform', 'label'],
-    'decor': ['id', 'kind', 'transform', 'label', 'decor', 'scale']
+    'decor': ['id', 'kind', 'transform', 'label', 'decor', 'scale'],
+    'room': ['id', 'kind', 'transform', 'label', 'width', 'depth', 'theme', 'doors'] // w3:expand
 };
 const WORLD_KEYS = ['version', 'name', 'shell', 'entities', 'revision', 'plan'] as const;
 const SHELL_KEYS = ['theme', 'width', 'depth'] as const;

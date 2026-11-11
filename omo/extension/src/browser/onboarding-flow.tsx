@@ -42,8 +42,8 @@ export interface OnboardingFlowProps {
 
 type Step = 1 | 2 | 3;
 const AGENTS: DeskAgent[] = ['hermes', 'claude', 'codex', 'shell'];
-const KIND_ICON: Record<WorldEntity['kind'], string> = { station: '▣', 'monitor-wall': '▤', 'web-wall': '◫', mirror: '◩', 'review-screen': '⌘', decor: '✿' };
-const KIND_LABEL: Record<WorldEntity['kind'], string> = { station: 'Desk', 'monitor-wall': 'Monitor wall', 'web-wall': 'Web wall', mirror: 'Mirror', 'review-screen': 'Code review', decor: 'Decor' };
+const KIND_ICON: Record<WorldEntity['kind'], string> = { station: '▣', 'monitor-wall': '▤', 'web-wall': '◫', mirror: '◩', 'review-screen': '⌘', decor: '✿', room: '▭' };
+const KIND_LABEL: Record<WorldEntity['kind'], string> = { station: 'Desk', 'monitor-wall': 'Monitor wall', 'web-wall': 'Web wall', mirror: 'Mirror', 'review-screen': 'Code review', decor: 'Decor', room: 'Room' };
 const THEME_INFO: Record<RoomTheme, { title: string; symbol: string }> = { station: { title: 'Space station', symbol: '◉' }, jungle: { title: 'Prehistoric jungle', symbol: '✳' } };
 
 const labelOf = (e: WorldEntity): string => e.label ?? (e.kind === 'station' ? e.station.name : KIND_LABEL[e.kind]);
@@ -73,7 +73,7 @@ function FloorPlan(props: { world: WorldSpec; selected?: string; onSelect: (id: 
             if (e.kind === 'station') shape = <><rect x={-1.1} y={-0.55} width={2.2} height={1.1} rx={0.18} data-agent={agentOf(e.station)} /><circle cx={0} cy={0.95} r={0.28} /></>;
             else if (e.kind === 'monitor-wall' || e.kind === 'web-wall') shape = <rect x={-e.width / 2} y={-0.14} width={e.width} height={0.28} rx={0.08} />;
             else if (e.kind === 'mirror' || e.kind === 'review-screen') shape = <rect x={-0.8} y={-0.12} width={1.6} height={0.24} rx={0.08} />;
-            else shape = <circle cx={0} cy={0} r={0.32 * (e.scale ?? 1)} />;
+            else shape = <circle cx={0} cy={0} r={0.32 * (e.kind === 'decor' ? e.scale ?? 1 : 1)} />;
             return <g {...common}><title>{labelOf(e)}</title>{shape}</g>;
         })}
         {props.world.entities.filter(e => e.kind === 'station' || e.kind === 'monitor-wall' || e.kind === 'web-wall').map(e =>

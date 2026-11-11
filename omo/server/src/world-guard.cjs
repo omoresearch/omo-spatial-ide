@@ -8,10 +8,10 @@ const W = require('../vendor/world-model.cjs');
 const { looksSecret } = require('./util.cjs');
 
 const MAX_OPS = 64;
-const MAX_OPS_BYTES = 64 * 1024;
+const MAX_OPS_BYTES = 192 * 1024; // w3:expand (worlds up to WORLD_MAX_BYTES)
 const OP_KEYS = {
     add: ['entity'], remove: ['id'], move: ['id', 'transform'], 'update-station': ['id', 'station'],
-    resize: ['id', 'width', 'height', 'elevation'], link: ['id', 'to'], rename: ['id', 'label'], shell: ['shell'], name: ['name']
+    resize: ['id', 'width', 'height', 'elevation'], link: ['id', 'to'], rename: ['id', 'label'], shell: ['shell'], name: ['name'], reshape: ['id', 'width', 'depth', 'doors', 'theme'] // w3:expand
 };
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const pick = (o, keys) => { const out = {}; for (const k of keys) if (o[k] !== undefined) out[k] = o[k]; return out; };
@@ -31,12 +31,13 @@ function canonicalEntity(e) {
         case 'web-wall': Object.assign(out, pick(e, ['width', 'height', 'elevation', 'home'])); break;
         case 'mirror': out.link = e.link; break;
         case 'decor': Object.assign(out, pick(e, ['decor', 'scale'])); break;
+        case 'room': Object.assign(out, pick(e, ['width', 'depth', 'theme'])); if (Array.isArray(e.doors)) out.doors = [...e.doors]; break; // w3:expand
         default: break;
     }
     return out;
 }
 function canonicalWorld(w) {
-    const out = { version: w.version, name: w.name, shell: { theme: w.shell.theme, width: w.shell.width, depth: w.shell.depth }, entities: w.entities.map(canonicalEntity), revision: w.revision };
+    const out = { version: w.version, name: w.name, shell: { theme: w.shell.theme, width: w.shell.width, depth: w.shell.depth, ...(w.shell.open === true ? { open: true } : {}) }, entities: w.entities.map(canonicalEntity), revision: w.revision };
     if (w.plan !== undefined) out.plan = w.plan;
     return out;
 }

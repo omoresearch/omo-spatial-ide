@@ -176,6 +176,7 @@ function glyphFor(e: WorldEntity): string {
         case 'mirror': return 'mirror';
         case 'review-screen': return 'review';
         case 'decor': return e.decor;
+        case 'room': return 'room'; // w3:expand
     }
 }
 
