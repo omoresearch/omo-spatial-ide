@@ -75,3 +75,50 @@ test('an empty open world frames the spawn area, never a zero-size box', () => {
   const frame = scale.overviewFrame(empty, { azimuth: 0.56, elevation: 0.61, aspect: 2, fov: 38 });
   assert.ok(frame && frame.distance > 8 && frame.distance < 60, JSON.stringify(frame));
 });
+
+// ------------------------------------------------------------------------------------------- (2) rooms readable
+function loadRooms() {
+  Module._extensions['.ts'] = (module, filename) => module._compile(typescript.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2020 }, fileName: filename }).outputText, filename);
+  Module._resolveFilename = function (request, parent, ...rest) { try { return originalResolve.call(this, request, parent, ...rest); } catch (error) { if (request.startsWith('.')) return originalResolve.call(this, request + '.ts', parent, ...rest); throw error; } };
+  try { return require('../src/browser/world-scene-rooms.ts'); } finally { Module._extensions['.ts'] = originalTsLoader; Module._resolveFilename = originalResolve; }
+}
+const luminance = c => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+function meshes(root) { const out = []; root.traverse(n => { if (n.isMesh) out.push(n); }); return out; }
+
+test('room walls are light and contrast with the room floor and the open ground', () => {
+  const R = loadRooms();
+  for (const theme of ['station', 'jungle']) {
+    const built = R.buildRoom(room('r', 0, 0, 14, 10), theme === 'jungle');
+    const walls = meshes(built.root.userData.roomWalls).filter(m => m.userData.part === 'wall');
+    assert.ok(walls.length >= 4, `${theme}: wall pieces tagged`);
+    const wallL = luminance(walls[0].material.color);
+    const floor = meshes(built.root).find(m => m.userData.part === 'floor');
+    assert.ok(floor, `${theme}: room floor tagged`);
+    assert.ok(wallL > 0.45, `${theme}: walls are light (${wallL.toFixed(2)})`);
+    assert.ok(wallL - luminance(floor.material.color) > 0.15, `${theme}: walls stand out from the floor`);
+  }
+});
+
+test('every doorway is framed: two coloured jamb posts and a threshold strip per door', () => {
+  const R = loadRooms();
+  const built = R.buildRoom({ ...room('r', 0, 0, 14, 10), doors: ['front', 'left'] }, false);
+  const all = meshes(built.root);
+  assert.equal(all.filter(m => m.userData.part === 'jamb').length, 4);
+  assert.equal(all.filter(m => m.userData.part === 'threshold').length, 2);
+});
+
+test('a room shows its name on a floor plate just outside its doorway', () => {
+  const R = loadRooms();
+  const built = R.buildRoom({ ...room('r', 0, 0, 14, 10), label: 'Research wing' }, false);
+  const plate = meshes(built.root).find(m => m.userData.part === 'name-plate');
+  assert.ok(plate, 'name plate exists');
+  assert.equal(plate.userData.roomName, 'Research wing');
+  assert.ok(plate.position.z > 5 && plate.position.z < 7.5, `outside the front door (z ${plate.position.z})`);
+  assert.ok(Math.abs(plate.position.y) < 0.1, 'lies on the floor');
+});
+
+test('overview cutaway keeps walls tall enough to read (>= 1 m) but below desk tops (<= 1.3 m)', () => {
+  const R = loadRooms();
+  const h = R.ROOM_WALL_HEIGHT * R.ROOM_CUTAWAY_SCALE;
+  assert.ok(h >= 1 && h <= 1.3, `cutaway wall height ${h}`);
+});

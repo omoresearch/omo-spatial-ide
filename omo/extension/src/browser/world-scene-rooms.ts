@@ -77,6 +77,27 @@ function roomColors(jungle: boolean): RoomColors {
         ? { floor: 0x6f8a72, trim: 0x4b6150, wall: 0x5a7561, cap: 0x46604e, strip: 0xc6e5a7 }
         : { floor: 0x58697b, trim: 0x2f3d4f, wall: 0x2f405a, cap: 0x23324a, strip: 0x77deef };
 }
+/**
+ * w3:look — readable rooms: light plaster walls with a dark cap line (they stand out from the floor, the ground
+ * and the desks inside), a darker floor, and doorways framed in the theme's accent colour.
+ */
+interface LookColors { wall: number; cap: number; floor: number; accent: number; plateInk: string; plateBg: string }
+function lookColors(jungle: boolean): LookColors {
+    return jungle
+        ? { wall: 0xe6e1cc, cap: 0x4b6150, floor: 0x5d7461, accent: 0xb9dc8f, plateInk: '#eef7dc', plateBg: 'rgba(37, 56, 44, 0.86)' }
+        : { wall: 0xdfe5ec, cap: 0x3a4a5f, floor: 0x46566a, accent: 0x6fd3e0, plateInk: '#eaf6fb', plateBg: 'rgba(22, 34, 50, 0.86)' };
+}
+/** A flat name plate texture (null outside a browser: tests build rooms in Node). */
+function nameTexture(text: string, colors: LookColors): THREE.CanvasTexture | undefined {
+    if (typeof document === 'undefined') return undefined;
+    const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 224;
+    const c = canvas.getContext('2d'); if (!c) return undefined;
+    c.fillStyle = colors.plateBg; c.beginPath(); c.roundRect?.(8, 8, 1008, 208, 40); c.fill();
+    c.fillStyle = colors.plateInk; c.font = '600 112px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(text.toUpperCase(), 512, 118, 960);
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4;
+    return texture;
+}
 
 /** Inward normal (room-local) of a wall side: the light strip sits on the inner face. */
 const INWARD: Record<WallSide, [number, number]> = { back: [0, 1], front: [0, -1], left: [1, 0], right: [-1, 0] };
@@ -84,27 +105,28 @@ const INWARD: Record<WallSide, [number, number]> = { back: [0, 1], front: [0, -1
 /** Build a room. `shellJungle` is the world's theme; the room's own theme wins when set. */
 export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity {
     const jungle = entity.theme ? entity.theme === 'jungle' : shellJungle;
-    const colors = roomColors(jungle);
+    const colors = roomColors(jungle), look = lookColors(jungle);
     const root = new THREE.Group(); root.name = `omo-entity:${entity.id}`;
     // Selectable in build mode (userData.entity) but not a workstation: clicking a wall never opens anything.
     root.userData.entity = entity.id; root.userData.kind = 'room';
     placeRoot(root, entity);
     const H = ROOM_WALL_HEIGHT, t = ROOM_WALL_THICKNESS;
     // Shared materials per room: a room is ~20 meshes, not 20 materials.
-    const wallMat = new THREE.MeshStandardMaterial({ color: colors.wall, roughness: 0.78, metalness: 0.06 });
-    const capMat = new THREE.MeshStandardMaterial({ color: colors.cap, roughness: 0.7, metalness: 0.1 });
+    const wallMat = new THREE.MeshStandardMaterial({ color: look.wall, roughness: 0.86, metalness: 0.02 }); // w3:look — light walls
+    const capMat = new THREE.MeshStandardMaterial({ color: look.cap, roughness: 0.7, metalness: 0.1 });
     const stripMat = new THREE.MeshStandardMaterial({ color: colors.strip, emissive: colors.strip, emissiveIntensity: 0.9, roughness: 0.5 });
-    const add = (parent: THREE.Object3D, size: [number, number, number], at: [number, number, number], mat: THREE.Material, cast = true): THREE.Mesh => {
+    const accentMat = new THREE.MeshStandardMaterial({ color: look.accent, emissive: look.accent, emissiveIntensity: 0.35, roughness: 0.55 });
+    const add = (parent: THREE.Object3D, size: [number, number, number], at: [number, number, number], mat: THREE.Material, cast = true, part?: string): THREE.Mesh => {
         const m = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), mat);
-        m.position.set(at[0], at[1], at[2]); m.castShadow = cast; m.receiveShadow = true; parent.add(m); return m;
+        m.position.set(at[0], at[1], at[2]); m.castShadow = cast; m.receiveShadow = true; if (part) m.userData.part = part; parent.add(m); return m;
     };
-    // Floor slab with a darker trim band, so the room reads as a place from far away.
-    add(root, [entity.width + t, 0.05, entity.depth + t], [0, 0.025, 0], new THREE.MeshStandardMaterial({ color: colors.trim, roughness: 0.8, metalness: 0.05 }), false);
-    add(root, [entity.width - 0.3, 0.06, entity.depth - 0.3], [0, 0.03, 0], new THREE.MeshStandardMaterial({ color: colors.floor, roughness: 0.74, metalness: 0.05 }), false);
+    // Floor slab with a dark trim band, so the room reads as a place from far away.
+    add(root, [entity.width + t, 0.05, entity.depth + t], [0, 0.025, 0], new THREE.MeshStandardMaterial({ color: look.cap, roughness: 0.8, metalness: 0.05 }), false, 'trim');
+    add(root, [entity.width - 0.3, 0.06, entity.depth - 0.3], [0, 0.03, 0], new THREE.MeshStandardMaterial({ color: look.floor, roughness: 0.74, metalness: 0.05 }), false, 'floor');
     const walls = new THREE.Group(); walls.name = 'omo-room-walls'; root.add(walls);
     for (const seg of roomWallSegments(entity)) {
-        add(walls, [seg.sx, H, seg.sz], [seg.x, H / 2, seg.z], wallMat);
-        add(walls, [seg.sx + 0.02, 0.06, seg.sz + 0.02], [seg.x, H + 0.03, seg.z], capMat, false);
+        add(walls, [seg.sx, H, seg.sz], [seg.x, H / 2, seg.z], wallMat, true, 'wall');
+        add(walls, [seg.sx + 0.02, 0.06, seg.sz + 0.02], [seg.x, H + 0.03, seg.z], capMat, false, 'cap');
         // Soft light strip on the inner face, just under the top edge.
         const [nx, nz] = INWARD[seg.side];
         const along = seg.sx > seg.sz;
@@ -113,13 +135,39 @@ export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity
     const lintels = new THREE.Group(); lintels.name = 'omo-room-lintels'; root.add(lintels);
     const doors = roomDoors(entity);
     const lh = H - ROOM_LINTEL_BOTTOM, ly = ROOM_LINTEL_BOTTOM + lh / 2;
-    if (doors.has('back')) add(lintels, [ROOM_DOOR_WIDTH, lh, t], [0, ly, -entity.depth / 2], wallMat);
-    if (doors.has('front')) add(lintels, [ROOM_DOOR_WIDTH, lh, t], [0, ly, entity.depth / 2], wallMat);
-    if (doors.has('left')) add(lintels, [t, lh, ROOM_DOOR_WIDTH], [-entity.width / 2, ly, 0], wallMat);
-    if (doors.has('right')) add(lintels, [t, lh, ROOM_DOOR_WIDTH], [entity.width / 2, ly, 0], wallMat);
+    // w3:look — every doorway: accent jamb posts either side (they scale with the cutaway walls) and a threshold strip.
+    const J = 0.12, half = ROOM_DOOR_WIDTH / 2;
+    const doorAt: Record<WallSide, { x: number; z: number; alongX: boolean }> = {
+        back: { x: 0, z: -entity.depth / 2, alongX: true }, front: { x: 0, z: entity.depth / 2, alongX: true },
+        left: { x: -entity.width / 2, z: 0, alongX: false }, right: { x: entity.width / 2, z: 0, alongX: false }
+    };
+    for (const side of WALL_ORDER) {
+        if (!doors.has(side)) continue;
+        const d = doorAt[side];
+        add(lintels, d.alongX ? [ROOM_DOOR_WIDTH, lh, t] : [t, lh, ROOM_DOOR_WIDTH], [d.x, ly, d.z], wallMat);
+        for (const s of [-1, 1]) {
+            const o = s * (half + J / 2 - 0.02); // over the wall end: the walkable gap stays exactly as wide as collision says
+            add(walls, d.alongX ? [J, H, t + 0.06] : [t + 0.06, H, J], [d.x + (d.alongX ? o : 0), H / 2, d.z + (d.alongX ? 0 : o)], accentMat, true, 'jamb');
+        }
+        add(root, d.alongX ? [ROOM_DOOR_WIDTH - 2 * J, 0.02, t + 0.5] : [t + 0.5, 0.02, ROOM_DOOR_WIDTH - 2 * J], [d.x, 0.07, d.z], accentMat, false, 'threshold');
+    }
+    // w3:look — the room's name on a floor plate just outside its main doorway; it always reads from the +z side
+    // (the overview camera), whatever the room's quarter turn.
+    const main = doors.has('front') ? 'front' : WALL_ORDER.find(s => doors.has(s));
+    if (main) {
+        const name = (entity.label ?? 'Room').slice(0, 40), d = doorAt[main];
+        const out = 1.25, nx = main === 'left' ? -out : main === 'right' ? out : 0, nz = main === 'back' ? -out : main === 'front' ? out : 0;
+        const map = nameTexture(name, look);
+        const plate = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.74), new THREE.MeshBasicMaterial({ color: map ? 0xffffff : look.cap, map, transparent: true, depthWrite: false }));
+        plate.rotation.set(-Math.PI / 2, -entity.transform.rotation, 0, 'YXZ'); // flat on the floor, text upright for a +z viewer
+        plate.position.set(d.x + nx, 0.035, d.z + nz); plate.renderOrder = 1;
+        plate.userData.part = 'name-plate'; plate.userData.roomName = name; plate.userData.ownsMap = true; plate.raycast = () => undefined;
+        root.add(plate);
+    }
     root.userData.roomWalls = walls; root.userData.roomLintels = lintels;
     return { root };
 }
+const WALL_ORDER: readonly WallSide[] = ['front', 'back', 'left', 'right'];
 
 /**
  * Overview cutaway: lower a room's walls and hide its lintels so the desks inside stay visible from above;
