@@ -16,18 +16,20 @@ import { entityRadius, roomRect } from '../common/world-model';
 export interface OverviewView { azimuth: number; elevation: number; aspect: number; fov: number }
 export interface OverviewFrame { target: { x: number; y: number; z: number }; distance: number }
 /** Content may reach this fraction of half the screen (a little air for labels and the HUD). */
-const FIT_MARGIN = 0.86;
+const FIT_MARGIN = 0.9;
 /** Content height that must stay in view (room walls). */
 const CONTENT_TOP = 2.8;
 export function overviewFrame(world: Pick<WorldSpec, 'shell' | 'entities'>, view: OverviewView): OverviewFrame | undefined {
     if (!world.shell.open) return undefined;
-    // The spawn street (worldHome) is always part of the picture: the player starts there.
-    let minX = -3, maxX = 3, minZ = -2, maxZ = 4.5;
+    // Content box (rooms + entities) with a little ground around it; an empty world frames the spawn area.
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const e of world.entities) {
         if (e.kind === 'room') { const r = roomRect(e); minX = Math.min(minX, r.minX); maxX = Math.max(maxX, r.maxX); minZ = Math.min(minZ, r.minZ); maxZ = Math.max(maxZ, r.maxZ); continue; }
         const k = entityRadius(e), { x, z } = e.transform;
         minX = Math.min(minX, x - k); maxX = Math.max(maxX, x + k); minZ = Math.min(minZ, z - k); maxZ = Math.max(maxZ, z + k);
     }
+    if (!Number.isFinite(minX)) { minX = -4; maxX = 4; minZ = -3; maxZ = 5; }
+    minX -= 1; maxX += 1; minZ -= 1; maxZ += 2.5; // the street strip in front of the doorways (name plates, paths)
     const target = { x: (minX + maxX) / 2, y: 0.7, z: (minZ + maxZ) / 2 };
     const corners: Array<[number, number, number]> = [];
     for (const x of [minX, maxX]) for (const z of [minZ, maxZ]) for (const y of [0, CONTENT_TOP]) corners.push([x, y, z]);
