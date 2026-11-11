@@ -1,0 +1,440 @@
+{
+ "script": "scripts/perf-many-desks.cjs",
+ "commit": "ad735ed3cfae569421e51adb1818b189d88155e8",
+ "port": 3552,
+ "deskCounts": [
+  8,
+  16,
+  32,
+  48
+ ],
+ "walkSeconds": 20,
+ "deskCommand": "yes | head -c 2000; while :; do date; sleep 0.5; done",
+ "host": {
+  "platform": "linux",
+  "cpus": 16,
+  "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor",
+  "memGB": 59,
+  "node": "v22.23.4"
+ },
+ "startedAt": "2026-11-11T08:23:18.876Z",
+ "runs": [
+  {
+   "desks": 8,
+   "port": 3552,
+   "tmuxSocket": "omo-perf-3552-8",
+   "pass": true,
+   "steps": [
+    {
+     "name": "app ready",
+     "at": "2026-11-11T08:23:20.999Z"
+    },
+    {
+     "name": "onboarding shown",
+     "at": "2026-11-11T08:23:26.155Z"
+    },
+    {
+     "name": "planned desks",
+     "at": "2026-11-11T08:23:27.840Z",
+     "detail": 8
+    },
+    {
+     "name": "room created",
+     "at": "2026-11-11T08:23:28.844Z",
+     "detail": {
+      "stations": 8
+     }
+    },
+    {
+     "name": "desks opened",
+     "at": "2026-11-11T08:23:47.056Z",
+     "detail": {
+      "opened": 8,
+      "failed": 0
+     }
+    },
+    {
+     "name": "walk measured",
+     "at": "2026-11-11T08:24:10.637Z",
+     "detail": {
+      "fps": 16.4,
+      "p90": 100,
+      "longTasks": 80,
+      "cpu": {
+       "seconds": 20.488,
+       "app": 10.9,
+       "tmux": 1.6,
+       "chrome": 577.4,
+       "note": "% of one core, averaged over the window"
+      }
+     }
+    }
+   ],
+   "stationsInWorld": 8,
+   "open": {
+    "opened": 8,
+    "failed": [],
+    "seconds": 18.2
+   },
+   "processes": {
+    "appPgid": 2940290,
+    "tmuxPid": 2943808,
+    "chromePid": 2941276
+   },
+   "walk": {
+    "frames": 332,
+    "fpsAverage": 16.4,
+    "fpsFromMeanDelta": 16.4,
+    "frameMs": {
+     "p50": 66.6,
+     "p90": 100,
+     "p99": 150.1,
+     "max": 166.7
+    },
+    "framesOver50ms": 184,
+    "longTasks": {
+     "count": 80,
+     "totalMs": 7825,
+     "maxMs": 165,
+     "unsupported": false
+    },
+    "jsHeapMB": {
+     "start": 233.3,
+     "end": 219.9,
+     "max": 233.3
+    },
+    "note": "The world renders on demand: while walking it draws every frame; standing still it idles, so fps is measured while moving.",
+    "cpu": {
+     "seconds": 20.488,
+     "app": 10.9,
+     "tmux": 1.6,
+     "chrome": 577.4,
+     "note": "% of one core, averaged over the window"
+    },
+    "chromeMetrics": {
+     "taskSeconds": 10.728,
+     "scriptSeconds": 9.191,
+     "layoutSeconds": 0.072,
+     "recalcStyleSeconds": 0.066,
+     "jsHeapUsedMB": 184.7,
+     "nodes": 40409
+    },
+    "desksShowingLiveOutput": 8
+   },
+   "pageErrors": []
+  },
+  {
+   "desks": 16,
+   "port": 3552,
+   "tmuxSocket": "omo-perf-3552-16",
+   "pass": true,
+   "steps": [
+    {
+     "name": "app ready",
+     "at": "2026-11-11T08:24:15.786Z"
+    },
+    {
+     "name": "onboarding shown",
+     "at": "2026-11-11T08:24:21.510Z"
+    },
+    {
+     "name": "planned desks",
+     "at": "2026-11-11T08:24:23.482Z",
+     "detail": 16
+    },
+    {
+     "name": "room created",
+     "at": "2026-11-11T08:24:24.515Z",
+     "detail": {
+      "stations": 16
+     }
+    },
+    {
+     "name": "desks opened",
+     "at": "2026-11-11T08:25:01.963Z",
+     "detail": {
+      "opened": 16,
+      "failed": 0
+     }
+    },
+    {
+     "name": "walk measured",
+     "at": "2026-11-11T08:25:26.225Z",
+     "detail": {
+      "fps": 15.2,
+      "p90": 116.7,
+      "longTasks": 82,
+      "cpu": {
+       "seconds": 20.864,
+       "app": 12.8,
+       "tmux": 3,
+       "chrome": 546.2,
+       "note": "% of one core, averaged over the window"
+      }
+     }
+    }
+   ],
+   "stationsInWorld": 16,
+   "open": {
+    "opened": 16,
+    "failed": [],
+    "seconds": 37.4
+   },
+   "processes": {
+    "appPgid": 2957535,
+    "tmuxPid": 2960814,
+    "chromePid": 2958102
+   },
+   "walk": {
+    "frames": 317,
+    "fpsAverage": 15.2,
+    "fpsFromMeanDelta": 15.3,
+    "frameMs": {
+     "p50": 66.7,
+     "p90": 116.7,
+     "p99": 150,
+     "max": 199.9
+    },
+    "framesOver50ms": 184,
+    "longTasks": {
+     "count": 82,
+     "totalMs": 8579,
+     "maxMs": 195,
+     "unsupported": false
+    },
+    "jsHeapMB": {
+     "start": 252,
+     "end": 290.9,
+     "max": 297
+    },
+    "note": "The world renders on demand: while walking it draws every frame; standing still it idles, so fps is measured while moving.",
+    "cpu": {
+     "seconds": 20.864,
+     "app": 12.8,
+     "tmux": 3,
+     "chrome": 546.2,
+     "note": "% of one core, averaged over the window"
+    },
+    "chromeMetrics": {
+     "taskSeconds": 11.337,
+     "scriptSeconds": 9.748,
+     "layoutSeconds": 0.049,
+     "recalcStyleSeconds": 0.142,
+     "jsHeapUsedMB": 236.5,
+     "nodes": 45428
+    },
+    "desksShowingLiveOutput": 16
+   },
+   "pageErrors": []
+  },
+  {
+   "desks": 32,
+   "port": 3552,
+   "tmuxSocket": "omo-perf-3552-32",
+   "pass": true,
+   "steps": [
+    {
+     "name": "app ready",
+     "at": "2026-11-11T08:25:30.873Z"
+    },
+    {
+     "name": "onboarding shown",
+     "at": "2026-11-11T08:25:36.266Z"
+    },
+    {
+     "name": "planned desks",
+     "at": "2026-11-11T08:25:39.718Z",
+     "detail": 32
+    },
+    {
+     "name": "room created",
+     "at": "2026-11-11T08:25:40.855Z",
+     "detail": {
+      "stations": 32
+     }
+    },
+    {
+     "name": "desks opened",
+     "at": "2026-11-11T08:27:13.617Z",
+     "detail": {
+      "opened": 32,
+      "failed": 0
+     }
+    },
+    {
+     "name": "walk measured",
+     "at": "2026-11-11T08:27:39.499Z",
+     "detail": {
+      "fps": 14.5,
+      "p90": 116.7,
+      "longTasks": 91,
+      "cpu": {
+       "seconds": 21.724,
+       "app": 16.2,
+       "tmux": 5.8,
+       "chrome": 545.8,
+       "note": "% of one core, averaged over the window"
+      }
+     }
+    }
+   ],
+   "stationsInWorld": 32,
+   "open": {
+    "opened": 32,
+    "failed": [],
+    "seconds": 92.8
+   },
+   "processes": {
+    "appPgid": 2981950,
+    "tmuxPid": 2985834,
+    "chromePid": 2982495
+   },
+   "walk": {
+    "frames": 315,
+    "fpsAverage": 14.5,
+    "fpsFromMeanDelta": 14.6,
+    "frameMs": {
+     "p50": 66.7,
+     "p90": 116.7,
+     "p99": 166.7,
+     "max": 216.7
+    },
+    "framesOver50ms": 196,
+    "longTasks": {
+     "count": 91,
+     "totalMs": 10121,
+     "maxMs": 207,
+     "unsupported": false
+    },
+    "jsHeapMB": {
+     "start": 283.2,
+     "end": 284,
+     "max": 326.1
+    },
+    "note": "The world renders on demand: while walking it draws every frame; standing still it idles, so fps is measured while moving.",
+    "cpu": {
+     "seconds": 21.724,
+     "app": 16.2,
+     "tmux": 5.8,
+     "chrome": 545.8,
+     "note": "% of one core, averaged over the window"
+    },
+    "chromeMetrics": {
+     "taskSeconds": 13.58,
+     "scriptSeconds": 11.585,
+     "layoutSeconds": 0.073,
+     "recalcStyleSeconds": 0.084,
+     "jsHeapUsedMB": 243.7,
+     "nodes": 42921
+    },
+    "desksShowingLiveOutput": 32
+   },
+   "pageErrors": []
+  },
+  {
+   "desks": 48,
+   "port": 3552,
+   "tmuxSocket": "omo-perf-3552-48",
+   "pass": true,
+   "steps": [
+    {
+     "name": "app ready",
+     "at": "2026-11-11T08:27:44.406Z"
+    },
+    {
+     "name": "onboarding shown",
+     "at": "2026-11-11T08:27:49.677Z"
+    },
+    {
+     "name": "planned desks",
+     "at": "2026-11-11T08:27:53.928Z",
+     "detail": 48
+    },
+    {
+     "name": "room created",
+     "at": "2026-11-11T08:27:55.174Z",
+     "detail": {
+      "stations": 48
+     }
+    },
+    {
+     "name": "desks opened",
+     "at": "2026-11-11T08:30:13.966Z",
+     "detail": {
+      "opened": 48,
+      "failed": 0
+     }
+    },
+    {
+     "name": "walk measured",
+     "at": "2026-11-11T08:30:39.340Z",
+     "detail": {
+      "fps": 13,
+      "p90": 133.3,
+      "longTasks": 100,
+      "cpu": {
+       "seconds": 21.693,
+       "app": 18.3,
+       "tmux": 10.2,
+       "chrome": 524.2,
+       "note": "% of one core, averaged over the window"
+      }
+     }
+    }
+   ],
+   "stationsInWorld": 48,
+   "open": {
+    "opened": 48,
+    "failed": [],
+    "seconds": 138.8
+   },
+   "processes": {
+    "appPgid": 3032471,
+    "tmuxPid": 3036161,
+    "chromePid": 3033244
+   },
+   "walk": {
+    "frames": 282,
+    "fpsAverage": 13,
+    "fpsFromMeanDelta": 13.1,
+    "frameMs": {
+     "p50": 83.3,
+     "p90": 133.3,
+     "p99": 166.7,
+     "max": 183.3
+    },
+    "framesOver50ms": 201,
+    "longTasks": {
+     "count": 100,
+     "totalMs": 9317,
+     "maxMs": 170,
+     "unsupported": false
+    },
+    "jsHeapMB": {
+     "start": 426.8,
+     "end": 518.4,
+     "max": 524.2
+    },
+    "note": "The world renders on demand: while walking it draws every frame; standing still it idles, so fps is measured while moving.",
+    "cpu": {
+     "seconds": 21.693,
+     "app": 18.3,
+     "tmux": 10.2,
+     "chrome": 524.2,
+     "note": "% of one core, averaged over the window"
+    },
+    "chromeMetrics": {
+     "taskSeconds": 18.054,
+     "scriptSeconds": 10.213,
+     "layoutSeconds": 0.071,
+     "recalcStyleSeconds": 0.105,
+     "jsHeapUsedMB": 447.3,
+     "nodes": 53671
+    },
+    "desksShowingLiveOutput": 48
+   },
+   "pageErrors": []
+  }
+ ],
+ "finishedAt": "2026-11-11T08:30:42.155Z"
+}

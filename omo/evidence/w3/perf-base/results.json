@@ -1,0 +1,125 @@
+{
+ "script": "scripts/perf-many-desks.cjs",
+ "commit": "3b7414630091be6b27f7d16de4076e895b56389e",
+ "port": 3553,
+ "deskCounts": [
+  2
+ ],
+ "walkSeconds": 20,
+ "deskCommand": "yes | head -c 2000; while :; do date; sleep 0.5; done",
+ "host": {
+  "platform": "linux",
+  "cpus": 16,
+  "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor",
+  "memGB": 59,
+  "node": "v22.23.4"
+ },
+ "startedAt": "2026-11-11T08:30:52.373Z",
+ "runs": [
+  {
+   "desks": 2,
+   "port": 3553,
+   "tmuxSocket": "omo-perf-3553-2",
+   "pass": true,
+   "steps": [
+    {
+     "name": "app ready",
+     "at": "2026-11-11T08:30:54.210Z"
+    },
+    {
+     "name": "onboarding shown",
+     "at": "2026-11-11T08:30:59.720Z"
+    },
+    {
+     "name": "planned desks",
+     "at": "2026-11-11T08:31:01.295Z",
+     "detail": 2
+    },
+    {
+     "name": "room created",
+     "at": "2026-11-11T08:31:02.189Z",
+     "detail": {
+      "stations": 2
+     }
+    },
+    {
+     "name": "desks opened",
+     "at": "2026-11-11T08:31:05.556Z",
+     "detail": {
+      "opened": 2,
+      "failed": 0
+     }
+    },
+    {
+     "name": "walk measured",
+     "at": "2026-11-11T08:31:29.750Z",
+     "detail": {
+      "fps": 26.3,
+      "p90": 50.1,
+      "longTasks": 49,
+      "cpu": {
+       "seconds": 21.139,
+       "app": 12.9,
+       "tmux": 0.7,
+       "chrome": 848.6,
+       "note": "% of one core, averaged over the window"
+      }
+     }
+    }
+   ],
+   "stationsInWorld": 2,
+   "open": {
+    "opened": 2,
+    "failed": [],
+    "seconds": 3.4
+   },
+   "processes": {
+    "appPgid": 3109064,
+    "tmuxPid": 3112299,
+    "chromePid": 3109750
+   },
+   "walk": {
+    "frames": 554,
+    "fpsAverage": 26.3,
+    "fpsFromMeanDelta": 26.3,
+    "frameMs": {
+     "p50": 33.3,
+     "p90": 50.1,
+     "p99": 83.4,
+     "max": 116.6
+    },
+    "framesOver50ms": 78,
+    "longTasks": {
+     "count": 49,
+     "totalMs": 3008,
+     "maxMs": 82,
+     "unsupported": false
+    },
+    "jsHeapMB": {
+     "start": 226.8,
+     "end": 222.6,
+     "max": 243.2
+    },
+    "note": "The world renders on demand: while walking it draws every frame; standing still it idles, so fps is measured while moving.",
+    "cpu": {
+     "seconds": 21.139,
+     "app": 12.9,
+     "tmux": 0.7,
+     "chrome": 848.6,
+     "note": "% of one core, averaged over the window"
+    },
+    "chromeMetrics": {
+     "taskSeconds": 6.795,
+     "scriptSeconds": 5.131,
+     "layoutSeconds": 0.051,
+     "recalcStyleSeconds": 0.203,
+     "jsHeapUsedMB": 186.2,
+     "nodes": 40564
+    },
+    "desksShowingLiveOutput": 2
+   },
+   "pageErrors": []
+  }
+ ],
+ "finishedAt": "2026-11-11T08:31:32.268Z"
+}

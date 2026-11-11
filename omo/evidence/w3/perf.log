@@ -3,3 +3,23 @@
 [N=8] planned desks 8
 [N=8] room created {"stations":8}
 [N=8] desks opened {"opened":8,"failed":0}
+[N=8] walk measured {"fps":16.4,"p90":100,"longTasks":80,"cpu":{"seconds":20.488,"app":10.9,"tmux":1.6,"chrome":577.4,"note":"% of one core, averaged over the window"}}
+[N=16] app ready
+[N=16] onboarding shown
+[N=16] planned desks 16
+[N=16] room created {"stations":16}
+[N=16] desks opened {"opened":16,"failed":0}
+[N=16] walk measured {"fps":15.2,"p90":116.7,"longTasks":82,"cpu":{"seconds":20.864,"app":12.8,"tmux":3,"chrome":546.2,"note":"% of one core, averaged over the window"}}
+[N=32] app ready
+[N=32] onboarding shown
+[N=32] planned desks 32
+[N=32] room created {"stations":32}
+[N=32] desks opened {"opened":32,"failed":0}
+[N=32] walk measured {"fps":14.5,"p90":116.7,"longTasks":91,"cpu":{"seconds":21.724,"app":16.2,"tmux":5.8,"chrome":545.8,"note":"% of one core, averaged over the window"}}
+[N=48] app ready
+[N=48] onboarding shown
+[N=48] planned desks 48
+[N=48] room created {"stations":48}
+[N=48] desks opened {"opened":48,"failed":0}
+[N=48] walk measured {"fps":13,"p90":133.3,"longTasks":100,"cpu":{"seconds":21.693,"app":18.3,"tmux":10.2,"chrome":524.2,"note":"% of one core, averaged over the window"}}
+results: /home/harry/dev/omo-world-v2/omo/evidence/w3/perf/results.json
