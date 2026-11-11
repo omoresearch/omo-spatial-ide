@@ -1,0 +1,21 @@
+admin box after send: {"value":"","placeholder":"Describe a change, e.g. add a desk for Codex"}
+FINAL PASS: admin prompt is empty after sending, neutral placeholder
+RUNNER PASS extension/test/t4-admin-prompt-real-app.cjs (exit 0)
+PASS: Using desk one in the classic room asks nothing
+PASS: After admin Apply adds a desk, no setup prompt opens (desk one keeps working) — []
+PASS: Build mode placed a ghost agent desk
+PASS: After build-mode Apply adds a desk, no setup prompt opens (desk one keeps working) — []
+PASS: First open of the new desk (desk switcher) offers its setup and waits for confirmation — "Set up demo-project · Codex desk as this station is configured? It will use profile “default” and start exactly these tabs: Codex. Nothing launches until you confirm; Cancel keeps just the shell.Start station tabsCancel"
+PASS: Nothing started before confirmation: the new desk has only its shell tab — ["Shell"]
+PASS: Cancel keeps just the shell and the prompt is gone
+FINAL PASS: 7 desk setup checks
+RUNNER PASS extension/test/t4-desk-setup-real-app.cjs (exit 0)
+PASS: item4-1440x900-full — 15 controls, bar [0,0,1440,44] content [16,1428] hud [[1342,80,1376,112],[64,796,134,826]] scrollWidth 1440/1440, Walk at [1288,1392], desk names cut: []
+PASS: item4-1440x900-desk — 15 controls, bar [48,68,1392,112] content [64,1228] hud [[1352,76,1380,104],[1276,76,1346,104]] scrollWidth 1344/1344, Walk at [1107,1177], desk names cut: []
+PASS: item4-1280x800-full — 15 controls, bar [0,0,1280,44] content [16,1268] hud [[1182,80,1216,112],[64,696,134,726]] scrollWidth 1280/1280, Walk at [1162,1232], desk names cut: []
+PASS: item4-1280x800-desk — 15 controls, bar [48,68,1232,112] content [64,1068] hud [[1192,76,1220,104],[1116,76,1186,104]] scrollWidth 1184/1184, Walk at [947,1017], desk names cut: []
+FINAL PASS: 4 viewport/mode checks, every bar control inside the window
+RUNNER PASS extension/test/t4-focus-bar-real-app.cjs (exit 0)
+layout lock note: 🔒 Desk “Desk one” is locked, so the room layout cannot change. Unlock it in Station recipes, or keep this layout.
+FINAL PASS: the layout lock note names the locked desk
+RUNNER PASS extension/test/t4-layout-lock-real-app.cjs (exit 0)

@@ -1,0 +1,18 @@
+PASS planner understood the plan — "OMO UNDERSTOOD\n3 desks · 1 monitor wall · 1 web wall · 1 review screen · 1 decor piece"
+PASS preview lists 3 desks — {"ents":3}
+PASS room has the 3 planned desks — "[\"terminal\",\"terminal-2\",\"desk-3\"]"
+PASS desk switcher shows the planned desk names — ["Literature","Data","Writing"]
+PASS build mode opens with B
+PASS ghost desk placed
+PASS applied: 4 desks in the world — "[\"terminal\",\"terminal-2\",\"desk-3\",\"desk-1\"]"
+PASS admin opens
+PASS admin returned a proposal — {"status":"proposed"}
+PASS admin Apply added the Codex desk — {"before":4,"after":5}
+PASS real shell output on the new Codex desk — "codex-desk"
+PASS full-screen terminal engaged
+PASS full-screen shows the command output line — ["Research lab - Codex desk:~/.../scratch/omo-demo-klx6nW/research-lab$ echo hello from the Codex desk","hello from the Codex desk","Research lab - Codex desk:~/.../scratch/omo-demo-klx6nW/research-la
+PASS immersive mode engaged
+PASS immersive monitor keeps the command output line — ["from the Codex desk","hello from the Codex desk","Research lab - Codex desk:~/.../scratch/omo-demo-klx6nW/research-lab$"]
+PASS viewport still 1440x900 — [1440,900]
+PASS no page errors — []
+DONE frames=2439 seconds=84.9

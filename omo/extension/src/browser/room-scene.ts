@@ -462,6 +462,8 @@ export class RoomScene {
         canvas.dataset.worldRevision = String(world.revision);
         canvas.dataset.worldEntities = JSON.stringify(world.entities.map(e => e.id));
         canvas.dataset.worldStations = JSON.stringify(stations.map(e => e.id));
+        canvas.dataset.worldShell = JSON.stringify({ width: world.shell.width, depth: world.shell.depth, open: !!world.shell.open }); // w3:test
+        canvas.dataset.worldRooms = JSON.stringify(world.entities.filter(e => e.kind === 'room').map(e => e.id)); // w3:test
         canvas.dataset.deskPositions = JSON.stringify(Object.fromEntries(stations.map(e => [e.id, { x: e.transform.x, z: e.transform.z }])));
         this.lastView[0] = NaN; this.renderer.shadowMap.needsUpdate = true;
         if (previous) this.positionCamera();
@@ -774,8 +776,7 @@ export class RoomScene {
         if (!selection && this.farScreen(station, surface)) { if (!surface.parked) { surface.parked = true; this.publishParked(); } } // w3:render — far monitor keeps its last frame
         else {
             surface.parked = false; surface.frame = frame; surface.selection = selectionKey;
-            // w3:perf: active desk at once; near/far max 6 per frame round-robin; hidden waits
-            if ((this.paintBudget ??= new MonitorPaintBudget({ alive: () => !this.disposed, onPainted: () => this.invalidate() })).request(station, () => this.terminalSurfaces.get(station) === surface && surface.frame === frame && this.paintTerminal(surface, frame, spans))) this.invalidate();
+            if ((this.paintBudget ??= new MonitorPaintBudget({ alive: () => !this.disposed, onPainted: () => this.invalidate() })).request(station, () => this.terminalSurfaces.get(station) === surface && surface.frame === frame && this.paintTerminal(surface, frame, spans))) this.invalidate(); // w3:perf: active desk at once; near/far max 6 per frame round-robin; hidden waits
         }
         this.paintLamp(station);
         if (!this.renderer) return;
