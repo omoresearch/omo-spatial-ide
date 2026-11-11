@@ -23,6 +23,8 @@ import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
 import { openSky } from './world-scene-open'; // w3:render
+import { cameraClip, shadowFrame, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render
+import { refreeze as refreezeNode } from './world-scene-kit'; // w3:render
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -164,7 +166,7 @@ export interface RoomSceneOptions {
 export class RoomScene {
     private renderer!: THREE.WebGLRenderer;
     private scene = new THREE.Scene();
-    private camera = new THREE.PerspectiveCamera(38, 1, 0.1, 150);
+    private camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400); // w3:render — far >= 400 (was 150); scaled per world in applyScaleView()
     private state: RoomState['camera'];
     private frame = 0;
     /** Render on demand: one rAF at most is ever pending; idle rooms render nothing. */
@@ -449,11 +451,8 @@ export class RoomScene {
         this.paintLinked();
         // Walking: footprint collision, bounds and reset spot of this world.
         if (this.walker) { this.walker.mover = worldMover(world); this.walker.home = worldHome(world.shell); }
-        this.roomScale = Math.max(1, world.shell.width / 12, world.shell.depth / 10);
-        if (this.lights) {
-            const extent = Math.max(12, Math.max(world.shell.width, world.shell.depth) * 0.75);
-            Object.assign(this.lights.sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent }); this.lights.sun.shadow.camera.updateProjectionMatrix();
-        }
+        this.roomScale = worldScale(world.shell);
+        this.shadowKey = ''; this.applyScaleView(); // w3:render — fog, clip planes and the sun's shadow box for this world size
         const canvas = this.renderer.domElement;
         canvas.dataset.worldName = world.name;
         canvas.dataset.worldRevision = String(world.revision);
@@ -677,6 +676,39 @@ export class RoomScene {
         canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('keydown',key);
         this.cleanup.push(()=>{canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('keydown',key);});
     }
+    // ------------------------------------------------------------------ w3:render — big worlds
+    private shadowKey = '';
+    private parkCheck = { x: NaN, z: NaN };
+    /** Fog and camera clip planes for the world size and navigation mode, then the sun's shadow box. */
+    private applyScaleView(): void {
+        const mode = this.navigation, fog = worldFog(this.world.shell, mode), clip = cameraClip(this.world.shell, mode);
+        const f = this.scene.fog as THREE.Fog | null; if (f) { f.near = fog.near; f.far = fog.far; }
+        if (this.camera.near !== clip.near || this.camera.far !== clip.far) { this.camera.near = clip.near; this.camera.far = clip.far; this.camera.updateProjectionMatrix(); }
+        this.followSun();
+    }
+    /**
+     * The sun's shadow box: fixed v1 box for classic rooms, a ±30 m box following the player (in 4 m steps) in big
+     * worlds. The shadow map is redrawn only when the box moves; the map size stays capped at 2048.
+     */
+    private followSun(): void {
+        if (!this.lights || !this.world) return;
+        const pose = this.walker?.pose ?? PLAYER_HOME, frame = shadowFrame(this.world.shell, this.navigation, pose);
+        const key = `${frame.cx},${frame.cz},${frame.extent}`; if (key === this.shadowKey) return;
+        this.shadowKey = key;
+        const { sun } = this.lights, k = Math.max(1, frame.extent / V1_SUN.extent);
+        sun.position.set(frame.cx + V1_SUN.x * k, V1_SUN.y * k, frame.cz + V1_SUN.z * k); refreezeNode(sun);
+        sun.target.position.set(frame.cx, 0, frame.cz); sun.target.updateMatrixWorld(true);
+        Object.assign(sun.shadow.camera, { left: -frame.extent, right: frame.extent, top: frame.extent, bottom: -frame.extent, near: 1, far: 40 * k });
+        sun.shadow.camera.updateProjectionMatrix();
+        if (this.renderer) this.renderer.shadowMap.needsUpdate = true;
+        this.setData('shadowFrame', key);
+    }
+    /** After the player walked >= 1 m: move the sun's shadow box. No work (or allocation) in between. */
+    private walked(pose: PlayerPose): void {
+        if (Math.hypot(pose.x - this.parkCheck.x, pose.z - this.parkCheck.z) < 1) return;
+        this.parkCheck.x = pose.x; this.parkCheck.z = pose.z;
+        this.followSun();
+    }
     /** w3:render — overview shows rooms as a cutaway (low walls, no lintels); walking shows full walls. */
     private cutRooms(): void {
         let changed = false;
@@ -687,6 +719,7 @@ export class RoomScene {
         this.navigation = mode; this.camera.fov = mode === 'walk' ? 65 : 38; this.camera.updateProjectionMatrix();
         this.walker?.setEnabled(mode === 'walk');
         this.cutRooms(); // w3:render — rooms: full walls when walking, low cutaway walls in the overview
+        if (this.world) this.applyScaleView(); // w3:render
         if (this.walker) this.smoother.snap(this.walker.pose);
         if (this.renderer) { this.renderer.domElement.dataset.navigation = mode; }
         this.labels.forEach(label => { label.classList.toggle('is-walk', mode === 'walk'); this.labelSize.delete(label); this.labelPos.delete(label); }); // t3:polish2: re-measure
@@ -1005,6 +1038,7 @@ export class RoomScene {
             }
             if(!this.smoother.settled(pose))moving=true;
             this.emitPose(pose,now,moving);
+            if(moving)this.walked(pose); // w3:render — shadow box follows the player (checked per metre walked)
         }
         if(moving){
             if(this.sharpTimer!==undefined){window.clearTimeout(this.sharpTimer);this.sharpTimer=undefined;}
