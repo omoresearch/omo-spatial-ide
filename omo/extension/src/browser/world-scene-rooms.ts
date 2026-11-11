@@ -145,11 +145,15 @@ export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity
         if (!doors.has(side)) continue;
         const d = doorAt[side];
         add(lintels, d.alongX ? [ROOM_DOOR_WIDTH, lh, t] : [t, lh, ROOM_DOOR_WIDTH], [d.x, ly, d.z], wallMat);
+        // w3:look (5) — the dark cap continues over the doorway (lintel + both jamb tops): no step in the cap line.
+        const span = ROOM_DOOR_WIDTH + 2 * J, deep = t + 0.08;
+        add(lintels, d.alongX ? [span, 0.06, deep] : [deep, 0.06, span], [d.x, H + 0.03, d.z], capMat, false, 'door-cap');
         for (const s of [-1, 1]) {
             const o = s * (half + J / 2 - 0.02); // over the wall end: the walkable gap stays exactly as wide as collision says
             add(walls, d.alongX ? [J, H, t + 0.06] : [t + 0.06, H, J], [d.x + (d.alongX ? o : 0), H / 2, d.z + (d.alongX ? 0 : o)], accentMat, true, 'jamb');
         }
-        add(root, d.alongX ? [ROOM_DOOR_WIDTH - 2 * J, 0.02, t + 0.5] : [t + 0.5, 0.02, ROOM_DOOR_WIDTH - 2 * J], [d.x, 0.07, d.z], accentMat, false, 'threshold');
+        // w3:look (5) — the threshold stays within the jamb depth (it used to stick 0.25 m out of both wall faces: a light wedge on the ground).
+        add(root, d.alongX ? [ROOM_DOOR_WIDTH - 2 * J, 0.02, t + 0.06] : [t + 0.06, 0.02, ROOM_DOOR_WIDTH - 2 * J], [d.x, 0.07, d.z], accentMat, false, 'threshold');
     }
     // w3:look — the room's name on a floor plate just outside its main doorway; it always reads from the +z side
     // (the overview camera), whatever the room's quarter turn.

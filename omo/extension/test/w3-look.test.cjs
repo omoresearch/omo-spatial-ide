@@ -150,3 +150,34 @@ test('overview chip text is the desk number; full titles stay for walking and cl
   assert.equal(labels.chipText('Papers wall ↗'), 'Papers wall');
   assert.equal(labels.chipText('05  Mirror · Desk one ↗'), '05');
 });
+
+// ------------------------------------------------------------------------------------------- (5) doorway seams
+test('doorway threshold stays inside the jamb depth (no light strip poking out past the wall faces)', () => {
+  const R = loadRooms();
+  const built = R.buildRoom({ ...room('r', 0, 0, 14, 10), doors: ['front', 'left'] }, false);
+  const all = meshes(built.root);
+  const jambs = all.filter(m => m.userData.part === 'jamb'), sills = all.filter(m => m.userData.part === 'threshold');
+  // A jamb is 0.12 m along the wall and (wall thickness + a little) across it: its larger floor size is its depth.
+  const jambDepth = Math.max(...jambs.map(j => Math.max(j.geometry.parameters.width, j.geometry.parameters.depth)));
+  for (const sill of sills) {
+    const p = sill.geometry.parameters, sillDepth = Math.min(p.width, p.depth);
+    assert.ok(sillDepth <= jambDepth + 1e-6, `threshold depth ${sillDepth} > jamb depth ${jambDepth}`);
+  }
+});
+
+test('the dark wall cap runs over every doorway too (no notch where the lintel meets the wall)', () => {
+  const R = loadRooms();
+  const built = R.buildRoom({ ...room('r', 0, 0, 14, 10), doors: ['front', 'left'] }, false);
+  const all = meshes(built.root);
+  const capTop = m => m.position.y + m.geometry.parameters.height / 2;
+  const wallCap = all.find(m => m.userData.part === 'cap');
+  const doorCaps = all.filter(m => m.userData.part === 'door-cap');
+  assert.equal(doorCaps.length, 2, 'one cap per doorway');
+  const jamb = all.find(m => m.userData.part === 'jamb').geometry.parameters, jambDepth = Math.min(jamb.width, jamb.depth);
+  for (const cap of doorCaps) {
+    assert.ok(Math.abs(capTop(cap) - capTop(wallCap)) < 1e-6, 'same top height as the wall cap');
+    const p = cap.geometry.parameters, span = Math.max(p.width, p.depth), depth = Math.min(p.width, p.depth);
+    assert.ok(span >= R.ROOM_DOOR_WIDTH + 0.2, `cap spans the doorway and both jambs (${span})`);
+    assert.ok(depth >= jambDepth, `cap covers the jamb tops (${depth} < ${jambDepth})`);
+  }
+});
