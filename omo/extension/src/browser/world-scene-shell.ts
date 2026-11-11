@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import type { WorldShell } from '../common/world-model';
 import { box, cylinder, glow, material } from './world-scene-kit';
 import { Footprint, inside } from './world-scene-collision';
+import { buildOpenGround, crystal, pylon } from './world-scene-open'; // w3:render
 
 export interface ShellColors { background: string; hemiSky: number; sun: number; accent: number }
 export function shellColors(jungle: boolean): ShellColors {
@@ -21,6 +22,7 @@ export function shellWalls(shell: WorldShell): { back: number; left: number } {
 }
 /** Is a point near a solid wall (the back wall or the left cutaway wall)? */
 export function nearWall(shell: WorldShell, x: number, z: number, reach = 0.6): boolean {
+    if (shell.open) return false; // w3:render — open ground has no walls: screens get stands
     const w = shellWalls(shell);
     return Math.abs(z - (w.back + 0.11)) < reach || Math.abs(x - (w.left + 0.11)) < reach;
 }
@@ -42,6 +44,13 @@ export function buildShell(shell: WorldShell, blocks: readonly Footprint[], orb:
     const root = new THREE.Group(); root.name = 'omo-world-shell';
     const W = shell.width, D = shell.depth, hw = W / 2, hd = D / 2;
     const free = (x: number, z: number): boolean => !blocks.some(f => inside(f, x, z, 0.1));
+    if (shell.open) { // w3:render — open world: ground, grid, horizon and sparse props; no outer walls
+        buildOpenGround(root, shell, free, {
+            jungle: [(r, x, z, k) => tree(r, x, z, 1.1 * k), (r, x, z) => fern(r, x, z), (r, x, z, k) => tree(r, x, z, 1.4 * k)],
+            station: [(r, x, z) => plant(r, x, z), crystal, pylon]
+        });
+        return root;
+    }
     box(root, [W + 1, 0.55, D], [0, -0.42, 0], jungle ? 0x34453a : 0x303c50);
     box(root, [W + 0.6, 0.12, D - 0.4], [0, -0.08, 0], jungle ? 0x76907b : 0x647889);
     const size = Math.max(W, D);

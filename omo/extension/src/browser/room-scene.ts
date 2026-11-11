@@ -20,8 +20,9 @@ import { buildShell, nearWall, shellColors } from './world-scene-shell';
 import type { OrbSpot } from './world-scene-shell';
 import { BuiltEntity, placeRoot, buildDecorEntity, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
 import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
-import { footprints, worldHome, worldMover } from './world-scene-collision';
+import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
+import { openSky } from './world-scene-open'; // w3:render
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -410,9 +411,10 @@ export class RoomScene {
         const previous = this.world; this.world = world;
         const jungle = world.shell.theme === 'jungle';
         if (previous && previous.shell.theme !== world.shell.theme) this.applyTheme(jungle);
+        this.applySky(world); // w3:render — open worlds: sky/horizon colour instead of the dark room backdrop
         const stations = world.entities.filter(e => e.kind === 'station');
         this.stationNumbers = new Map(stations.map((e, i) => [e.id, i + 1]));
-        const blocks = footprints(world);
+        const blocks = [...footprints(world), ...roomFootprints(world)]; // w3:render — no ambient props inside rooms
         // Shell: rebuilt only when its size/theme or the footprints that hide ambient props change.
         const shellKey = JSON.stringify([world.shell, blocks]);
         if (shellKey !== this.shellKey) {
@@ -461,6 +463,11 @@ export class RoomScene {
         this.lastView[0] = NaN; this.renderer.shadowMap.needsUpdate = true;
         if (previous) this.positionCamera();
         this.invalidate();
+    }
+    /** w3:render — background + fog colour: the classic room backdrop, or the open world's sky. */
+    private applySky(world: WorldSpec): void {
+        const jungle = world.shell.theme === 'jungle', color = world.shell.open ? openSky(jungle) : shellColors(jungle).background;
+        (this.scene.background as THREE.Color).set(color); (this.scene.fog as THREE.Fog).color.set(color);
     }
     private applyTheme(jungle: boolean): void {
         const colors = shellColors(jungle);

@@ -70,6 +70,7 @@ export function inside(f: Footprint, x: number, z: number, pad = 0): boolean {
 }
 /** Walkable bounds of a shell. A 12 x 10 shell gives the v1 bounds x ±5.5, z -3.8..4.45. */
 export function walkBounds(shell: WorldShell): { minX: number; maxX: number; minZ: number; maxZ: number } {
+    if (shell.open) return { minX: -shell.width / 2 + 0.4, maxX: shell.width / 2 - 0.4, minZ: -shell.depth / 2 + 0.4, maxZ: shell.depth / 2 - 0.4 }; // w3:render — open ground: walk to its edge
     return { minX: -shell.width / 2 + 0.5, maxX: shell.width / 2 - 0.5, minZ: -shell.depth / 2 + 1.2, maxZ: shell.depth / 2 - 0.55 };
 }
 /** Where the player stands on reset in this shell (PLAYER_HOME for a v1 room). */
