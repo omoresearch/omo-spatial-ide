@@ -93,8 +93,8 @@ function nameTexture(text: string, colors: LookColors): THREE.CanvasTexture | un
     const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 224;
     const c = canvas.getContext('2d'); if (!c) return undefined;
     c.fillStyle = colors.plateBg; c.beginPath(); c.roundRect?.(8, 8, 1008, 208, 40); c.fill();
-    c.fillStyle = colors.plateInk; c.font = '600 112px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(text.toUpperCase(), 512, 118, 960);
+    c.fillStyle = colors.plateInk; c.font = '600 92px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(text.toUpperCase(), 512, 116, 940);
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4;
     return texture;
 }
@@ -183,7 +183,7 @@ export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity
         if (title) {
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: title, transparent: true, depthWrite: false, fog: false }));
             const w = Math.min(9, Math.max(4.4, entity.width * 0.7)); sprite.scale.set(w, w * 224 / 1024, 1);
-            sprite.position.set(0, H + 1.1, -entity.depth / 2 + 0.2); // over the back wall: clear of the desk chips sprite.renderOrder = 2; sprite.userData.part = 'room-title'; sprite.userData.ownsMap = true; sprite.raycast = () => undefined;
+            sprite.position.set(0, H + 0.75, entity.depth / 2 + 0.1); // over the front (door) wall: wall/desk tags sit at the back and inside sprite.renderOrder = 2; sprite.userData.part = 'room-title'; sprite.userData.ownsMap = true; sprite.raycast = () => undefined;
             root.add(sprite);
         }
     }

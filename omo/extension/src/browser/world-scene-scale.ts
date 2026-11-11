@@ -62,7 +62,9 @@ export const V1_FOG = { near: 33, far: 65 } as const;
 const WALK_FOG_MAX_SCALE = 2.6;
 
 /** Fog for a shell and navigation mode. The overview stands far back, so its fog scales with the full world. */
-export function worldFog(shell: Pick<WorldShell, 'width' | 'depth'>, mode: 'walk' | 'overview'): { near: number; far: number } {
+export function worldFog(shell: Pick<WorldShell, 'width' | 'depth'> & { open?: boolean }, mode: 'walk' | 'overview'): { near: number; far: number } {
+    // w3:look (4) — walking in an open world: a sky-tinted haze from 30 m, solid at 150 m (depth on the horizon).
+    if (shell.open && mode === 'walk') return { near: 22, far: 120 };
     const s = worldScale(shell), k = mode === 'walk' ? Math.min(s, WALK_FOG_MAX_SCALE) : s;
     return { near: V1_FOG.near * k, far: V1_FOG.far * k };
 }

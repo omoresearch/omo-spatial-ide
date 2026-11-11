@@ -58,6 +58,15 @@ export function buildOpenGround(root: THREE.Group, shell: WorldShell, free: (x: 
     // Horizon: a large plane just below the ground in the sky colour; the fog blends its far edge into the sky.
     const span = Math.max(W, D);
     const horizon = new THREE.Mesh(new THREE.PlaneGeometry(span * 8 + 600, span * 8 + 600), material(jungle ? 0x3e5a3a : 0x4a5743) /* w3:look: a darker surround so the world edge reads */);
+    // w3:look (4) — a sky dome: pale at the horizon, deeper blue overhead (fog off, never picked).
+    {
+        const dome = new THREE.SphereGeometry(330, 24, 12), pos = dome.getAttribute('position'), colors: number[] = [];
+        const low = new THREE.Color(jungle ? 0xdcefe9 : 0xd8e8f2), high = new THREE.Color(jungle ? 0x6fb3d6 : 0x5c9fd6), c = new THREE.Color();
+        for (let i = 0; i < pos.count; i++) { const t = Math.max(0, pos.getY(i) / 330); c.copy(low).lerp(high, Math.pow(t, 0.6)); colors.push(c.r, c.g, c.b); }
+        dome.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        const sky = new THREE.Mesh(dome, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+        sky.renderOrder = -10; sky.raycast = () => undefined; sky.userData.part = 'sky'; root.add(sky);
+    }
     horizon.rotation.x = -Math.PI / 2; horizon.position.y = -0.62; horizon.receiveShadow = false; horizon.raycast = () => undefined; root.add(horizon);
     // Spawn marker (the classic room's centre disc and crystal), when free.
     if (free(0.2, 3)) {

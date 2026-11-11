@@ -89,17 +89,19 @@ export function buildPaths(shell: WorldShell, entities: readonly WorldEntity[]):
         let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
         for (const r of rects) { minX = Math.min(minX, r.minX); maxX = Math.max(maxX, r.maxX); minZ = Math.min(minZ, r.minZ); maxZ = Math.max(maxZ, r.maxZ); }
         maxZ = Math.max(maxZ, pz.z + 3.6);
-        const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2, rx = (maxX - minX) / 2 + 7, rz = (maxZ - minZ) / 2 + 7;
+        const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2, rx = (maxX - minX) / 2 + 12, rz = (maxZ - minZ) / 2 + 12;
         const trunk = jungle ? 0x6a5640 : 0x6b5a48, leaf = [jungle ? 0x3f7a45 : 0x4c7d4a, jungle ? 0x5a9150 : 0x5f8f55, 0x3d6b44];
-        const N = Math.min(28, Math.round((rx + rz) * 0.7));
+        const N0 = Math.min(28, Math.round((rx + rz) * 0.7)), N = N0 + 90; // near grove + a far tree line on the horizon
         for (let i = 0; i < N; i++) {
+            const far = i >= N0;
             const h = (k: number): number => { const v = Math.sin(i * 91.7 + k * 47.3) * 43758.5453; return v - Math.floor(v); };
-            const a = (i / N) * Math.PI * 2 + h(1) * 0.35, f = 1 + h(2) * 0.5;
+            const a = far ? ((i - N0) / 90) * Math.PI * 2 + h(1) * 0.05 : (i / N0) * Math.PI * 2 + h(1) * 0.35, f = far ? 2.2 + h(2) * 0.9 : 1 + h(2) * 0.5;
             const x = cx + Math.cos(a) * rx * f, z = cz + Math.sin(a) * rz * f;
-            if (Math.abs(x) > half.w || Math.abs(z) > half.d || inRoom(x, z, 1.5)) continue;
+            if ((!far && (Math.abs(x) > half.w || Math.abs(z) > half.d)) || inRoom(x, z, 1.5)) continue; // far trees may stand on the surround
             if (Math.abs(x - pz.x) < PATH_W && z > maxZ - 4) continue; // keep the plaza approach open
-            const s = 0.8 + h(3) * 0.7;
-            cylinder(root, 0.14 * s, 1.6 * s, [x, 0.8 * s, z], trunk, 0.2 * s, 8);
+            const s = (far ? 1.9 : 0.8) + h(3) * (far ? 1.2 : 0.7);
+            const off = Math.abs(x) > half.w + 0.5 || Math.abs(z) > half.d + 0.5, base = off ? -0.62 : 0; // the surround plane sits 0.62 m lower
+            cylinder(root, 0.14 * s, 1.6 * s - base, [x, (1.6 * s + base) / 2, z], trunk, 0.2 * s, 8);
             const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1 * s, 0), material(leaf[i % 3]));
             crown.position.set(x, 1.6 * s + 0.8 * s, z); crown.rotation.y = h(4) * 3; crown.castShadow = true; crown.receiveShadow = true; root.add(crown);
         }

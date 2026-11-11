@@ -88,8 +88,8 @@ export function openPlazaHome(shell: WorldShell, entities: readonly WorldEntity[
     const d = doors.reduce((a, b) => (Math.hypot(a.x, a.z) <= Math.hypot(b.x, b.z) ? a : b));
     const lim = (v: number, h: number): number => Math.max(-h + 0.6, Math.min(h - 0.6, v));
     // 9 m out and 3 m to the side: the doorway, the room's corner and open ground beyond are all in view.
-    const sx = -d.nz * 3, sz = d.nx * 3;
-    const x = lim(d.x + d.nx * 9 + sx, shell.width / 2), z = lim(d.z + d.nz * 9 + sz, shell.depth / 2);
+    const sx = -d.nz * 5, sz = d.nx * 5;
+    const x = lim(d.x + d.nx * 13 + sx, shell.width / 2), z = lim(d.z + d.nz * 13 + sz, shell.depth / 2);
     // yaw 0 faces -z; forward = (-sin yaw, -cos yaw). Face the doorway itself.
     return { x, z, yaw: Math.atan2(x - d.x, z - d.z), pitch: 0 };
 }
