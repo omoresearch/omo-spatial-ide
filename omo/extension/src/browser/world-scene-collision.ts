@@ -7,7 +7,9 @@
  * Movement slides along each axis separately, so walking into a desk at an angle glides along it.
  */
 import type { PlayerPose } from '../common/player-state';
-import type { WorldEntity, WorldShell, WorldSpec, DecorKind } from '../common/world-model';
+import type { WorldEntity, WorldShell, WorldSpec, DecorKind, Rect } from '../common/world-model';
+import { roomRect, rooms } from '../common/world-model';
+import { roomWallRects } from './world-scene-rooms'; // w3:render
 
 /** A rectangle in entity-local floor space, before rotation and decor scale. */
 export interface LocalRect { left: number; right: number; front: number; back: number }
@@ -79,7 +81,8 @@ export function worldHome(shell: WorldShell): PlayerPose {
 export type WorldMover = (player: PlayerPose, input: { forward: number; right: number }, seconds: number) => PlayerPose;
 export function worldMover(world: WorldSpec): WorldMover {
     const blocks = footprints(world), b = walkBounds(world.shell);
-    const blocked = (x: number, z: number): boolean => blocks.some(f => inside(f, x, z));
+    const walls = roomWalls(world); // w3:render — room walls block, doorways do not (empty for a classic world: exact v1 rules)
+    const blocked = (x: number, z: number): boolean => blocks.some(f => inside(f, x, z)) || walls.some(r => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ);
     return (player, input, seconds) => {
         const length = Math.hypot(input.forward, input.right) || 1;
         const step = 2.7 * Math.max(0, Math.min(seconds, 0.1));
@@ -98,5 +101,20 @@ export function circleHits(blocks: readonly Footprint[], x: number, z: number, r
         const { lx, lz } = local(f, x, z), r = f.rect;
         const cx = Math.max(r.left, Math.min(r.right, lx)), cz = Math.max(r.front, Math.min(r.back, lz));
         return Math.hypot(lx - cx, lz - cz) < radius;
+    });
+}
+
+// ----------------------------------------------------------------------------------------------- w3:render
+/** The player keeps this far from a room wall (the camera never clips into it). */
+export const ROOM_WALL_CLEARANCE = 0.25;
+/** Every room wall piece in the world as a padded world rectangle (doorway gaps stay open: 1.6 - 2 x 0.25 = 1.1 m). */
+export function roomWalls(world: WorldSpec): Rect[] {
+    return rooms(world).flatMap(room => roomWallRects(room, ROOM_WALL_CLEARANCE));
+}
+/** Room floors as footprints: ambient shell props never grow inside a room. Not used for collision. */
+export function roomFootprints(world: WorldSpec): Footprint[] {
+    return rooms(world).map(room => {
+        const r = roomRect(room), x = (r.minX + r.maxX) / 2, z = (r.minZ + r.maxZ) / 2;
+        return { id: room.id, x, z, rotation: 0, rect: { left: r.minX - x - 0.3, right: r.maxX - x + 0.3, front: r.minZ - z - 0.3, back: r.maxZ - z + 0.3 } };
     });
 }
