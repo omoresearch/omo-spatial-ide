@@ -11,11 +11,11 @@
  * WorldProposal that the user must Apply.
  */
 import {
-    applyWorldOps, defaultStation, stations, validateWorld,
-    WORLD_ID_RE, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS
+    applyWorldOps, defaultStation, entityRadius, growOpsFor, roomRect, rooms, stations, validateWorld,
+    ROOM_MAX, ROOM_MIN, SHELL_MAX, SHELL_MIN, WALL_SIDES, WORLD_ID_RE, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS
 } from './world-model';
 import type {
-    DecorKind, EntityKind, StationConfig, StationEntity, TabKind, Transform, WorldEntity, WorldOp, WorldProposal, WorldSpec
+    DecorKind, EntityKind, RoomEntity, StationConfig, StationEntity, TabKind, Transform, WallSide, WorldEntity, WorldOp, WorldProposal, WorldSpec
 } from './world-model';
 
 export interface RulePlanResult {
@@ -125,6 +125,7 @@ export function describeOp(world: WorldSpec, op: WorldOp): string {
                 case 'mirror': return `Add mirror ${label} of ${name(e.link)} ${at(e.transform)}`;
                 case 'review-screen': return `Add code review screen ${label} ${at(e.transform)}`;
                 case 'decor': return `Add ${e.decor}${e.scale && e.scale !== 1 ? ` (size ×${round(e.scale)})` : ''} ${at(e.transform)}`;
+                case 'room': return `Add room ${label} ${round(e.width)} × ${round(e.depth)} m${doorText(e.doors)} ${at(e.transform)}`; // w3:admin
             }
             return 'Add something';
         }
@@ -155,11 +156,20 @@ export function describeOp(world: WorldSpec, op: WorldOp): string {
             const parts: string[] = [];
             if (op.shell.theme) parts.push(`theme ${op.shell.theme === 'jungle' ? 'Prehistoric jungle' : 'Space station'}`);
             if (op.shell.width !== undefined || op.shell.depth !== undefined) parts.push(`size ${round(op.shell.width ?? world.shell.width)} × ${round(op.shell.depth ?? world.shell.depth)} m`);
-            return `Room: ${parts.join(', ') || 'no change'}`;
+            if (op.shell.open === true) parts.push('open world (no outer walls)');
+            if (op.shell.open === false) parts.push('walled room');
+            return `${world.shell.open || op.shell.open ? 'World' : 'Room'}: ${parts.join(', ') || 'no change'}`;
         }
+        case 'reshape': return `Resize room ${name(op.id)} to ${round(op.width)} × ${round(op.depth)} m${op.doors ? doorText(op.doors) : ''}`; // w3:admin
         case 'name': return `Rename the world to “${op.name}”`;
     }
     return 'Unknown change';
+}
+
+const SIDE_WORD: Record<WallSide, string> = { back: 'back', front: 'front', left: 'left', right: 'right' };
+function doorText(doors: readonly WallSide[] | undefined): string {
+    const list = doors ?? ['front'];
+    return list.length ? `, door${list.length === 1 ? '' : 's'} on the ${list.map(d => SIDE_WORD[d]).join(' and ')}` : ', no doors';
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -175,6 +185,7 @@ function halfSize(e: WorldEntity): [number, number] {
         case 'web-wall': return [e.width / 2, 0.2];
         case 'mirror': return [0.7, 0.2];
         case 'review-screen': return [0.9, 0.3];
+        case 'room': return [e.width / 2, e.depth / 2]; // w3:admin
         case 'decor': {
             const s = e.scale ?? 1;
             const base: Record<DecorKind, [number, number]> = {
@@ -201,14 +212,67 @@ const isWallThing = (e: WorldEntity): boolean => e.kind === 'web-wall' || e.kind
 
 type Placement = 'floor' | 'wall' | 'near';
 
+/** w3:admin — the floor area a placement searches: the whole world or one room's inside. `walls` = its edges are real walls. */
+interface Region { minX: number; maxX: number; minZ: number; maxZ: number; walls: boolean }
+const WALL_INSET = 0.2;
+function worldRegion(world: WorldSpec): Region {
+    return { minX: -world.shell.width / 2, maxX: world.shell.width / 2, minZ: -world.shell.depth / 2, maxZ: world.shell.depth / 2, walls: !world.shell.open };
+}
+function roomRegion(room: RoomEntity): Region {
+    const r = roomRect(room);
+    return { minX: r.minX + WALL_INSET, maxX: r.maxX - WALL_INSET, minZ: r.minZ + WALL_INSET, maxZ: r.maxZ - WALL_INSET, walls: true };
+}
+/** Local room side -> world unit vector (same rotation convention as room kits). */
+function sideVector(room: RoomEntity, side: WallSide): { x: number; z: number } {
+    const local = side === 'back' ? { x: 0, z: -1 } : side === 'front' ? { x: 0, z: 1 } : side === 'left' ? { x: -1, z: 0 } : { x: 1, z: 0 };
+    const c = Math.cos(room.transform.rotation), s = Math.sin(room.transform.rotation);
+    return { x: Math.round(local.x * c + local.z * s), z: Math.round(-local.x * s + local.z * c) };
+}
+/** The world side a room's local side faces after its quarter turn. */
+function worldSideOf(room: RoomEntity, side: WallSide): WallSide {
+    const v = sideVector(room, side);
+    return v.z < 0 ? 'back' : v.z > 0 ? 'front' : v.x < 0 ? 'left' : 'right';
+}
+/** The local side that faces a given world side. */
+function localSideFacing(room: RoomEntity, worldSide: WallSide): WallSide {
+    return WALL_SIDES.find(s => worldSideOf(room, s) === worldSide) ?? worldSide;
+}
+/** Keep-clear zones on both sides of every doorway (1.6 m wide, 1.2 m deep). */
+function doorZones(room: RoomEntity): Rect[] {
+    const r = roomRect(room);
+    const out: Rect[] = [];
+    for (const side of room.doors ?? ['front']) {
+        const v = sideVector(room, side);
+        const px = v.x === 0 ? room.transform.x : v.x < 0 ? r.minX : r.maxX;
+        const pz = v.z === 0 ? room.transform.z : v.z < 0 ? r.minZ : r.maxZ;
+        const along = v.x === 0;
+        out.push({ x: px, z: pz, hx: along ? 0.8 : 1.2, hz: along ? 1.2 : 0.8 });
+    }
+    return out;
+}
+const within = (a: Rect, b: Rect, inset: number): boolean => a.x - a.hx >= b.x - b.hx + inset && a.x + a.hx <= b.x + b.hx - inset && a.z - a.hz >= b.z - b.hz + inset && a.z + a.hz <= b.z + b.hz - inset;
+
 function fits(world: WorldSpec, cand: WorldEntity, t: Transform, ignore: ReadonlySet<string>): boolean {
     const r = rectOf(cand, t);
     const W = world.shell.width / 2, D = world.shell.depth / 2;
     if (Math.abs(r.x) + r.hx > W - 0.1 || Math.abs(r.z) + r.hz > D - 0.1) return false;
     // Keep the spawn walkway (front centre) free of floor furniture.
     if (!isWallThing(cand) && !isRug(cand) && overlaps(r, { x: 0, z: D - 0.9, hx: 0.7, hz: 0.7 }, 0)) return false;
-    for (const other of world.entities) {
-        if (other.id === cand.id || ignore.has(other.id)) continue;
+    const others = world.entities.filter(o => o.id !== cand.id && !ignore.has(o.id));
+    if (cand.kind === 'room') {
+        // w3:admin — a new room keeps 1 m from other rooms and never swallows or cuts through existing things.
+        for (const other of others) if (overlaps(r, rectOf(other), other.kind === 'room' ? 1 : 0.3)) return false;
+        return true;
+    }
+    for (const room of others) {
+        if (room.kind !== 'room') continue;
+        const rr = rectOf(room);
+        if (!isRug(cand) && doorZones(room).some(z => overlaps(r, z, 0))) return false;
+        if (within(r, rr, WALL_INSET)) continue; // inside this room
+        if (overlaps(r, rr, 0.3)) return false; // across or against its walls
+    }
+    for (const other of others) {
+        if (other.kind === 'room') continue;
         if (isRug(cand) || isRug(other)) continue;
         if (isWallThing(cand) && !isWallThing(other) && other.kind !== 'decor' && other.kind !== 'review-screen') {
             // A wall item may hang behind a desk only if it does not cut through the desk itself.
@@ -220,20 +284,28 @@ function fits(world: WorldSpec, cand: WorldEntity, t: Transform, ignore: Readonl
     return true;
 }
 
-function candidates(world: WorldSpec, cand: WorldEntity, mode: Placement, near?: { x: number; z: number }): Transform[] {
-    const W = world.shell.width / 2, D = world.shell.depth / 2;
+/** Grid step: fine in a classic room, coarser in a big open world so a search stays fast. */
+function gridStep(region: Region): number {
+    return Math.max(0.25, Math.ceil(Math.max(region.maxX - region.minX, region.maxZ - region.minZ) / 96 * 4) / 4);
+}
+
+function candidates(world: WorldSpec, cand: WorldEntity, mode: Placement, near?: { x: number; z: number }, region: Region = worldRegion(world)): Transform[] {
+    const { minX, maxX, minZ, maxZ } = region;
     const out: Array<Transform & { score: number }> = [];
     const [hx, hz] = halfSize(cand);
-    const prefer = near ?? (mode === 'wall' ? { x: 0, z: -D } : { x: 0, z: -D / 3 });
+    const cx = (minX + maxX) / 2;
+    const wall = mode === 'wall' && region.walls;
+    const prefer = near ?? (wall ? { x: cx, z: minZ } : { x: cx, z: minZ + (maxZ - minZ) / 3 });
+    const step = gridStep(region);
     const add = (x: number, z: number, rotation: number): void => {
         out.push({ x: round(x), z: round(z), rotation, score: Math.hypot(x - prefer.x, z - prefer.z) });
     };
-    if (mode === 'wall') {
+    if (wall) {
         const inset = hz + 0.15;
-        for (let x = -W + hx + 0.3; x <= W - hx - 0.3 + 1e-9; x += 0.25) add(x, -D + inset, 0);
-        for (let z = -D + hx + 0.3; z <= D - hx - 1.2 + 1e-9; z += 0.25) { add(-W + inset, z, Math.PI / 2); add(W - inset, z, -Math.PI / 2); }
+        for (let x = minX + hx + 0.3; x <= maxX - hx - 0.3 + 1e-9; x += step) add(x, minZ + inset, 0);
+        for (let z = minZ + hx + 0.3; z <= maxZ - hx - 1.2 + 1e-9; z += step) { add(minX + inset, z, Math.PI / 2); add(maxX - inset, z, -Math.PI / 2); }
     } else {
-        for (let x = -W + 0.5; x <= W - 0.5 + 1e-9; x += 0.25) for (let z = -D + 0.5; z <= D - 0.5 + 1e-9; z += 0.25) add(x, z, 0);
+        for (let x = minX + 0.5; x <= maxX - 0.5 + 1e-9; x += step) for (let z = minZ + 0.5; z <= maxZ - 0.5 + 1e-9; z += step) add(x, z, 0);
     }
     out.sort((a, b) => a.score - b.score || a.x - b.x || a.z - b.z);
     return out.map(({ x, z, rotation }) => ({ x, z, rotation }));
@@ -374,16 +446,111 @@ class Planner {
         return `${id.slice(0, 30)}-${Date.now().toString(36)}`;
     }
 
-    /** Find a free spot, growing the room once by 4 m (width) if nothing fits. */
-    place(e: WorldEntity, mode: Placement, near?: { x: number; z: number }): Transform | undefined {
-        for (let attempt = 0; attempt < 3; attempt++) {
-            for (const t of candidates(this.draft, e, mode, near)) if (fits(this.draft, e, t, new Set())) return t;
-            if (this.draft.shell.width + 4 > 40) break;
-            const width = this.draft.shell.width + 4;
-            if (!this.push({ op: 'shell', shell: { width } }, ` — so the new ${KIND_NAME[e.kind]} fits`)) break;
+    /**
+     * w3:admin — find a free spot. Search order: the target room (named, or the room holding the related
+     * thing, or the room with the most desks), next to `near` / the other desks; then grow that room
+     * (reshape, up to ROOM_MAX); then the world itself grows (width and/or depth, via the contract's
+     * growOpsFor, up to SHELL_MAX). In a classic world with no rooms the room IS the world: it fills
+     * first and grows only when full.
+     */
+    place(e: WorldEntity, mode: Placement, near?: { x: number; z: number }, roomId?: string): Transform | undefined {
+        let room = roomId ?? (e.kind === 'room' ? undefined : this.defaultRoom(e, near));
+        const prefer = near ?? this.relatedPoint(e, room);
+        for (let attempt = 0; attempt < 80; attempt++) {
+            const target = room ? this.draft.entities.find((x): x is RoomEntity => x.id === room && x.kind === 'room') : undefined;
+            const region = target ? roomRegion(target) : worldRegion(this.draft);
+            for (const t of candidates(this.draft, e, mode, prefer, region)) if (fits(this.draft, e, t, new Set())) return t;
+            if (target) {
+                if (this.growRoom(target, e)) continue;
+                this.notes.push(`“${entityName(target)}” cannot grow any more, so the new ${KIND_NAME[e.kind]} goes just outside it.`);
+                room = undefined;
+                continue;
+            }
+            if (!this.growWorld(e, prefer)) break;
         }
-        this.notes.push(`There is no free spot for the ${KIND_NAME[e.kind]}. Make the room bigger or remove something first.`);
+        this.notes.push(`There is no free spot for the ${KIND_NAME[e.kind]}, even in a ${SHELL_MAX} × ${SHELL_MAX} m world. Remove something first.`);
         return undefined;
+    }
+
+    /** The room a new thing goes into when the request does not name one. Undefined = the world itself. */
+    defaultRoom(e: WorldEntity, near?: { x: number; z: number }): string | undefined {
+        const list = rooms(this.draft);
+        if (!list.length) return undefined;
+        if (near) return this.roomAt(near)?.id;
+        const recent = this.lastRefs.map(id => this.draft.entities.find(x => x.id === id)).find((x): x is RoomEntity => x?.kind === 'room');
+        if (recent) return recent.id;
+        if (e.kind !== 'station' && e.kind !== 'monitor-wall' && e.kind !== 'web-wall' && e.kind !== 'review-screen' && e.kind !== 'mirror') return undefined;
+        let best: RoomEntity | undefined, most = -1;
+        for (const r of list) { const n = stations(this.draft).filter(d => this.roomAt(d.transform)?.id === r.id).length; if (n > most) { most = n; best = r; } }
+        return best?.id;
+    }
+
+    roomAt(p: { x: number; z: number }): RoomEntity | undefined {
+        return rooms(this.draft).find(r => { const b = roomRect(r); return p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ; });
+    }
+
+    /** Where related things are: other desks for a desk (the middle of their group), else undefined (region default). */
+    relatedPoint(e: WorldEntity, roomId?: string): { x: number; z: number } | undefined {
+        if (e.kind !== 'station') return undefined;
+        const room = roomId ? this.draft.entities.find((x): x is RoomEntity => x.id === roomId && x.kind === 'room') : undefined;
+        const desks = stations(this.draft).filter(d => room ? this.roomAt(d.transform)?.id === room.id : !this.roomAt(d.transform));
+        if (!desks.length) return undefined;
+        return { x: desks.reduce((a, d) => a + d.transform.x, 0) / desks.length, z: desks.reduce((a, d) => a + d.transform.z, 0) / desks.length };
+    }
+
+    /** Grow a room by one step on its shorter side (the world grows with it if needed). False = it cannot. */
+    growRoom(room: RoomEntity, e: WorldEntity): boolean {
+        const step = Math.max(2, Math.ceil(Math.max(...halfSize(e)) * 2));
+        const options: Array<[number, number]> = room.width <= room.depth
+            ? [[room.width + step, room.depth], [room.width, room.depth + step]]
+            : [[room.width, room.depth + step], [room.width + step, room.depth]];
+        const inside = new Set(this.draft.entities.filter(x => x.kind !== 'room' && this.roomAt(x.transform)?.id === room.id).map(x => x.id));
+        for (const [w, d] of options) {
+            const width = Math.min(ROOM_MAX, w), depth = Math.min(ROOM_MAX, d);
+            if (width === room.width && depth === room.depth) continue;
+            const grown: RoomEntity = { ...room, width, depth };
+            const r = rectOf(grown);
+            // Must not run into another room or swallow / cut through things that stand outside it.
+            const blocked = this.draft.entities.some(o => o.id !== room.id && !inside.has(o.id) && overlaps(r, rectOf(o), o.kind === 'room' ? 1 : 0.3));
+            if (blocked) continue;
+            const grow = growOpsFor(this.draft, grown);
+            if (!grow) continue;
+            const before = this.ops.length;
+            if (grow.every(op => this.push(op, ` — so “${entityName(room)}” can grow`)) && this.push({ op: 'reshape', id: room.id, width, depth }, ` — so the new ${KIND_NAME[e.kind]} fits inside`)) return true;
+            this.rollback(before);
+        }
+        return false;
+    }
+
+    /** Grow the world one step (width and/or depth) using the shared growOpsFor rule. False = at SHELL_MAX. */
+    growWorld(e: WorldEntity, prefer?: { x: number; z: number }): boolean {
+        const { width, depth } = this.draft.shell;
+        const reach = entityRadius(e);
+        const probe = (axis: 'x' | 'z'): Transform => {
+            const size = axis === 'x' ? width : depth;
+            const step = Math.max(4, Math.round(size * 0.15));
+            const half = (size + step) / 2 - reach - 2;
+            const sign = prefer && (axis === 'x' ? prefer.x : prefer.z) < 0 ? -1 : 1;
+            return axis === 'x' ? { x: sign * half, z: 0, rotation: 0 } : { x: 0, z: sign * half, rotation: 0 };
+        };
+        const order: Array<'x' | 'z'> = width <= depth * 1.25 ? ['x', 'z'] : ['z', 'x'];
+        for (const axis of order) {
+            if ((axis === 'x' ? width : depth) >= SHELL_MAX) continue;
+            const ops = e.kind === 'room' ? growOpsFor(this.draft, { ...e, transform: probe(axis) }, probe(axis), 1) : growOpsFor(this.draft, e, probe(axis));
+            const clipped = ops ?? [{ op: 'shell', shell: axis === 'x' ? { width: Math.min(SHELL_MAX, width + Math.max(4, Math.round(width * 0.15))) } : { depth: Math.min(SHELL_MAX, depth + Math.max(4, Math.round(depth * 0.15))) } } as WorldOp];
+            if (!clipped.length) continue;
+            const before = this.ops.length;
+            if (clipped.every(op => this.push(op, ` — so the new ${KIND_NAME[e.kind]} fits`))) return true;
+            this.rollback(before);
+        }
+        return false;
+    }
+
+    /** Undo planned ops back to `count` (used when a multi-op growth step half fails). */
+    rollback(count: number): void {
+        while (this.ops.length > count) { this.ops.pop(); this.steps.pop(); }
+        const res = this.ops.length ? applyWorldOps(this.world, this.ops) : { ok: true as const, world: this.world };
+        if (res.ok) this.draft = res.world;
     }
 
     // ----- intents ------------------------------------------------------------------------
@@ -742,8 +909,8 @@ class Planner {
             const arm = Math.floor(n / 3), back = n - 2 * arm;
             needWidth = Math.max(back * SX + 1, back > 0 && arm > 0 ? back * SX + 4.6 : 0, arm > 0 ? 10 : 0);
             needDepth = 2.4 + arm * SX + 2.4;
-            const width = Math.max(this.draft.shell.width, Math.min(40, needWidth));
-            const depth = Math.max(this.draft.shell.depth, Math.min(40, needDepth));
+            const width = Math.max(this.draft.shell.width, Math.min(SHELL_MAX, needWidth));
+            const depth = Math.max(this.draft.shell.depth, Math.min(SHELL_MAX, needDepth));
             const bz = -depth / 2 + 1.5;
             for (let i = 0; i < back; i++) slots.push({ x: (i - (back - 1) / 2) * SX, z: bz, rotation: 0 });
             for (let i = 0; i < arm; i++) {
@@ -753,8 +920,8 @@ class Planner {
                 slots.push({ x: width / 2 - 1.35, z, rotation: -Math.PI / 2 });
             }
         }
-        const width = Math.min(40, Math.max(this.draft.shell.width, Math.ceil(needWidth)));
-        const depth = Math.min(40, Math.max(this.draft.shell.depth, Math.ceil(needDepth)));
+        const width = Math.min(SHELL_MAX, Math.max(this.draft.shell.width, Math.ceil(needWidth)));
+        const depth = Math.min(SHELL_MAX, Math.max(this.draft.shell.depth, Math.ceil(needDepth)));
         if (width !== this.draft.shell.width || depth !== this.draft.shell.depth) this.push({ op: 'shell', shell: { width, depth } }, ' — so the desks fit');
         const W = this.draft.shell.width / 2, DD = this.draft.shell.depth / 2;
         free.forEach((e, i) => {
