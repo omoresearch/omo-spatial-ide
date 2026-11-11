@@ -87,7 +87,11 @@ function lockSprite(): THREE.Sprite {
     return sprite;
 }
 
-export interface GhostSpec { entity: WorldEntity; valid: boolean }
+export interface GhostSpec {
+    entity: WorldEntity; valid: boolean;
+    /** w3:build — the bigger world floor (centred on the origin) this ghost grows the shell to on Apply. */
+    grow?: { width: number; depth: number };
+}
 export interface BuildLayerView {
     world: WorldSpec;
     /** Entity ids the applied world does not have yet (pending adds) or that the pending proposal changes. */
@@ -217,7 +221,7 @@ export class BuildLayer {
     }
 
     private renderGhost(spec: GhostSpec | undefined): void {
-        const key = spec ? `${JSON.stringify(spec.entity)}:${spec.valid}` : '';
+        const key = spec ? `${JSON.stringify(spec.entity)}:${spec.valid}:${spec.grow ? `${spec.grow.width}x${spec.grow.depth}` : ''}` : '';
         if (key === this.ghostKey) return;
         this.ghostKey = key;
         disposeTree(this.ghost); this.ghost.clear();
@@ -232,6 +236,7 @@ export class BuildLayer {
         pad.rotation.x = -Math.PI / 2; pad.position.set(0, 0.015, fp.offsetZ);
         inner.add(box, edges, pad, new THREE.Line(frontArrow(fp), new THREE.LineBasicMaterial({ color, depthTest: false })));
         this.ghost.add(inner);
+        if (spec.grow) this.ghost.add(growOutline(spec.grow.width, spec.grow.depth, color)); // w3:build
     }
 
     /** Gold particles running from a screen to the station it now follows (optional flourish). */
@@ -271,6 +276,15 @@ export class BuildLayer {
         attr.needsUpdate = true; (p.points.material as THREE.PointsMaterial).opacity = 1 - t * t;
         return true;
     }
+}
+
+/** w3:build — dashed outline of the bigger world floor the ghost grows the shell to. */
+function growOutline(width: number, depth: number, color: number): THREE.Line {
+    const hw = width / 2, hd = depth / 2, y = 0.03;
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-hw, y, -hd), new THREE.Vector3(hw, y, -hd), new THREE.Vector3(hw, y, hd), new THREE.Vector3(-hw, y, hd), new THREE.Vector3(-hw, y, -hd)]),
+        new THREE.LineDashedMaterial({ color, dashSize: 0.5, gapSize: 0.3, transparent: true, opacity: 0.9, depthTest: false }));
+    line.computeLineDistances(); line.renderOrder = 13;
+    return line;
 }
 
 function anchor(e: WorldEntity): THREE.Vector3 {

@@ -200,6 +200,8 @@
 .omo-build-proposal li::before { content: '~'; position: absolute; left: 8px; color: var(--omo-info); font-family: var(--omo-mono); }
 .omo-build-proposal li.is-add::before { content: '+'; color: var(--omo-ok); }
 .omo-build-proposal li.is-remove::before { content: '−'; color: var(--omo-danger); }
+.omo-build-proposal li.is-grow { color: var(--omo-accent); } /* w3:build */
+.omo-build-proposal li.is-grow::before { content: '⤢'; color: var(--omo-accent); }
 .omo-build-proposal li.is-link::before { content: '⟶'; left: 5px; color: var(--omo-agent-hermes); }
 .omo-build-proposal li.is-lock::before { content: '◆'; color: var(--omo-warn); }
 .omo-build-more { align-self: flex-start; padding: 0; background: none; border: none; color: var(--omo-accent); font-size: var(--omo-fs-xs); }

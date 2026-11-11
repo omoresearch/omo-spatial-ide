@@ -11,6 +11,7 @@ import { Icon } from './icons';
 import { entityTitle, entityNoun } from './world-store';
 import type { WorldEntity, StationConfig, StationEntity, TabKind } from '../common/world-model';
 import { stations } from '../common/world-model';
+import { proposalLines } from './build-room'; // w3:build
 import '../../src/browser/build-mode.css';
 
 function useBuild(build: BuildMode): void {
@@ -184,11 +185,12 @@ function ProposalBar(props: { build: BuildMode }): React.ReactElement | null {
     const { build } = props, store = build.store!, p = store.proposal;
     const [open, setOpen] = React.useState(false);
     if (!p) return null;
-    const lines = p.diff.length ? p.diff : ['No visible change.'];
+    const extra = proposalLines(store.world, store.preview, p.diff); // w3:build: 'The world grows to W × D m to fit this', rooms, open world
+    const lines = extra.length ? extra : ['No visible change.'];
     const shown = open ? lines : lines.slice(0, 4);
     return <section className="omo-build-proposal" aria-label="Pending changes" data-testid="build-proposal">
         <header><span className="omo-build-dot" /><strong>{lines.length} pending change{lines.length === 1 ? '' : 's'}</strong><small>Not saved until you apply. Nothing starts.</small></header>
-        <ul data-testid="build-diff">{shown.map((line, i) => <li key={i} className={/^Add /.test(line) ? 'is-add' : /^Remove /.test(line) ? 'is-remove' : /^Link /.test(line) ? 'is-link' : /^(Lock|Unlock) /.test(line) ? 'is-lock' : ''}>{line}</li>)}</ul>
+        <ul data-testid="build-diff">{shown.map((line, i) => <li key={i} className={/^The world grows /.test(line) ? 'is-grow' : /^Add /.test(line) ? 'is-add' : /^Remove /.test(line) ? 'is-remove' : /^Link /.test(line) ? 'is-link' : /^(Lock|Unlock) /.test(line) ? 'is-lock' : ''}>{line}</li>)}</ul>
         {lines.length > 4 && <button type="button" className="omo-build-more" onClick={() => setOpen(!open)}>{open ? 'Show less' : `Show ${lines.length - 4} more`}</button>}
         <footer>
             <button type="button" className="omo-build-discard" data-testid="build-discard" onClick={() => build.discard()}>Discard</button>

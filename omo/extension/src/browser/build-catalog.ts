@@ -3,7 +3,7 @@
  * floor, how new ids are made, and how wall items snap to the room shell. Pure data + maths.
  */
 import type { WorldSpec, WorldEntity, DecorKind, Transform, StationKind } from '../common/world-model';
-import { WORLD_ID_RE, defaultStation, stations } from '../common/world-model';
+import { WORLD_ID_RE, SHELL_MAX, defaultStation, stations } from '../common/world-model';
 
 export type PaletteId =
     | 'agent-desk' | 'shell-desk' | 'monitor-wall' | 'web-wall' | 'mirror' | 'review-screen'
@@ -111,21 +111,25 @@ export const normalizeRotation = (r: number): number => {
     return round3(v) + 0; // + 0 turns -0 into 0
 };
 
+/** w3:build — how far past the current shell edge a point may go; the world grows to fit on Apply. */
+export const GROW_REACH = 6;
+
 /**
- * Where a palette item goes for a floor point: grid-snapped, kept inside the shell, and (wall items)
- * snapped flat against the nearest wall, facing into the room, when within 1.6 m of it.
+ * Where a palette item goes for a floor point: grid-snapped, kept within GROW_REACH metres of the shell
+ * (w3:build: past the edge the world grows to fit, see growOpsFor) and never past SHELL_MAX, and (wall items)
+ * snapped flat against the nearest wall, facing into the room, when within 1.6 m of it (walled worlds only).
  */
 export function placement(world: WorldSpec, point: { x: number; z: number }, rotation: number, wallMounted: boolean, size: { width: number; depth: number }): { transform: Transform; snapped: 'wall' | 'grid' } {
     const hw = world.shell.width / 2, hd = world.shell.depth / 2;
     const inset = 0.45;
-    if (wallMounted) {
+    if (wallMounted && !world.shell.open) { // w3:build: an open world has no outer walls
         const d = [
             { wall: 'back', dist: point.z + hd, rot: 0 },
             { wall: 'front', dist: hd - point.z, rot: Math.PI },
             { wall: 'left', dist: point.x + hw, rot: Math.PI / 2 },
             { wall: 'right', dist: hw - point.x, rot: -Math.PI / 2 }
         ].sort((a, b) => a.dist - b.dist)[0];
-        if (d.dist < 1.6) {
+        if (d.dist < 1.6 && d.dist > -1) { // w3:build: aimed well past the wall = place it out there (the world grows)
             const along = d.wall === 'back' || d.wall === 'front';
             const half = size.width / 2 + 0.1;
             const x = along ? clamp(snapGrid(point.x), -hw + half, hw - half) : (d.wall === 'left' ? -hw + inset : hw - inset);
@@ -134,7 +138,8 @@ export function placement(world: WorldSpec, point: { x: number; z: number }, rot
         }
     }
     const margin = 0.3;
-    return { transform: { x: round3(clamp(snapGrid(point.x), -hw + margin, hw - margin)), z: round3(clamp(snapGrid(point.z), -hd + margin, hd - margin)), rotation: normalizeRotation(rotation) }, snapped: 'grid' };
+    const rx = Math.min(hw + GROW_REACH, SHELL_MAX / 2 - margin), rz = Math.min(hd + GROW_REACH, SHELL_MAX / 2 - margin); // w3:build
+    return { transform: { x: round3(clamp(snapGrid(point.x), -rx, rx)), z: round3(clamp(snapGrid(point.z), -rz, rz)), rotation: normalizeRotation(rotation) }, snapped: 'grid' };
 }
 const clamp = (n: number, lo: number, hi: number): number => lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, n));
 

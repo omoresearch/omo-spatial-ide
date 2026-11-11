@@ -22,6 +22,7 @@ import type { WorldEntity, WorldOp, WorldSpec, StationConfig, Transform } from '
 import { applyWorldOps } from '../common/world-model';
 import { BuildLayer, GhostSpec, rendererApi, hasWorldRenderer, threeOf } from './build-scene';
 import { PaletteId, paletteItem, makeEntity, placement, footprint, normalizeRotation, defaultLinkTarget } from './build-catalog';
+import { growFor } from './build-room'; // w3:build
 
 export type BuildTool = 'select' | 'place' | 'move' | 'link';
 export interface BuildState {
@@ -79,6 +80,8 @@ export class BuildMode {
     private noticeTimer?: number;
     private globalOff: Array<() => void> = [];
     private aimFrame = 0;
+    /** w3:build — shell ops the current ghost needs (the world grows to fit it on Apply). */
+    private ghostGrow: WorldOp[] = [];
 
     constructor(private options: BuildModeOptions) {
         // Each drawn frame (walking turns the view): keep the ghost / hover under the crosshair. Cached, so cheap.
@@ -379,10 +382,10 @@ export class BuildMode {
         if (!g.valid) { this.warn(this.state.ghostReason || 'It does not fit there.'); return; }
         if (this.state.tool === 'move') {
             const id = g.entity.id, e = this.entity(id);
-            if (this.propose([{ op: 'move', id, transform: { ...g.entity.transform } }], `Move ${entityTitle(e)}`)) { this.set({ tool: 'select' }); this.ghost = undefined; this.render(); }
+            if (this.propose([...this.ghostGrow, { op: 'move', id, transform: { ...g.entity.transform } }], `Move ${entityTitle(e)}`)) { this.set({ tool: 'select' }); this.ghost = undefined; this.render(); }
             return;
         }
-        if (this.propose([{ op: 'add', entity: g.entity }], `Place ${entityTitle(g.entity)}`)) {
+        if (this.propose([...this.ghostGrow, { op: 'add', entity: g.entity }], `Place ${entityTitle(g.entity)}`)) { // w3:build: grow first, then add
             this.lastAim.key = ''; this.aim();
             this.options.message(`Placed ${entityTitle(g.entity)} · Click to place another · Esc to stop · Apply when ready.`);
         }
@@ -423,30 +426,33 @@ export class BuildMode {
         this.lastAim.key = key;
         if (!floor) { this.ghost = undefined; this.set({ ghostValid: false, ghostReason: 'Aim at the floor inside the room.' }); this.render(); return; }
         const world = store.preview;
-        let entity: WorldEntity | undefined; let wall = false;
+        let entity: WorldEntity | undefined; let wall = false; let snapped = false;
         if (tool === 'move') {
             const e = this.entity(this.state.selected); if (!e) { this.selectTool(); return; }
             wall = e.kind === 'monitor-wall' || e.kind === 'web-wall' || e.kind === 'mirror' || e.kind === 'review-screen' || (e.kind === 'decor' && (e.decor === 'bookshelf' || e.decor === 'window'));
             const fp = footprint(e);
             const p = placement(world, floor, this.state.rotation, wall, fp);
-            entity = { ...e, transform: p.transform } as WorldEntity;
+            entity = { ...e, transform: p.transform } as WorldEntity; snapped = p.snapped === 'wall';
         } else if (this.state.item) {
             const meta = paletteItem(this.state.item);
             const probe = makeEntity(this.state.item, world, { x: floor.x, z: floor.z, rotation: this.state.rotation }, defaultLinkTarget(world, floor, this.state.selected));
             if (!probe) { this.ghost = undefined; this.set({ ghostValid: false, ghostReason: 'Add a desk first. A mirror follows one desk.' }); this.render(); return; }
             const p = placement(world, floor, this.state.rotation, meta.wallMounted, footprint(probe));
             entity = { ...probe, transform: p.transform } as WorldEntity;
-            wall = meta.wallMounted;
+            wall = meta.wallMounted; snapped = p.snapped === 'wall';
         }
         if (!entity) return;
-        const reason = this.fitProblem(world, entity, tool === 'move');
-        this.ghost = { entity, valid: !reason };
+        // w3:build — near or past the edge: the world grows (symmetrically) to fit it, up to SHELL_MAX.
+        const grow = growFor(world, entity, snapped);
+        this.ghostGrow = grow.ops;
+        const reason = grow.refused ?? this.fitProblem(world, entity, tool === 'move', grow.ops);
+        this.ghost = { entity, valid: !reason, grow: grow.size };
         this.set({ ghostValid: !reason, ghostReason: reason, ghostAt: entity.transform });
         this.render();
     }
     /** Why `entity` cannot go where it is ('' = it fits). */
-    private fitProblem(world: WorldSpec, entity: WorldEntity, moving: boolean): string {
-        const ops: WorldOp[] = moving ? [{ op: 'move', id: entity.id, transform: entity.transform }] : [{ op: 'add', entity }];
+    private fitProblem(world: WorldSpec, entity: WorldEntity, moving: boolean, grow: WorldOp[] = []): string {
+        const ops: WorldOp[] = [...grow, moving ? { op: 'move', id: entity.id, transform: entity.transform } : { op: 'add', entity }];
         const r = applyWorldOps(world, ops);
         if (!r.ok) return friendly(r.error, world);
         const solid = (e: WorldEntity): boolean => e.kind === 'station' || (e.kind === 'decor' && e.decor !== 'rug' && e.decor !== 'window');
@@ -499,8 +505,9 @@ export class BuildMode {
     private hintText(): string {
         const { tool, item, ghostValid, ghostReason } = this.state;
         if (!this.state.active) return '';
-        if (tool === 'place') return ghostValid ? `Click to place ${paletteItem(item ?? 'agent-desk').title} · R turn · Esc stop` : ghostReason || 'Aim at the floor';
-        if (tool === 'move') return ghostValid ? 'Click to put it down · R turn · Esc cancel' : ghostReason || 'Aim at the floor';
+        const grows = ghostValid && this.ghost?.grow ? ` · The world grows to ${this.ghost.grow.width} × ${this.ghost.grow.depth} m` : ''; // w3:build
+        if (tool === 'place') return ghostValid ? `Click to place ${paletteItem(item ?? 'agent-desk').title}${grows} · R turn · Esc stop` : ghostReason || 'Aim at the floor';
+        if (tool === 'move') return ghostValid ? `Click to put it down${grows} · R turn · Esc cancel` : ghostReason || 'Aim at the floor';
         if (tool === 'link') return this.state.linkSource ? `Click screens to follow ${entityTitle(this.entity(this.state.linkSource))} · Esc done` : 'Click a desk to link from';
         return this.state.selected ? 'M move · R turn · Del remove · Esc deselect' : 'Click a thing to select it · B leave';
     }
@@ -541,7 +548,7 @@ const emptyWorld: WorldSpec = { version: 2, name: 'World', shell: { theme: 'stat
 function friendly(error: string, world: WorldSpec): string {
     const id = /^([a-z0-9-]+) (is locked|does not exist|already exists)/.exec(error);
     if (id) { const e = world.entities.find(x => x.id === id[1]); return `${entityTitle(e, id[1])} ${id[2]}.`; }
-    if (/Entity .* is invalid/.test(error)) return 'It does not fit there: keep it inside the room.';
+    if (/Entity .* is invalid/.test(error)) return 'It does not fit there.';
     return error;
 }
 
