@@ -115,6 +115,7 @@ export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity
     const wallMat = new THREE.MeshStandardMaterial({ color: look.wall, roughness: 0.86, metalness: 0.02 }); // w3:look — light walls
     const capMat = new THREE.MeshStandardMaterial({ color: look.cap, roughness: 0.7, metalness: 0.1 });
     const stripMat = new THREE.MeshStandardMaterial({ color: colors.strip, emissive: colors.strip, emissiveIntensity: 0.9, roughness: 0.5 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: jungle ? 0x2f4a45 : 0x2c3e52, emissive: jungle ? 0x3d6b5a : 0x35587a, emissiveIntensity: 0.35, roughness: 0.2, metalness: 0.4 }); // w3:look (7)
     const accentMat = new THREE.MeshStandardMaterial({ color: look.accent, emissive: look.accent, emissiveIntensity: 0.35, roughness: 0.55 });
     const add = (parent: THREE.Object3D, size: [number, number, number], at: [number, number, number], mat: THREE.Material, cast = true, part?: string): THREE.Mesh => {
         const m = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), mat);
@@ -131,6 +132,16 @@ export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity
         const [nx, nz] = INWARD[seg.side];
         const along = seg.sx > seg.sz;
         add(walls, [along ? seg.sx - 0.04 : 0.03, 0.045, along ? 0.03 : seg.sz - 0.04], [seg.x + nx * (t / 2 + 0.016), H - 0.2, seg.z + nz * (t / 2 + 0.016)], stripMat, false);
+        // w3:look (7) — outer face detail: a dark base trim and a window band on long wall pieces.
+        const ox = -nx * (t / 2 + 0.012), oz = -nz * (t / 2 + 0.012), len = along ? seg.sx : seg.sz;
+        add(walls, [along ? seg.sx : 0.02, 0.28, along ? 0.02 : seg.sz], [seg.x + ox, 0.14, seg.z + oz], capMat, false, 'base-trim');
+        if (len >= 2.2) {
+            const n = Math.max(1, Math.floor((len - 0.6) / 2.2)), pane = Math.min(1.7, (len - 0.6) / n - 0.4);
+            for (let i = 0; i < n; i++) {
+                const off = -len / 2 + 0.3 + (len - 0.6) * (i + 0.5) / n;
+                add(walls, [along ? pane : 0.02, 0.9, along ? 0.02 : pane], [seg.x + ox * 1.4 + (along ? off : 0), 1.55, seg.z + oz * 1.4 + (along ? 0 : off)], glassMat, false, 'window');
+            }
+        }
     }
     const lintels = new THREE.Group(); lintels.name = 'omo-room-lintels'; root.add(lintels);
     const doors = roomDoors(entity);
@@ -160,13 +171,21 @@ export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity
     const main = doors.has('front') ? 'front' : WALL_ORDER.find(s => doors.has(s));
     if (main) {
         const name = (entity.label ?? 'Room').slice(0, 40), d = doorAt[main];
-        const out = 1.25, nx = main === 'left' ? -out : main === 'right' ? out : 0, nz = main === 'back' ? -out : main === 'front' ? out : 0;
+        const out = 0.85, nx = main === 'left' ? -out : main === 'right' ? out : 0, nz = main === 'back' ? -out : main === 'front' ? out : 0;
         const map = nameTexture(name, look);
-        const plate = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.74), new THREE.MeshBasicMaterial({ color: map ? 0xffffff : look.cap, map, transparent: true, depthWrite: false }));
+        const plate = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.44), new THREE.MeshBasicMaterial({ color: map ? 0xffffff : look.cap, map, transparent: true, depthWrite: false }));
         plate.rotation.set(-Math.PI / 2, -entity.transform.rotation, 0, 'YXZ'); // flat on the floor, text upright for a +z viewer
-        plate.position.set(d.x + nx, 0.035, d.z + nz); plate.renderOrder = 1;
+        plate.position.set(d.x + nx, 0.06, d.z + nz); plate.renderOrder = 1; (plate.material as THREE.MeshBasicMaterial).polygonOffset = true; (plate.material as THREE.MeshBasicMaterial).polygonOffsetFactor = -2;
         plate.userData.part = 'name-plate'; plate.userData.roomName = name; plate.userData.ownsMap = true; plate.raycast = () => undefined;
         root.add(plate);
+        // w3:look (7) — a floating, camera-facing room title above the room: readable in overview and from afar.
+        const title = nameTexture(name, look);
+        if (title) {
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: title, transparent: true, depthWrite: false, fog: false }));
+            const w = Math.min(9, Math.max(4.4, entity.width * 0.7)); sprite.scale.set(w, w * 224 / 1024, 1);
+            sprite.position.set(0, H + 1.1, -entity.depth / 2 + 0.2); // over the back wall: clear of the desk chips sprite.renderOrder = 2; sprite.userData.part = 'room-title'; sprite.userData.ownsMap = true; sprite.raycast = () => undefined;
+            root.add(sprite);
+        }
     }
     root.userData.roomWalls = walls; root.userData.roomLintels = lintels;
     return { root };

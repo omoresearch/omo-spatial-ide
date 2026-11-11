@@ -13,7 +13,7 @@ import type { WorldShell } from '../common/world-model';
 import { box, cylinder, glow, material } from './world-scene-kit';
 
 /** Sky / horizon colour of an open world (the scene background and fog colour). */
-export function openSky(jungle: boolean): string { return jungle ? '#9fc7b4' : '#8fb4d0'; }
+export function openSky(jungle: boolean): string { return jungle ? '#b9dcef' : '#a9cdea'; } // w3:look (4): a clear blue sky, distinct from the ground
 /** At most this many ambient props on open ground, whatever the size. */
 export const OPEN_PROP_CAP = 44;
 /** Ground area per ambient prop (square metres): sparse. */
@@ -49,15 +49,15 @@ export function buildOpenGround(root: THREE.Group, shell: WorldShell, free: (x: 
     const jungle = shell.theme === 'jungle';
     const W = shell.width, D = shell.depth, hw = W / 2, hd = D / 2;
     // Ground slab: top face at y -0.02 (same walking level as the classic floor), a thin darker edge band.
-    box(root, [W + 0.6, 0.4, D + 0.6], [0, -0.42, 0], jungle ? 0x3f5a46 : 0x34445a);
-    const ground = box(root, [W, 0.12, D], [0, -0.08, 0], jungle ? 0x7f9c80 : 0x6a7f90);
+    box(root, [W + 0.6, 0.4, D + 0.6], [0, -0.42, 0], jungle ? 0x4b6640 : 0x56634a);
+    const ground = box(root, [W, 0.12, D], [0, -0.08, 0], jungle ? 0x6f9a5c : 0x7d8f6e); // w3:look (4): warm green-grey ground
     ground.castShadow = false;
     // Grids: 1 m (subtle) and 10 m (a little stronger): the Minecraft-like sense of scale and distance.
-    root.add(gridLines(W, D, 1, jungle ? 0x91a98b : 0x8b9fac, 0.16, 0.02)); // 4 cm over the ground: no depth flicker from far overview cameras
-    if (Math.max(W, D) >= 20) root.add(gridLines(W, D, 10, jungle ? 0xd2e6c4 : 0xc6d9e6, 0.22, 0.024));
+    root.add(gridLines(W, D, 1, jungle ? 0x86ad73 : 0x92a283, 0.14, 0.02)); // 4 cm over the ground: no depth flicker from far overview cameras
+    if (Math.max(W, D) >= 20) root.add(gridLines(W, D, 10, jungle ? 0xcfe3b8 : 0xc9d6b4, 0.22, 0.024));
     // Horizon: a large plane just below the ground in the sky colour; the fog blends its far edge into the sky.
     const span = Math.max(W, D);
-    const horizon = new THREE.Mesh(new THREE.PlaneGeometry(span * 8 + 600, span * 8 + 600), material(jungle ? 0x5b7d68 : 0x4f6880));
+    const horizon = new THREE.Mesh(new THREE.PlaneGeometry(span * 8 + 600, span * 8 + 600), material(jungle ? 0x3e5a3a : 0x4a5743) /* w3:look: a darker surround so the world edge reads */);
     horizon.rotation.x = -Math.PI / 2; horizon.position.y = -0.62; horizon.receiveShadow = false; horizon.raycast = () => undefined; root.add(horizon);
     // Spawn marker (the classic room's centre disc and crystal), when free.
     if (free(0.2, 3)) {

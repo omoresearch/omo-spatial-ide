@@ -54,11 +54,11 @@ test('overview of an open world frames its rooms and desks, not the whole ground
   // Old behaviour: 24 m x worldScale(54 x 48) = 115 m away. The content frame must stand much nearer.
   assert.ok(frame.distance < 24 * scale.worldScale(campus().shell) * 0.75, `distance ${frame.distance}`);
   // The content box centre is the look-at target (rooms sit behind the street, z < 0).
-  assert.ok(frame.target.z < -3 && Math.abs(frame.target.x) < 1.5, JSON.stringify(frame.target));
+  assert.ok(frame.target.z < 0 && Math.abs(frame.target.x) < 1.5, JSON.stringify(frame.target));
   // Every content corner is on screen, and the content fills the view (a corner reaches past 70 % of half the screen).
   let most = 0;
-  // Content box: rooms x -16..18, z -13..-3, plus the strip in front of the doorways (name plates, to z -1).
-  for (const x of [-16, 18]) for (const z of [-13, -1]) for (const y of [0, 2.8]) {
+  // Content box: rooms x -16..18, z -13..-3, plus the street + plaza in front of the doorways (to z 4).
+  for (const x of [-16, 18]) for (const z of [-13, 4]) for (const y of [0, 2.8]) {
     const p = project(frame, view, [x, y, z]);
     assert.ok(Math.abs(p.x) <= 0.95 && Math.abs(p.y) <= 0.95, `corner ${x},${z} at ${p.x.toFixed(2)},${p.y.toFixed(2)}`);
     most = Math.max(most, Math.abs(p.x), Math.abs(p.y));

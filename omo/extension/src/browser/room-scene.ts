@@ -26,6 +26,7 @@ import { openSky } from './world-scene-open'; // w3:render
 import { cameraClip, overviewFrame, shadowFrame, terminalFar, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render; w3:look overviewFrame
 import { refreeze as refreezeNode } from './world-scene-kit'; // w3:render
 import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
+import { buildPaths, pathsKey } from './world-scene-paths'; // w3:look (7)
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -231,6 +232,8 @@ export class RoomScene {
     private mirrorSurface?: HTMLCanvasElement;
     private mirrorTexture?: THREE.CanvasTexture;
     private paintBudget?: MonitorPaintBudget;
+    private homeKey?: string; // w3:look (6)
+    private pathsKey = ''; private pathsRoot?: THREE.Group; // w3:look (7)
     private mirrorFrame: MonitorFrame = { lines: [] };
     /** Last full-size frame per desk and its 80 x 22 monitor window, so a re-render reuses the same object. */
     private terminalSources?: Map<string, { input: MonitorFrame; frame: MonitorFrame }>;
@@ -427,6 +430,13 @@ export class RoomScene {
             if (this.shellRoot) { this.worldRoot.remove(this.shellRoot); disposeTree(this.shellRoot); }
             this.shellRoot = buildShell(world.shell, blocks, ORB); this.worldRoot.add(this.shellRoot); freezeTree(this.shellRoot); this.shellKey = shellKey;
         }
+        const pk = pathsKey(world.shell, world.entities); // w3:look (7) — plaza, paths, lamps (open worlds)
+        if (pk !== this.pathsKey) {
+            if (this.pathsRoot) { this.worldRoot.remove(this.pathsRoot); disposeTree(this.pathsRoot); this.pathsRoot = undefined; }
+            const built = buildPaths(world.shell, world.entities);
+            if (built) { this.pathsRoot = built; this.worldRoot.add(built); freezeTree(built); }
+            this.pathsKey = pk;
+        }
         const ids = new Set(world.entities.map(e => e.id));
         for (const [id, item] of this.entities) if (!ids.has(id)) this.removeEntity(id, item);
         for (const entity of world.entities) {
@@ -454,7 +464,11 @@ export class RoomScene {
         for (const label of this.labels) this.labelPos.delete(label);
         this.paintLinked();
         // Walking: footprint collision, bounds and reset spot of this world.
-        if (this.walker) { this.walker.mover = worldMover(world); this.walker.home = worldHome(world.shell); }
+        if (this.walker) {
+            const firstOpen = world.shell.open && (!previous || !previous.shell.open || this.homeKey !== world.name); // w3:look (6): a newly loaded open world starts in its plaza
+            this.walker.mover = worldMover(world); this.walker.home = worldHome(world.shell, world.entities);
+            if (firstOpen) { this.homeKey = world.name; this.walker.pose = { ...this.walker.home }; }
+        }
         this.roomScale = worldScale(world.shell);
         this.shadowKey = ''; this.applyScaleView(); // w3:render — fog, clip planes and the sun's shadow box for this world size
         const canvas = this.renderer.domElement;
