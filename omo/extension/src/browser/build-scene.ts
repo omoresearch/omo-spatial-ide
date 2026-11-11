@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import type { RoomScene } from './room-scene';
 import type { WorldSpec, WorldEntity, Transform } from '../common/world-model';
 import { footprint, Footprint } from './build-catalog';
+import { roomWalls } from './build-room'; // w3:build
 import { ambientHost } from './agent-avatars';
 
 // ------------------------------------------------------------------ renderer bridge (stubs)
@@ -40,8 +41,8 @@ export function threeOf(scene: RoomScene | undefined): { scene?: THREE.Scene; ca
 
 // ------------------------------------------------------------------ colours
 
-const COLOR = { ok: 0x8fe3c4, bad: 0xff9b8f, gold: 0xf7d774, select: 0xf7d774, hover: 0xeaf0f2, station: 0x9ec3ff, screen: 0x8fe3c4, decor: 0xb9e58a, pending: 0xf3bd62 };
-const kindColor = (e: WorldEntity): number => e.kind === 'station' ? COLOR.station : e.kind === 'decor' ? COLOR.decor : COLOR.screen;
+const COLOR = { ok: 0x8fe3c4, bad: 0xff9b8f, gold: 0xf7d774, select: 0xf7d774, hover: 0xeaf0f2, station: 0x9ec3ff, screen: 0x8fe3c4, decor: 0xb9e58a, pending: 0xf3bd62, room: 0xc9b8ff };
+const kindColor = (e: WorldEntity): number => e.kind === 'station' ? COLOR.station : e.kind === 'decor' ? COLOR.decor : e.kind === 'room' ? COLOR.room : COLOR.screen;
 
 // ------------------------------------------------------------------ geometry helpers
 
@@ -87,7 +88,11 @@ function lockSprite(): THREE.Sprite {
     return sprite;
 }
 
-export interface GhostSpec { entity: WorldEntity; valid: boolean }
+export interface GhostSpec {
+    entity: WorldEntity; valid: boolean;
+    /** w3:build — the bigger world floor (centred on the origin) this ghost grows the shell to on Apply. */
+    grow?: { width: number; depth: number };
+}
 export interface BuildLayerView {
     world: WorldSpec;
     /** Entity ids the applied world does not have yet (pending adds) or that the pending proposal changes. */
@@ -193,6 +198,7 @@ export class BuildLayer {
             }
             const rect = new THREE.Line(floorRect(fp), new THREE.LineBasicMaterial({ color, transparent: true, opacity: selected || source ? 1 : 0.55 }));
             group.add(rect, new THREE.Line(frontArrow(fp), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 })));
+            if (e.kind === 'room') this.blueprints.add(wallLines(e, color, selected || source ? 1 : 0.7)); // w3:build: walls with doorway gaps
             if (e.kind === 'station' && e.station.locked) { const lock = lockSprite(); lock.position.set(0, fp.height + 0.45, fp.offsetZ - 0.4); group.add(lock); }
             this.blueprints.add(group);
         }
@@ -217,7 +223,7 @@ export class BuildLayer {
     }
 
     private renderGhost(spec: GhostSpec | undefined): void {
-        const key = spec ? `${JSON.stringify(spec.entity)}:${spec.valid}` : '';
+        const key = spec ? `${JSON.stringify(spec.entity)}:${spec.valid}:${spec.grow ? `${spec.grow.width}x${spec.grow.depth}` : ''}` : '';
         if (key === this.ghostKey) return;
         this.ghostKey = key;
         disposeTree(this.ghost); this.ghost.clear();
@@ -232,6 +238,8 @@ export class BuildLayer {
         pad.rotation.x = -Math.PI / 2; pad.position.set(0, 0.015, fp.offsetZ);
         inner.add(box, edges, pad, new THREE.Line(frontArrow(fp), new THREE.LineBasicMaterial({ color, depthTest: false })));
         this.ghost.add(inner);
+        if (spec.grow) this.ghost.add(growOutline(spec.grow.width, spec.grow.depth, color)); // w3:build
+        if (spec.entity.kind === 'room') this.ghost.add(wallLines(spec.entity, color, 1)); // w3:build
     }
 
     /** Gold particles running from a screen to the station it now follows (optional flourish). */
@@ -271,6 +279,25 @@ export class BuildLayer {
         attr.needsUpdate = true; (p.points.material as THREE.PointsMaterial).opacity = 1 - t * t;
         return true;
     }
+}
+
+/** w3:build — a room's walls (world coordinates) as short upright panels' top + bottom edges, doorway gaps left open. */
+function wallLines(room: Extract<WorldEntity, { kind: 'room' }>, color: number, opacity: number): THREE.LineSegments {
+    const pts: THREE.Vector3[] = [];
+    for (const w of roomWalls(room)) for (const y of [0.04, 1.2]) pts.push(new THREE.Vector3(w.a.x, y, w.a.z), new THREE.Vector3(w.b.x, y, w.b.z));
+    for (const w of roomWalls(room)) for (const p of [w.a, w.b]) pts.push(new THREE.Vector3(p.x, 0.04, p.z), new THREE.Vector3(p.x, 1.2, p.z));
+    const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false }));
+    lines.renderOrder = 12;
+    return lines;
+}
+
+/** w3:build — dashed outline of the bigger world floor the ghost grows the shell to. */
+function growOutline(width: number, depth: number, color: number): THREE.Line {
+    const hw = width / 2, hd = depth / 2, y = 0.03;
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-hw, y, -hd), new THREE.Vector3(hw, y, -hd), new THREE.Vector3(hw, y, hd), new THREE.Vector3(-hw, y, hd), new THREE.Vector3(-hw, y, -hd)]),
+        new THREE.LineDashedMaterial({ color, dashSize: 0.5, gapSize: 0.3, transparent: true, opacity: 0.9, depthTest: false }));
+    line.computeLineDistances(); line.renderOrder = 13;
+    return line;
 }
 
 function anchor(e: WorldEntity): THREE.Vector3 {

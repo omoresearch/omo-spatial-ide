@@ -18,10 +18,11 @@ import type { FirstPersonControls } from './first-person-controls';
 import { sceneControls } from './focus-screen';
 import type { WorldStore, WorldStoreChange } from './world-store';
 import { entityTitle, describeChange } from './world-store';
-import type { WorldEntity, WorldOp, WorldSpec, StationConfig, Transform } from '../common/world-model';
-import { applyWorldOps } from '../common/world-model';
+import type { WorldEntity, WorldOp, WorldSpec, StationConfig, Transform, RoomEntity, WallSide } from '../common/world-model';
+import { applyWorldOps, ROOM_MIN, ROOM_MAX } from '../common/world-model';
 import { BuildLayer, GhostSpec, rendererApi, hasWorldRenderer, threeOf } from './build-scene';
 import { PaletteId, paletteItem, makeEntity, placement, footprint, normalizeRotation, defaultLinkTarget } from './build-catalog';
+import { growFor, roomFromDrag, quarterTurn, roomWalls, polygonHitsWalls, shrinkProblem, shellSizeOps } from './build-room'; // w3:build
 
 export type BuildTool = 'select' | 'place' | 'move' | 'link';
 export interface BuildState {
@@ -79,6 +80,11 @@ export class BuildMode {
     private noticeTimer?: number;
     private globalOff: Array<() => void> = [];
     private aimFrame = 0;
+    /** w3:build — shell ops the current ghost needs (the world grows to fit it on Apply). */
+    private ghostGrow: WorldOp[] = [];
+    /** w3:build — Room tool: the first corner (drag start or first click) and whether this press set it. */
+    private roomAnchor?: { x: number; z: number };
+    private roomPress?: { fresh: boolean };
 
     constructor(private options: BuildModeOptions) {
         // Each drawn frame (walking turns the view): keep the ghost / hover under the crosshair. Cached, so cheap.
@@ -93,10 +99,12 @@ export class BuildMode {
             if (this.handleKey(event)) { event.preventDefault(); event.stopImmediatePropagation(); }
         };
         const down = (event: PointerEvent): void => {
+            if (this.roomDown(event)) return; // w3:build: Room tool owns the press (no orbit / look while drawing)
             const t = threeOf(this.bound?.scene);
             if (event.target === t.canvas && t.navigation === 'overview' && event.button === 0) this.overviewDown = { x: event.clientX, y: event.clientY };
         };
         const up = (event: PointerEvent): void => {
+            if (this.roomUp(event)) return; // w3:build
             const t = threeOf(this.bound?.scene), start = this.overviewDown; this.overviewDown = undefined;
             // RoomScene's own pointerup still runs (it needs it to end an orbit); its workstation select is swallowed by `ownsClicks`.
             if (!start || event.target !== t.canvas || t.navigation !== 'overview') return;
@@ -195,11 +203,11 @@ export class BuildMode {
         const meta = paletteItem(item);
         if (item === 'mirror' && !this.store?.preview.entities.some(e => e.kind === 'station')) { this.warn('Add a desk first. A mirror follows one desk.'); return; }
         this.set({ tool: 'place', item, setupFor: undefined, linkSource: undefined });
-        this.lastAim.key = '';
+        this.lastAim.key = ''; this.roomAnchor = undefined;
         this.focusCanvas(); this.aim();
-        this.options.message(`${meta.title} · Aim at the floor · Click to place · R to turn · Esc to stop.`);
+        this.options.message(item === 'room' ? 'Room · Drag on the floor to draw it (or click two corners) · R turns its doorway · Esc to stop.' : `${meta.title} · Aim at the floor · Click to place · R to turn · Esc to stop.`);
     }
-    selectTool(): void { this.set({ tool: 'select', item: undefined, linkSource: undefined }); this.ghost = undefined; this.render(); }
+    selectTool(): void { this.roomAnchor = undefined; this.set({ tool: 'select', item: undefined, linkSource: undefined }); this.ghost = undefined; this.render(); }
     linkTool(): void {
         if (!this.state.active) this.enter();
         const sel = this.entity(this.state.selected);
@@ -220,7 +228,11 @@ export class BuildMode {
     rotate(direction: 1 | -1 = 1): void {
         if (this.state.tool === 'place' || this.state.tool === 'move') { this.set({ rotation: normalizeRotation(this.state.rotation + direction * QUARTER) }); this.lastAim.key = ''; this.aim(); return; }
         const e = this.entity(this.state.selected); if (!e) return;
-        this.propose([{ op: 'move', id: e.id, transform: { ...e.transform, rotation: normalizeRotation(e.transform.rotation + direction * QUARTER) } }], `Turn ${entityTitle(e)}`);
+        const rotation = e.kind === 'room' ? quarterTurn(e.transform.rotation + direction * QUARTER) : normalizeRotation(e.transform.rotation + direction * QUARTER); // w3:build: rooms turn in exact quarters
+        const turned = { ...e, transform: { ...e.transform, rotation } } as WorldEntity;
+        const problem = e.kind === 'room' ? this.fitProblem(this.preview(), turned, true, growFor(this.preview(), turned).ops) : '';
+        if (problem) { this.warn(problem); return; }
+        this.propose([...(e.kind === 'room' ? growFor(this.preview(), turned).ops : []), { op: 'move', id: e.id, transform: turned.transform }], `Turn ${entityTitle(e)}`);
     }
     remove(): void {
         const e = this.entity(this.state.selected); if (!e) return;
@@ -238,6 +250,31 @@ export class BuildMode {
         const e = this.entity(id); if (!e || (e.kind !== 'monitor-wall' && e.kind !== 'web-wall')) return;
         if (e.width === size.width && e.height === size.height && e.elevation === size.elevation) return;
         this.propose([{ op: 'resize', id, width: size.width, height: size.height, elevation: size.elevation }], `Resize ${entityTitle(e)}`);
+    }
+    /** w3:build — World size: set the shell to width x depth (refused, with the reason, if it cuts something off). */
+    resizeWorld(width: number, depth: number): boolean {
+        const world = this.preview(), shell = world.shell;
+        if (width === shell.width && depth === shell.depth) return false;
+        const problem = shrinkProblem(world, width, depth, e => entityTitle(e));
+        if (problem) { this.warn(problem); return false; } // growing never cuts anything off; shrinking names what is in the way
+        return this.propose(shellSizeOps(width, depth), `World size ${width} × ${depth} m`);
+    }
+    /** w3:build — open world (no outer walls) on / off. */
+    setOpenWorld(open: boolean): void {
+        if (!!this.preview().shell.open === open) return;
+        this.propose([{ op: 'shell', shell: { open } }], open ? 'Open world' : 'Walled world');
+    }
+    /** w3:build — Room inspector: size, doorways and theme as one 'reshape' step (the world grows if it must). */
+    reshapeRoom(id: string, next: { width: number; depth: number; doors: WallSide[]; theme?: RoomEntity['theme'] }): void {
+        const e = this.entity(id); if (e?.kind !== 'room') return;
+        const width = Math.min(ROOM_MAX, Math.max(ROOM_MIN, next.width)), depth = Math.min(ROOM_MAX, Math.max(ROOM_MIN, next.depth));
+        const sameDoors = JSON.stringify([...(e.doors ?? ['front'])].sort()) === JSON.stringify([...next.doors].sort());
+        if (e.width === width && e.depth === depth && sameDoors && (next.theme === undefined || next.theme === e.theme)) return;
+        const shaped: RoomEntity = { ...e, width, depth, doors: [...next.doors], ...(next.theme ? { theme: next.theme } : {}) };
+        const grow = growFor(this.preview(), shaped);
+        const problem = grow.refused ?? this.fitProblem(this.preview(), shaped, true, grow.ops);
+        if (problem) { this.warn(problem); return; }
+        this.propose([...grow.ops, { op: 'reshape', id, width, depth, doors: [...next.doors], ...(next.theme ? { theme: next.theme } : {}) }], `Reshape ${entityTitle(e)}`);
     }
     unlink(id: string): void { const e = this.entity(id); if (e?.kind === 'monitor-wall' && e.link) this.propose([{ op: 'link', id }], `Unlink ${entityTitle(e)}`); }
     link(id: string, to: string): void {
@@ -339,6 +376,7 @@ export class BuildMode {
     }
     private escape(): void {
         if (this.state.setupFor) { this.closeSetup(); return; }
+        if (this.roomAnchor) { this.roomAnchor = undefined; this.lastAim.key = ''; this.aim(); this.note('Room corner dropped. Drag or click again to draw a room.'); return; } // w3:build
         if (this.state.tool === 'place' || this.state.tool === 'move' || this.state.tool === 'link') { this.selectTool(); this.options.message('Build mode · Click a thing to select it · B to leave.'); return; }
         if (this.state.selected) { this.select(undefined); return; }
         this.exit();
@@ -349,6 +387,14 @@ export class BuildMode {
         if (!this.state.active) return;
         const { tool } = this.state;
         // Walking: the ghost sits under the crosshair, so that is where it goes. Overview: under the mouse.
+        if (tool === 'place' && this.state.item === 'room' && !this.roomAnchor) { // w3:build: walking — the first click sets a corner
+            this.lastAim.key = ''; this.aim();
+            const t = threeOf(this.bound?.scene), r = t.canvas?.getBoundingClientRect();
+            const p = t.camera && t.canvas && r ? this.layer.floorPoint(t.camera, t.canvas, r.left + r.width / 2, r.top + r.height / 2) : undefined;
+            if (!p) { this.note('Aim at the floor to set the first corner.'); return; }
+            this.roomAnchor = { x: Math.round(p.x * 2) / 2, z: Math.round(p.z * 2) / 2 }; this.lastAim.key = ''; this.aim();
+            this.note('First corner set · Aim at the opposite corner and click · Esc to cancel.'); return;
+        }
         if (tool === 'place' || tool === 'move') { this.lastAim.key = ''; if (threeOf(this.bound?.scene).navigation === 'overview') this.aim(clientX, clientY); else this.aim(); this.commitGhost(); return; }
         const id = this.pick(clientX, clientY);
         const e = this.entity(id);
@@ -379,10 +425,11 @@ export class BuildMode {
         if (!g.valid) { this.warn(this.state.ghostReason || 'It does not fit there.'); return; }
         if (this.state.tool === 'move') {
             const id = g.entity.id, e = this.entity(id);
-            if (this.propose([{ op: 'move', id, transform: { ...g.entity.transform } }], `Move ${entityTitle(e)}`)) { this.set({ tool: 'select' }); this.ghost = undefined; this.render(); }
+            if (this.propose([...this.ghostGrow, { op: 'move', id, transform: { ...g.entity.transform } }], `Move ${entityTitle(e)}`)) { this.set({ tool: 'select' }); this.ghost = undefined; this.render(); }
             return;
         }
-        if (this.propose([{ op: 'add', entity: g.entity }], `Place ${entityTitle(g.entity)}`)) {
+        this.roomAnchor = undefined; // w3:build
+        if (this.propose([...this.ghostGrow, { op: 'add', entity: g.entity }], `${g.entity.kind === 'room' ? 'Build' : 'Place'} ${entityTitle(g.entity)}`)) { // w3:build: grow first, then add
             this.lastAim.key = ''; this.aim();
             this.options.message(`Placed ${entityTitle(g.entity)} · Click to place another · Esc to stop · Apply when ready.`);
         }
@@ -418,39 +465,98 @@ export class BuildMode {
         }
         // t2:worldui — the overview camera orbits ~24-40 m out; the 14 m walking reach made every overview aim miss the floor.
         const floor = this.layer.floorPoint(t.camera, t.canvas, x, y, t.navigation === 'overview' ? 200 : undefined);
-        const key = floor ? `${Math.round(floor.x * 8)}:${Math.round(floor.z * 8)}:${this.state.rotation}:${tool}:${this.state.item}:${this.state.selected}:${store.preview.revision}:${store.proposal?.steps.length ?? 0}` : 'none';
+        const key = floor ? `${Math.round(floor.x * 8)}:${Math.round(floor.z * 8)}:${this.state.rotation}:${tool}:${this.state.item}:${this.state.selected}:${store.preview.revision}:${store.proposal?.steps.length ?? 0}:${this.roomAnchor ? `${this.roomAnchor.x},${this.roomAnchor.z}` : ''}` : 'none';
         if (key === this.lastAim.key) return;
         this.lastAim.key = key;
         if (!floor) { this.ghost = undefined; this.set({ ghostValid: false, ghostReason: 'Aim at the floor inside the room.' }); this.render(); return; }
         const world = store.preview;
-        let entity: WorldEntity | undefined; let wall = false;
+        let entity: WorldEntity | undefined; let wall = false; let snapped = false;
         if (tool === 'move') {
             const e = this.entity(this.state.selected); if (!e) { this.selectTool(); return; }
             wall = e.kind === 'monitor-wall' || e.kind === 'web-wall' || e.kind === 'mirror' || e.kind === 'review-screen' || (e.kind === 'decor' && (e.decor === 'bookshelf' || e.decor === 'window'));
             const fp = footprint(e);
             const p = placement(world, floor, this.state.rotation, wall, fp);
-            entity = { ...e, transform: p.transform } as WorldEntity;
+            entity = { ...e, transform: p.transform } as WorldEntity; snapped = p.snapped === 'wall';
+            if (entity.kind === 'room') entity.transform = { ...entity.transform, rotation: quarterTurn(entity.transform.rotation) }; // w3:build
+        } else if (this.state.item === 'room') {
+            entity = this.roomGhost(world, floor); // w3:build
         } else if (this.state.item) {
             const meta = paletteItem(this.state.item);
             const probe = makeEntity(this.state.item, world, { x: floor.x, z: floor.z, rotation: this.state.rotation }, defaultLinkTarget(world, floor, this.state.selected));
             if (!probe) { this.ghost = undefined; this.set({ ghostValid: false, ghostReason: 'Add a desk first. A mirror follows one desk.' }); this.render(); return; }
             const p = placement(world, floor, this.state.rotation, meta.wallMounted, footprint(probe));
             entity = { ...probe, transform: p.transform } as WorldEntity;
-            wall = meta.wallMounted;
+            wall = meta.wallMounted; snapped = p.snapped === 'wall';
         }
         if (!entity) return;
-        const reason = this.fitProblem(world, entity, tool === 'move');
-        this.ghost = { entity, valid: !reason };
+        // w3:build — near or past the edge: the world grows (symmetrically) to fit it, up to SHELL_MAX.
+        const grow = growFor(world, entity, snapped);
+        this.ghostGrow = grow.ops;
+        const reason = grow.refused ?? this.fitProblem(world, entity, tool === 'move', grow.ops);
+        this.ghost = { entity, valid: !reason, grow: grow.size };
         this.set({ ghostValid: !reason, ghostReason: reason, ghostAt: entity.transform });
         this.render();
     }
+    // ------------------------------------------------------------------ w3:build Room tool
+
+    /** The room the Room tool would build for this floor point (from the anchor corner when one is set). */
+    private roomGhost(world: WorldSpec, floor: { x: number; z: number }): WorldEntity | undefined {
+        const rotation = quarterTurn(this.state.rotation);
+        const a = this.roomAnchor ?? { x: floor.x - ROOM_MIN / 2, z: floor.z - ROOM_MIN / 2 }, b = this.roomAnchor ? floor : { x: floor.x + ROOM_MIN / 2, z: floor.z + ROOM_MIN / 2 };
+        const r = roomFromDrag(a, b, ROOM_MIN, ROOM_MAX);
+        const probe = makeEntity('room', world, { x: r.x, z: r.z, rotation });
+        if (probe?.kind !== 'room') return undefined;
+        // A quarter turn swaps the room's own width and depth, so the floor plan stays as drawn.
+        const turned = Math.abs(Math.round(rotation / QUARTER)) % 2 === 1;
+        return { ...probe, width: turned ? r.depth : r.width, depth: turned ? r.width : r.depth };
+    }
+    /** Floor point for a press: the mouse in overview, the crosshair while walking. */
+    private pressPoint(event: PointerEvent): { x: number; z: number } | undefined {
+        const t = threeOf(this.bound?.scene); if (!t.camera || !t.canvas) return undefined;
+        const r = t.canvas.getBoundingClientRect();
+        const x = t.navigation === 'walk' ? r.left + r.width / 2 : event.clientX, y = t.navigation === 'walk' ? r.top + r.height / 2 : event.clientY;
+        return this.layer.floorPoint(t.camera, t.canvas, x, y, t.navigation === 'overview' ? 200 : undefined);
+    }
+    private roomDown(event: PointerEvent): boolean {
+        const t = threeOf(this.bound?.scene);
+        // Overview only: walking keeps its look-drag, and draws a room with two clicks (see click()).
+        if (!this.state.active || this.state.tool !== 'place' || this.state.item !== 'room' || event.button !== 0 || event.target !== t.canvas || t.navigation !== 'overview') return false;
+        const p = this.pressPoint(event);
+        if (!p) return false;
+        event.stopImmediatePropagation(); event.preventDefault();
+        const fresh = !this.roomAnchor;
+        if (fresh) this.roomAnchor = { x: Math.round(p.x * 2) / 2, z: Math.round(p.z * 2) / 2 };
+        this.roomPress = { fresh };
+        this.lastAim.key = ''; this.aim(t.navigation === 'overview' ? event.clientX : undefined, t.navigation === 'overview' ? event.clientY : undefined);
+        return true;
+    }
+    private roomUp(event: PointerEvent): boolean {
+        const press = this.roomPress; if (!press) return false;
+        this.roomPress = undefined; event.stopImmediatePropagation();
+        const t = threeOf(this.bound?.scene), p = this.pressPoint(event), a = this.roomAnchor;
+        if (!a || !p) return true;
+        // A plain click sets the first corner; a drag, or a second click, builds the room.
+        if (press.fresh && Math.hypot(p.x - a.x, p.z - a.z) < 0.75) { this.note('First corner set · Click the opposite corner (or drag) · Esc to cancel.'); return true; }
+        this.lastAim.key = ''; this.aim(t.navigation === 'overview' ? event.clientX : undefined, t.navigation === 'overview' ? event.clientY : undefined);
+        if (this.ghost?.valid) this.commitGhost();
+        else { this.roomAnchor = undefined; this.warn(this.state.ghostReason || 'The room does not fit there.'); this.lastAim.key = ''; this.aim(); }
+        return true;
+    }
+
     /** Why `entity` cannot go where it is ('' = it fits). */
-    private fitProblem(world: WorldSpec, entity: WorldEntity, moving: boolean): string {
-        const ops: WorldOp[] = moving ? [{ op: 'move', id: entity.id, transform: entity.transform }] : [{ op: 'add', entity }];
+    private fitProblem(world: WorldSpec, entity: WorldEntity, moving: boolean, grow: WorldOp[] = []): string {
+        const ops: WorldOp[] = [...grow, moving ? { op: 'move', id: entity.id, transform: entity.transform } : { op: 'add', entity }];
         const r = applyWorldOps(world, ops);
         if (!r.ok) return friendly(r.error, world);
         const solid = (e: WorldEntity): boolean => e.kind === 'station' || (e.kind === 'decor' && e.decor !== 'rug' && e.decor !== 'window');
-        const wallish = (e: WorldEntity): boolean => !solid(e) && !(e.kind === 'decor' && e.decor === 'rug');
+        const wallish = (e: WorldEntity): boolean => !solid(e) && e.kind !== 'room' && !(e.kind === 'decor' && e.decor === 'rug'); // w3:build: a room is a floor
+        // w3:build — rooms: no overlap with another room; solid things may stand inside, only the room walls block them.
+        for (const other of world.entities) {
+            if (other.id === entity.id) continue;
+            if (entity.kind === 'room' && other.kind === 'room' && overlaps(entity, other)) return `Overlaps ${entityTitle(other)}.`;
+            if (entity.kind === 'room' && solid(other) && polygonHitsWalls(corners(other), roomWalls(entity))) return `A wall would cut through ${entityTitle(other)}.`;
+            if (other.kind === 'room' && solid(entity) && polygonHitsWalls(corners(entity), roomWalls(other))) return `That is on a wall of ${entityTitle(other)}.`;
+        }
         const pose = this.bound?.scene.getPlayerPose();
         if (solid(entity) && pose && threeOf(this.bound?.scene).navigation === 'walk' && inside(entity, pose)) return 'You are standing there. Step back a little.';
         for (const other of world.entities) {
@@ -499,8 +605,10 @@ export class BuildMode {
     private hintText(): string {
         const { tool, item, ghostValid, ghostReason } = this.state;
         if (!this.state.active) return '';
-        if (tool === 'place') return ghostValid ? `Click to place ${paletteItem(item ?? 'agent-desk').title} · R turn · Esc stop` : ghostReason || 'Aim at the floor';
-        if (tool === 'move') return ghostValid ? 'Click to put it down · R turn · Esc cancel' : ghostReason || 'Aim at the floor';
+        const grows = ghostValid && this.ghost?.grow ? ` · The world grows to ${this.ghost.grow.width} × ${this.ghost.grow.depth} m` : ''; // w3:build
+        if (tool === 'place' && item === 'room') return ghostValid ? (this.roomAnchor ? `Release or click to build ${this.ghost?.entity.kind === 'room' ? `${this.ghost.entity.width} × ${this.ghost.entity.depth} m` : 'it'}${grows} · Esc cancel` : `Drag on the floor to draw a room (at least ${ROOM_MIN} m)${grows} · R turns its doorway`) : ghostReason || 'Aim at the floor'; // w3:build
+        if (tool === 'place') return ghostValid ? `Click to place ${paletteItem(item ?? 'agent-desk').title}${grows} · R turn · Esc stop` : ghostReason || 'Aim at the floor';
+        if (tool === 'move') return ghostValid ? `Click to put it down${grows} · R turn · Esc cancel` : ghostReason || 'Aim at the floor';
         if (tool === 'link') return this.state.linkSource ? `Click screens to follow ${entityTitle(this.entity(this.state.linkSource))} · Esc done` : 'Click a desk to link from';
         return this.state.selected ? 'M move · R turn · Del remove · Esc deselect' : 'Click a thing to select it · B leave';
     }
@@ -541,7 +649,7 @@ const emptyWorld: WorldSpec = { version: 2, name: 'World', shell: { theme: 'stat
 function friendly(error: string, world: WorldSpec): string {
     const id = /^([a-z0-9-]+) (is locked|does not exist|already exists)/.exec(error);
     if (id) { const e = world.entities.find(x => x.id === id[1]); return `${entityTitle(e, id[1])} ${id[2]}.`; }
-    if (/Entity .* is invalid/.test(error)) return 'It does not fit there: keep it inside the room.';
+    if (/Entity .* is invalid/.test(error)) return 'It does not fit there.';
     return error;
 }
 

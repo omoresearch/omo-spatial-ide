@@ -381,6 +381,7 @@ export function diffWorlds(a: WorldSpec, b: WorldSpec): WorldOp[] {
     if (!deepEqual(a.shell, b.shell)) {
         const shell: Partial<WorldShell> = {};
         (Object.keys(b.shell) as Array<keyof WorldShell>).forEach(k => { if (a.shell[k] !== b.shell[k]) (shell as Record<string, unknown>)[k] = b.shell[k]; });
+        if (a.shell.open && !b.shell.open) shell.open = false; // w3:build: undo of "Open world" (the shell op drops open: false)
         edits.push({ op: 'shell', shell });
     }
     const inB = new Map(b.entities.map(e => [e.id, e]));
@@ -417,7 +418,7 @@ export function diffWorlds(a: WorldSpec, b: WorldSpec): WorldOp[] {
     // Fallback: rebuild every differing entity. Still validated by the caller's applyWorldOps.
     const rebuild: WorldOp[] = [...unlocks];
     if (a.name !== b.name) rebuild.push({ op: 'name', name: b.name });
-    if (!deepEqual(a.shell, b.shell)) rebuild.push({ op: 'shell', shell: clone(b.shell) });
+    if (!deepEqual(a.shell, b.shell)) rebuild.push({ op: 'shell', shell: { ...clone(b.shell), open: !!b.shell.open } }); // w3:build
     for (const ea of a.entities) if (!deepEqual(ea, inB.get(ea.id)) && !(ea.kind === 'mirror' && inB.get(ea.id) === undefined && removedWithStation(ea, b))) rebuild.push({ op: 'remove', id: ea.id });
     for (const eb of b.entities) if (!deepEqual(eb, inA.get(eb.id))) rebuild.push({ op: 'add', entity: clone(eb) });
     return rebuild;

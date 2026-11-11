@@ -8,6 +8,7 @@ import * as React from 'react';
 export type BuildGlyphName =
     | 'desk-agent' | 'desk-shell' | 'monitor-wall' | 'web-wall' | 'mirror' | 'review'
     | 'plant' | 'lamp' | 'crystal' | 'sofa' | 'bookshelf' | 'whiteboard' | 'rug' | 'window'
+    | 'room' | 'world-size' | 'open-world' // w3:build
     | 'build' | 'cursor' | 'move' | 'rotate' | 'link' | 'trash' | 'undo' | 'redo' | 'unlock' | 'setup' | 'sparkle';
 
 const P: Record<BuildGlyphName, React.ReactNode> = {
@@ -25,6 +26,10 @@ const P: Record<BuildGlyphName, React.ReactNode> = {
     whiteboard: <><rect x="3" y="3.5" width="18" height="12" rx="1" /><path d="M7 15.5 5 21M17 15.5l2 5.5M7 8.5c2-2 3 1 5-1s3 1 5-1" /></>,
     rug: <><rect x="3" y="7" width="18" height="10" rx="2" /><rect x="6" y="9.5" width="12" height="5" rx="1" /><path d="M3 9H1.5M3 12H1.5M3 15H1.5M21 9h1.5M21 12h1.5M21 15h1.5" /></>,
     window: <><rect x="4" y="3.5" width="16" height="17" rx="1" /><path d="M12 3.5v17M4 12h16" /></>,
+    // w3:build — a floor plan with a doorway gap in the front wall; world size = outward arrows; open world = ground + horizon.
+    room: <><path d="M9.5 20H3.5V4h17v16h-6" /><path d="M3.5 11h6v4" /><path d="M9.5 20v-1.5M14.5 20v-1.5" /></>,
+    'world-size': <><rect x="7.5" y="7.5" width="9" height="9" rx="1" /><path d="M3 3l3 3M3 3v3.5M3 3h3.5M21 3l-3 3M21 3v3.5M21 3h-3.5M3 21l3-3M3 21v-3.5M3 21h3.5M21 21l-3-3M21 21v-3.5M21 21h-3.5" /></>,
+    'open-world': <><path d="M2.5 15.5h19" /><path d="M5 19.5h14" /><circle cx="12" cy="9" r="3.5" /><path d="M12 3v1M5.5 9h1M17.5 9h1M7.4 4.4l.7.7M16.6 4.4l-.7.7" /></>,
     build: <><path d="M3.5 20.5 13 11" /><path d="M14.5 3.5a5 5 0 0 0-1.5 7.5l1 1a5 5 0 0 0 7.5-1.5l-3-.5-1-1-.5-3Z" /></>,
     cursor: <path d="M5 3.5 18.5 12l-6 1.5-3 6Z" />,
     move: <path d="M12 3v18M3 12h18M12 3l-2.5 2.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l-2.5 2.5" />,

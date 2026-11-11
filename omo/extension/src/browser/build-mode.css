@@ -200,6 +200,8 @@
 .omo-build-proposal li::before { content: '~'; position: absolute; left: 8px; color: var(--omo-info); font-family: var(--omo-mono); }
 .omo-build-proposal li.is-add::before { content: '+'; color: var(--omo-ok); }
 .omo-build-proposal li.is-remove::before { content: '−'; color: var(--omo-danger); }
+.omo-build-proposal li.is-grow { color: var(--omo-accent); } /* w3:build */
+.omo-build-proposal li.is-grow::before { content: '⤢'; color: var(--omo-accent); }
 .omo-build-proposal li.is-link::before { content: '⟶'; left: 5px; color: var(--omo-agent-hermes); }
 .omo-build-proposal li.is-lock::before { content: '◆'; color: var(--omo-warn); }
 .omo-build-more { align-self: flex-start; padding: 0; background: none; border: none; color: var(--omo-accent); font-size: var(--omo-fs-xs); }
@@ -274,3 +276,18 @@
 .omo-build-dialog { overflow: hidden; }
 .omo-build-dialog > .omo-build-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 2px; margin: -2px; }
 .omo-build-dialog > header, .omo-build-dialog > .omo-build-lockrow, .omo-build-dialog > footer, .omo-build-dialog > .omo-build-locknote { flex: 0 0 auto; }
+/* w3:build — Room inspector doorway toggles and the World size section. */
+.omo-build-room { display: flex; flex-direction: column; gap: var(--omo-sp-2); }
+.omo-build-doors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.omo-build-doors button { height: 28px; border-radius: var(--omo-r-sm); border: 1px solid var(--omo-line-2); background: var(--omo-surface-1); color: var(--omo-text-2); font-size: var(--omo-fs-xs); cursor: pointer; }
+.omo-build-doors button.is-on { border-color: var(--omo-accent-line); background: var(--omo-accent-soft); color: var(--omo-accent); }
+.omo-build-doors button:focus-visible, .omo-build-world button:focus-visible { outline: 2px solid var(--omo-focus); outline-offset: 1px; }
+.omo-build-group.is-spaces .omo-build-item-art { color: #c9b8ff; }
+.omo-build-world { gap: var(--omo-sp-2); display: flex; flex-direction: column; }
+.omo-build-world h3 { display: flex; align-items: center; gap: 6px; }
+.omo-build-stepper { display: grid; grid-template-columns: 1fr 28px 64px 28px; align-items: center; gap: 4px; font-size: var(--omo-fs-xs); color: var(--omo-text-2); }
+.omo-build-stepper button { height: 28px; border-radius: var(--omo-r-sm); border: 1px solid var(--omo-line-2); background: var(--omo-surface-1); color: var(--omo-text); font-size: var(--omo-fs-md); line-height: 1; cursor: pointer; }
+.omo-build-stepper button:disabled { opacity: 0.4; cursor: default; }
+.omo-build-stepper output { text-align: center; font-family: var(--omo-mono); color: var(--omo-text); }
+.omo-build-openrow small, .omo-build-world-note { font-size: var(--omo-fs-2xs); color: var(--omo-text-3); }
+.omo-build-world-note { display: flex; align-items: center; gap: 6px; margin: 0; }

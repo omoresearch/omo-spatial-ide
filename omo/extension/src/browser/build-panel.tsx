@@ -11,6 +11,9 @@ import { Icon } from './icons';
 import { entityTitle, entityNoun } from './world-store';
 import type { WorldEntity, StationConfig, StationEntity, TabKind } from '../common/world-model';
 import { stations } from '../common/world-model';
+import { proposalLines } from './build-room'; // w3:build
+import { RoomInspector } from './build-room-inspector'; // w3:build
+import { WorldSizeSection } from './build-world-size'; // w3:build
 import '../../src/browser/build-mode.css';
 
 function useBuild(build: BuildMode): void {
@@ -87,7 +90,7 @@ function ToolButton(props: { glyph: string; label: string; keyHint?: string; act
 
 function Palette(props: { build: BuildMode }): React.ReactElement {
     const { build } = props, s = build.state;
-    const groups: Array<PaletteItem['group']> = ['Stations', 'Screens', 'Decor'];
+    const groups: Array<PaletteItem['group']> = ['Spaces', 'Stations', 'Screens', 'Decor']; // w3:build: + Spaces
     const hasDesk = !!build.store && stations(build.store.preview).length > 0;
     return <aside className="omo-build-palette" aria-label="Build palette" data-testid="build-palette">
         {groups.map(group => <section key={group} className={`omo-build-group is-${group.toLowerCase()}`}>
@@ -103,6 +106,7 @@ function Palette(props: { build: BuildMode }): React.ReactElement {
                 </button>;
             })}</div>
         </section>)}
+        {build.store && <WorldSizeSection build={build} world={build.store.preview} />}{/* w3:build */}
         <p className="omo-build-palette-foot">Place · <kbd>R</kbd> turn · <kbd>Esc</kbd> stop. Changes wait for <b>Apply</b>.</p>
     </aside>;
 }
@@ -147,6 +151,7 @@ function Inspector(props: { build: BuildMode; entity: WorldEntity }): React.Reac
             <NumberField label="Height" testid="build-height" value={e.height} min={e.kind === 'web-wall' ? 0.6 : 0.4} max={4} step={0.1} onCommit={n => build.resize(e.id, { width: e.width, height: n, elevation: e.elevation })} />
             <NumberField label="Lift" value={e.elevation} min={0} max={3} step={0.05} onCommit={n => build.resize(e.id, { width: e.width, height: e.height, elevation: n })} />
         </div>}
+        {e.kind === 'room' && <RoomInspector build={build} room={e} />}{/* w3:build */}
         {(e.kind === 'monitor-wall' || e.kind === 'mirror') && <label className="omo-build-field"><span>Follows</span>
             <select data-testid="build-link-select" value={linkTarget ?? ''} onChange={ev => ev.target.value ? build.link(e.id, ev.target.value) : build.unlink(e.id)}>
                 {e.kind === 'monitor-wall' && <option value="">Nothing (its own view)</option>}
@@ -176,7 +181,7 @@ function glyphFor(e: WorldEntity): string {
         case 'mirror': return 'mirror';
         case 'review-screen': return 'review';
         case 'decor': return e.decor;
-        case 'room': return 'room'; // w3:expand
+        case 'room': return 'room'; // w3:build: real glyph in build-glyphs.tsx
     }
 }
 
@@ -184,11 +189,12 @@ function ProposalBar(props: { build: BuildMode }): React.ReactElement | null {
     const { build } = props, store = build.store!, p = store.proposal;
     const [open, setOpen] = React.useState(false);
     if (!p) return null;
-    const lines = p.diff.length ? p.diff : ['No visible change.'];
+    const extra = proposalLines(store.world, store.preview, p.diff); // w3:build: 'The world grows to W × D m to fit this', rooms, open world
+    const lines = extra.length ? extra : ['No visible change.'];
     const shown = open ? lines : lines.slice(0, 4);
     return <section className="omo-build-proposal" aria-label="Pending changes" data-testid="build-proposal">
         <header><span className="omo-build-dot" /><strong>{lines.length} pending change{lines.length === 1 ? '' : 's'}</strong><small>Not saved until you apply. Nothing starts.</small></header>
-        <ul data-testid="build-diff">{shown.map((line, i) => <li key={i} className={/^Add /.test(line) ? 'is-add' : /^Remove /.test(line) ? 'is-remove' : /^Link /.test(line) ? 'is-link' : /^(Lock|Unlock) /.test(line) ? 'is-lock' : ''}>{line}</li>)}</ul>
+        <ul data-testid="build-diff">{shown.map((line, i) => <li key={i} className={/^The world grows /.test(line) ? 'is-grow' : /^Add /.test(line) ? 'is-add' : /^Remove /.test(line) ? 'is-remove' : /^Link /.test(line) ? 'is-link' : /^(Lock|Unlock) /.test(line) ? 'is-lock' : ''}>{line}</li>)}</ul>
         {lines.length > 4 && <button type="button" className="omo-build-more" onClick={() => setOpen(!open)}>{open ? 'Show less' : `Show ${lines.length - 4} more`}</button>}
         <footer>
             <button type="button" className="omo-build-discard" data-testid="build-discard" onClick={() => build.discard()}>Discard</button>
