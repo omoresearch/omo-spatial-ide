@@ -49,3 +49,11 @@ export function shadowFrame(shell: Pick<WorldShell, 'width' | 'depth'>, mode: 'w
     const snap = (v: number): number => Math.round(v / SHADOW_STEP) * SHADOW_STEP;
     return { cx: snap(player.x), cz: snap(player.z), extent: FOLLOW_EXTENT };
 }
+
+/** A station monitor farther than this from the player keeps its last painted frame (no canvas repaint, no upload). */
+export const FAR_TERMINAL_M = 25;
+/** Hysteresis: a parked monitor resumes painting only once the player is this much nearer (no flicker on the edge). */
+export const FAR_TERMINAL_RESUME_M = 23;
+export function terminalFar(player: { x: number; z: number }, at: { x: number; z: number }, parked: boolean): boolean {
+    return Math.hypot(player.x - at.x, player.z - at.z) > (parked ? FAR_TERMINAL_RESUME_M : FAR_TERMINAL_M);
+}

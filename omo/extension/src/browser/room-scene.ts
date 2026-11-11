@@ -23,7 +23,7 @@ import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
 import { openSky } from './world-scene-open'; // w3:render
-import { cameraClip, shadowFrame, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render
+import { cameraClip, shadowFrame, terminalFar, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render
 import { refreeze as refreezeNode } from './world-scene-kit'; // w3:render
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
@@ -110,6 +110,8 @@ interface ScreenSurface {
     /** w2:render — empty-screen hint (linked walls) and the last painted linked input. */
     hint?: string;
     linkSource?: unknown;
+    /** w3:render — far from the player: keeps its last painted frame until the player comes nearer. */
+    parked?: boolean;
 }
 const SURFACE_W = 1024, SURFACE_H = 576;
 /**
@@ -573,12 +575,15 @@ export class RoomScene {
             surface.hint = link ? `Linked to ${linkName}. Waiting for its screen.` : 'Link this wall to a desk in build mode.';
             const source = input ?? `${surface.hint}\u0000${linkName ?? ''}`;
             if (surface.linkSource === source) continue;
+            if (this.farScreen(id, surface)) { surface.parked = true; continue; } // w3:render — far: keep the last frame (linkSource not updated, so it repaints when near)
+            surface.parked = false;
             surface.linkSource = source;
             const frame: MonitorFrame = input ? monitorWindow(input) : { lines: [], title: link ? `LINKED · ${String(linkName).toUpperCase()}` : 'MONITOR WALL', status: link ? 'No frame yet' : 'Not linked' };
             surface.frame = frame; surface.selection = '';
             if (this.paintTerminal(surface, frame, [])) changed = true;
         }
         if (changed) this.invalidate();
+        this.publishParked(); // w3:render
         this.setData('linkedFrames', JSON.stringify(Object.fromEntries([...this.linkedSurfaces].map(([id, s]) => [id, s.frame?.lines.length ?? 0]))));
     }
     /** The entity under a client (CSS pixel) point: the frontmost hit, any kind (build lane hook). */
@@ -703,11 +708,25 @@ export class RoomScene {
         if (this.renderer) this.renderer.shadowMap.needsUpdate = true;
         this.setData('shadowFrame', key);
     }
-    /** After the player walked >= 1 m: move the sun's shadow box. No work (or allocation) in between. */
+    /** Is a station / linked screen far from the player (keep its last frame)? Never parks a screen that was never painted. */
+    private farScreen(id: string, surface: ScreenSurface): boolean {
+        const entity = this.entities.get(id)?.entity;
+        if (!entity || !surface.rows || this.navigation !== 'walk') return false; // the overview shows every screen live
+        return terminalFar(this.walker?.pose ?? PLAYER_HOME, entity.transform, !!surface.parked);
+    }
+    /** After the player walked >= 1 m: move the sun's shadow box and repaint parked screens that are near again. No work (or allocation) in between. */
     private walked(pose: PlayerPose): void {
         if (Math.hypot(pose.x - this.parkCheck.x, pose.z - this.parkCheck.z) < 1) return;
         this.parkCheck.x = pose.x; this.parkCheck.z = pose.z;
         this.followSun();
+        let linked = false;
+        for (const [id, surface] of this.terminalSurfaces) if (surface.parked && !this.farScreen(id, surface)) { surface.parked = false; this.setTerminalFrame(this.terminalFrames[id] ?? { lines: [] }, id as TerminalWorkstation); }
+        for (const [id, surface] of this.linkedSurfaces) if (surface.parked && !this.farScreen(id, surface)) { surface.parked = false; linked = true; }
+        if (linked) this.paintLinked();
+        this.publishParked();
+    }
+    private publishParked(): void {
+        this.setData('parkedScreens', JSON.stringify([...this.terminalSurfaces, ...this.linkedSurfaces].filter(([, s]) => s.parked).map(([id]) => id)));
     }
     /** w3:render — overview shows rooms as a cutaway (low walls, no lintels); walking shows full walls. */
     private cutRooms(): void {
@@ -719,7 +738,7 @@ export class RoomScene {
         this.navigation = mode; this.camera.fov = mode === 'walk' ? 65 : 38; this.camera.updateProjectionMatrix();
         this.walker?.setEnabled(mode === 'walk');
         this.cutRooms(); // w3:render — rooms: full walls when walking, low cutaway walls in the overview
-        if (this.world) this.applyScaleView(); // w3:render
+        if (this.world) { this.applyScaleView(); this.parkCheck.x = NaN; this.walked(this.walker?.pose ?? PLAYER_HOME); } // w3:render — overview: parked screens resume
         if (this.walker) this.smoother.snap(this.walker.pose);
         if (this.renderer) { this.renderer.domElement.dataset.navigation = mode; }
         this.labels.forEach(label => { label.classList.toggle('is-walk', mode === 'walk'); this.labelSize.delete(label); this.labelPos.delete(label); }); // t3:polish2: re-measure
@@ -750,8 +769,8 @@ export class RoomScene {
         // Same frame object and same selection: the monitor already shows it (the other desk on every update).
         if (surface.frame === frame && surface.selection === selectionKey) return;
         const frameChanged = surface.frame !== frame;
-        surface.frame = frame; surface.selection = selectionKey;
-        if (this.paintTerminal(surface, frame, spans)) this.invalidate();
+        if (!selection && this.farScreen(station, surface)) { if (!surface.parked) { surface.parked = true; this.publishParked(); } } // w3:render — far monitor keeps its last frame
+        else { surface.parked = false; surface.frame = frame; surface.selection = selectionKey; if (this.paintTerminal(surface, frame, spans)) this.invalidate(); }
         this.paintLamp(station);
         if (!this.renderer) return;
         this.setData('terminalSelection', this.terminalSelection?.model.text() ?? '');
@@ -1038,7 +1057,7 @@ export class RoomScene {
             }
             if(!this.smoother.settled(pose))moving=true;
             this.emitPose(pose,now,moving);
-            if(moving)this.walked(pose); // w3:render — shadow box follows the player (checked per metre walked)
+            if(moving)this.walked(pose); // w3:render — shadow box follows the player; near screens resume (checked per metre walked)
         }
         if(moving){
             if(this.sharpTimer!==undefined){window.clearTimeout(this.sharpTimer);this.sharpTimer=undefined;}
