@@ -74,8 +74,38 @@ export function walkBounds(shell: WorldShell): { minX: number; maxX: number; min
     return { minX: -shell.width / 2 + 0.5, maxX: shell.width / 2 - 0.5, minZ: -shell.depth / 2 + 1.2, maxZ: shell.depth / 2 - 0.55 };
 }
 /** Where the player stands on reset in this shell (PLAYER_HOME for a v1 room). */
-export function worldHome(shell: WorldShell): PlayerPose {
-    return { x: 0, z: Math.min(4.1, shell.depth / 2 - 0.9), yaw: 0, pitch: 0 };
+export function worldHome(shell: WorldShell, entities: readonly WorldEntity[] = []): PlayerPose {
+    const plaza = shell.open ? openPlazaHome(shell, entities) : undefined; // w3:look (6)
+    return plaza ?? { x: 0, z: Math.min(4.1, shell.depth / 2 - 0.9), yaw: 0, pitch: 0 };
+}
+/**
+ * w3:look (6) — open-world spawn: stand ~9 m out from the doorway nearest the world centre, facing into it,
+ * so the first view shows a room and its desks (never a blank wall). No rooms: the classic spot.
+ */
+export function openPlazaHome(shell: WorldShell, entities: readonly WorldEntity[]): PlayerPose | undefined {
+    const doors = openDoorways(entities);
+    if (!doors.length) return undefined;
+    const d = doors.reduce((a, b) => (Math.hypot(a.x, a.z) <= Math.hypot(b.x, b.z) ? a : b));
+    const lim = (v: number, h: number): number => Math.max(-h + 0.6, Math.min(h - 0.6, v));
+    // 9 m out and 3 m to the side: the doorway, the room's corner and open ground beyond are all in view.
+    const sx = -d.nz * 5, sz = d.nx * 5;
+    const x = lim(d.x + d.nx * 13 + sx, shell.width / 2), z = lim(d.z + d.nz * 13 + sz, shell.depth / 2);
+    // yaw 0 faces -z; forward = (-sin yaw, -cos yaw). Face the doorway itself.
+    return { x, z, yaw: Math.atan2(x - d.x, z - d.z), pitch: 0 };
+}
+/** Doorway centres (world) of every room with their outward normals. */
+export function openDoorways(entities: readonly WorldEntity[]): Array<{ x: number; z: number; nx: number; nz: number; room: string }> {
+    const out: Array<{ x: number; z: number; nx: number; nz: number; room: string }> = [];
+    for (const e of entities) {
+        if (e.kind !== 'room') continue;
+        const r = e.transform.rotation, c = Math.round(Math.cos(r)), s = Math.round(Math.sin(r));
+        const local: Record<string, [number, number, number, number]> = { back: [0, -e.depth / 2, 0, -1], front: [0, e.depth / 2, 0, 1], left: [-e.width / 2, 0, -1, 0], right: [e.width / 2, 0, 1, 0] };
+        for (const side of e.doors ?? ['front']) {
+            const [lx, lz, lnx, lnz] = local[side];
+            out.push({ x: e.transform.x + c * lx + s * lz, z: e.transform.z - s * lx + c * lz, nx: c * lnx + s * lnz, nz: -s * lnx + c * lnz, room: e.id });
+        }
+    }
+    return out;
 }
 
 /** A walking function bound to one world: same signature as advancePlayer without the layout. */

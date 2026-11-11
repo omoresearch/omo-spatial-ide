@@ -200,6 +200,8 @@
     font: 500 10px var(--omo-mono)!important; letter-spacing: .02em; white-space: nowrap; backdrop-filter: blur(8px);
 }
 .omo-scene-label:hover { border-color: var(--omo-accent); background: var(--omo-surface-3); color: var(--omo-accent-strong); }
+/* w3:look — open-world overview: short desk-number chips anchored over their desk (full title on hover). */
+.omo-scene-label.is-chip { padding: 3px 7px; font-weight: 600 !important; font-size: 10px !important; letter-spacing: 0; border-radius: 7px; min-width: 22px; text-align: center; }
 .omo-scene-controls {
     position: absolute; bottom: var(--omo-sp-4); left: var(--omo-sp-4); right: var(--omo-sp-4); display: flex; align-items: center; justify-content: space-between;
     gap: var(--omo-sp-2); color: var(--omo-text-2); font-size: var(--omo-fs-xs); pointer-events: none;

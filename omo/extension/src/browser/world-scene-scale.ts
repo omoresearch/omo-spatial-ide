@@ -5,7 +5,51 @@
  * A classic 12 x 10 room keeps every v1 number: fog 33..65, shadow box ±12 around the origin with the sun at
  * (-5, 12, 8). Bigger worlds scale fog with the world size and make the shadow box follow the player.
  */
-import type { WorldShell } from '../common/world-model';
+import type { WorldShell, WorldSpec } from '../common/world-model';
+import { entityRadius, roomRect } from '../common/world-model';
+
+/**
+ * w3:look — the overview camera of an OPEN world frames its content (rooms + entities, plus the spawn street),
+ * not the whole ground (which can be 200 x 200 m). Returns the look-at point and the camera distance at the
+ * default zoom (RoomScene scales it with the user's zoom). Closed shells keep the v1 camera (undefined).
+ */
+export interface OverviewView { azimuth: number; elevation: number; aspect: number; fov: number }
+export interface OverviewFrame { target: { x: number; y: number; z: number }; distance: number }
+/** Content may reach this fraction of half the screen (a little air for labels and the HUD). */
+const FIT_MARGIN = 0.98;
+/** Content height that must stay in view (room walls). */
+const CONTENT_TOP = 2.8;
+export function overviewFrame(world: Pick<WorldSpec, 'shell' | 'entities'>, view: OverviewView): OverviewFrame | undefined {
+    if (!world.shell.open) return undefined;
+    // Content box (rooms + entities) with a little ground around it; an empty world frames the spawn area.
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const e of world.entities) {
+        if (e.kind === 'room') { const r = roomRect(e); minX = Math.min(minX, r.minX); maxX = Math.max(maxX, r.maxX); minZ = Math.min(minZ, r.minZ); maxZ = Math.max(maxZ, r.maxZ); continue; }
+        const k = entityRadius(e), { x, z } = e.transform;
+        minX = Math.min(minX, x - k); maxX = Math.max(maxX, x + k); minZ = Math.min(minZ, z - k); maxZ = Math.max(maxZ, z + k);
+    }
+    if (!Number.isFinite(minX)) { minX = -4; maxX = 4; minZ = -3; maxZ = 5; }
+    minX -= 1; maxX += 1; minZ -= 1; maxZ += world.entities.some(e => e.kind === 'room') ? 7 : 2.5; // the street + plaza in front of the doorways
+    const target = { x: (minX + maxX) / 2, y: 0.7, z: (minZ + maxZ) / 2 };
+    const corners: Array<[number, number, number]> = [];
+    for (const x of [minX, maxX]) for (const z of [minZ, maxZ]) for (const y of [0, CONTENT_TOP]) corners.push([x, y, z]);
+    // Camera basis for this azimuth / elevation (same as RoomScene: position = target + dir * d, lookAt target).
+    const { azimuth: a, elevation: el } = view;
+    const dir = [Math.sin(a) * Math.cos(el), Math.sin(el), Math.cos(a) * Math.cos(el)];
+    const f = [-dir[0], -dir[1], -dir[2]];
+    const rl = Math.hypot(f[2], f[0]) || 1, r = [-f[2] / rl, 0, f[0] / rl];
+    const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    const t = Math.tan(view.fov * Math.PI / 360), aspect = Math.max(0.2, view.aspect);
+    const fits = (d: number): boolean => corners.every(([x, y, z]) => {
+        const v = [x - (target.x + dir[0] * d), y - (target.y + dir[1] * d), z - (target.z + dir[2] * d)];
+        const depth = v[0] * f[0] + v[1] * f[1] + v[2] * f[2]; if (depth <= 0.5) return false;
+        const sx = (v[0] * r[0] + v[1] * r[1] + v[2] * r[2]) / (depth * t * aspect), sy = (v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / (depth * t);
+        return Math.abs(sx) <= FIT_MARGIN && Math.abs(sy) <= FIT_MARGIN;
+    });
+    let lo = 4, hi = 4000;
+    for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
+    return { target, distance: Math.max(10, hi) };
+}
 
 /** Overview distance scale: 1 for the v1 12 x 10 room, larger for bigger shells. */
 export function worldScale(shell: Pick<WorldShell, 'width' | 'depth'>): number {
@@ -18,7 +62,9 @@ export const V1_FOG = { near: 33, far: 65 } as const;
 const WALK_FOG_MAX_SCALE = 2.6;
 
 /** Fog for a shell and navigation mode. The overview stands far back, so its fog scales with the full world. */
-export function worldFog(shell: Pick<WorldShell, 'width' | 'depth'>, mode: 'walk' | 'overview'): { near: number; far: number } {
+export function worldFog(shell: Pick<WorldShell, 'width' | 'depth'> & { open?: boolean }, mode: 'walk' | 'overview'): { near: number; far: number } {
+    // w3:look (4) — walking in an open world: a sky-tinted haze from 30 m, solid at 150 m (depth on the horizon).
+    if (shell.open && mode === 'walk') return { near: 22, far: 120 };
     const s = worldScale(shell), k = mode === 'walk' ? Math.min(s, WALK_FOG_MAX_SCALE) : s;
     return { near: V1_FOG.near * k, far: V1_FOG.far * k };
 }
