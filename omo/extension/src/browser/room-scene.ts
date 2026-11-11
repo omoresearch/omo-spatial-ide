@@ -710,8 +710,8 @@ export class RoomScene {
     }
     /** Is a station / linked screen far from the player (keep its last frame)? Never parks a screen that was never painted. */
     private farScreen(id: string, surface: ScreenSurface): boolean {
-        const entity = this.entities.get(id)?.entity;
-        if (!entity || !surface.rows || this.navigation !== 'walk') return false; // the overview shows every screen live
+        if (!surface.rows || this.navigation !== 'walk') return false; // the overview shows every screen live
+        const entity = this.entities?.get(id)?.entity; if (!entity) return false;
         return terminalFar(this.walker?.pose ?? PLAYER_HOME, entity.transform, !!surface.parked);
     }
     /** After the player walked >= 1 m: move the sun's shadow box and repaint parked screens that are near again. No work (or allocation) in between. */
