@@ -276,3 +276,10 @@
 .omo-build-dialog { overflow: hidden; }
 .omo-build-dialog > .omo-build-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 2px; margin: -2px; }
 .omo-build-dialog > header, .omo-build-dialog > .omo-build-lockrow, .omo-build-dialog > footer, .omo-build-dialog > .omo-build-locknote { flex: 0 0 auto; }
+/* w3:build — Room inspector doorway toggles and the World size section. */
+.omo-build-room { display: flex; flex-direction: column; gap: var(--omo-sp-2); }
+.omo-build-doors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.omo-build-doors button { height: 28px; border-radius: var(--omo-r-sm); border: 1px solid var(--omo-line-2); background: var(--omo-surface-1); color: var(--omo-text-2); font-size: var(--omo-fs-xs); cursor: pointer; }
+.omo-build-doors button.is-on { border-color: var(--omo-accent-line); background: var(--omo-accent-soft); color: var(--omo-accent); }
+.omo-build-doors button:focus-visible, .omo-build-world button:focus-visible { outline: 2px solid var(--omo-focus); outline-offset: 1px; }
+.omo-build-group.is-spaces .omo-build-item-art { color: #c9b8ff; }

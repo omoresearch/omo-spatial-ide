@@ -3,15 +3,16 @@
  * floor, how new ids are made, and how wall items snap to the room shell. Pure data + maths.
  */
 import type { WorldSpec, WorldEntity, DecorKind, Transform, StationKind } from '../common/world-model';
-import { WORLD_ID_RE, SHELL_MAX, defaultStation, stations } from '../common/world-model';
+import { WORLD_ID_RE, SHELL_MAX, ROOM_MIN, defaultStation, stations } from '../common/world-model';
 
 export type PaletteId =
     | 'agent-desk' | 'shell-desk' | 'monitor-wall' | 'web-wall' | 'mirror' | 'review-screen'
+    | 'room' // w3:build
     | `decor-${DecorKind}`;
 
 export interface PaletteItem {
     id: PaletteId;
-    group: 'Stations' | 'Screens' | 'Decor';
+    group: 'Spaces' | 'Stations' | 'Screens' | 'Decor'; // w3:build: + Spaces (rooms)
     title: string;
     hint: string;
     /** Glyph name in build-icons.tsx. */
@@ -23,6 +24,7 @@ export interface PaletteItem {
 export const DECOR_KINDS: DecorKind[] = ['plant', 'lamp', 'crystal', 'sofa', 'bookshelf', 'whiteboard', 'rug', 'window'];
 
 export const PALETTE: PaletteItem[] = [
+    { id: 'room', group: 'Spaces', title: 'Room', hint: 'Drag a floor plan', glyph: 'room', wallMounted: false }, // w3:build
     { id: 'agent-desk', group: 'Stations', title: 'Agent desk', hint: 'Hermes + shell tabs', glyph: 'desk-agent', wallMounted: false },
     { id: 'shell-desk', group: 'Stations', title: 'Shell desk', hint: 'One plain shell', glyph: 'desk-shell', wallMounted: false },
     { id: 'monitor-wall', group: 'Screens', title: 'Monitor wall', hint: 'Mirror a desk, big', glyph: 'monitor-wall', wallMounted: true },
@@ -58,7 +60,8 @@ export function footprint(entity: WorldEntity): Footprint {
             const [w, d, h] = DECOR_SIZE[entity.decor], s = entity.scale ?? 1;
             return { width: w * s, depth: d * s, offsetZ: 0, height: h * s, elevation: entity.decor === 'window' ? 1.0 : 0 };
         }
-        case 'room': return { width: entity.width, depth: entity.depth, offsetZ: 0, height: 3, elevation: 0 }; // w3:expand (placeholder; w3-build lane refines)
+        // w3:build — a room is a floor: a thin slab (its walls are drawn and checked separately, see build-room.ts roomWalls).
+        case 'room': return { width: entity.width, depth: entity.depth, offsetZ: 0, height: 0.06, elevation: 0 };
     }
 }
 
@@ -80,6 +83,13 @@ export function nextDeskName(world: WorldSpec): string {
     return 'New desk';
 }
 
+/** w3:build — the next free room name: Room 1, Room 2 … */
+export function nextRoomName(world: WorldSpec): string {
+    const names = new Set(world.entities.map(e => (e.label ?? '').toLowerCase()));
+    for (let n = 1; n < 1000; n++) if (!names.has(`room ${n}`)) return `Room ${n}`;
+    return 'Room';
+}
+
 /** Build the entity a palette item places. `link` is the station a mirror follows. */
 export function makeEntity(item: PaletteId, world: WorldSpec, transform: Transform, link?: string): WorldEntity | undefined {
     const t = { ...transform };
@@ -95,6 +105,7 @@ export function makeEntity(item: PaletteId, world: WorldSpec, transform: Transfo
         const target = world.entities.find(e => e.id === link);
         return { id: nextId(world, 'mirror'), kind: 'mirror', label: `Mirror · ${target?.label ?? 'desk'}`.slice(0, 60), link, transform: t };
     }
+    if (item === 'room') return { id: nextId(world, 'room'), kind: 'room', label: nextRoomName(world), transform: t, width: ROOM_MIN, depth: ROOM_MIN, doors: ['front'] }; // w3:build
     if (item === 'review-screen') return { id: nextId(world, 'review'), kind: 'review-screen', label: 'Code review', transform: t };
     const decor = item.slice('decor-'.length) as DecorKind;
     return { id: nextId(world, decor), kind: 'decor', decor, transform: t };

@@ -12,6 +12,7 @@ import { entityTitle, entityNoun } from './world-store';
 import type { WorldEntity, StationConfig, StationEntity, TabKind } from '../common/world-model';
 import { stations } from '../common/world-model';
 import { proposalLines } from './build-room'; // w3:build
+import { RoomInspector } from './build-room-inspector'; // w3:build
 import '../../src/browser/build-mode.css';
 
 function useBuild(build: BuildMode): void {
@@ -88,7 +89,7 @@ function ToolButton(props: { glyph: string; label: string; keyHint?: string; act
 
 function Palette(props: { build: BuildMode }): React.ReactElement {
     const { build } = props, s = build.state;
-    const groups: Array<PaletteItem['group']> = ['Stations', 'Screens', 'Decor'];
+    const groups: Array<PaletteItem['group']> = ['Spaces', 'Stations', 'Screens', 'Decor']; // w3:build: + Spaces
     const hasDesk = !!build.store && stations(build.store.preview).length > 0;
     return <aside className="omo-build-palette" aria-label="Build palette" data-testid="build-palette">
         {groups.map(group => <section key={group} className={`omo-build-group is-${group.toLowerCase()}`}>
@@ -148,6 +149,7 @@ function Inspector(props: { build: BuildMode; entity: WorldEntity }): React.Reac
             <NumberField label="Height" testid="build-height" value={e.height} min={e.kind === 'web-wall' ? 0.6 : 0.4} max={4} step={0.1} onCommit={n => build.resize(e.id, { width: e.width, height: n, elevation: e.elevation })} />
             <NumberField label="Lift" value={e.elevation} min={0} max={3} step={0.05} onCommit={n => build.resize(e.id, { width: e.width, height: e.height, elevation: n })} />
         </div>}
+        {e.kind === 'room' && <RoomInspector build={build} room={e} />}{/* w3:build */}
         {(e.kind === 'monitor-wall' || e.kind === 'mirror') && <label className="omo-build-field"><span>Follows</span>
             <select data-testid="build-link-select" value={linkTarget ?? ''} onChange={ev => ev.target.value ? build.link(e.id, ev.target.value) : build.unlink(e.id)}>
                 {e.kind === 'monitor-wall' && <option value="">Nothing (its own view)</option>}

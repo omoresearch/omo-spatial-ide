@@ -151,3 +151,9 @@ export function proposalLines(before: WorldSpec, after: WorldSpec, diff: string[
     }
     return lines;
 }
+
+/** An exact quarter-turn rotation in (-PI, PI] (the contract requires rooms within 1e-6 of a quarter). */
+export function quarterTurn(r: number): number {
+    let q = Math.round(r / (Math.PI / 2)) % 4; if (q < 0) q += 4;
+    return [0, Math.PI / 2, Math.PI, -Math.PI / 2][q];
+}
