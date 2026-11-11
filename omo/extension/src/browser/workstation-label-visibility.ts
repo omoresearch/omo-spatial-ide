@@ -27,3 +27,25 @@ export function layoutLabels<T extends { x: number; y: number; w: number; h: num
     }
     return out;
 }
+
+/**
+ * w3:look — overview labels of an open world: no stacking. Each label keeps its anchored spot next to its object;
+ * one that would touch an already placed label is hidden instead (zooming in shows it again). Lower `priority`
+ * is placed first (room names 0, desk chips 1, other screens 2), then front labels (larger y), then left to right.
+ * Returns every item, in input order, with `hidden`.
+ */
+export function declutterLabels<T extends { x: number; y: number; w: number; h: number; priority?: number }>(items: readonly T[], gap = 3): Array<T & { hidden: boolean }> {
+    const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const hidden = new Set<T>();
+    const order = [...items].sort((a, b) => (a.priority ?? 1) - (b.priority ?? 1) || b.y - a.y || a.x - b.x);
+    for (const item of order) {
+        const hits = placed.some(p => Math.abs(p.x - item.x) * 2 < p.w + item.w + gap * 2 && Math.abs(p.y - item.y) * 2 < p.h + item.h + gap * 2);
+        if (hits) hidden.add(item); else placed.push(item);
+    }
+    return items.map(item => ({ ...item, hidden: hidden.has(item) }));
+}
+/** w3:look — the short overview chip of a label: the desk number ("03  Desk three ↗" -> "03"), else the title without the arrow. */
+export function chipText(text: string): string {
+    const number = /^(\d+)\s/.exec(text);
+    return number ? number[1] : text.replace(/\s*↗$/, '');
+}

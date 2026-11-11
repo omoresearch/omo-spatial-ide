@@ -20,6 +20,7 @@ Module._resolveFilename = function (request, parent, ...rest) {
   catch (error) { if (request.startsWith('.')) return originalResolve.call(this, request + '.ts', parent, ...rest); throw error; }
 };
 const scale = require('../src/browser/world-scene-scale.ts');
+const labels = require('../src/browser/workstation-label-visibility.ts');
 Module._extensions['.ts'] = originalTsLoader;
 Module._resolveFilename = originalResolve;
 
@@ -56,13 +57,13 @@ test('overview of an open world frames its rooms and desks, not the whole ground
   assert.ok(frame.target.z < -3 && Math.abs(frame.target.x) < 1.5, JSON.stringify(frame.target));
   // Every content corner is on screen, and the content fills the view (a corner reaches past 70 % of half the screen).
   let most = 0;
-  // Content box: rooms x -16..18, z -13..-3, plus the spawn street in front of them (to z 4.5).
-  for (const x of [-16, 18]) for (const z of [-13, 4.5]) for (const y of [0, 2.8]) {
+  // Content box: rooms x -16..18, z -13..-3, plus the strip in front of the doorways (name plates, to z -1).
+  for (const x of [-16, 18]) for (const z of [-13, -1]) for (const y of [0, 2.8]) {
     const p = project(frame, view, [x, y, z]);
     assert.ok(Math.abs(p.x) <= 0.95 && Math.abs(p.y) <= 0.95, `corner ${x},${z} at ${p.x.toFixed(2)},${p.y.toFixed(2)}`);
     most = Math.max(most, Math.abs(p.x), Math.abs(p.y));
   }
-  assert.ok(most > 0.7, `content fills the view (largest corner ${most.toFixed(2)})`);
+  assert.ok(most > 0.82, `content fills the view (largest corner ${most.toFixed(2)})`);
 });
 
 test('a classic walled room keeps the v1 overview camera (no content frame)', () => {
@@ -121,4 +122,31 @@ test('overview cutaway keeps walls tall enough to read (>= 1 m) but below desk t
   const R = loadRooms();
   const h = R.ROOM_WALL_HEIGHT * R.ROOM_CUTAWAY_SCALE;
   assert.ok(h >= 1 && h <= 1.3, `cutaway wall height ${h}`);
+});
+
+// ------------------------------------------------------------------------------------------- (3) overview labels
+test('overview chips never overlap: a chip that would touch a placed one is hidden, not stacked away from its desk', () => {
+  const items = [
+    { id: 'a', x: 100, y: 100, w: 30, h: 20 }, { id: 'b', x: 110, y: 104, w: 30, h: 20 }, { id: 'c', x: 300, y: 100, w: 30, h: 20 },
+  ];
+  const out = labels.declutterLabels(items);
+  const shown = out.filter(i => !i.hidden);
+  for (const i of out) assert.equal(i.y, items.find(o => o.id === i.id).y, 'chips keep their anchored spot (no vertical stacking)');
+  for (let i = 0; i < shown.length; i++) for (let j = i + 1; j < shown.length; j++) {
+    const p = shown[i], q = shown[j];
+    assert.ok(Math.abs(p.x - q.x) * 2 >= p.w + q.w || Math.abs(p.y - q.y) * 2 >= p.h + q.h, `${p.id} and ${q.id} overlap`);
+  }
+  assert.deepEqual(out.filter(i => i.hidden).map(i => i.id), ['a'], 'the front chip (larger y) wins');
+});
+
+test('room labels are placed before desk chips (priority 0 wins over a chip at the same spot)', () => {
+  const out = labels.declutterLabels([{ id: 'chip', x: 200, y: 210, w: 30, h: 20, priority: 1 }, { id: 'room', x: 205, y: 200, w: 120, h: 24, priority: 0 }]);
+  assert.equal(out.find(i => i.id === 'room').hidden, false);
+  assert.equal(out.find(i => i.id === 'chip').hidden, true);
+});
+
+test('overview chip text is the desk number; full titles stay for walking and classic rooms', () => {
+  assert.equal(labels.chipText('03  Desk three ↗'), '03');
+  assert.equal(labels.chipText('Papers wall ↗'), 'Papers wall');
+  assert.equal(labels.chipText('05  Mirror · Desk one ↗'), '05');
 });

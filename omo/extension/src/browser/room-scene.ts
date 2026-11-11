@@ -11,7 +11,7 @@ import type { RoomLayoutId, RoomKitId } from '../common/player-state';
 import type { RuntimeColorMetadata } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
 import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-preview';
-import { workstationLabelVisible, layoutLabels } from './workstation-label-visibility'; // t3:polish2 layoutLabels
+import { workstationLabelVisible, layoutLabels, declutterLabels, chipText } from './workstation-label-visibility'; // t3:polish2 layoutLabels; w3:look declutter + chips
 import { PoseSmoother } from './movement-smoothing';
 // w2:render — the room is built from a WorldSpec (shared contract) by the world scene builders.
 import type { WorldEntity, WorldSpec } from '../common/world-model';
@@ -536,9 +536,18 @@ export class RoomScene {
             this.host.appendChild(label); item.label = label;
         }
         const { text, aria } = this.labelText(item);
-        if (item.label.dataset.baseText !== text) { item.label.dataset.baseText = text; item.label.textContent = text; this.labelSize.delete(item.label); } // t3:polish2: re-measure
+        if (item.label.dataset.baseText !== text) { item.label.dataset.baseText = text; this.labelSize.delete(item.label); } // t3:polish2: re-measure
+        this.showLabelText(item.label);
         item.label.setAttribute('aria-label', aria);
         if (item.entity.kind === 'station') this.deskLabels.set(id, item.label);
+    }
+    /** w3:look — open-world overview shows short chips ("03"); walking and classic rooms show the full title. */
+    private chipLabels(): boolean { return this.navigation === 'overview' && !!this.world?.shell.open; }
+    private showLabelText(label: HTMLButtonElement): void {
+        const base = label.dataset.baseText ?? '', chip = this.chipLabels(), text = chip ? chipText(base) : base;
+        if (label.textContent !== text) { label.textContent = text; this.labelSize.delete(label); }
+        label.classList.toggle('is-chip', chip);
+        if (chip) label.title = base.replace(/\s*↗$/, ''); else label.removeAttribute('title');
     }
     private labelClicked(id: string): void {
         const item = this.entities.get(id); if (!item) return;
@@ -745,7 +754,7 @@ export class RoomScene {
         if (this.world) { this.applyScaleView(); this.parkCheck.x = NaN; this.walked(this.walker?.pose ?? PLAYER_HOME); } // w3:render — overview: parked screens resume
         if (this.walker) this.smoother.snap(this.walker.pose);
         if (this.renderer) { this.renderer.domElement.dataset.navigation = mode; }
-        this.labels.forEach(label => { label.classList.toggle('is-walk', mode === 'walk'); this.labelSize.delete(label); this.labelPos.delete(label); }); // t3:polish2: re-measure
+        this.labels.forEach(label => { label.classList.toggle('is-walk', mode === 'walk'); this.labelSize.delete(label); this.labelPos.delete(label); this.showLabelText(label); }); // t3:polish2: re-measure; w3:look chips
         this.positionCamera(); this.invalidate();
     }
     setTerminalLines(lines: string[]): void { this.setTerminalFrame({ ...this.terminalFrames.terminal, lines, cells: undefined, foreground: undefined, background: undefined, cursor: undefined }); }
@@ -1126,19 +1135,30 @@ export class RoomScene {
     private placeLabels(w:number,h:number):void{
         const {a,b}=this.tmp;
         // t3:polish2 — project every label, then lay the visible ones out in screen space so they never pile up.
-        const items:Array<{label:HTMLButtonElement;x:number;y:number;w:number;h:number}>=[];
+        // w3:look — open-world overview: short chips anchored just above their object; overlapping ones hide (no stacking).
+        const chips=this.chipLabels();
+        const items:Array<{label:HTMLButtonElement;x:number;y:number;w:number;h:number;priority:number}>=[];
         for(const label of this.labels){
             const action = label.dataset.workstation as string;
             const root = this.rootFor(action);
             if (!root) continue;
-            const p=a.copy(root.position).add(b.set(0,root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9),-.3).applyAxisAngle(THREE.Object3D.DEFAULT_UP,root.rotation.y)).project(this.camera);
+            const kind = this.entities.get(action)?.entity.kind;
+            const lift = chips ? (kind==='station' ? 2.25 : (root.userData.labelHeight ?? 2.9) * 0.9) : root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9);
+            const p=a.copy(root.position).add(b.set(0,lift,chips&&kind==='station'?-.36:-.3).applyAxisAngle(THREE.Object3D.DEFAULT_UP,root.rotation.y)).project(this.camera);
             const mesh = this.screens.get(action);
             const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(b)) : undefined;
             const x=Math.round((p.x*0.5+0.5)*w*2)/2,y=Math.round((-p.y*0.5+0.5)*h*2)/2;
             if(!workstationLabelVisible(this.navigation, p.z, distance)){ if(this.labelPos.get(label)!==-1){this.labelPos.set(label,-1);label.style.visibility='hidden';} continue; }
             let size=this.labelSize.get(label);
             if(!size||!size.w){size={w:label.offsetWidth||100,h:label.offsetHeight||26};this.labelSize.set(label,size);}
-            items.push({label,x,y,w:size.w,h:size.h});
+            items.push({label,x,y,w:size.w,h:size.h,priority:kind==='station'?1:2});
+        }
+        if(chips){
+            for(const item of declutterLabels(items)){
+                if(!item.hidden){this.applyLabel(item.label,item.x,item.y);continue;}
+                if(this.labelPos.get(item.label)!==-1){this.labelPos.set(item.label,-1);item.label.style.visibility='hidden';}
+            }
+            return;
         }
         for(const item of layoutLabels(items))this.applyLabel(item.label,item.x,item.y);
     }
