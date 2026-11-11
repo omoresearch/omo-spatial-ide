@@ -92,6 +92,10 @@ export interface RuntimeConsoleOptions {
     preferredProfile?: () => string | undefined;
     pollMs?: number;
     retryMs?: number;
+    /** w3:perf — live poll interval for this desk (desk-activity budget). Read before every poll; falls back to pollMs. */
+    pollInterval?: () => number;
+    /** w3:perf — clock for the poll budget (tests). */
+    now?: () => number;
 }
 
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
@@ -257,6 +261,8 @@ export class RuntimeConsoleController {
     private sentSize?: { viewId: string; cols: number; rows: number };
     private resizing: Promise<void> = Promise.resolve();
     private timer: unknown;
+    /** w3:perf — the pending timer is the next live poll: when it was planned and with which interval. */
+    private pollWait?: { epoch: number; gen: number; at: number; ms: number };
     private disposed = false;
     private current: RuntimeConsoleState = RuntimeConsoleController.initial();
 
@@ -337,11 +343,32 @@ export class RuntimeConsoleController {
         try { this.options.storage?.setItem(bindingKey(this.binding), JSON.stringify({ workspaceId: this.current.workspace.id, tabId: this.current.activeTabId })); } catch { /* storage is optional; the backend binding is still stable */ }
     }
 
-    private clearTimer(): void { if (this.timer !== undefined) { this.options.cancel(this.timer); this.timer = undefined; } }
+    private clearTimer(): void { this.pollWait = undefined; if (this.timer !== undefined) { this.options.cancel(this.timer); this.timer = undefined; } }
     private later(fn: () => void, ms: number): void {
         this.clearTimer();
         const epoch = this.epoch; const gen = this.viewGen;
-        this.timer = this.options.schedule(() => { this.timer = undefined; if (epoch === this.epoch && gen === this.viewGen && !this.disposed) fn(); }, ms);
+        this.timer = this.options.schedule(() => { this.timer = undefined; this.pollWait = undefined; if (epoch === this.epoch && gen === this.viewGen && !this.disposed) fn(); }, ms);
+    }
+    // ---- w3:perf — poll budget: far desks poll slowly, the active desk at POLL_MS. Input never waits for a poll. ----
+    private pollInterval(): number {
+        const ms = this.options.pollInterval?.();
+        return typeof ms === 'number' && Number.isFinite(ms) && ms >= 0 ? ms : this.options.pollMs ?? POLL_MS;
+    }
+    private nowMs(): number { return this.options.now?.() ?? Date.now(); }
+    private schedulePoll(epoch: number, gen: number, delay: number, at = this.nowMs(), ms = delay): void {
+        this.later(() => void this.pollOnce(epoch, gen), delay);
+        this.pollWait = { epoch, gen, at, ms };
+    }
+    /**
+     * The desk's budget changed. A faster budget pulls the pending poll forward (a desk you turn to
+     * refreshes at once); a slower one applies from the next poll, so nothing already due is delayed.
+     */
+    pollIntervalChanged(): void {
+        const wait = this.pollWait;
+        if (this.disposed || !wait || this.timer === undefined || wait.epoch !== this.epoch || wait.gen !== this.viewGen) return;
+        const ms = this.pollInterval();
+        if (ms >= wait.ms) return;
+        this.schedulePoll(wait.epoch, wait.gen, Math.max(0, wait.at + ms - this.nowMs()), wait.at, ms);
     }
     private clearMirrorTimer(): void { if (this.mirrorTimer !== undefined) { this.options.cancel(this.mirrorTimer); this.mirrorTimer = undefined; } }
     private releaseMirror(notify = true): void {
@@ -570,7 +597,7 @@ export class RuntimeConsoleController {
             if (epoch !== this.epoch || gen !== this.viewGen || this.disposed) return;
             if (copy) this.set({ pendingClipboard: copy });
         }
-        this.later(() => void this.pollOnce(epoch, gen), this.options.pollMs ?? POLL_MS);
+        this.schedulePoll(epoch, gen, this.pollInterval()); // w3:perf
     }
 
     /** The grid this desk's view is asked to have. */

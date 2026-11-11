@@ -25,6 +25,7 @@ import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
 import { openSky } from './world-scene-open'; // w3:render
 import { cameraClip, shadowFrame, terminalFar, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render
 import { refreeze as refreezeNode } from './world-scene-kit'; // w3:render
+import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -229,6 +230,7 @@ export class RoomScene {
     private webSurface?: HTMLCanvasElement;
     private mirrorSurface?: HTMLCanvasElement;
     private mirrorTexture?: THREE.CanvasTexture;
+    private paintBudget?: MonitorPaintBudget;
     private mirrorFrame: MonitorFrame = { lines: [] };
     /** Last full-size frame per desk and its 80 x 22 monitor window, so a re-render reuses the same object. */
     private terminalSources?: Map<string, { input: MonitorFrame; frame: MonitorFrame }>;
@@ -770,7 +772,11 @@ export class RoomScene {
         if (surface.frame === frame && surface.selection === selectionKey) return;
         const frameChanged = surface.frame !== frame;
         if (!selection && this.farScreen(station, surface)) { if (!surface.parked) { surface.parked = true; this.publishParked(); } } // w3:render — far monitor keeps its last frame
-        else { surface.parked = false; surface.frame = frame; surface.selection = selectionKey; if (this.paintTerminal(surface, frame, spans)) this.invalidate(); }
+        else {
+            surface.parked = false; surface.frame = frame; surface.selection = selectionKey;
+            // w3:perf: active desk at once; near/far max 6 per frame round-robin; hidden waits
+            if ((this.paintBudget ??= new MonitorPaintBudget({ alive: () => !this.disposed, onPainted: () => this.invalidate() })).request(station, () => this.terminalSurfaces.get(station) === surface && surface.frame === frame && this.paintTerminal(surface, frame, spans))) this.invalidate();
+        }
         this.paintLamp(station);
         if (!this.renderer) return;
         this.setData('terminalSelection', this.terminalSelection?.model.text() ?? '');

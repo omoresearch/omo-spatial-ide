@@ -22,6 +22,7 @@ import { WORLD_ID_RE, applyWorldOps, stations as worldStations, validateWorld, w
 import { RuntimeConsoleController, bindingKey } from './runtime-console-controller';
 import type { RuntimeConsoleState, StationBinding, StorageLike } from './runtime-console-controller';
 import type { StationRecipe, StationRecipeTab } from './station-recipe';
+import { deskActivity } from './desk-activity'; // w3:perf
 import { STATION_RECIPE_VERSION, validateStationRecipe } from './station-recipe';
 
 export type StationId = string;
@@ -180,11 +181,15 @@ export class WorldStations {
     private offered = new Set<string>();
     private armed = new Set<StationId>(); // t4:polish: desks the user just opened for the first time
     private disposed = false;
+    private offActivity?: () => void; // w3:perf
     /** True when the world came from storage (not a fresh v1 migration). */
     stored = false;
 
     private readonly options: WorldStationsOptions;
-    constructor(options: WorldStationsOptions) { this.options = options; publishDirectory(this.list); }
+    constructor(options: WorldStationsOptions) {
+        this.options = options; publishDirectory(this.list);
+        this.offActivity = deskActivity.subscribe(id => this.controllers.get(id)?.pollIntervalChanged()); // w3:perf
+    }
 
     get spec(): WorldSpec | undefined { return this.world; }
     stations(): readonly StationInfo[] { return this.list; }
@@ -208,6 +213,7 @@ export class WorldStations {
         const removed = [...before].filter(id => !after.has(id));
         const added = [...after].filter(id => !before.has(id));
         for (const id of [...this.controllers.keys()]) if (!after.has(id)) { this.controllers.get(id)?.dispose(); this.controllers.delete(id); this.states.delete(id); }
+        deskActivity.forget(removed); // w3:perf
         for (const id of [...this.armed]) if (!after.has(id)) this.armed.delete(id);
         this.pushLocks();
         publishDirectory(this.list);
@@ -225,6 +231,7 @@ export class WorldStations {
             c = new RuntimeConsoleController({ service: this.options.service, storage: this.options.storage, schedule: this.options.schedule, cancel: this.options.cancel,
                 preferredProfile: () => this.info(id)?.config.profile,
                 onChange: state => { this.states.set(id, state); this.options.onChange(state, id); },
+                pollInterval: () => deskActivity.pollMs(id), // w3:perf: active 200 ms, near 500 ms, far/hidden 3 s
                 onMirrorFrame: frame => this.options.onMirrorFrame?.(frame, id), onMirrorError: m => this.options.onMirrorError?.(m) });
             this.controllers.set(id, c);
             c.setStationLocked(this.locked(id));
@@ -309,6 +316,7 @@ export class WorldStations {
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
+        this.offActivity?.(); this.offActivity = undefined; // w3:perf
         this.controllers.forEach(c => c.dispose());
         this.controllers.clear(); this.states.clear();
     }

@@ -1,4 +1,4 @@
-// GENERATED from omo/extension/src/common/world-model.ts (sha256 9988e22ca61e51443421a5e262cb004449bf4394cf0e6074e6752a600a7a8557). Do not edit.
+// GENERATED from omo/extension/src/common/world-model.ts (sha256 6657fd6456be25ab2d607b5de3fc058043d2642effe5f7838da04c274d7066ee). Do not edit.
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.worldStorageKey = exports.WORLD_ID_RE = exports.WALL_SIDES = exports.ROOM_MAX = exports.ROOM_MIN = exports.SHELL_MAX = exports.SHELL_MIN = exports.WORLD_MAX_BYTES = exports.WORLD_MAX_STATIONS = exports.WORLD_MAX_ENTITIES = exports.WORLD_VERSION = void 0;
@@ -60,7 +60,7 @@ function validEntity(e, shell) {
         default: return false;
     }
 }
-/** w3:expand — a room entity: size within ROOM_MIN..ROOM_MAX, quarter-turn rotation, known doorway sides (no repeats). */
+/** w3:expand — a room entity: size within ROOM_MIN..ROOM_MAX, rotation in 90° steps, known doorway sides (no repeats). */
 function validRoom(v) {
     const quarter = Math.abs(Math.round(v.transform.rotation / (Math.PI / 2)) * (Math.PI / 2) - v.transform.rotation) < 1e-6;
     const doors = v.doors === undefined || (Array.isArray(v.doors) && v.doors.length <= 4 && new Set(v.doors).size === v.doors.length && v.doors.every(d => exports.WALL_SIDES.includes(d)));
@@ -230,10 +230,10 @@ function worldFromRoomV1(room) {
 /** Storage key per project, next to the v1 room key. */
 const worldStorageKey = (projectUri) => `omo.world.v2:${projectUri}`;
 exports.worldStorageKey = worldStorageKey;
-/** The floor rectangle a room covers (quarter turns swap width and depth). */
+/** The floor rectangle a room covers (a 90° or 270° rotation swaps width and depth). */
 function roomRect(e) {
-    const turned = Math.abs(Math.round(e.transform.rotation / (Math.PI / 2))) % 2 === 1;
-    const hw = (turned ? e.depth : e.width) / 2, hd = (turned ? e.width : e.depth) / 2;
+    const sideways = Math.abs(Math.round(e.transform.rotation / (Math.PI / 2))) % 2 === 1;
+    const hw = (sideways ? e.depth : e.width) / 2, hd = (sideways ? e.width : e.depth) / 2;
     return { minX: e.transform.x - hw, maxX: e.transform.x + hw, minZ: e.transform.z - hd, maxZ: e.transform.z + hd };
 }
 /** Rough half-size of an entity's footprint, for "does the world need to grow" checks (not collision). */

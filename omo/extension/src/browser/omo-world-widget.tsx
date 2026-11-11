@@ -85,6 +85,7 @@ import { OnboardingFlow } from './onboarding-flow';
 import { OnboardingPlanBackend } from './onboarding-admin';
 import { OnboardingWorldSink, saveOnboardingWorld, readLocalWorld } from './onboarding-store';
 import { v1RoomFor } from './onboarding-planner';
+import { classifyDesks, setDeskPriority } from './desk-activity'; // w3:perf
 // --- end w2:onboard ---
 
 export const TERMINAL_STATION_ID = 'terminal-1';
@@ -106,7 +107,7 @@ function SceneView(props: { theme: RoomTheme; layout: RoomLayoutId; kit: RoomKit
     const [ready, setReady] = React.useState(false);
     const [mode,setMode]=React.useState<'walk'|'overview'>(props.walk?'walk':'overview');
     React.useEffect(()=>{setMode(props.walk?'walk':'overview');},[props.walk]);
-    React.useEffect(()=>{instance.current?.setNavigation(mode);},[mode]);
+    React.useEffect(()=>{instance.current?.setNavigation(mode);if(instance.current)callbacks.current.onPose?.(instance.current.getPlayerPose());/* w3:perf: overview <-> walk re-ranks desks via poseChanged */},[mode]);
     React.useEffect(()=>{instance.current?.setTerminalFrames(props.terminalFrames);},[props.terminalFrames]);
     React.useEffect(()=>{if(props.webFrame)instance.current?.setWebFrame(props.webFrame);else instance.current?.clearWebFrame();},[props.webFrame]);
     React.useEffect(() => {
@@ -390,8 +391,8 @@ export class OmoWorldWidget extends ReactWidget {
     }
     // --- omo immersive lane: engaged only while this widget shows a saved room (never during setup). ---
     private syncImmersive(): void { this.immersive.mode.setEngaged(!this.isDisposed && this.isVisible && this.initialized && !!this.room && !this.configuring); }
-    protected override onAfterShow(msg: Message): void { super.onAfterShow(msg); this.syncImmersive(); }
-    protected override onAfterHide(msg: Message): void { super.onAfterHide(msg); this.syncImmersive(); }
+    protected override onAfterShow(msg: Message): void { super.onAfterShow(msg); this.syncImmersive(); this.rankDesks(); /* w3:perf */ }
+    protected override onAfterHide(msg: Message): void { super.onAfterHide(msg); this.syncImmersive(); this.rankDesks(); /* w3:perf */ }
     protected override onBeforeDetach(msg: Message): void { this.immersive.mode.setEngaged(false); super.onBeforeDetach(msg); }
     protected override onUpdateRequest(msg: Message): void { super.onUpdateRequest(msg); this.syncImmersive(); this.buildMode.sync(); /* w2:build */ }
     private toggleImmersiveButton = (): void => { this.worldScene?.releaseTyping(); this.immersive.toggleFromButton(); this.focusMode.controls?.element.focus({ preventScroll: true }); };
@@ -452,7 +453,7 @@ export class OmoWorldWidget extends ReactWidget {
         for (const info of this.stationList) if (!this.monitors[info.id]) this.monitors = { ...this.monitors, [info.id]: { lines: [] } };
         if (reconnect && this.room && added.length) this.stations.reconnectSaved(this.bindingContext());
         if (stored && world && !this.configuring) this.worldScene?.setWorld(world); // w2:integrate — keep the 3D room in sync with world changes
-        this.pushLinkedFrames(); this.update();
+        this.pushLinkedFrames(); this.rankDesks(); /* w3:perf */ this.update();
     }
     private stationsChanged(removed: string[]): void {
         if (removed.length) {
@@ -653,6 +654,7 @@ export class OmoWorldWidget extends ReactWidget {
         if (station !== 'web' && !this.stations.has(station)) return; // w2:runtime: any world station id
         this.worldScene?.releaseTyping(); this.activeMode = station;
         if (station !== 'web') { this.activeStation = station; this.console = this.stations.controller(station); this.consoleState = this.deskState(station); }
+        this.rankDesks(); // w3:perf
         this.update();
     };
     private saveStationRecipe = (input: Omit<StationRecipe, 'version' | 'id'>): void => {
@@ -687,7 +689,14 @@ export class OmoWorldWidget extends ReactWidget {
         else if (shortcut === 'select-tab-2') { const tab = this.consoleState.workspace?.tabs[1]; if (tab) void this.console?.selectTab(tab.id); else { this.feedback = 'There is no second tab on this desk yet.'; this.update(); } }
         else { this.console?.refreshBoard(); this.feedback = 'Workspace picker opened in Manage. No shell input was sent.'; this.update(); }
     };
-    private poseChanged = (pose: PlayerPose): void => { void this.web?.setDistance(webWallDistance(pose)); };
+    private poseChanged = (pose: PlayerPose): void => { void this.web?.setDistance(webWallDistance(pose)); this.rankDesks(pose); }; // w3:perf: poseChanged re-ranks desks
+    /** w3:perf — desk poll/paint priority from the active station, the player pose and desk (plus linked wall) positions. */
+    private rankDesks(pose: PlayerPose | undefined = this.worldScene?.getPlayerPose()): void {
+        if (!this.stations || !pose) return;
+        const walls = linkedEntities(this.stations.spec), overview = this.node.querySelector('.omo-scene-wrap')?.getAttribute('data-navigation') === 'overview';
+        const desks = this.stationList.map(info => ({ id: info.id, points: [...(info.position ? [info.position] : []), ...walls.filter(l => l.station === info.id).map(l => l.entity.transform)] }));
+        const ranking = classifyDesks({ active: this.activeStation, pose, desks, overview, hidden: !this.isVisible }); for (const [id, p] of Object.entries(ranking)) setDeskPriority(id, p); // w3:perf
+    }
 
     private selectStation = (station: Workstation | string, point?: ScreenPoint): void => {
         if (this.buildMode.ownsClicks) return; // w2:build — a click while building selects/places, never opens a workstation

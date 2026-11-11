@@ -57,7 +57,7 @@ export interface DecorEntity extends EntityBase { kind: 'decor'; decor: DecorKin
 /**
  * w3:expand — a room inside the world: its own floor, walls on all four sides and a doorway (a 1.6 m gap,
  * centred) in every side listed in `doors` (default ['front']). The transform is the room centre; rotation
- * is 0 or ±PI/2 (quarter turns only). `theme` defaults to the world shell's theme. Stations and other
+ * is 0 or ±PI/2 (90° steps only). `theme` defaults to the world shell's theme. Stations and other
  * entities are NOT children of a room: they are placed in world coordinates like everything else.
  */
 export interface RoomEntity extends EntityBase { kind: 'room'; width: number; depth: number; theme?: RoomTheme; doors?: WallSide[] }
@@ -140,7 +140,7 @@ export function validEntity(e: unknown, shell: WorldShell): e is WorldEntity {
         default: return false;
     }
 }
-/** w3:expand — a room entity: size within ROOM_MIN..ROOM_MAX, quarter-turn rotation, known doorway sides (no repeats). */
+/** w3:expand — a room entity: size within ROOM_MIN..ROOM_MAX, rotation in 90° steps, known doorway sides (no repeats). */
 export function validRoom(v: RoomEntity): boolean {
     const quarter = Math.abs(Math.round(v.transform.rotation / (Math.PI / 2)) * (Math.PI / 2) - v.transform.rotation) < 1e-6;
     const doors = v.doors === undefined || (Array.isArray(v.doors) && v.doors.length <= 4 && new Set(v.doors).size === v.doors.length && v.doors.every(d => WALL_SIDES.includes(d)));
@@ -250,10 +250,10 @@ export const worldStorageKey = (projectUri: string): string => `omo.world.v2:${p
 /** Axis-aligned rectangle (world metres). */
 export interface Rect { minX: number; maxX: number; minZ: number; maxZ: number }
 
-/** The floor rectangle a room covers (quarter turns swap width and depth). */
+/** The floor rectangle a room covers (a 90° or 270° rotation swaps width and depth). */
 export function roomRect(e: Pick<RoomEntity, 'transform' | 'width' | 'depth'>): Rect {
-    const turned = Math.abs(Math.round(e.transform.rotation / (Math.PI / 2))) % 2 === 1;
-    const hw = (turned ? e.depth : e.width) / 2, hd = (turned ? e.width : e.depth) / 2;
+    const sideways = Math.abs(Math.round(e.transform.rotation / (Math.PI / 2))) % 2 === 1;
+    const hw = (sideways ? e.depth : e.width) / 2, hd = (sideways ? e.width : e.depth) / 2;
     return { minX: e.transform.x - hw, maxX: e.transform.x + hw, minZ: e.transform.z - hd, maxZ: e.transform.z + hd };
 }
 
