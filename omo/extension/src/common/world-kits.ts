@@ -8,7 +8,7 @@
  * Kits never start an agent: a station only lists the tabs it WOULD open.
  */
 import type { StationConfig, TabKind, Transform, WorldEntity, WorldOp, WorldResult, WorldSpec } from './world-model';
-import { applyWorldOps, WORLD_ID_RE, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS } from './world-model';
+import { applyWorldOps, entityRadius, shellToFit, WORLD_ID_RE, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS } from './world-model';
 import { isDevBuild } from './world-templates';
 
 export type WorldKitId = 'hermes-desk-kit' | 'pair-programming-kit' | 'review-corner' | 'research-nook' | 'lounge-corner';
@@ -144,8 +144,17 @@ export function kitOps(world: WorldSpec, kitId: string, anchor: Transform): KitO
     try { prefix = freePrefix(world, kit); } catch (error) { return { ok: false, error: (error as Error).message }; }
     const idOf = (local: string): string => `${prefix}-${local}`;
     const cos = Math.cos(anchor.rotation), sin = Math.sin(anchor.rotation);
-    const hw = world.shell.width / 2 - MARGIN, hd = world.shell.depth / 2 - MARGIN;
+    // w3:admin — the world grows (contract rule shellToFit, up to SHELL_MAX) so the whole kit fits; only past the cap is it clamped.
+    let shell = world.shell;
+    for (const piece of kit.pieces) {
+        const t = piece.transform, reach = entityRadius(piece);
+        const x = anchor.x + t.x * cos + t.z * sin, z = anchor.z - t.x * sin + t.z * cos;
+        const fit = shellToFit(shell, { x: x + Math.sign(x || 1) * reach, z: z + Math.sign(z || 1) * reach }, 1);
+        if (fit) shell = { ...shell, width: fit.width, depth: fit.depth };
+    }
     const ops: WorldOp[] = [];
+    if (shell.width !== world.shell.width || shell.depth !== world.shell.depth) ops.push({ op: 'shell', shell: { width: shell.width, depth: shell.depth } });
+    const hw = shell.width / 2 - MARGIN, hd = shell.depth / 2 - MARGIN;
     const ids: string[] = [];
     for (const piece of kit.pieces) {
         const entity: WorldEntity = JSON.parse(JSON.stringify(piece));

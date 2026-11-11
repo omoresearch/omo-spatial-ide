@@ -17,6 +17,9 @@ Module._extensions['.ts'] = (module, filename) => {
 const model = require('../src/common/world-model.ts');
 const rules = require('../src/common/world-admin-rules.ts');
 const onboarding = require('../src/browser/onboarding-planner.ts');
+const templates = require('../src/common/world-templates.ts');
+const preset = require('../src/common/world-preset.ts');
+const kits = require('../src/common/world-kits.ts');
 Module._extensions['.ts'] = originalTsLoader;
 
 const base = () => model.worldFromRoomV1({ theme: 'station', projectName: 'Fixture', layout: 'classic', kit: 'hermes-desk' });
@@ -215,4 +218,88 @@ test('w3 onboarding: caps are 48 desks and 256 things', () => {
   assert.ok(warnings.some(w => /48/.test(w)));
   assert.equal(model.validateWorld(world).ok, true);
   assert.ok(world.entities.length <= 256);
+});
+
+// ------------------------------------------------------------------------------------- part 4: templates + presets
+test('w3 templates: "Open campus" is an open world ~80 x 60 m with agents, research and lounge rooms, desks inside', () => {
+  const t = templates.worldTemplate('open-campus');
+  assert.ok(t, 'open-campus template');
+  assert.equal(t.label, 'Open campus');
+  const w = t.world;
+  assert.equal(w.shell.open, true);
+  assert.ok(Math.abs(w.shell.width - 80) <= 10 && Math.abs(w.shell.depth - 60) <= 10, JSON.stringify(w.shell));
+  const rs = model.rooms(w);
+  assert.equal(rs.length, 3);
+  for (const word of ['Agents', 'Research', 'Lounge']) assert.ok(rs.some(r => r.label.includes(word)), word);
+  const desks = model.stations(w);
+  assert.ok(desks.length >= 6);
+  for (const d of desks) assert.ok(rs.some(r => inside(d, r)), `${d.id} inside a room`);
+  assert.equal(desks.filter(d => inside(d, rs.find(r => /Lounge/.test(r.label)))).length, 0);
+  assert.match(t.summary, /3 rooms/);
+});
+
+test('w3 templates: "Mission control XL" is one 30 x 20 room with 10 desks and 2 monitor walls', () => {
+  const t = templates.worldTemplate('mission-control-xl');
+  assert.ok(t);
+  assert.equal(t.label, 'Mission control XL');
+  const w = t.world;
+  const rs = model.rooms(w);
+  const big = rs.length ? rs[0] : { width: w.shell.width, depth: w.shell.depth };
+  assert.equal(big.width, 30); assert.equal(big.depth, 20);
+  assert.equal(model.stations(w).length, 10);
+  assert.equal(w.entities.filter(e => e.kind === 'monitor-wall').length, 2);
+  assert.ok(w.entities.filter(e => e.kind === 'monitor-wall').every(e => e.link && model.stations(w).some(s => s.id === e.link)));
+  // desks do not overlap each other
+  const ds = model.stations(w);
+  for (let i = 0; i < ds.length; i++) for (let j = i + 1; j < ds.length; j++) assert.ok(near(ds[i], ds[j]) >= 3, `${ds[i].id}/${ds[j].id}`);
+});
+
+test('w3 templates: every template instantiates to a valid world and keeps v1 ids for the first two desks', () => {
+  for (const t of templates.WORLD_TEMPLATES) {
+    const w = templates.instantiateTemplate(t.id, { name: 'X', theme: 'jungle' });
+    assert.ok(w, t.id);
+    assert.equal(model.validateWorld(w).ok, true, t.id);
+    const ids = model.stations(w).map(s => s.id);
+    assert.equal(ids[0], 'terminal', t.id);
+    if (ids.length > 1) assert.equal(ids[1], 'terminal-2', t.id);
+  }
+});
+
+test('w3 presets: export keeps rooms and the open shell; no ids, paths or tokens leak; the file imports cleanly', () => {
+  const w = templates.instantiateTemplate('open-campus');
+  const room = model.rooms(w)[0];
+  room.label = 'Lab /home/harry/secret';
+  room.workspaceId = 'ws_abcdef123456';
+  const raw = preset.exportWorldPreset(w, { name: 'Campus' });
+  assert.doesNotMatch(raw, /\/home\/|ws_abcdef|workspaceId/);
+  const back = preset.parseWorldPreset(raw).world;
+  assert.equal(back.shell.open, true);
+  assert.equal(model.rooms(back).length, 3);
+  const r0 = back.entities.find(e => e.id === room.id);
+  assert.equal(r0.width, room.width); assert.deepEqual(r0.doors, room.doors);
+  assert.equal(r0.label, undefined, 'unsafe label dropped');
+  assert.match(preset.previewWorldPreset(preset.parseWorldPreset(raw)).join('\n'), /Open world|room/i);
+});
+
+test('w3 presets: import refuses unknown room fields and a bad shell field', () => {
+  const w = templates.instantiateTemplate('open-campus');
+  const good = JSON.parse(preset.exportWorldPreset(w));
+  const bad = JSON.parse(JSON.stringify(good)); bad.world.entities.find(e => e.kind === 'room').path = '/x';
+  assert.throws(() => preset.parseWorldPreset(JSON.stringify(bad)), /unknown fields/);
+  const bad2 = JSON.parse(JSON.stringify(good)); bad2.world.shell.secret = 1;
+  assert.throws(() => preset.parseWorldPreset(JSON.stringify(bad2)), /unknown fields/);
+});
+
+test('w3 kits: inserting a kit into a big open world works (not clamped to the old room) and grows a small world', () => {
+  const w = templates.instantiateTemplate('open-campus');
+  const anchor = { x: 30, z: 20, rotation: 0 };
+  const r = kits.insertKit(w, 'hermes-desk-kit', anchor);
+  assert.equal(r.ok, true, r.error);
+  const desk = r.world.entities.find(e => e.id === r.ids[0]);
+  assert.equal(desk.transform.x, 30);
+  // a small classic world grows to fit a kit placed past its edge
+  const small = base();
+  const r2 = kits.insertKit(small, 'lounge-corner', { x: 7.5, z: 0, rotation: 0 });
+  assert.equal(r2.ok, true, r2.error);
+  assert.ok(r2.world.shell.width > 12);
 });

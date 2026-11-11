@@ -10,12 +10,13 @@
  * where present) so existing runtime bindings and saved workspaces keep working after a switch.
  */
 import type { RoomTheme } from './room-state';
-import type { StationConfig, TabKind, WorldEntity, WorldSpec } from './world-model';
+import type { RoomEntity, StationConfig, TabKind, WallSide, WorldEntity, WorldSpec } from './world-model';
 import { validateWorld, worldFromRoomV1, WORLD_VERSION } from './world-model';
 
 export type WorldTemplateId =
     | 'solo-builder' | 'classic-pair' | 'agent-lab' | 'research-library' | 'startup-war-room'
-    | 'review-studio' | 'jungle-expedition' | 'space-station' | 'minimal-terminal-nook';
+    | 'review-studio' | 'jungle-expedition' | 'space-station' | 'minimal-terminal-nook'
+    | 'open-campus' | 'mission-control-xl'; // w3:admin
 
 export interface WorldTemplate {
     id: WorldTemplateId;
@@ -45,15 +46,33 @@ function station(id: string, label: string, x: number, z: number, rotation: numb
 function decor(id: string, kind: Extract<WorldEntity, { kind: 'decor' }>['decor'], x: number, z: number, rotation = 0, scale?: number): WorldEntity {
     return { id, kind: 'decor', decor: kind, transform: { x, z, rotation }, ...(scale !== undefined ? { scale } : {}) };
 }
-function world(name: string, theme: RoomTheme, width: number, depth: number, entities: WorldEntity[]): WorldSpec {
-    return { version: WORLD_VERSION, name, shell: { theme, width, depth }, entities, revision: 0 };
+function world(name: string, theme: RoomTheme, width: number, depth: number, entities: WorldEntity[], open?: boolean): WorldSpec {
+    return { version: WORLD_VERSION, name, shell: { theme, width, depth, ...(open ? { open: true } : {}) }, entities, revision: 0 };
 }
+/** w3:admin — a room inside the world (centre x, z; quarter turns only). */
+function room(id: string, label: string, x: number, z: number, width: number, depth: number, doors: WallSide[] = ['front'], rotation = 0): RoomEntity {
+    return { id, kind: 'room', label, transform: { x, z, rotation }, width, depth, doors };
+}
+/** w3:admin — desks in rows of `cols`, 4.4 m apart, the first row at `firstZ`, 3.2 m between rows (facing -z). */
+function deskRows(ids: string[], labels: string[], configs: StationConfig[], cx: number, firstZ: number, cols: number): WorldEntity[] {
+    const rows = Math.ceil(ids.length / cols);
+    return ids.map((id, i) => {
+        const row = Math.floor(i / cols), inRow = row === rows - 1 ? ids.length - row * cols : cols, col = i - row * cols;
+        return station(id, labels[i], Math.round((cx + (col - (inRow - 1) / 2) * 4.4) * 100) / 100, Math.round((firstZ + row * 3.2) * 100) / 100, 0, configs[i]);
+    });
+}
+const MISSION_ROLES: Array<[string, TabKind]> = [
+    ['Flight · Hermes', 'hermes'], ['Build', 'shell'], ['Deploy', 'shell'], ['Logs', 'shell'], ['Alerts', 'shell'],
+    ['Code · Claude', 'claude'], ['Review · Codex', 'codex'], ['Data · Hermes', 'hermes'], ['Network', 'shell'], ['Ops', 'shell']
+];
 
 /** One-line description of a world's contents, for pickers and import previews. */
 export function describeWorld(w: WorldSpec): string {
     const count = (kind: WorldEntity['kind']): number => w.entities.filter(e => e.kind === kind).length;
     const part = (n: number, one: string, many = `${one}s`): string | undefined => n ? `${n} ${n === 1 ? one : many}` : undefined;
     return [
+        w.shell.open ? 'Open world' : undefined, // w3:admin
+        part(count('room'), 'room'),
         part(count('station'), 'desk'),
         part(count('monitor-wall'), 'monitor wall'),
         part(count('web-wall'), 'web wall'),
@@ -196,6 +215,58 @@ const RAW_TEMPLATES: Array<Omit<WorldTemplate, 'summary'>> = [
             { id: 'nook-wall', kind: 'monitor-wall', label: 'Screen · Terminal', transform: { x: 0, z: -3.6, rotation: 0 }, width: 2.6, height: 1.5, elevation: 0.8, link: 'terminal' },
             decor('lamp', 'lamp', 1.2, 0.2),
             decor('rug', 'rug', 0, 1.2)
+        ])
+    },
+    // ---------------------------------------------------------------------------------------- w3:admin
+    {
+        id: 'open-campus',
+        label: 'Open campus',
+        description: 'An open world (80 × 60 m) with three rooms round a plaza: an agents room, a research room and a lounge.',
+        world: world('Open campus', 'station', 80, 60, [
+            // Agents room (back left): Hermes, Claude, Codex and Shell desks under a big wall linked to Hermes.
+            room('agents-room', 'Agents room', -14, -12, 16, 12, ['front', 'right']),
+            ...deskRows(['terminal', 'terminal-2', 'agents-codex', 'agents-shell'], ['Hermes', 'Claude', 'Codex', 'Shell'],
+                [setup('Hermes', 'hermes'), setup('Claude', 'claude'), setup('Codex', 'codex'), setup('Shell', 'shell')], -14, -14.2, 2),
+            { id: 'agents-wall', kind: 'monitor-wall', label: 'Agents wall · Hermes', transform: { x: -14, z: -17.3, rotation: 0 }, width: 6, height: 2.6, elevation: 0.6, link: 'terminal' },
+            { id: 'code', kind: 'review-screen', label: 'Code review', transform: { x: -21, z: -9, rotation: HALF_PI } },
+            decor('agents-plant', 'plant', -21.2, -17.2),
+            // Research room (back right): three Hermes desks, a sources wall and shelves.
+            room('research-room', 'Research room', 14, -12, 16, 12, ['front', 'left']),
+            ...deskRows(['research-1', 'research-2', 'research-3'], ['Reader one', 'Reader two', 'Reader three'],
+                [setup('Reader one', 'hermes'), setup('Reader two', 'hermes'), setup('Reader three', 'hermes')], 14, -13.4, 3),
+            { id: 'web', kind: 'web-wall', label: 'Sources wall', transform: { x: 14, z: -17.4, rotation: 0 }, width: 5.4, height: 2.6, elevation: 0.6 },
+            decor('research-shelf-1', 'bookshelf', 21.4, -14, -HALF_PI),
+            decor('research-shelf-2', 'bookshelf', 21.4, -10, -HALF_PI),
+            decor('research-lamp', 'lamp', 9, -8),
+            // Lounge (front, across the plaza): no desks.
+            room('lounge', 'Lounge', 0, 12, 14, 10, ['back']),
+            decor('lounge-sofa', 'sofa', 0, 13.6, Math.PI),
+            decor('lounge-rug', 'rug', 0, 12, 0, 1.6),
+            decor('lounge-plant-1', 'plant', -6, 16),
+            decor('lounge-plant-2', 'plant', 6, 16),
+            decor('lounge-lamp', 'lamp', 5.6, 9.4),
+            // The plaza between the rooms.
+            decor('plaza-crystal', 'crystal', 0, -2, 0, 1.4),
+            decor('plaza-plant-1', 'plant', -8, 2, 0, 1.6),
+            decor('plaza-plant-2', 'plant', 8, 2, 0, 1.6)
+        ], true)
+    },
+    {
+        id: 'mission-control-xl',
+        label: 'Mission control XL',
+        description: 'One big 30 × 20 m control room: ten desks in two rows facing two monitor walls.',
+        world: world('Mission control XL', 'station', 30, 20, [
+            ...deskRows(MISSION_ROLES.map((_, i) => i === 0 ? 'terminal' : i === 1 ? 'terminal-2' : `console-${i + 1}`), MISSION_ROLES.map(([n]) => n),
+                MISSION_ROLES.map(([n, k]) => setup(n, k)), 0, -4.2, 5),
+            { id: 'main-wall', kind: 'monitor-wall', label: 'Main wall · Flight', transform: { x: -5, z: -9.3, rotation: 0 }, width: 8, height: 3.2, elevation: 0.5, link: 'terminal' },
+            { id: 'ops-wall', kind: 'monitor-wall', label: 'Ops wall · Logs', transform: { x: 5, z: -9.3, rotation: 0 }, width: 8, height: 3.2, elevation: 0.5, link: 'console-4' },
+            { id: 'web', kind: 'web-wall', label: 'Status web wall', transform: { x: -14.6, z: -2, rotation: HALF_PI }, width: 4.6, height: 2.4, elevation: 0.7 },
+            { id: 'code', kind: 'review-screen', label: 'Code review', transform: { x: 14.4, z: -2, rotation: -HALF_PI } },
+            decor('plant-1', 'plant', -14, -9),
+            decor('plant-2', 'plant', 14, -9),
+            decor('window-l', 'window', -14.9, 5, HALF_PI, 1.6),
+            decor('window-r', 'window', 14.9, 5, -HALF_PI, 1.6),
+            decor('rug', 'rug', 0, 5.6, 0, 2.4)
         ])
     }
 ];

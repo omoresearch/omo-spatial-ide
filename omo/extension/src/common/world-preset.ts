@@ -46,7 +46,7 @@ const ENTITY_KEYS: Record<WorldEntity['kind'], readonly string[]> = {
     'room': ['id', 'kind', 'transform', 'label', 'width', 'depth', 'theme', 'doors'] // w3:expand
 };
 const WORLD_KEYS = ['version', 'name', 'shell', 'entities', 'revision', 'plan'] as const;
-const SHELL_KEYS = ['theme', 'width', 'depth'] as const;
+const SHELL_KEYS = ['theme', 'width', 'depth', 'open'] as const; // w3:admin: + open
 const TRANSFORM_KEYS = ['x', 'z', 'rotation'] as const;
 const STATION_KEYS = ['name', 'kind', 'profile', 'tabs', 'locked'] as const;
 const TAB_KEYS = ['name', 'kind'] as const;
@@ -100,7 +100,7 @@ function cleanWorld(source: WorldSpec, mode: 'export' | 'import', name?: string)
     };
     if (mode === 'import' && !onlyKeys(source, WORLD_KEYS)) refuse('The world has unknown fields.');
     if (mode === 'import' && !onlyKeys(source.shell, SHELL_KEYS)) refuse('The room shell has unknown fields.');
-    const shell: WorldShell = { theme: source.shell.theme, width: source.shell.width, depth: source.shell.depth };
+    const shell: WorldShell = { theme: source.shell.theme, width: source.shell.width, depth: source.shell.depth, ...(source.shell.open === true ? { open: true } : {}) };
     const transform = (t: Transform): Transform => {
         if (mode === 'import' && !onlyKeys(t, TRANSFORM_KEYS)) refuse('A position has unknown fields.');
         return { x: t.x, z: t.z, rotation: t.rotation };
@@ -133,6 +133,8 @@ function cleanWorld(source: WorldSpec, mode: 'export' | 'import', name?: string)
             case 'mirror': return { ...base, kind: 'mirror', link: e.link };
             case 'review-screen': return { ...base, kind: 'review-screen' };
             case 'decor': return { ...base, kind: 'decor', decor: e.decor, ...(e.scale !== undefined ? { scale: e.scale } : {}) };
+            // w3:admin — rooms keep their size, theme and doorways (allow-listed fields only).
+            case 'room': return { ...base, kind: 'room', width: e.width, depth: e.depth, ...(e.theme !== undefined ? { theme: e.theme } : {}), ...(e.doors !== undefined ? { doors: [...e.doors] } : {}) };
             default: return refuse('A world item has an unknown kind.');
         }
     });
@@ -197,7 +199,7 @@ export function parseAnyRoomPreset(raw: string): AnyRoomPreset {
 /** Human-readable preview lines for an imported world (shown before Save). */
 export function previewWorldPreset(preset: WorldPreset): string[] {
     const w = preset.world;
-    const lines = [`${w.shell.theme === 'jungle' ? 'Jungle' : 'Station'} room, ${w.shell.width} × ${w.shell.depth} m, ${w.entities.length} items.`];
+    const lines = [`${w.shell.theme === 'jungle' ? 'Jungle' : 'Station'} ${w.shell.open ? 'open world' : 'room'}, ${w.shell.width} × ${w.shell.depth} m, ${w.entities.length} items.`];
     for (const e of w.entities) {
         const name = e.label ?? e.id;
         switch (e.kind) {
@@ -206,6 +208,7 @@ export function previewWorldPreset(preset: WorldPreset): string[] {
             case 'web-wall': lines.push(`Web wall “${name}”${e.home ? ` · ${e.home}` : ''}`); break;
             case 'mirror': lines.push(`Mirror of ${e.link}`); break;
             case 'review-screen': lines.push(`Code review screen “${name}”`); break;
+            case 'room': lines.push(`Room “${name}” ${e.width} × ${e.depth} m, door${(e.doors ?? ['front']).length === 1 ? '' : 's'}: ${(e.doors ?? ['front']).join(', ') || 'none'}`); break; // w3:admin
             default: break;
         }
     }
