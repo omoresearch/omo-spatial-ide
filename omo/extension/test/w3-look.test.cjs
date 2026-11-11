@@ -1,0 +1,77 @@
+// w3:look — open world and rooms look good and readable: overview framing, room labels, label de-overlap,
+// spawn spot, paths. Pure functions only (the real-browser look check is scripts/w3-expand-real.cjs).
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const Module = require('node:module');
+const typescript = require('typescript');
+
+const originalTsLoader = Module._extensions['.ts'];
+const originalResolve = Module._resolveFilename;
+Module._extensions['.ts'] = (module, filename) => {
+  const output = typescript.transpileModule(fs.readFileSync(filename, 'utf8'), {
+    compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2020 }, fileName: filename,
+  }).outputText;
+  module._compile(output, filename);
+};
+Module._resolveFilename = function (request, parent, ...rest) {
+  try { return originalResolve.call(this, request, parent, ...rest); }
+  catch (error) { if (request.startsWith('.')) return originalResolve.call(this, request + '.ts', parent, ...rest); throw error; }
+};
+const scale = require('../src/browser/world-scene-scale.ts');
+Module._extensions['.ts'] = originalTsLoader;
+Module._resolveFilename = originalResolve;
+
+const station = (id, x, z, rotation = 0) => ({ id, kind: 'station', label: id, transform: { x, z, rotation }, station: { name: id, kind: 'shell', tabs: [{ name: 'Shell', kind: 'shell' }], locked: false } });
+const room = (id, x, z, width, depth, rotation = 0) => ({ id, kind: 'room', label: id, transform: { x, z, rotation }, width, depth, doors: ['front'] });
+/** The onboarding "two wings" world: a 54 x 48 open shell, two rooms either side of the street. */
+function campus() {
+  return { version: 2, name: 'campus', revision: 1, shell: { theme: 'station', width: 54, depth: 48, open: true }, entities: [
+    room('research-wing', -9, -8, 14, 10), room('agent-wing', 9, -8, 18, 10),
+    station('d1', -11, -10), station('d2', -7, -10), station('d3', 5, -10), station('d4', 9, -10), station('d5', 13, -10),
+  ] };
+}
+/** Project a world point with the same camera model RoomScene uses (lookAt target, vertical fov, aspect). */
+function project(frame, view, p) {
+  const { azimuth: a, elevation: e } = view;
+  const dir = [Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)];
+  const C = [frame.target.x + dir[0] * frame.distance, frame.target.y + dir[1] * frame.distance, frame.target.z + dir[2] * frame.distance];
+  const f = [-dir[0], -dir[1], -dir[2]];
+  const r = [f[1] * 0 - f[2] * 1, f[2] * 0 - f[0] * 0, f[0] * 1 - f[1] * 0]; const rl = Math.hypot(...r); r.forEach((v, i) => { r[i] = v / rl; });
+  const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+  const v = [p[0] - C[0], p[1] - C[1], p[2] - C[2]];
+  const dot = (x, y) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
+  const t = Math.tan(view.fov * Math.PI / 360), z = dot(v, f);
+  return { x: dot(v, r) / (z * t * view.aspect), y: dot(v, u) / (z * t) };
+}
+
+test('overview of an open world frames its rooms and desks, not the whole ground', () => {
+  const view = { azimuth: 0.56, elevation: 0.61, aspect: 2.74, fov: 38 };
+  const frame = scale.overviewFrame(campus(), view);
+  assert.ok(frame, 'an open world gets a content frame');
+  // Old behaviour: 24 m x worldScale(54 x 48) = 115 m away. The content frame must stand much nearer.
+  assert.ok(frame.distance < 24 * scale.worldScale(campus().shell) * 0.75, `distance ${frame.distance}`);
+  // The content box centre is the look-at target (rooms sit behind the street, z < 0).
+  assert.ok(frame.target.z < -3 && Math.abs(frame.target.x) < 1.5, JSON.stringify(frame.target));
+  // Every content corner is on screen, and the content fills the view (a corner reaches past 70 % of half the screen).
+  let most = 0;
+  // Content box: rooms x -16..18, z -13..-3, plus the spawn street in front of them (to z 4.5).
+  for (const x of [-16, 18]) for (const z of [-13, 4.5]) for (const y of [0, 2.8]) {
+    const p = project(frame, view, [x, y, z]);
+    assert.ok(Math.abs(p.x) <= 0.95 && Math.abs(p.y) <= 0.95, `corner ${x},${z} at ${p.x.toFixed(2)},${p.y.toFixed(2)}`);
+    most = Math.max(most, Math.abs(p.x), Math.abs(p.y));
+  }
+  assert.ok(most > 0.7, `content fills the view (largest corner ${most.toFixed(2)})`);
+});
+
+test('a classic walled room keeps the v1 overview camera (no content frame)', () => {
+  const classic = { version: 2, name: 'p', revision: 0, shell: { theme: 'station', width: 12, depth: 10 }, entities: [station('terminal', -2.2, -0.7)] };
+  assert.equal(scale.overviewFrame(classic, { azimuth: 0.56, elevation: 0.61, aspect: 2, fov: 38 }), undefined);
+});
+
+test('an empty open world frames the spawn area, never a zero-size box', () => {
+  const empty = { version: 2, name: 'p', revision: 0, shell: { theme: 'station', width: 200, depth: 200, open: true }, entities: [] };
+  const frame = scale.overviewFrame(empty, { azimuth: 0.56, elevation: 0.61, aspect: 2, fov: 38 });
+  assert.ok(frame && frame.distance > 8 && frame.distance < 60, JSON.stringify(frame));
+});

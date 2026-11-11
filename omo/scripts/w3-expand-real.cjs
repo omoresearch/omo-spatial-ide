@@ -69,6 +69,10 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check('onboarding: all 10 desks created', desks1.length === 10, { desks: desks1.length });
         check('onboarding: world is bigger than the classic 12 x 10', shell1.width > 12 || shell1.depth > 10 || shell1.open, shell1);
         await click('[data-testid="overview-mode"]').catch(() => {}); await pause(1500); await shot('1-onboarding-world-overview');
+        // w3:look — the straight-ahead first-person view from the spawn spot (Reset view puts the player at home).
+        await click('[data-testid="walk-mode"]').catch(() => {}); await pause(800);
+        await click('button[aria-label="Reset room camera"]').catch(() => {}); await pause(1500); await shot('1b-spawn-first-person');
+        await click('[data-testid="overview-mode"]').catch(() => {}); await pause(1000);
 
         // 2. admin adds a room
         await page.focus(CANVAS); await page.keyboard.press('h'); await pause(800);

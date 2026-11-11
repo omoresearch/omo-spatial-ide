@@ -23,7 +23,7 @@ import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
 import { openSky } from './world-scene-open'; // w3:render
-import { cameraClip, shadowFrame, terminalFar, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render
+import { cameraClip, overviewFrame, shadowFrame, terminalFar, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render; w3:look overviewFrame
 import { refreeze as refreezeNode } from './world-scene-kit'; // w3:render
 import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
 export type { CodeReviewFrame } from '../common/code-review-preview';
@@ -989,6 +989,13 @@ export class RoomScene {
         this.invalidate();
         if (this.navigation === 'walk') { this.walker?.step(0); return; }
         const {azimuth:a,elevation:e,distance:d}=this.state;
+        // w3:look — open worlds: frame the rooms and entities (zoom scales the fitted distance; 24 = default zoom).
+        const content = this.world ? overviewFrame(this.world, { azimuth: a, elevation: e, aspect: this.camera.aspect, fov: this.camera.fov }) : undefined;
+        if (content) {
+            const k = content.distance * d / 24, t = content.target;
+            this.camera.position.set(t.x+Math.sin(a)*Math.cos(e)*k,t.y+Math.sin(e)*k,t.z+Math.cos(a)*Math.cos(e)*k);
+            this.camera.lookAt(t.x,t.y,t.z); return;
+        }
         const fit = Math.max(1, 1.28 / this.camera.aspect) * this.roomScale;
         this.camera.position.set(Math.sin(a)*Math.cos(e)*d*fit,Math.sin(e)*d*fit,Math.cos(a)*Math.cos(e)*d*fit);
         this.camera.lookAt(0,0.7,0);
