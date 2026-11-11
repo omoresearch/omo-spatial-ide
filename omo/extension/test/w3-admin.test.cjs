@@ -60,3 +60,78 @@ test('w3 growth: a new desk joins the other desks (not a far corner)', () => {
   const others = desks.slice(0, -1);
   assert.ok(Math.min(...others.map(o => near(o, added))) < 6);
 });
+
+// ------------------------------------------------------------------------------------- part 2: intents
+test('w3 intents: "add a room for research with 4 desks" — a room next to the existing area, desks inside, door facing it', () => {
+  const world = base();
+  const r = plan(world, 'add a room for research with 4 desks');
+  const after = applied(world, r);
+  const room = model.rooms(after).find(x => /research/i.test(x.label));
+  assert.ok(room, 'research room');
+  const desks = model.stations(after).filter(d => inside(d, room));
+  assert.equal(desks.length, 4, 'the 4 new desks are inside the room');
+  assert.equal(model.stations(after).length, 6);
+  // the old classic room became the main room of an open world; nothing in it moved
+  assert.equal(after.shell.open, true);
+  const main = model.rooms(after).find(x => x.id !== room.id);
+  assert.ok(main, 'the old room is kept as a room');
+  for (const e of world.entities) assert.deepEqual(after.entities.find(x => x.id === e.id).transform, e.transform);
+  // the door faces the main room
+  const dx = main.transform.x - room.transform.x, dz = main.transform.z - room.transform.z;
+  const want = Math.abs(dx) > Math.abs(dz) ? (dx < 0 ? 'left' : 'right') : (dz < 0 ? 'back' : 'front');
+  assert.deepEqual(room.doors, [want]);
+  assert.equal(r.proposal.source, 'admin');
+});
+
+test('w3 intents: a second room goes next to the first rooms, not far away', () => {
+  let world = applied(base(), plan(base(), 'add a room for research with 2 desks'));
+  world = applied(world, plan(world, 'add a lounge'));
+  const lounge = model.rooms(world).find(x => /lounge/i.test(x.label));
+  assert.ok(lounge);
+  const others = model.rooms(world).filter(x => x.id !== lounge.id);
+  assert.ok(Math.min(...others.map(o => near(o, lounge))) < 25);
+});
+
+test('w3 intents: "add 2 desks in the research room" puts them inside that room (growing it if needed)', () => {
+  let world = applied(base(), plan(base(), 'add a room for research with 4 desks'));
+  const room = model.rooms(world).find(x => /research/i.test(x.label));
+  world = applied(world, plan(world, 'add 6 desks in the research room'));
+  const grown = world.entities.find(x => x.id === room.id);
+  assert.equal(model.stations(world).filter(d => inside(d, grown)).length, 10);
+});
+
+test('w3 intents: "make the world huge" and "make the world bigger" grow the shell beyond 40 m', () => {
+  const huge = applied(base(), plan(base(), 'make the world huge'));
+  assert.ok(huge.shell.width >= 100 && huge.shell.depth >= 100, JSON.stringify(huge.shell));
+  let w = base();
+  for (let i = 0; i < 8; i++) w = applied(w, plan(w, 'make the world bigger'));
+  assert.ok(w.shell.width > 40, JSON.stringify(w.shell));
+});
+
+test('w3 intents: "make it an open world" opens the shell and keeps the room', () => {
+  const world = base();
+  const after = applied(world, plan(world, 'make it an open world'));
+  assert.equal(after.shell.open, true);
+  assert.ok(after.shell.width >= 40);
+  assert.equal(model.rooms(after).length, 1);
+  assert.equal(model.validateWorld(after).ok, true);
+});
+
+test('w3 intents: "add a door to the left of the research room" and "resize the research room to 14 x 10"', () => {
+  let world = applied(base(), plan(base(), 'add a room for research with 2 desks'));
+  const room = model.rooms(world).find(x => /research/i.test(x.label));
+  world = applied(world, plan(world, 'add a door to the back of the research room'));
+  assert.ok(world.entities.find(x => x.id === room.id).doors.includes('back'));
+  world = applied(world, plan(world, 'resize the research room to 14 x 10'));
+  const after = world.entities.find(x => x.id === room.id);
+  assert.equal(after.width, 14); assert.equal(after.depth, 10);
+});
+
+test('w3 intents: proposals never start agents and contain only world ops', () => {
+  const r = plan(base(), 'add a room for agents with 3 codex desks');
+  assert.ok(r.proposal);
+  const allowed = new Set(['add', 'remove', 'move', 'update-station', 'resize', 'link', 'rename', 'shell', 'reshape', 'name']);
+  for (const op of r.proposal.ops) assert.ok(allowed.has(op.op), op.op);
+  const codex = applied(base(), r).entities.filter(e => e.kind === 'station' && e.station.tabs[0].kind === 'codex');
+  assert.equal(codex.length, 3);
+});
