@@ -1,0 +1,5 @@
+node --check: 18/18 ok
+vendored world model matches source
+ok   second login of same member replaces the first (4009)
+19 checks passed
+7 checks passed

@@ -1,0 +1,16 @@
+PASS onboarding: big plan makes rooms — {"rooms":["research-wing","agent-wing"]}
+PASS onboarding: all 10 desks created — {"desks":10}
+PASS onboarding: world is bigger than the classic 12 x 10 — {"width":54,"depth":48,"open":true}
+PASS admin: room request gives a proposal — {"status":"proposed"}
+PASS admin: Apply adds a room — {"before":2,"after":3}
+PASS admin: Apply adds 3 desks — {"before":10,"after":13}
+PASS build: World size controls present
+PASS build: + grows the world to the next 4 m step each way — {"before3":{"width":54,"depth":62,"open":true},"after3":{"width":56,"depth":64,"open":true}}
+PASS build: Open world switch makes an open world — {"width":56,"depth":64,"open":true}
+PASS build: ghost desk placed near the edge — [0.93,0.4]
+PASS build: desk added — {"before":13,"after":14}
+PASS build: world grew or already fitted (no clamp error) — {"before4":{"width":56,"depth":64,"open":true},"after4":{"width":75,"depth":83,"open":true},"diff":"The world grows to 75 × 83 m to fit this\nAdd agent desk “Desk eleven”"}
+PASS walk: player can go beyond the classic room edge (|x| > 5.5 m) — {"x0":4,"x1":18.66}
+PASS render: parked-screen state is published — []
+PASS no page errors — []
+15/15 checks passed

@@ -1,0 +1,135 @@
+{
+ "failed": 0,
+ "checks": [
+  {
+   "name": "onboarding: big plan makes rooms",
+   "pass": true,
+   "detail": {
+    "rooms": [
+     "research-wing",
+     "agent-wing"
+    ]
+   }
+  },
+  {
+   "name": "onboarding: all 10 desks created",
+   "pass": true,
+   "detail": {
+    "desks": 10
+   }
+  },
+  {
+   "name": "onboarding: world is bigger than the classic 12 x 10",
+   "pass": true,
+   "detail": {
+    "width": 54,
+    "depth": 48,
+    "open": true
+   }
+  },
+  {
+   "name": "admin: room request gives a proposal",
+   "pass": true,
+   "detail": {
+    "status": "proposed"
+   }
+  },
+  {
+   "name": "admin: Apply adds a room",
+   "pass": true,
+   "detail": {
+    "before": 2,
+    "after": 3
+   }
+  },
+  {
+   "name": "admin: Apply adds 3 desks",
+   "pass": true,
+   "detail": {
+    "before": 10,
+    "after": 13
+   }
+  },
+  {
+   "name": "build: World size controls present",
+   "pass": true
+  },
+  {
+   "name": "build: + grows the world to the next 4 m step each way",
+   "pass": true,
+   "detail": {
+    "before3": {
+     "width": 54,
+     "depth": 62,
+     "open": true
+    },
+    "after3": {
+     "width": 56,
+     "depth": 64,
+     "open": true
+    }
+   }
+  },
+  {
+   "name": "build: Open world switch makes an open world",
+   "pass": true,
+   "detail": {
+    "width": 56,
+    "depth": 64,
+    "open": true
+   }
+  },
+  {
+   "name": "build: ghost desk placed near the edge",
+   "pass": true,
+   "detail": [
+    0.93,
+    0.4
+   ]
+  },
+  {
+   "name": "build: desk added",
+   "pass": true,
+   "detail": {
+    "before": 13,
+    "after": 14
+   }
+  },
+  {
+   "name": "build: world grew or already fitted (no clamp error)",
+   "pass": true,
+   "detail": {
+    "before4": {
+     "width": 56,
+     "depth": 64,
+     "open": true
+    },
+    "after4": {
+     "width": 75,
+     "depth": 83,
+     "open": true
+    },
+    "diff": "The world grows to 75 × 83 m to fit this\nAdd agent desk “Desk eleven”"
+   }
+  },
+  {
+   "name": "walk: player can go beyond the classic room edge (|x| > 5.5 m)",
+   "pass": true,
+   "detail": {
+    "x0": 4,
+    "x1": 18.66
+   }
+  },
+  {
+   "name": "render: parked-screen state is published",
+   "pass": true,
+   "detail": []
+  },
+  {
+   "name": "no page errors",
+   "pass": true,
+   "detail": []
+  }
+ ],
+ "errors": []
+}
