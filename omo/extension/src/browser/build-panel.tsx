@@ -13,6 +13,7 @@ import type { WorldEntity, StationConfig, StationEntity, TabKind } from '../comm
 import { stations } from '../common/world-model';
 import { proposalLines } from './build-room'; // w3:build
 import { RoomInspector } from './build-room-inspector'; // w3:build
+import { WorldSizeSection } from './build-world-size'; // w3:build
 import '../../src/browser/build-mode.css';
 
 function useBuild(build: BuildMode): void {
@@ -105,6 +106,7 @@ function Palette(props: { build: BuildMode }): React.ReactElement {
                 </button>;
             })}</div>
         </section>)}
+        {build.store && <WorldSizeSection build={build} world={build.store.preview} />}{/* w3:build */}
         <p className="omo-build-palette-foot">Place · <kbd>R</kbd> turn · <kbd>Esc</kbd> stop. Changes wait for <b>Apply</b>.</p>
     </aside>;
 }

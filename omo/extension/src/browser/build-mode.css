@@ -283,3 +283,11 @@
 .omo-build-doors button.is-on { border-color: var(--omo-accent-line); background: var(--omo-accent-soft); color: var(--omo-accent); }
 .omo-build-doors button:focus-visible, .omo-build-world button:focus-visible { outline: 2px solid var(--omo-focus); outline-offset: 1px; }
 .omo-build-group.is-spaces .omo-build-item-art { color: #c9b8ff; }
+.omo-build-world { gap: var(--omo-sp-2); display: flex; flex-direction: column; }
+.omo-build-world h3 { display: flex; align-items: center; gap: 6px; }
+.omo-build-stepper { display: grid; grid-template-columns: 1fr 28px 64px 28px; align-items: center; gap: 4px; font-size: var(--omo-fs-xs); color: var(--omo-text-2); }
+.omo-build-stepper button { height: 28px; border-radius: var(--omo-r-sm); border: 1px solid var(--omo-line-2); background: var(--omo-surface-1); color: var(--omo-text); font-size: var(--omo-fs-md); line-height: 1; cursor: pointer; }
+.omo-build-stepper button:disabled { opacity: 0.4; cursor: default; }
+.omo-build-stepper output { text-align: center; font-family: var(--omo-mono); color: var(--omo-text); }
+.omo-build-openrow small, .omo-build-world-note { font-size: var(--omo-fs-2xs); color: var(--omo-text-3); }
+.omo-build-world-note { display: flex; align-items: center; gap: 6px; margin: 0; }

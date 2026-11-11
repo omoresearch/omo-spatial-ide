@@ -39,7 +39,10 @@ export function growFor(world: WorldSpec, entity: WorldEntity, snappedToWall = f
 export function growLine(before: WorldSpec, after: WorldSpec): string | undefined {
     const a = before.shell, b = after.shell;
     if (a.width === b.width && a.depth === b.depth) return undefined;
-    if (b.width >= a.width && b.depth >= a.depth) return `The world grows to ${sizeText(b.width, b.depth)} to fit this`;
+    // "to fit this" only when the change also places or moves something (auto-grow); a plain resize says its size.
+    const old = new Map(before.entities.map(e => [e.id, JSON.stringify(e.transform)]));
+    const placed = after.entities.some(e => old.get(e.id) !== JSON.stringify(e.transform) || (e.kind === 'room' && JSON.stringify(before.entities.find(x => x.id === e.id)) !== JSON.stringify(e)));
+    if (placed && b.width >= a.width && b.depth >= a.depth) return `The world grows to ${sizeText(b.width, b.depth)} to fit this`;
     return `World size ${sizeText(b.width, b.depth)}`;
 }
 

@@ -22,7 +22,7 @@ import type { WorldEntity, WorldOp, WorldSpec, StationConfig, Transform, RoomEnt
 import { applyWorldOps, ROOM_MIN, ROOM_MAX } from '../common/world-model';
 import { BuildLayer, GhostSpec, rendererApi, hasWorldRenderer, threeOf } from './build-scene';
 import { PaletteId, paletteItem, makeEntity, placement, footprint, normalizeRotation, defaultLinkTarget } from './build-catalog';
-import { growFor, roomFromDrag, quarterTurn, roomWalls, polygonHitsWalls } from './build-room'; // w3:build
+import { growFor, roomFromDrag, quarterTurn, roomWalls, polygonHitsWalls, shrinkProblem, shellSizeOps } from './build-room'; // w3:build
 
 export type BuildTool = 'select' | 'place' | 'move' | 'link';
 export interface BuildState {
@@ -250,6 +250,19 @@ export class BuildMode {
         const e = this.entity(id); if (!e || (e.kind !== 'monitor-wall' && e.kind !== 'web-wall')) return;
         if (e.width === size.width && e.height === size.height && e.elevation === size.elevation) return;
         this.propose([{ op: 'resize', id, width: size.width, height: size.height, elevation: size.elevation }], `Resize ${entityTitle(e)}`);
+    }
+    /** w3:build — World size: set the shell to width x depth (refused, with the reason, if it cuts something off). */
+    resizeWorld(width: number, depth: number): boolean {
+        const world = this.preview(), shell = world.shell;
+        if (width === shell.width && depth === shell.depth) return false;
+        const problem = shrinkProblem(world, width, depth, e => entityTitle(e));
+        if (problem) { this.warn(problem); return false; } // growing never cuts anything off; shrinking names what is in the way
+        return this.propose(shellSizeOps(width, depth), `World size ${width} × ${depth} m`);
+    }
+    /** w3:build — open world (no outer walls) on / off. */
+    setOpenWorld(open: boolean): void {
+        if (!!this.preview().shell.open === open) return;
+        this.propose([{ op: 'shell', shell: { open } }], open ? 'Open world' : 'Walled world');
     }
     /** w3:build — Room inspector: size, doorways and theme as one 'reshape' step (the world grows if it must). */
     reshapeRoom(id: string, next: { width: number; depth: number; doors: WallSide[]; theme?: RoomEntity['theme'] }): void {
