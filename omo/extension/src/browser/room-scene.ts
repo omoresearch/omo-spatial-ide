@@ -233,6 +233,18 @@ export class RoomScene {
     private mirrorTexture?: THREE.CanvasTexture;
     private paintBudget?: MonitorPaintBudget;
     private homeKey?: string; // w3:look (6)
+    /** w3:fps — optional frame counter: add ?fps=1 to the app URL or run localStorage.setItem('omo.fps','1'). */
+    private fpsEl?: HTMLElement | null; private fpsFrames = 0; private fpsT0 = 0;
+    private fpsTick(): void {
+        if (this.fpsEl === undefined) {
+            let on = false; try { on = /[?&]fps=1/.test(location.search) || localStorage.getItem('omo.fps') === '1'; } catch { /* no storage */ }
+            this.fpsEl = on ? Object.assign(document.createElement('div'), { className: 'omo-fps' }) : null;
+            if (this.fpsEl) { this.fpsEl.dataset.testid = 'omo-fps'; this.fpsEl.style.cssText = 'position:absolute;left:8px;top:8px;z-index:20;padding:2px 8px;border-radius:6px;background:rgba(10,16,24,.72);color:#9ff0c8;font:600 12px ui-monospace,monospace;pointer-events:none'; this.host.appendChild(this.fpsEl); }
+        }
+        if (!this.fpsEl) return;
+        const now = performance.now(); if (!this.fpsT0) this.fpsT0 = now; this.fpsFrames++;
+        if (now - this.fpsT0 >= 1000) { const fps = this.fpsFrames * 1000 / (now - this.fpsT0); this.fpsEl.textContent = `${fps.toFixed(0)} fps · ${this.world?.entities.filter(e => e.kind === 'station').length ?? 0} desks`; this.fpsEl.dataset.fps = fps.toFixed(1); this.fpsFrames = 0; this.fpsT0 = now; }
+    }
     private pathsKey = ''; private pathsRoot?: THREE.Group; // w3:look (7)
     private mirrorFrame: MonitorFrame = { lines: [] };
     /** Last full-size frame per desk and its 80 x 22 monitor window, so a re-render reuses the same object. */
@@ -1107,7 +1119,7 @@ export class RoomScene {
             this.needsRender=false;
             if(ambientFrame||!moving)this.lastAmbientRender=now;
             this.uploadDirty();
-            this.renderer.render(this.scene,this.camera);this.renders++;
+            this.renderer.render(this.scene,this.camera);this.renders++;this.fpsTick(); // w3:fps
             this.updateOverlays(w,h,now,moving);
             this.governResolution(now,moving&&!wasIdle);
         }
