@@ -26,7 +26,7 @@ import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { applyWorldOps, validateWorld, WORLD_MAX_ENTITIES } from '../common/world-model';
+import { applyWorldOps, validateWorld, ROOM_MAX, ROOM_MIN, SHELL_MAX, SHELL_MIN, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS } from '../common/world-model';
 import type { WorldOp, WorldProposal, WorldSpec } from '../common/world-model';
 import {
     WORLD_ADMIN_PROFILE_RE, WORLD_ADMIN_PROMPT_MAX
@@ -41,7 +41,7 @@ import { isExecutable, sanitizedEnv, which } from './runtime-discovery';
 export const HERMES_PLAN_TIMEOUT_MS = 90_000;
 const HERMES_OUTPUT_MAX = 256 * 1024;
 const HERMES_PROMPT_MAX = 110 * 1024;
-const OP_NAMES = new Set(['add', 'remove', 'move', 'update-station', 'resize', 'link', 'rename', 'shell', 'name']);
+const OP_NAMES = new Set(['add', 'remove', 'move', 'update-station', 'resize', 'link', 'rename', 'shell', 'reshape', 'name']); // w3:admin: + reshape
 
 export interface HermesRunResult { stdout: string; stderr: string; code: number | null; timedOut: boolean }
 /** Runs Hermes with exact argv (no shell). Replaceable in tests with a fake. */
@@ -117,10 +117,12 @@ WorldOp is one of:
 {"op":"resize","id":string,"width":number,"height":number,"elevation"?:number}
 {"op":"link","id":string,"to"?:string}          (monitor-wall or mirror -> a station id; omit "to" to unlink a monitor wall)
 {"op":"rename","id":string,"label":string}
-{"op":"shell","shell":{"theme"?:"station"|"jungle","width"?:number,"depth"?:number}}   (room 8..40 m each way)
+{"op":"shell","shell":{"theme"?:"station"|"jungle","width"?:number,"depth"?:number,"open"?:boolean}}   (world ${SHELL_MIN}..${SHELL_MAX} m each way; "open":true = open world, no outer walls)
+{"op":"reshape","id":roomId,"width":number,"depth":number,"doors"?:WallSide[],"theme"?:"station"|"jungle"}   (resize a room ${ROOM_MIN}..${ROOM_MAX} m and/or set its doorways)
 {"op":"name","name":string}
 
-Transform = {"x":number,"z":number,"rotation":number}  metres; x right (-width/2..width/2), z towards the door (-depth/2..depth/2); rotation radians, 0 faces the back wall (-z).
+Transform = {"x":number,"z":number,"rotation":number}  metres; x right (-width/2..width/2), z towards the front (-depth/2..depth/2); rotation radians, 0 faces the back wall (-z).
+WallSide = "back"|"front"|"left"|"right"  (sides of a room before its rotation; back = -z)
 WorldEntity = common {"id":string matching ^[a-z0-9][a-z0-9-]{0,47}$ and unique,"transform":Transform,"label"?:string (max 60)} plus ONE of:
   {"kind":"station","station":StationConfig}                      a desk, about 3.6 m wide and 2 m deep
   {"kind":"monitor-wall","width":0.6..8,"height":0.4..4,"elevation":0..3,"link"?:stationId}
@@ -128,12 +130,21 @@ WorldEntity = common {"id":string matching ^[a-z0-9][a-z0-9-]{0,47}$ and unique,
   {"kind":"mirror","link":stationId}
   {"kind":"review-screen"}
   {"kind":"decor","decor":"plant"|"lamp"|"crystal"|"sofa"|"bookshelf"|"whiteboard"|"rug"|"window","scale"?:0.25..4}
+  {"kind":"room","width":${ROOM_MIN}..${ROOM_MAX},"depth":${ROOM_MIN}..${ROOM_MAX},"doors"?:WallSide[] (default ["front"]; each is a 1.6 m doorway in the middle of that wall),"theme"?:"station"|"jungle"}
+      a room inside the world with its own floor and walls; transform = its centre; rotation 0 or ±1.5708 (quarter turns) only; it must fit inside the world.
 StationConfig = {"name":string (max 60),"kind":"hermes"|"shell","profile"?:string (a Hermes profile NAME, never a path),"tabs":[{"name":string,"kind":"shell"|"hermes"|"claude"|"codex"}] (1..8),"locked":boolean}
+
+World layout:
+- A classic world is one walled room (shell.open absent). An open world (shell.open true) is open ground with rooms on it.
+- Rooms are NOT parents: desks and other things are placed in world coordinates. A thing is "in" a room when its position is inside the room's floor (keep 0.5 m from the walls and do not block a doorway).
+- The world can grow as needed: to make space, widen/deepen the shell (op "shell") or grow a room (op "reshape") instead of piling things into the middle.
+- When adding a desk, put it inside the room the user means (or the room with the related desks), next to related desks; put a monitor wall linked to a desk just behind that desk.
+- A new room goes next to existing rooms (about 2 m apart) with a doorway facing the nearest existing room. To turn a classic world into an open world, set "open":true, grow the shell, and add a room of the old size at the old centre so nothing moves.
 
 Rules:
 - Ops apply in order; an op may refer to an id added earlier in the same list.
 - A locked station refuses every change except {"op":"update-station","id":...,"station":{"locked":false}}.
-- At most ${WORLD_MAX_ENTITIES} entities and 16 stations. Keep things inside the room and do not overlap desks.
+- At most ${WORLD_MAX_ENTITIES} entities and ${WORLD_MAX_STATIONS} stations. Keep things inside the world (and inside their room), do not overlap desks, and keep rooms from overlapping each other.
 - Never put secrets, tokens, passwords, API keys, file paths or host names of private machines into any field.
 - Never start an agent; WorldOps cannot run anything. Only change what the user asked for.
 - Prefer moving existing things over removing them. Keep existing ids.`;

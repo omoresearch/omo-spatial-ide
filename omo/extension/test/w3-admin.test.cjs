@@ -20,6 +20,7 @@ const onboarding = require('../src/browser/onboarding-planner.ts');
 const templates = require('../src/common/world-templates.ts');
 const preset = require('../src/common/world-preset.ts');
 const kits = require('../src/common/world-kits.ts');
+const admin = require('../src/node/world-admin-service.ts');
 Module._extensions['.ts'] = originalTsLoader;
 
 const base = () => model.worldFromRoomV1({ theme: 'station', projectName: 'Fixture', layout: 'classic', kit: 'hermes-desk' });
@@ -302,4 +303,28 @@ test('w3 kits: inserting a kit into a big open world works (not clamped to the o
   const r2 = kits.insertKit(small, 'lounge-corner', { x: 7.5, z: 0, rotation: 0 });
   assert.equal(r2.ok, true, r2.error);
   assert.ok(r2.world.shell.width > 12);
+});
+
+// ------------------------------------------------------------------------------------- part 5: Hermes planner prompt
+test('w3 hermes prompt: describes rooms, reshape, the open world and the new caps', () => {
+  const text = admin.HERMES_ADMIN_SYSTEM;
+  assert.match(text, /"kind":"room"/);
+  assert.match(text, /"op":"reshape"/);
+  assert.match(text, /"open"\?:\s*boolean/);
+  assert.match(text, new RegExp(`${model.SHELL_MIN}\\.\\.${model.SHELL_MAX}`));
+  assert.match(text, new RegExp(`${model.ROOM_MIN}\\.\\.${model.ROOM_MAX}`));
+  assert.match(text, new RegExp(`${model.WORLD_MAX_ENTITIES} entities and ${model.WORLD_MAX_STATIONS} stations`));
+  assert.doesNotMatch(text, /16 stations|8\.\.40/);
+});
+
+test('w3 hermes answer check: a room + reshape plan from Hermes is accepted; an unknown op is still refused', () => {
+  const world = base();
+  const ops = [
+    { op: 'shell', shell: { open: true, width: 60, depth: 50 } },
+    { op: 'add', entity: { id: 'lab', kind: 'room', label: 'Lab', transform: { x: 0, z: -14, rotation: 0 }, width: 12, depth: 8, doors: ['front'] } },
+    { op: 'reshape', id: 'lab', width: 14, depth: 9, doors: ['front', 'left'] },
+  ];
+  const checked = admin.checkHermesAnswer(world, { summary: 's', explanation: 'e', ops });
+  assert.equal(checked.ops.length, 3);
+  assert.throws(() => admin.checkHermesAnswer(world, { ops: [{ op: 'start-agent', id: 'terminal' }] }), /not a known world operation/);
 });
