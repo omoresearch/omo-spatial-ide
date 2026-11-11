@@ -21,6 +21,7 @@ import type { OrbSpot } from './world-scene-shell';
 import { BuiltEntity, placeRoot, buildDecorEntity, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
 import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, worldHome, worldMover } from './world-scene-collision';
+import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -480,7 +481,7 @@ export class RoomScene {
             case 'mirror': return buildMirror(entity, entity.id === 'mirror' ? this.mirrorTexture! : this.linkedSurface(entity.id).texture, standing);
             case 'monitor-wall': return buildMonitorWall(entity, this.linkedSurface(entity.id).texture, standing);
             case 'decor': return buildDecorEntity(entity, jungle);
-            case 'room': { const root = new THREE.Group(); root.name = `omo-room-${entity.id}`; return { root }; } // w3:expand placeholder (w3-render lane builds real rooms)
+            case 'room': { const built = buildRoom(entity, jungle); setRoomCutaway(built.root, this.navigation !== 'walk', false); return built; } // w3:render — real rooms (world-scene-rooms.ts)
         }
     }
     private linkedSurface(id: string): ScreenSurface {
@@ -515,7 +516,7 @@ export class RoomScene {
         return { text, aria };
     }
     private syncLabel(item: SceneEntity): void {
-        if (item.entity.kind === 'decor') { item.label?.remove(); item.label = undefined; return; }
+        if (item.entity.kind === 'decor' || item.entity.kind === 'room') { item.label?.remove(); item.label = undefined; return; } // w3:render — rooms are places, not workstations
         const id = item.entity.id;
         if (!item.label) {
             const label = document.createElement('button'); label.className = 'omo-scene-label'; label.dataset.workstation = id;
@@ -669,9 +670,16 @@ export class RoomScene {
         canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('keydown',key);
         this.cleanup.push(()=>{canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('keydown',key);});
     }
+    /** w3:render — overview shows rooms as a cutaway (low walls, no lintels); walking shows full walls. */
+    private cutRooms(): void {
+        let changed = false;
+        for (const item of this.entities.values()) if (item.entity.kind === 'room' && setRoomCutaway(item.built.root, this.navigation !== 'walk')) changed = true;
+        if (changed && this.renderer) this.renderer.shadowMap.needsUpdate = true;
+    }
     setNavigation(mode: 'walk' | 'overview'): void {
         this.navigation = mode; this.camera.fov = mode === 'walk' ? 65 : 38; this.camera.updateProjectionMatrix();
         this.walker?.setEnabled(mode === 'walk');
+        this.cutRooms(); // w3:render — rooms: full walls when walking, low cutaway walls in the overview
         if (this.walker) this.smoother.snap(this.walker.pose);
         if (this.renderer) { this.renderer.domElement.dataset.navigation = mode; }
         this.labels.forEach(label => { label.classList.toggle('is-walk', mode === 'walk'); this.labelSize.delete(label); this.labelPos.delete(label); }); // t3:polish2: re-measure
