@@ -89,6 +89,25 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             check('admin: Apply adds a room', rooms2.length === rooms1.length + 1, { before: rooms1.length, after: rooms2.length });
             check('admin: Apply adds 3 desks', desks2.length === desks1.length + 3, { before: desks1.length, after: desks2.length });
         }
+        // w4:big — desks into a NEW room, and a desk moved between rooms, through the real admin panel.
+        const ask = async (prompt) => {
+            await page.click('[data-testid="admin-prompt"]'); await page.keyboard.type(prompt); await page.keyboard.press('Enter');
+            await page.waitForFunction(() => { const es = [...document.querySelectorAll('[data-testid="admin-entry"]')]; const l = es[es.length - 1]; return l && l.dataset.status !== 'thinking'; }, { timeout: 20000 });
+            const st = await page.$$eval('[data-testid="admin-entry"]', es => es[es.length - 1].dataset.status);
+            if (st === 'proposed') { const ap = await page.$$('[data-testid="admin-apply"]'); await ap[ap.length - 1].click(); await pause(1500); }
+            return st;
+        };
+        {
+            const r0 = J((await ds()).worldRooms, []).length, d0 = J((await ds()).worldStations, []).length;
+            const st = await ask('add 5 desks into the next room');
+            const r1 = J((await ds()).worldRooms, []).length, d1 = J((await ds()).worldStations, []).length;
+            check('admin: "add 5 desks into the next room" builds a new room with 5 desks', st === 'proposed' && r1 === r0 + 1 && d1 === d0 + 5, { st, rooms: [r0, r1], desks: [d0, d1] });
+            const st2 = await ask('move Desk one to the review room');
+            check('admin: "move Desk one to the review room" is planned and applied', st2 === 'proposed', { st2 });
+            const st3 = await ask('make the world as big as possible');
+            const big = J((await ds()).worldShell, {});
+            check('admin: "make the world as big as possible" gives a 1 km world', st3 === 'proposed' && big.width === 1000 && big.depth === 1000, big);
+        }
         await shot('2-admin-room');
         if (await page.$('[data-testid="admin-close"]')) await click('[data-testid="admin-close"]'); else { await page.focus(CANVAS); await page.keyboard.press('h'); }
         await pause(600);

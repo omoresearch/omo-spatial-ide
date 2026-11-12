@@ -1,0 +1,166 @@
+{
+ "failed": 0,
+ "checks": [
+  {
+   "name": "onboarding: big plan makes rooms",
+   "pass": true,
+   "detail": {
+    "rooms": [
+     "research-wing",
+     "agent-wing"
+    ]
+   }
+  },
+  {
+   "name": "onboarding: all 10 desks created",
+   "pass": true,
+   "detail": {
+    "desks": 10
+   }
+  },
+  {
+   "name": "onboarding: world is bigger than the classic 12 x 10",
+   "pass": true,
+   "detail": {
+    "width": 54,
+    "depth": 48,
+    "open": true
+   }
+  },
+  {
+   "name": "admin: room request gives a proposal",
+   "pass": true,
+   "detail": {
+    "status": "proposed"
+   }
+  },
+  {
+   "name": "admin: Apply adds a room",
+   "pass": true,
+   "detail": {
+    "before": 2,
+    "after": 3
+   }
+  },
+  {
+   "name": "admin: Apply adds 3 desks",
+   "pass": true,
+   "detail": {
+    "before": 10,
+    "after": 13
+   }
+  },
+  {
+   "name": "admin: \"add 5 desks into the next room\" builds a new room with 5 desks",
+   "pass": true,
+   "detail": {
+    "st": "proposed",
+    "rooms": [
+     3,
+     4
+    ],
+    "desks": [
+     13,
+     18
+    ]
+   }
+  },
+  {
+   "name": "admin: \"move Desk one to the review room\" is planned and applied",
+   "pass": true,
+   "detail": {
+    "st2": "proposed"
+   }
+  },
+  {
+   "name": "admin: \"make the world as big as possible\" gives a 1 km world",
+   "pass": true,
+   "detail": {
+    "width": 1000,
+    "depth": 1000,
+    "open": true
+   }
+  },
+  {
+   "name": "build: World size controls present",
+   "pass": true
+  },
+  {
+   "name": "build: + grows the world to the next size step each way",
+   "pass": true,
+   "detail": {
+    "before3": {
+     "width": 1000,
+     "depth": 1000,
+     "open": true
+    },
+    "after3": {
+     "width": 1000,
+     "depth": 1000,
+     "open": true
+    }
+   }
+  },
+  {
+   "name": "build: Open world switch makes an open world",
+   "pass": true,
+   "detail": {
+    "width": 1000,
+    "depth": 1000,
+    "open": true
+   }
+  },
+  {
+   "name": "build: ghost desk placed near the edge",
+   "pass": true,
+   "detail": [
+    0.93,
+    0.4
+   ]
+  },
+  {
+   "name": "build: desk added",
+   "pass": true,
+   "detail": {
+    "before": 18,
+    "after": 19
+   }
+  },
+  {
+   "name": "build: world grew or already fitted (no clamp error)",
+   "pass": true,
+   "detail": {
+    "before4": {
+     "width": 1000,
+     "depth": 1000,
+     "open": true
+    },
+    "after4": {
+     "width": 1000,
+     "depth": 1000,
+     "open": true
+    },
+    "diff": "Add agent desk “Desk eleven”"
+   }
+  },
+  {
+   "name": "walk: player can go beyond the classic room edge (|x| > 5.5 m)",
+   "pass": true,
+   "detail": {
+    "x0": 4,
+    "x1": 17.833
+   }
+  },
+  {
+   "name": "render: parked-screen state is published",
+   "pass": true,
+   "detail": []
+  },
+  {
+   "name": "no page errors",
+   "pass": true,
+   "detail": []
+  }
+ ],
+ "errors": []
+}

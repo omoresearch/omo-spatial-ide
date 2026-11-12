@@ -19,7 +19,7 @@ import { sceneControls } from './focus-screen';
 import type { WorldStore, WorldStoreChange } from './world-store';
 import { entityTitle, describeChange } from './world-store';
 import type { WorldEntity, WorldOp, WorldSpec, StationConfig, Transform, RoomEntity, WallSide } from '../common/world-model';
-import { applyWorldOps, ROOM_MIN, ROOM_MAX } from '../common/world-model';
+import { applyWorldOps, roomRect, ROOM_MIN, ROOM_MAX } from '../common/world-model';
 import { BuildLayer, GhostSpec, rendererApi, hasWorldRenderer, threeOf } from './build-scene';
 import { PaletteId, paletteItem, makeEntity, placement, footprint, normalizeRotation, defaultLinkTarget } from './build-catalog';
 import { growFor, roomFromDrag, quarterTurn, roomWalls, polygonHitsWalls, shrinkProblem, shellSizeOps } from './build-room'; // w3:build
@@ -66,6 +66,27 @@ export interface BuildModeOptions {
 const QUARTER = Math.PI / 2;
 const isLinkable = (e: WorldEntity | undefined): boolean => e?.kind === 'monitor-wall' || e?.kind === 'mirror';
 const isLocked = (e: WorldEntity | undefined): boolean => e?.kind === 'station' && e.station.locked;
+
+/**
+ * w4:big — the things standing inside `room` (not other rooms), moved with it to `to`: same offset from the
+ * room centre, turned by the same quarter turns. Wall screens and decor come along too.
+ */
+export function carryOps(world: WorldSpec, room: WorldEntity, to: { x: number; z: number; rotation: number }): WorldOp[] {
+    if (room.kind !== 'room') return [];
+    const r = roomRect(room), from = room.transform;
+    const turn = to.rotation - from.rotation, c = Math.round(Math.cos(turn)), s = Math.round(Math.sin(turn));
+    if (from.x === to.x && from.z === to.z && Math.abs(turn) < 1e-6) return [];
+    const ops: WorldOp[] = [];
+    for (const e of world.entities) {
+        if (e.kind === 'room' || e.id === room.id) continue;
+        const { x, z } = e.transform;
+        if (!(x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ)) continue;
+        const dx = x - from.x, dz = z - from.z;
+        const nx = to.x + c * dx + s * dz, nz = to.z - s * dx + c * dz;
+        ops.push({ op: 'move', id: e.id, transform: { x: Math.round(nx * 100) / 100, z: Math.round(nz * 100) / 100, rotation: e.transform.rotation + turn } });
+    }
+    return ops;
+}
 
 export class BuildMode {
     state: BuildState = { active: false, tool: 'select', rotation: 0, ghostValid: false, ghostReason: '', worldRenderer: false, profilesVersion: 0, hint: '', notice: '', noticeTone: 'info' };
@@ -425,7 +446,8 @@ export class BuildMode {
         if (!g.valid) { this.warn(this.state.ghostReason || 'It does not fit there.'); return; }
         if (this.state.tool === 'move') {
             const id = g.entity.id, e = this.entity(id);
-            if (this.propose([...this.ghostGrow, { op: 'move', id, transform: { ...g.entity.transform } }], `Move ${entityTitle(e)}`)) { this.set({ tool: 'select' }); this.ghost = undefined; this.render(); }
+            const carried = e && e.kind === 'room' ? carryOps(this.preview(), e, g.entity.transform) : []; // w4:big — a moved room takes its desks along
+            if (this.propose([...this.ghostGrow, { op: 'move', id, transform: { ...g.entity.transform } }, ...carried], `Move ${entityTitle(e)}${carried.length ? ` with ${carried.length} thing${carried.length === 1 ? '' : 's'} inside` : ''}`)) { this.set({ tool: 'select' }); this.ghost = undefined; this.render(); }
             return;
         }
         this.roomAnchor = undefined; // w3:build
@@ -545,9 +567,12 @@ export class BuildMode {
 
     /** Why `entity` cannot go where it is ('' = it fits). */
     private fitProblem(world: WorldSpec, entity: WorldEntity, moving: boolean, grow: WorldOp[] = []): string {
-        const ops: WorldOp[] = [...grow, moving ? { op: 'move', id: entity.id, transform: entity.transform } : { op: 'add', entity }];
+        const before = moving ? world.entities.find(x => x.id === entity.id) : undefined;
+        const carried = before && before.kind === 'room' ? carryOps(world, before, entity.transform) : []; // w4:big
+        const ops: WorldOp[] = [...grow, moving ? { op: 'move', id: entity.id, transform: entity.transform } : { op: 'add', entity }, ...carried];
         const r = applyWorldOps(world, ops);
         if (!r.ok) return friendly(r.error, world);
+        if (carried.length) world = { ...world, entities: world.entities.filter(x => !carried.some(c => 'id' in c && c.id === x.id)) }; // judged at their new spots
         const solid = (e: WorldEntity): boolean => e.kind === 'station' || (e.kind === 'decor' && e.decor !== 'rug' && e.decor !== 'window');
         const wallish = (e: WorldEntity): boolean => !solid(e) && e.kind !== 'room' && !(e.kind === 'decor' && e.decor === 'rug'); // w3:build: a room is a floor
         // w3:build — rooms: no overlap with another room; solid things may stand inside, only the room walls block them.
