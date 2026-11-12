@@ -102,8 +102,8 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             await click('[data-testid="build-world-depth-plus"]'); await pause(400);
             if (await page.$('[data-testid="build-apply"]')) await click('[data-testid="build-apply"]'); await pause(1200);
             const after3 = J((await ds()).worldShell, {});
-            const step = n => Math.min(200, Math.floor(n / 4) * 4 + 4); // + goes to the next 4 m step
-            check('build: + grows the world to the next 4 m step each way', after3.width === step(before3.width) && after3.depth === step(before3.depth), { before3, after3 });
+            const step = n => { const k = n < 40 ? 4 : n < 200 ? 20 : 100; return Math.min(1000, Math.floor(n / k) * k + k); }; // + goes to the next step (4/20/100 m)
+            check('build: + grows the world to the next size step each way', after3.width === step(before3.width) && after3.depth === step(before3.depth), { before3, after3 });
         }
         if (!J((await ds()).worldShell, {}).open && await page.$('[data-testid="build-world-open"]')) {
             await click('[data-testid="build-world-open"]'); await pause(400);

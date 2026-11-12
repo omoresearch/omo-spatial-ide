@@ -464,7 +464,7 @@ export class BuildMode {
             return;
         }
         // t2:worldui — the overview camera orbits ~24-40 m out; the 14 m walking reach made every overview aim miss the floor.
-        const floor = this.layer.floorPoint(t.camera, t.canvas, x, y, t.navigation === 'overview' ? 200 : undefined);
+        const floor = this.layer.floorPoint(t.camera, t.canvas, x, y, t.navigation === 'overview' ? 2500 : undefined); // w4:big
         const key = floor ? `${Math.round(floor.x * 8)}:${Math.round(floor.z * 8)}:${this.state.rotation}:${tool}:${this.state.item}:${this.state.selected}:${store.preview.revision}:${store.proposal?.steps.length ?? 0}:${this.roomAnchor ? `${this.roomAnchor.x},${this.roomAnchor.z}` : ''}` : 'none';
         if (key === this.lastAim.key) return;
         this.lastAim.key = key;
@@ -515,7 +515,7 @@ export class BuildMode {
         const t = threeOf(this.bound?.scene); if (!t.camera || !t.canvas) return undefined;
         const r = t.canvas.getBoundingClientRect();
         const x = t.navigation === 'walk' ? r.left + r.width / 2 : event.clientX, y = t.navigation === 'walk' ? r.top + r.height / 2 : event.clientY;
-        return this.layer.floorPoint(t.camera, t.canvas, x, y, t.navigation === 'overview' ? 200 : undefined);
+        return this.layer.floorPoint(t.camera, t.canvas, x, y, t.navigation === 'overview' ? 2500 : undefined); // w4:big
     }
     private roomDown(event: PointerEvent): boolean {
         const t = threeOf(this.bound?.scene);

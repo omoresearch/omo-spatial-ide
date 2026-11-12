@@ -19,9 +19,9 @@ export const WORLD_VERSION = 2 as const;
 export const WORLD_MAX_ENTITIES = 256; // w3:expand (was 64)
 export const WORLD_MAX_STATIONS = 48; // w3:expand (was 16)
 export const WORLD_MAX_BYTES = 192 * 1024; // w3:expand (was 64 KiB)
-/** w3:expand — shell (ground) size limits in metres. 12 x 10 is the classic room; 200 x 200 is the open-world maximum. */
+/** w3:expand — shell (ground) size limits in metres. 12 x 10 is the classic room; w4:big — 1000 x 1000 (1 km) is the open-world maximum. */
 export const SHELL_MIN = 8;
-export const SHELL_MAX = 200;
+export const SHELL_MAX = 1000;
 /** w3:expand — a room placed inside the world (its own floor, walls and doorways). */
 export const ROOM_MIN = 3;
 export const ROOM_MAX = 60;

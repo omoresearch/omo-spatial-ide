@@ -65,7 +65,10 @@ export function buildOpenGround(root: THREE.Group, shell: WorldShell, free: (x: 
         for (let i = 0; i < pos.count; i++) { const t = Math.max(0, pos.getY(i) / 330); c.copy(low).lerp(high, Math.pow(t, 0.6)); colors.push(c.r, c.g, c.b); }
         dome.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         const sky = new THREE.Mesh(dome, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
-        sky.renderOrder = -10; sky.raycast = () => undefined; sky.userData.part = 'sky'; root.add(sky);
+        sky.renderOrder = -10; sky.raycast = () => undefined; sky.userData.part = 'sky'; sky.frustumCulled = false;
+        // w4:big — the dome is centred on the camera every frame, so it never ends or clips in a 1 km world.
+        sky.onBeforeRender = (_r, _s, camera) => { sky.position.copy(camera.position); sky.updateMatrixWorld(true); };
+        root.add(sky);
     }
     horizon.rotation.x = -Math.PI / 2; horizon.position.y = -0.62; horizon.receiveShadow = false; horizon.raycast = () => undefined; root.add(horizon);
     // Spawn marker (the classic room's centre disc and crystal), when free.

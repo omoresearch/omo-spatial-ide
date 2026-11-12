@@ -13,7 +13,10 @@ import { Icon } from './icons';
 
 /** The next size one step up / down: back onto the 4 m grid, within SHELL_MIN..SHELL_MAX. */
 export function stepSize(n: number, dir: 1 | -1): number {
-    const next = dir > 0 ? Math.floor(n / SHELL_STEP) * SHELL_STEP + SHELL_STEP : Math.ceil(n / SHELL_STEP) * SHELL_STEP - SHELL_STEP;
+    // w4:big — the step grows with the world: 4 m below 40 m, 20 m below 200 m, then 100 m (1 km in a few clicks).
+    const base = dir > 0 ? n : n - 1;
+    const step = base < 40 ? SHELL_STEP : base < 200 ? 20 : 100;
+    const next = dir > 0 ? Math.floor(n / step) * step + step : Math.ceil(n / step) * step - step;
     return Math.min(SHELL_MAX, Math.max(SHELL_MIN, next));
 }
 

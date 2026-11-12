@@ -1,4 +1,4 @@
-// GENERATED from omo/extension/src/common/world-model.ts (sha256 6657fd6456be25ab2d607b5de3fc058043d2642effe5f7838da04c274d7066ee). Do not edit.
+// GENERATED from omo/extension/src/common/world-model.ts (sha256 3df89f7e60819d15b1445efd942e28eab67c48f591f09a96d89265c843ade27c). Do not edit.
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.worldStorageKey = exports.WORLD_ID_RE = exports.WALL_SIDES = exports.ROOM_MAX = exports.ROOM_MIN = exports.SHELL_MAX = exports.SHELL_MIN = exports.WORLD_MAX_BYTES = exports.WORLD_MAX_STATIONS = exports.WORLD_MAX_ENTITIES = exports.WORLD_VERSION = void 0;
@@ -21,9 +21,9 @@ exports.WORLD_VERSION = 2;
 exports.WORLD_MAX_ENTITIES = 256; // w3:expand (was 64)
 exports.WORLD_MAX_STATIONS = 48; // w3:expand (was 16)
 exports.WORLD_MAX_BYTES = 192 * 1024; // w3:expand (was 64 KiB)
-/** w3:expand — shell (ground) size limits in metres. 12 x 10 is the classic room; 200 x 200 is the open-world maximum. */
+/** w3:expand — shell (ground) size limits in metres. 12 x 10 is the classic room; w4:big — 1000 x 1000 (1 km) is the open-world maximum. */
 exports.SHELL_MIN = 8;
-exports.SHELL_MAX = 200;
+exports.SHELL_MAX = 1000;
 /** w3:expand — a room placed inside the world (its own floor, walls and doorways). */
 exports.ROOM_MIN = 3;
 exports.ROOM_MAX = 60;

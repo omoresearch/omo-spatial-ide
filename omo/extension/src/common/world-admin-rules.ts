@@ -630,6 +630,14 @@ class Planner {
         const name = extractName(lower, clause, this);
         const size = sizeWord(lower);
         if (kind === 'room') return this.addRooms(clause, lower, count, name);
+        // w4:big — "add 5 desks to the next room / a new room / another room": a new room holding them.
+        if (kind === 'station' && NEW_ROOM_RE.test(lower)) {
+            const rest = lower.replace(NEW_ROOM_PHRASE_RE, ' ').trim().replace(/^(?:add|put|place|create|build|make|give me|set up|get)\s+/, '').trim();
+            const synth = ` add a room with ${/^\d|^(a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/.test(rest) ? rest : `${count} ${rest}`} `;
+            const id = this.addRoom(clause, synth, name, 0);
+            if (id) this.lastRefs = [id];
+            return;
+        }
         const into = this.roomRefIn(lower);
         const previous = this.targetRoom;
         if (into) this.targetRoom = into.id;
@@ -731,7 +739,7 @@ class Planner {
     // ----- w3:admin rooms and the open world ----------------------------------------------
     /** "in / inside / into the research room" → that room (only a specific match, never the bare word). */
     roomRefIn(lower: string): RoomEntity | undefined {
-        const m = /\b(?:in|inside|into|within)\s+(?:the\s+)?(.+)$/.exec(lower);
+        const m = /\b(?:in|inside|into|within|to)\s+(?:the\s+)?(.+)$/.exec(lower); // w4:big: "add 5 desks to the lounge"
         if (!m || !rooms(this.draft).length) return undefined;
         const found = this.lookup(m[1], e => e.kind === 'room');
         if (found.length === 1 && (this.lastScore >= 200 || rooms(this.draft).length === 1)) return found[0] as RoomEntity;
@@ -766,7 +774,7 @@ class Planner {
         if (this.draft.shell.open) { this.notes.push('The world is already open. Say “make the world bigger” for more ground.'); return; }
         if (!this.openUp()) return;
         const { width, depth } = this.draft.shell;
-        const w = Math.min(SHELL_MAX, Math.max(60, width + 24)), d = Math.min(SHELL_MAX, Math.max(50, depth + 24));
+        const w = Math.min(SHELL_MAX, Math.max(160, width + 24)), d = Math.min(SHELL_MAX, Math.max(160, depth + 24)); // w4:big (was 60 x 50)
         if (w !== width || d !== depth) this.push({ op: 'shell', shell: { width: w, depth: d } }, ' — open ground around the room');
     }
 
@@ -979,8 +987,16 @@ class Planner {
         const refText = m ? m[1] : stripVerb(lower);
         const dest = m ? `${m[2]}${m[3]}` : '';
         const targets = /\b(them|those|these|all desks|the desks)\b/.test(refText) ? this.lookup(refText) : [this.one(refText, 'thing')].filter((e): e is WorldEntity => !!e);
+        const intoRoom = this.roomRefIn(` ${dest} `); // w4:big — "move desk one to the lounge": a free spot inside that room
         for (const e of targets) {
             if (this.locked(e)) continue;
+            if (intoRoom && e.kind !== 'room') {
+                if (this.roomAt(e.transform)?.id === intoRoom.id) { this.notes.push(`“${entityName(e)}” is already in “${entityName(intoRoom)}”.`); continue; }
+                const before = this.ops.length;
+                const spot = this.place(e, isWallThing(e) ? 'wall' : 'floor', undefined, intoRoom.id);
+                if (spot && this.push({ op: 'move', id: e.id, transform: { ...spot, rotation: isWallThing(e) ? spot.rotation : e.transform.rotation } }, ` — into “${entityName(intoRoom)}”`)) continue;
+                this.rollback(before); this.notes.push(`There is no free spot for “${entityName(e)}” in “${entityName(intoRoom)}”.`); continue;
+            }
             const t = this.destination(e, ` ${dest} `);
             if (!t) { this.notes.push(`Where should “${entityName(e)}” go? Try “left 2 m”, “to the back wall”, “to the back left corner” or “next to desk one”.`); continue; }
             this.push({ op: 'move', id: e.id, transform: t });
@@ -1121,7 +1137,8 @@ class Planner {
         if (huge && /\bworld\b/.test(lower) && !this.openUp()) return;
         let width = this.draft.shell.width, depth = this.draft.shell.depth;
         if (dims) { [width, depth] = dims; }
-        else if (huge) { width = Math.max(width, 120); depth = Math.max(depth, 120); }
+        else if (/\b(as big as (?:possible|it gets)|max(?:imum)?(?: size)?|biggest|largest|endless|infinite|minecraft)\b/.test(lower)) { if (!this.openUp()) return; width = SHELL_MAX; depth = SHELL_MAX; } // w4:big
+        else if (huge) { width = Math.max(width, 400); depth = Math.max(depth, 400); } // w4:big (was 120)
         else {
             const given = /(\d+(?:\.\d+)?)\s*(?:m|metres?|meters?)\b/.exec(lower)?.[1];
             const much = /\b(much|a lot|way|lots)\b/.test(lower) ? 2 : 1;
@@ -1207,7 +1224,7 @@ function detectIntent(lower: string): Intent | undefined {
     if (/^(link|connect|attach|hook up|point)\b/.test(s)) return 'link';
     if (/^(remove|delete|drop|get rid of|destroy|take away|take out|clear)\b/.test(s)) return 'remove';
     if (/^(switch|change|use|make|set|turn)\b.*\b(jungle|space station|space theme|station theme|orbital)\b/.test(s)) return 'theme';
-    if (/^(make|resize|enlarge|shrink|grow|set|expand)\b.*\b(room|world|floor|wing|lounge|office|lab)\b.*\b(bigger|larger|smaller|wider|narrower|deeper|longer|shorter|huge|giant|massive|enormous|vast|gigantic|\d+(?:\.\d+)?\s*(?:x|×|by)\s*\d+)/.test(s) || /^(enlarge|grow|shrink|expand)\s+(?:the |this |my )?(room|world)\b/.test(s)) return 'room-size';
+    if (/^(make|resize|enlarge|shrink|grow|set|expand)\b.*\b(room|world|floor|wing|lounge|office|lab)\b.*\b(bigger|larger|smaller|wider|narrower|deeper|longer|shorter|huge|giant|massive|enormous|vast|gigantic|as big as (?:possible|it gets)|max(?:imum)?|biggest|largest|endless|infinite|minecraft|\d+(?:\.\d+)?\s*(?:x|×|by)\s*\d+)/.test(s) || /^(enlarge|grow|shrink|expand)\s+(?:the |this |my )?(room|world)\b/.test(s)) return 'room-size';
     if (/^(resize|enlarge|shrink)\b/.test(s)) return 'resize';
     if (/^(make|set)\s+(?:the|my|that|this|it|its|both)\b/.test(s) && /\b(bigger|larger|smaller|wider|taller|huge|giant|tiny|\d+(?:\.\d+)?\s*(?:x|×|by)\s*\d+)/.test(s)) return 'resize';
     if (/^(turn|rotate|spin)\b/.test(s)) return 'rotate';
@@ -1267,6 +1284,9 @@ function roomDims(lower: string): [number, number] | undefined {
     return m ? [Number(m[1]), Number(m[2])] : undefined;
 }
 /** "with 4 desks", "(with twelve codex desks)" → 4 / 12; none → 0. */
+/** w4:big — "the next room", "a new room", "another wing", "a separate lab": the request wants a NEW room. */
+const NEW_ROOM_RE = /\b(?:next|new|another|separate|second|other|different|extra|fresh)\s+(?:rooms?|wings?|labs?|offices?|spaces?)\b/;
+const NEW_ROOM_PHRASE_RE = /\b(?:to|in|into|inside|within|for)?\s*(?:the|a|an)?\s*(?:next|new|another|separate|second|other|different|extra|fresh)\s+(?:rooms?|wings?|labs?|offices?|spaces?)\b/;
 function deskCountIn(lower: string): number {
     const m = /\bwith\s+(\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|some|a few|few|several|a couple of|couple of)\s+(?:[a-z]+\s+){0,2}?(?:desks?|stations?|workstations?|seats?)\b/.exec(lower);
     if (!m) return 0;

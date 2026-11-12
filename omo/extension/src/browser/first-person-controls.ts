@@ -37,14 +37,17 @@ const ease = (t: number): number => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)
 const wrapAngle = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const LOOK_SPEED = 0.004, LOCKED_LOOK_SPEED = 0.0024;
+/** w4:big — Shift+WASD runs at this multiple of walking speed (2.7 m/s -> ~8 m/s). */
+const SPRINT = 3;
 const POINTER_LOOK_KEY = 'omo.pointerLook';
-const WALK_HINT = 'Walking · WASD to move. Drag to look. Click a monitor to use it.';
+const WALK_HINT = 'Walking · WASD to move (hold Shift to run). Drag to look. Click a monitor to use it.';
 const readPointerLook = (): boolean => { try { return typeof localStorage !== 'undefined' && localStorage.getItem(POINTER_LOOK_KEY) === '1'; } catch { return false; } };
 
 export class FirstPersonControls {
     enabled = false;
     typing = false;
     pose: PlayerPose = { ...PLAYER_HOME };
+    private sprint = false; // w4:big
     // w2:render — walking rules and reset spot of the current WorldSpec (RoomScene sets them). Unset = v1 layout rules.
     mover?: (player: PlayerPose, input: { forward: number; right: number }, seconds: number) => PlayerPose;
     home?: PlayerPose;
@@ -242,12 +245,13 @@ export class FirstPersonControls {
             if(key==='g'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();this.keys.clear();if(!event.repeat)window.dispatchEvent(new CustomEvent(IMMERSIVE_TOGGLE_EVENT));return;}
             if(key==='l'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.repeat){event.preventDefault();this.setPointerLook(!this.lookEnabled);return;}
             if(['w','a','s','d'].includes(key)){event.preventDefault();this.keys.add(key);}
+            this.sprint=event.shiftKey; // w4:big — hold Shift to run (big worlds)
             if(event.key==='ArrowLeft'){event.preventDefault();this.pose.yaw+=0.07;}
             if(event.key==='ArrowRight'){event.preventDefault();this.pose.yaw-=0.07;}
             if(event.key==='ArrowUp'){event.preventDefault();this.pose.pitch=Math.min(1.2,this.pose.pitch+0.05);}
             if(event.key==='ArrowDown'){event.preventDefault();this.pose.pitch=Math.max(-1.2,this.pose.pitch-0.05);}
         });
-        on('keyup',event=>{if(this.enabled)event.stopImmediatePropagation();this.keys.delete(event.key.toLowerCase());});
+        on('keyup',event=>{if(this.enabled)event.stopImmediatePropagation();this.keys.delete(event.key.toLowerCase());this.sprint=event.shiftKey;});
         on('paste',event=>{if(this.enabled&&this.typing){
             event.preventDefault();event.stopImmediatePropagation();const text=event.clipboardData?.getData('text/plain');
             if (!text) return;
@@ -371,7 +375,7 @@ export class FirstPersonControls {
             const k=this.keys;
             const speed=this.velocity.step(Number(k.has('w'))-Number(k.has('s')),Number(k.has('d'))-Number(k.has('a')),seconds);
             // advancePlayer moves at full speed along the input direction; eased speed scales the time step.
-            if(speed>0){const input={forward:this.velocity.forward,right:this.velocity.right},time=seconds*Math.min(1,speed);this.pose=this.mover?this.mover(this.pose,input,time):advancePlayer(this.pose,input,time,this.layout);} // w2:render
+            if(speed>0){const input={forward:this.velocity.forward,right:this.velocity.right},time=seconds*Math.min(1,speed);for(let i=0;i<(this.sprint?SPRINT:1);i++)this.pose=this.mover?this.mover(this.pose,input,time):advancePlayer(this.pose,input,time,this.layout); /* w4:big: running = several normal steps, so thin walls still block */} // w2:render
         }else this.velocity.stop();
         this.apply();
     }
