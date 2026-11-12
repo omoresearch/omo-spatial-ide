@@ -1,0 +1,29 @@
+PASS create-room printed an owner key — Room created: two-app-room (Two app room)
+PASS room server up on loopback plain http — http://127.0.0.1:3540/healthz
+PASS two separate Omo apps serve — {"A":"http://127.0.0.1:3541","B":"http://127.0.0.1:3542","socketA":"omo-2app-app-a-4100598","socketB":"omo-2app-app-b-4100598"}
+PASS both apps opened in their own headless Chrome and created a local room
+PASS A hosts through "Host a room" (server URL + owner key) — Connected to Two app room on http://127.0.0.1:3540 · you host this room.
+PASS A creates an invite link — {"link":"http://127.0.0.1:3540/omo-room/join/two-app-room#invite=<redacted>","uiDefaultInviteRole":"member","chosen":"builder"}
+PASS B joins by pasting the invite link (role builder) — Connected to Two app room on http://127.0.0.1:3540 · your role: builder.
+PASS presence list both ways — {"A_strip":"Harry (you)Kaviru","B_strip":"HarryKaviru (you)","A_panel":"Harry (you) · host | Kaviru · builder | viewer · looks only | member · chat, voice, agent status | builder · also edits the room","B_panel":"Harry · host | Kaviru (you) · builder"}
+PASS avatars both ways + peer avatar moves when A walks — {"A_sees":["Kaviru"],"B_sees":["Harry"],"A_on_B_before":{"x":0,"z":4.1},"A_on_B_after":{"x":-1.2369639224464195,"z":4.1}}
+PASS chat both ways — {"A_to_B":"hello from Harry","B_to_A":"hi Harry, Kaviru here"}
+PASS unique string typed into A's real terminal and echoed by the shell — omo-term-only-e234aa08089b
+PASS A desk -> B within 10 s — {"placedAt":{"x":451,"y":752,"ghost":"-5,9.25,0,true"},"newStation":"desk-1","msToB":1113,"A":["terminal","terminal-2","desk-1"],"B":["terminal","terminal-2","desk-1"],"notice":""}
+PASS B builder edit -> A — {"placedAt":{"x":451,"y":729,"ghost":"-8.5,19,0,true"},"newEntity":"plant-1","msToA":1479}
+SHOT /home/harry/dev/omo-world-v2/omo/evidence/t3-mp2/mp2-B-member-refused.png
+PASS member-role edit refused with readable message — {"bStatus":"Connected to Two app room on http://127.0.0.1:3540 · your role: member.","message":"Your role in this room is “member”: you can chat, talk and share agent status, but only builders and the owner can change the room. Ask the room owner to make you a builder. Nothing was changed.","roomRev
+SHOT /home/harry/dev/omo-world-v2/omo/evidence/t3-mp2/mp2-A-room-sees-B.png
+SHOT /home/harry/dev/omo-world-v2/omo/evidence/t3-mp2/mp2-B-room-sees-A.png
+PASS screenshots A and B rooms — {"A_peers":[{"name":"Kaviru","visible":true}],"B_peers":[{"name":"Harry","visible":true}]}
+PASS voice connected + audio both ways — {"A":{"states":["connected"],"inboundBytes":[545,13334],"outboundBytes":[556,13324]},"B":{"states":["connected"],"inboundBytes":[780,13810],"outboundBytes":[783,13820]}}
+SHOT /home/harry/dev/omo-world-v2/omo/evidence/t3-mp2/mp2-voice-panel.png
+PASS mute stops A outbound bytes — {"A_outboundBytes":[14620,14620],"A_packetsSent":[180,180],"B_inboundBytes":[14620,14620]}
+PASS unmute: A outbound bytes grow again and B receives them — {"A_outboundBytes":[22801,33412],"B_inboundBytes":[23044,33574],"A_states":["connected"]}
+PASS B leaves -> A drops B — {"A_strip":"Harry (you)","B_chip":"Remote room"}
+PASS terminal string never in server log or any relayed frame — {"unique":"omo-term-only-e234aa08089b","framesTraced":992,"inTrace":false,"inServerLog":false,"serverLogBytes":474}
+PASS no owner key in trace or server log
+PASS no fixture agent started
+PASS no page errors — {"A":[],"B":[]}
+
+23/23 checks passed -> /home/harry/dev/omo-world-v2/omo/evidence/t3-mp2/remote-two-app-results.json
