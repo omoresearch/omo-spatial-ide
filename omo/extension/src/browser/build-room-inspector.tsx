@@ -45,6 +45,7 @@ export function RoomInspector(props: { build: BuildMode; room: RoomEntity }): Re
                 {!room.theme && <option value="">Same as the world</option>}
                 <option value="station">Station</option>
                 <option value="jungle">Jungle</option>
+                <option value="skyline">Skyline</option>
             </select></label>
     </div>;
 }

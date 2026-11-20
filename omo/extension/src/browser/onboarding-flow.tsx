@@ -44,7 +44,7 @@ type Step = 1 | 2 | 3;
 const AGENTS: DeskAgent[] = ['hermes', 'claude', 'codex', 'shell'];
 const KIND_ICON: Record<WorldEntity['kind'], string> = { station: '▣', 'monitor-wall': '▤', 'web-wall': '◫', mirror: '◩', 'review-screen': '⌘', decor: '✿', room: '▭' };
 const KIND_LABEL: Record<WorldEntity['kind'], string> = { station: 'Desk', 'monitor-wall': 'Monitor wall', 'web-wall': 'Web wall', mirror: 'Mirror', 'review-screen': 'Code review', decor: 'Decor', room: 'Room' };
-const THEME_INFO: Record<RoomTheme, { title: string; symbol: string }> = { station: { title: 'Space station', symbol: '◉' }, jungle: { title: 'Prehistoric jungle', symbol: '✳' } };
+const THEME_INFO: Record<RoomTheme, { title: string; symbol: string }> = { station: { title: 'Space station', symbol: '◉' }, jungle: { title: 'Prehistoric jungle', symbol: '✳' }, skyline: { title: 'Manhattan skyline', symbol: '▲' } };
 
 const labelOf = (e: WorldEntity): string => e.label ?? (e.kind === 'station' ? e.station.name : KIND_LABEL[e.kind]);
 

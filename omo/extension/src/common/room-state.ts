@@ -1,5 +1,5 @@
 import type { RoomLayoutId, RoomKitId } from './player-state';
-export type RoomTheme = 'station' | 'jungle';
+export type RoomTheme = 'station' | 'jungle' | 'skyline'; // sky:render
 export interface RoomState {
     version: 1;
     theme: RoomTheme;
@@ -13,7 +13,7 @@ export function parseRoomState(raw: string | null, projectUri: string): RoomStat
     if (!raw) return undefined;
     try {
         const value = JSON.parse(raw);
-        if (!value || value.version !== 1 || !['station', 'jungle'].includes(value.theme)
+        if (!value || value.version !== 1 || !['station', 'jungle', 'skyline'].includes(value.theme)
             || value.projectUri !== projectUri || typeof value.projectName !== 'string'
             || !value.projectName.trim() || value.projectName.length > 120
             || (value.layout !== undefined && value.layout !== 'classic' && value.layout !== 'wide')

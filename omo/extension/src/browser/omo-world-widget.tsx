@@ -96,7 +96,8 @@ const asDesk = (id: string): TerminalWorkstation => id as TerminalWorkstation;
 const CAMERA = { azimuth: 0.56, elevation: 0.61, distance: 24 };
 const THEMES = {
     station: { title: 'Space station', eyebrow: 'ORBITAL / 01', description: 'A quiet observatory for your next big idea.', symbol: '◉' },
-    jungle: { title: 'Prehistoric jungle', eyebrow: 'EXPEDITION / 02', description: 'A green retreat. Room to think, space to build.', symbol: '✳' }
+    jungle: { title: 'Prehistoric jungle', eyebrow: 'EXPEDITION / 02', description: 'A green retreat. Room to think, space to build.', symbol: '✳' },
+    skyline: { title: 'Manhattan skyline', eyebrow: 'FLOOR 61 / 03', description: 'A glass penthouse floor above the city at dusk.', symbol: '▲' } // sky:render
 };
 
 function SceneView(props: { theme: RoomTheme; layout: RoomLayoutId; kit: RoomKitId; camera: RoomState['camera']; onSelect: (station: Workstation, point?: ScreenPoint) => void; onTextSelect: (station: TerminalWorkstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrames: Record<TerminalWorkstation, MonitorFrame>; webFrame?: WebSurfaceFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onPaste: (text: string) => void; onScroll?: (delta: number) => void; onWebScroll?: (point: ScreenPoint, deltaY: number, deltaX: number) => void; onMessage: (text: string) => void; onShortcut?: (shortcut: 'new-shell' | 'select-tab-2' | 'workspace-picker') => void; onOpenLink?: (url: string) => void; onPose?: (pose: PlayerPose) => void; children?: React.ReactNode }): React.ReactElement {

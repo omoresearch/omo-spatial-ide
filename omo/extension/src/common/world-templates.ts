@@ -16,7 +16,7 @@ import { validateWorld, worldFromRoomV1, WORLD_VERSION } from './world-model';
 export type WorldTemplateId =
     | 'solo-builder' | 'classic-pair' | 'agent-lab' | 'research-library' | 'startup-war-room'
     | 'review-studio' | 'jungle-expedition' | 'space-station' | 'minimal-terminal-nook'
-    | 'open-campus' | 'mission-control-xl'; // w3:admin
+    | 'open-campus' | 'mission-control-xl' | 'nyc-skyscraper'; // w3:admin; sky:render
 
 export interface WorldTemplate {
     id: WorldTemplateId;
@@ -169,6 +169,23 @@ const RAW_TEMPLATES: Array<Omit<WorldTemplate, 'summary'>> = [
             decor('sofa', 'sofa', 0, 3.6, Math.PI),
             decor('plant', 'plant', 5.4, -4.2),
             decor('lamp', 'lamp', 5.4, 3.8)
+        ])
+    },
+    {
+        id: 'nyc-skyscraper', // sky:render
+        label: 'NYC skyscraper',
+        description: 'A glass penthouse floor high above Manhattan at dusk: three desks facing the skyline, a web wall and a lounge.',
+        world: world('NYC skyscraper', 'skyline', 24, 18, [
+            station('terminal', 'Plan · Hermes', -4.6, -3.4, 0, setup('Plan · Hermes', 'hermes')),
+            station('terminal-2', 'Code · Claude', 0, -3.4, 0, setup('Code · Claude', 'claude')),
+            station('desk-3', 'Review · Codex', 4.6, -3.4, 0, setup('Review · Codex', 'codex')),
+            { id: 'web', kind: 'web-wall', label: 'Docs wall', transform: { x: 11.3, z: 1.5, rotation: -HALF_PI }, width: 4.8, height: 2.5, elevation: 0.7 },
+            decor('sofa', 'sofa', -7.2, 5.2, Math.PI / 4),
+            decor('rug', 'rug', -7.6, 5.6, 0, 1.4),
+            decor('plant-1', 'plant', -10.6, -7.6, 0, 1.4),
+            decor('plant-2', 'plant', 10.6, -7.6, 0, 1.4),
+            decor('plant-3', 'plant', 10.6, 7.4, 0, 1.2),
+            decor('lamp', 'lamp', -5.4, 6.6)
         ])
     },
     {

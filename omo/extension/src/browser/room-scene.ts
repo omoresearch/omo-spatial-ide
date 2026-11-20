@@ -27,6 +27,8 @@ import { cameraClip, overviewFrame, shadowFrame, terminalFar, worldFog, worldSca
 import { refreeze as refreezeNode } from './world-scene-kit'; // w3:render
 import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
 import { buildPaths, pathsKey } from './world-scene-paths'; // w3:look (7)
+import { buildSkylineShell, restyleForSkyline, SKYLINE_COLORS, SKYLINE_FOG } from './world-scene-skyline'; // sky:render
+import { SkylineFx } from './world-scene-skyline-fx'; // sky:render
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -226,6 +228,7 @@ export class RoomScene {
     private linkedFrames = new Map<string, MonitorFrame>();
     private stationNumbers = new Map<string, number>();
     private lights?: { hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight; accent: THREE.PointLight };
+    private skyFx?: SkylineFx; // sky:render — bloom + environment, skyline theme only
     /** Overview camera distance scale for shells larger than the v1 12 x 10 room. */
     private roomScale = 1;
     private webSurface?: HTMLCanvasElement;
@@ -269,7 +272,7 @@ export class RoomScene {
         const given = this.options.world ? validateWorld(this.options.world) : undefined;
         if (given && !given.ok) this.options.onError(`This world could not be drawn: ${given.error} Showing the classic room.`);
         const world = given?.ok ? given.world : legacyRoomWorld({ theme: this.options.theme, layout: this.options.layout, kit: this.options.kit });
-        const colors = shellColors(world.shell.theme === 'jungle');
+        const colors = world.shell.theme === 'skyline' ? SKYLINE_COLORS : shellColors(world.shell.theme === 'jungle'); // sky:render
         this.scene.background = new THREE.Color(colors.background);
         this.scene.fog = new THREE.Fog(colors.background, 33, 65);
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -432,6 +435,7 @@ export class RoomScene {
         const previous = this.world; this.world = world;
         const jungle = world.shell.theme === 'jungle';
         if (previous && previous.shell.theme !== world.shell.theme) this.applyTheme(jungle);
+        this.applySkyline(world.shell.theme === 'skyline'); // sky:render
         this.applySky(world); // w3:render — open worlds: sky/horizon colour instead of the dark room backdrop
         const stations = world.entities.filter(e => e.kind === 'station');
         this.stationNumbers = new Map(stations.map((e, i) => [e.id, i + 1]));
@@ -440,7 +444,7 @@ export class RoomScene {
         const shellKey = JSON.stringify([world.shell, blocks]);
         if (shellKey !== this.shellKey) {
             if (this.shellRoot) { this.worldRoot.remove(this.shellRoot); disposeTree(this.shellRoot); }
-            this.shellRoot = buildShell(world.shell, blocks, ORB); this.worldRoot.add(this.shellRoot); freezeTree(this.shellRoot); this.shellKey = shellKey;
+            this.shellRoot = world.shell.theme === 'skyline' ? buildSkylineShell(world.shell, blocks, this.camera) : buildShell(world.shell, blocks, ORB); /* sky:render */ this.worldRoot.add(this.shellRoot); freezeTree(this.shellRoot); this.shellKey = shellKey;
         }
         const pk = pathsKey(world.shell, world.entities); // w3:look (7) — plaza, paths, lamps (open worlds)
         if (pk !== this.pathsKey) {
@@ -462,6 +466,7 @@ export class RoomScene {
             }
             if (item) { this.worldRoot.remove(item.built.root); disposeTree(item.built.root); this.screens.delete(entity.id); this.lamps.delete(entity.id); }
             const built = this.buildEntity(entity, jungle, standing);
+            if (world.shell.theme === 'skyline') restyleForSkyline(built.root); // sky:render
             this.worldRoot.add(built.root); freezeTree(built.root);
             this.entities.set(entity.id, { entity, key, built, label: item?.label });
             if (built.screen) { built.screen.userData.screenOf = entity.id; built.screen.userData.screenKind = entity.kind; this.screens.set(entity.id, built.screen); }
@@ -497,8 +502,20 @@ export class RoomScene {
     }
     /** w3:render — background + fog colour: the classic room backdrop, or the open world's sky. */
     private applySky(world: WorldSpec): void {
-        const jungle = world.shell.theme === 'jungle', color = world.shell.open ? openSky(jungle) : shellColors(jungle).background;
+        const jungle = world.shell.theme === 'jungle', color = world.shell.theme === 'skyline' ? SKYLINE_COLORS.background : world.shell.open ? openSky(jungle) : shellColors(jungle).background; // sky:render
         (this.scene.background as THREE.Color).set(color); (this.scene.fog as THREE.Fog).color.set(color);
+    }
+    /** sky:render — skyline theme on/off: dusk lights, far haze, bloom + environment. */
+    private applySkyline(on: boolean): void {
+        if (on && !this.skyFx && this.renderer) {
+            this.skyFx = new SkylineFx(this.renderer, this.scene, this.camera);
+            this.renderer.toneMappingExposure = 1.0;
+        } else if (!on && this.skyFx) { this.skyFx.dispose(); this.skyFx = undefined; this.renderer.toneMappingExposure = 1.25; }
+        if (on && this.lights) {
+            this.lights.hemi.color.setHex(SKYLINE_COLORS.hemiSky); this.lights.hemi.groundColor.setHex(0x2a2020); this.lights.hemi.intensity = 1.5;
+            this.lights.sun.color.setHex(SKYLINE_COLORS.sun); this.lights.sun.intensity = 2.2;
+            this.lights.accent.color.setHex(SKYLINE_COLORS.accent); this.lights.accent.intensity = 18; this.lights.accent.position.y = 3.4;
+        } else if (this.lights && this.lights.hemi.intensity !== 2.3) { this.lights.hemi.intensity = 2.3; this.lights.hemi.groundColor.setHex(0x283136); this.lights.sun.intensity = 4; this.lights.accent.intensity = 25; this.lights.accent.position.y = 4; }
     }
     private applyTheme(jungle: boolean): void {
         const colors = shellColors(jungle);
@@ -726,8 +743,8 @@ export class RoomScene {
     /** Fog and camera clip planes for the world size and navigation mode, then the sun's shadow box. */
     private applyScaleView(): void {
         const mode = this.navigation, fog = worldFog(this.world.shell, mode), clip = cameraClip(this.world.shell, mode);
-        const f = this.scene.fog as THREE.Fog | null; if (f) { f.near = fog.near; f.far = fog.far; }
-        if (this.camera.near !== clip.near || this.camera.far !== clip.far) { this.camera.near = clip.near; this.camera.far = clip.far; this.camera.updateProjectionMatrix(); }
+        const f = this.scene.fog as THREE.Fog | null; if (f) { const sky = this.world.shell.theme === 'skyline'; f.near = sky ? SKYLINE_FOG.near : fog.near; f.far = sky ? SKYLINE_FOG.far : fog.far; } // sky:render
+        const farClip = this.world.shell.theme === 'skyline' ? Math.max(clip.far, 6000) : clip.far; /* sky:render */ if (this.camera.near !== clip.near || this.camera.far !== farClip) { this.camera.near = clip.near; this.camera.far = farClip; this.camera.updateProjectionMatrix(); }
         this.followSun();
     }
     /**
@@ -1037,7 +1054,7 @@ export class RoomScene {
     }
     private resize():void {
         const w=this.host.clientWidth,h=this.host.clientHeight;if(!w||!h)return;
-        this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.lastView[0]=NaN;this.positionCamera();
+        this.renderer.setSize(w,h);this.skyFx?.setSize();/* sky:render */this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.lastView[0]=NaN;this.positionCamera();
     }
     /** Device pixel ratio for the drawing buffer: capped, then scaled by the dynamic-resolution step. */
     private pixelRatio(): number {
@@ -1067,7 +1084,7 @@ export class RoomScene {
     }
     private applyScale(step: number): void {
         const before = this.pixelRatio(); this.scaleStep = step; const after = this.pixelRatio();
-        if (after !== before) { this.renderer.setPixelRatio(after); this.renderer.setSize(this.host.clientWidth, this.host.clientHeight); this.lastView[0] = NaN; }
+        if (after !== before) { this.renderer.setPixelRatio(after); this.renderer.setSize(this.host.clientWidth, this.host.clientHeight); this.skyFx?.setSize(); /* sky:render */ this.lastView[0] = NaN; }
         this.setData('renderScale', String(SCALE_STEPS[step]));
     }
     /**
@@ -1119,7 +1136,7 @@ export class RoomScene {
             this.needsRender=false;
             if(ambientFrame||!moving)this.lastAmbientRender=now;
             this.uploadDirty();
-            this.renderer.render(this.scene,this.camera);this.renders++;this.fpsTick(); // w3:fps
+            if(this.skyFx)this.skyFx.render();else this.renderer.render(this.scene,this.camera);this.renders++;this.fpsTick(); // w3:fps; sky:render
             this.updateOverlays(w,h,now,moving);
             this.governResolution(now,moving&&!wasIdle);
         }
@@ -1228,6 +1245,7 @@ export class RoomScene {
         this.setPeers([]);
         this.disposed=true;for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
+        this.skyFx?.dispose();this.skyFx=undefined; // sky:render
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
     }
 }

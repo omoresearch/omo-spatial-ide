@@ -53,7 +53,7 @@ function isUtf8WithinLimit(value: string): boolean {
 }
 
 function validTheme(value: unknown): value is RoomTheme {
-    return value === 'station' || value === 'jungle';
+    return value === 'station' || value === 'jungle' || value === 'skyline';
 }
 
 function validLayout(value: unknown): value is RoomLayoutId {

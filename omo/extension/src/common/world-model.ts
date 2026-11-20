@@ -144,13 +144,13 @@ export function validEntity(e: unknown, shell: WorldShell): e is WorldEntity {
 export function validRoom(v: RoomEntity): boolean {
     const quarter = Math.abs(Math.round(v.transform.rotation / (Math.PI / 2)) * (Math.PI / 2) - v.transform.rotation) < 1e-6;
     const doors = v.doors === undefined || (Array.isArray(v.doors) && v.doors.length <= 4 && new Set(v.doors).size === v.doors.length && v.doors.every(d => WALL_SIDES.includes(d)));
-    return finite(v.width, ROOM_MIN, ROOM_MAX) && finite(v.depth, ROOM_MIN, ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle');
+    return finite(v.width, ROOM_MIN, ROOM_MAX) && finite(v.depth, ROOM_MIN, ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle' || v.theme === 'skyline');
 }
 
 export function validateWorld(w: unknown): WorldResult {
     const v = w as WorldSpec;
     if (!v || v.version !== WORLD_VERSION || !text(v.name, 120) || !Number.isInteger(v.revision) || v.revision < 0) return { ok: false, error: 'Not a version 2 world.' };
-    if (!v.shell || !['station', 'jungle'].includes(v.shell.theme) || !finite(v.shell.width, SHELL_MIN, SHELL_MAX) || !finite(v.shell.depth, SHELL_MIN, SHELL_MAX)
+    if (!v.shell || !['station', 'jungle', 'skyline'].includes(v.shell.theme) || !finite(v.shell.width, SHELL_MIN, SHELL_MAX) || !finite(v.shell.depth, SHELL_MIN, SHELL_MAX)
         || (v.shell.open !== undefined && typeof v.shell.open !== 'boolean')) return { ok: false, error: 'The room shell is invalid.' };
     if (!Array.isArray(v.entities) || v.entities.length > WORLD_MAX_ENTITIES) return { ok: false, error: `A world holds at most ${WORLD_MAX_ENTITIES} things.` };
     const ids = new Set<string>();
