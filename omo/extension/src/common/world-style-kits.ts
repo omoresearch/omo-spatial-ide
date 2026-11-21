@@ -32,6 +32,8 @@ export interface StyleKitProp {
     fallback: DecorKind;
 }
 
+export interface KitBlock { x: number; z: number; hx: number; hz: number }
+
 export interface StyleKit {
     id: StyleKitId;
     label: string;
@@ -49,6 +51,14 @@ export interface StyleKit {
     spawn: { x: number; z: number; yaw: number };
     /** A low lounge dais (real step-up surface for walking physics). */
     dais: { x: number; z: number; width: number; depth: number; height: number };
+    /** The baked desk monitor in desk-local space (the IDE's live station screen covers it exactly). */
+    deskScreen: { y: number; z: number; width: number; height: number };
+    /** Floor rectangles of the baked furniture (world space, axis aligned) — extra walking colliders. */
+    blocks: readonly KitBlock[];
+    /** Free floor spots for extra decor in a kit world (world space). */
+    decorSlots: readonly { x: number; z: number }[];
+    /** The catalogue model a plain decor kind is drawn with in this kit (no entry: the procedural decor). */
+    decorProps: Partial<Record<DecorKind, string>>;
     props: readonly StyleKitProp[];
     render: { exposure: number; bloom: { strength: number; radius: number; threshold: number }; eye: number };
 }
@@ -94,10 +104,31 @@ export const STYLE_KITS: readonly StyleKit[] = [{
     offset: { x: -9, z: 6 },
     // Baked desks at blender x 4.2 / 7.6 / 11.0, y 5.0 (three z -5.0) facing south: world (x - 9, z + 6).
     desks: [{ x: -4.8, z: 1, rotation: 0 }, { x: -1.4, z: 1, rotation: 0 }, { x: 2, z: 1, rotation: 0 }],
-    // The baked file's `webwall_anchor` empty sits on the south wall (three 9.2, -0.03), facing into the room.
-    webWall: { transform: { x: -0.4, z: 5.86, rotation: Math.PI }, width: 4, height: 2.25, elevation: 0.5 },
+    // The baked file's `webwall_anchor` empty: glTF node (9.2, 1.55, -0.03), extras width 4 / height 2.4 on the free
+    // south wall (baked x 7.2..11.2, z 0.35..2.75 Blender) -> world x 0.2, centre y 1.55, facing into the room (-z).
+    webWall: { transform: { x: 0.2, z: 5.88, rotation: Math.PI }, width: 4, height: 2.4, elevation: 0.35 },
     spawn: { x: -6, z: 4.4, yaw: -0.5 },
     dais: { x: 6.3, z: 3.6, width: 3.2, depth: 2.4, height: 0.18 },
+    // Baked EmitScreen0..2: 0.69 x 0.40 m planes at y 1.01..1.41, baked z -5.10 (world 0.9) -> desk-local z -0.1.
+    deskScreen: { y: 1.21, z: -0.094, width: 0.69, height: 0.4 },
+    // From the glTF accessor bounds (world = baked + offset). Desks themselves are IDE stations (their own footprint).
+    blocks: [
+        { x: -4.5, z: -3.3, hx: 1.1, hz: 1.1 },      // dining table + 6 chairs
+        { x: 4.29, z: -3.47, hx: 0.61, hz: 0.57 },   // lounge chair
+        { x: 6.1, z: -3.35, hx: 0.55, hz: 0.55 },    // coffee table
+        { x: 7.9, z: -3.44, hx: 0.57, hz: 0.48 },    // armchair
+        { x: 6.0, z: -1.47, hx: 1.13, hz: 0.52 },    // sofa
+        { x: 6.0, z: -4.75, hx: 0.44, hz: 0.31 },    // ottoman
+        { x: 7.95, z: -1.45, hx: 0.28, hz: 0.23 }, { x: 4.3, z: -1.45, hx: 0.28, hz: 0.23 }, // side tables
+        { x: 7.0, z: 4.65, hx: 1.6, hz: 1.35 },      // bar counter + stools
+        { x: -8.6, z: -4.8, hx: 0.4, hz: 1.05 },     // steel shelves (west wall, north)
+        // live CC0 plants (props.json)
+        { x: 3.35, z: -4.95, hx: 0.35, hz: 0.35 }, { x: -7.7, z: -5.35, hx: 0.35, hz: 0.35 }, { x: 8.3, z: -0.6, hx: 0.35, hz: 0.35 },
+        { x: -6.8, z: 1.0, hx: 0.35, hz: 0.35 }, { x: 4.0, z: 1.0, hx: 0.35, hz: 0.35 }, { x: -1.8, z: -4.95, hx: 0.35, hz: 0.35 },
+        { x: 4.95, z: 5.45, hx: 0.35, hz: 0.35 }, { x: -8.0, z: 5.0, hx: 0.35, hz: 0.35 }
+    ],
+    decorSlots: [{ x: 0.2, z: -4.4 }, { x: -3.6, z: 3.9 }, { x: 3.6, z: 3.9 }, { x: -7.2, z: -2.4 }],
+    decorProps: { plant: 'potted_plant_01', sofa: 'sofa_02', bookshelf: 'steel_frame_shelves_03' },
     props: KIT_PROPS,
     render: { exposure: 1, bloom: { strength: 0.28, radius: 0.55, threshold: 1.6 }, eye: 1.65 }
 }];
@@ -107,9 +138,31 @@ export function styleKit(id: string | undefined): StyleKit | undefined { return 
 /** The kit a theme is drawn with (undefined: the theme's procedural look only). */
 export function kitForTheme(theme: RoomTheme | undefined): StyleKit | undefined { return STYLE_KITS.find(k => k.theme === theme); }
 export function kitProp(id: string | undefined): StyleKitProp | undefined { return KIT_PROPS.find(p => p.id === id); }
-/** True when the baked shell of `kit` can draw this world (closed shell no larger than the bake). */
-export function kitShellFits(kit: StyleKit, world: Pick<WorldSpec, 'shell'>): boolean {
-    return !world.shell.open && world.shell.width <= kit.shell.width + 1e-6 && world.shell.depth <= kit.shell.depth + 1e-6;
+/** True when the baked shell of `kit` draws this world: a closed shell of exactly the baked floor size, no rooms inside. */
+export function kitShellFits(kit: StyleKit, world: Pick<WorldSpec, 'shell'> & { entities?: readonly WorldEntity[] }): boolean {
+    return !world.shell.open && Math.abs(world.shell.width - kit.shell.width) < 0.01 && Math.abs(world.shell.depth - kit.shell.depth) < 0.01
+        && !(world.entities ?? []).some(e => e.kind === 'room');
+}
+/** The kit that draws this world's shell (theme kit + exact fit), if any. */
+export function activeKit(world: Pick<WorldSpec, 'shell'> & { entities?: readonly WorldEntity[] }): StyleKit | undefined {
+    const kit = kitForTheme(world.shell.theme);
+    return kit && kitShellFits(kit, world) ? kit : undefined;
+}
+/** Index of the kit desk anchor a transform stands on (within 5 cm, same facing), else -1. */
+export function kitDeskIndex(kit: StyleKit, t: Transform): number {
+    const turn = (a: number): number => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    return kit.desks.findIndex(d => Math.abs(d.x - t.x) < 0.05 && Math.abs(d.z - t.z) < 0.05 && Math.abs(turn(d.rotation) - turn(t.rotation)) < 0.01);
+}
+/** True when a web wall stands on the kit's web-wall anchor. */
+export function onKitWebWall(kit: StyleKit, t: Transform): boolean {
+    const a = kit.webWall.transform;
+    return Math.abs(a.x - t.x) < 0.05 && Math.abs(a.z - t.z) < 0.05;
+}
+/** The catalogue prop a decor entity is drawn with in `kit`: its own `prop`, else the kit's model for its kind. */
+export function decorPropFor(kit: StyleKit | undefined, e: { decor: DecorKind; prop?: string }): StyleKitProp | undefined {
+    if (e.prop) return kitProp(e.prop);
+    const id = kit?.decorProps[e.decor];
+    return id ? kitProp(id) : undefined;
 }
 /** Best catalogue prop for a phrase ('a money tree', 'two armchairs'), longest word match first. */
 export function propForPhrase(text: string): StyleKitProp | undefined {
