@@ -1005,7 +1005,7 @@ export class OmoWorldWidget extends ReactWidget {
                                 bells={Object.fromEntries(this.stationList.map(info => [info.id, this.deskState(info.id).unreadBells]))} onExit={this.leaveImmersive}/>
                             : <><BuildToggle build={this.buildMode}/>{/* w2:build */}<button type="button" className="omo-immersive-launch" data-testid="immersive-launch" title="Immersive world (G)" onMouseDown={event => event.preventDefault()} onClick={this.toggleImmersiveButton}>
                                 <Icon name="expand" size={14} />Immersive world <kbd>G</kbd></button></>)}
-                        {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode}/>}
+                        {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* builder-ui */}
                         {/* t3:polish2 — the Admin button lives inside the 3D view (it was over the voice panel). */}{this.room && !this.configuring && this.admin && this.adminState && !this.adminState.open && <AdminButton open={false} onClick={() => { this.worldScene?.releaseTyping(); this.admin?.toggle(true); }}/>}
                     </SceneView>
                     {/* w2:admin (mount hook) */}{this.room && !this.configuring && this.admin && this.adminState && <>

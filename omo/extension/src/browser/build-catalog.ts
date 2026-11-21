@@ -2,12 +2,13 @@
  * Build catalog (w2 build lane): what the build palette can place, how big each thing is on the
  * floor, how new ids are made, and how wall items snap to the room shell. Pure data + maths.
  */
-import type { WorldSpec, WorldEntity, DecorKind, Transform, StationKind } from '../common/world-model';
+import type { WorldSpec, WorldEntity, DecorKind, Transform, StationKind, TabKind } from '../common/world-model';
 import { WORLD_ID_RE, SHELL_MAX, ROOM_MIN, defaultStation, stations } from '../common/world-model';
 
 export type PaletteId =
     | 'agent-desk' | 'shell-desk' | 'monitor-wall' | 'web-wall' | 'mirror' | 'review-screen'
     | 'room' // w3:build
+    | 'room-s' | 'room-m' | 'room-l' // builder-ui: fixed-size rooms, placed with one click
     | `decor-${DecorKind}`;
 
 export interface PaletteItem {
@@ -25,6 +26,9 @@ export const DECOR_KINDS: DecorKind[] = ['plant', 'lamp', 'crystal', 'sofa', 'bo
 
 export const PALETTE: PaletteItem[] = [
     { id: 'room', group: 'Spaces', title: 'Room', hint: 'Drag a floor plan', glyph: 'room', wallMounted: false }, // w3:build
+    { id: 'room-s', group: 'Spaces', title: 'Small room', hint: '6 × 6 m', glyph: 'room', wallMounted: false }, // builder-ui
+    { id: 'room-m', group: 'Spaces', title: 'Medium room', hint: '10 × 8 m', glyph: 'room', wallMounted: false }, // builder-ui
+    { id: 'room-l', group: 'Spaces', title: 'Large room', hint: '16 × 12 m', glyph: 'room', wallMounted: false }, // builder-ui
     { id: 'agent-desk', group: 'Stations', title: 'Agent desk', hint: 'Hermes + shell tabs', glyph: 'desk-agent', wallMounted: false },
     { id: 'shell-desk', group: 'Stations', title: 'Shell desk', hint: 'One plain shell', glyph: 'desk-shell', wallMounted: false },
     { id: 'monitor-wall', group: 'Screens', title: 'Monitor wall', hint: 'Mirror a desk, big', glyph: 'monitor-wall', wallMounted: true },
@@ -90,16 +94,62 @@ export function nextRoomName(world: WorldSpec): string {
     return 'Room';
 }
 
+/**
+ * builder-ui — choices the World Builder's Add tab makes before a placement: the tab kinds of a new agent
+ * desk, the desk a new monitor wall follows and the page a new web wall opens. Read by makeEntity, so the
+ * placement ghost and the placed thing use them. Empty = the old defaults.
+ */
+export interface PlacementPrefs { deskTabs: TabKind[]; monitorLink: string; webHome: string }
+export const placementPrefs: PlacementPrefs = { deskTabs: [], monitorLink: '', webHome: '' };
+export function setPlacementPrefs(patch: Partial<PlacementPrefs>): void { Object.assign(placementPrefs, patch); }
+
+/** builder-ui — floor sizes (width × depth, metres) of the S / M / L room cards. */
+export const ROOM_PRESETS: Record<'room-s' | 'room-m' | 'room-l', { width: number; depth: number }> = {
+    'room-s': { width: 6, depth: 6 }, 'room-m': { width: 10, depth: 8 }, 'room-l': { width: 16, depth: 12 }
+};
+
+const TAB_NAME: Record<TabKind, string> = { hermes: 'Hermes', shell: 'Shell', claude: 'Claude', codex: 'Codex', dsh: 'dsh' };
+/** builder-ui — starting tabs for a list of tab kinds: one tab each, unique names ("Shell", "Shell 2"). Max 8. */
+export function tabsFromKinds(kinds: readonly TabKind[]): Array<{ name: string; kind: TabKind }> {
+    const out: Array<{ name: string; kind: TabKind }> = [];
+    for (const kind of kinds.slice(0, 8)) {
+        const base = TAB_NAME[kind] ?? 'Shell';
+        const n = out.filter(t => t.kind === kind).length;
+        out.push({ name: n ? `${base} ${n + 1}` : base, kind });
+    }
+    return out;
+}
+/** builder-ui — a safe http(s) page address, or '' (a bare host gets https://). */
+export function webHomeUrl(text: string): string {
+    const v = text.trim();
+    if (!v) return '';
+    const url = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
+    if (!/^https?:\/\/[^\s/?#]+/i.test(url) || url.length > 2048 || /\s/.test(url)) return '';
+    return url;
+}
+
 /** Build the entity a palette item places. `link` is the station a mirror follows. */
-export function makeEntity(item: PaletteId, world: WorldSpec, transform: Transform, link?: string): WorldEntity | undefined {
+export function makeEntity(item: PaletteId, world: WorldSpec, transform: Transform, link?: string, prefs: PlacementPrefs = placementPrefs): WorldEntity | undefined {
     const t = { ...transform };
     if (item === 'agent-desk' || item === 'shell-desk') {
         const kind: StationKind = item === 'agent-desk' ? 'hermes' : 'shell';
         const name = nextDeskName(world);
-        return { id: nextId(world, 'desk'), kind: 'station', label: name, transform: t, station: defaultStation(name, kind) };
+        const station = defaultStation(name, kind);
+        if (item === 'agent-desk' && prefs.deskTabs.length) station.tabs = tabsFromKinds(prefs.deskTabs); // builder-ui
+        return { id: nextId(world, 'desk'), kind: 'station', label: name, transform: t, station };
     }
-    if (item === 'monitor-wall') return { id: nextId(world, 'monitors'), kind: 'monitor-wall', label: 'Monitor wall', transform: t, width: 3, height: 1.7, elevation: 0.9 };
-    if (item === 'web-wall') return { id: nextId(world, 'web-wall'), kind: 'web-wall', label: 'Web wall', transform: t, width: 3.9, height: 2.44, elevation: 0.68 };
+    if (item === 'monitor-wall') {
+        const follow = prefs.monitorLink && stations(world).some(s => s.id === prefs.monitorLink) ? prefs.monitorLink : undefined; // builder-ui
+        return { id: nextId(world, 'monitors'), kind: 'monitor-wall', label: 'Monitor wall', transform: t, width: 3, height: 1.7, elevation: 0.9, ...(follow ? { link: follow } : {}) };
+    }
+    if (item === 'web-wall') {
+        const home = webHomeUrl(prefs.webHome); // builder-ui
+        return { id: nextId(world, 'web-wall'), kind: 'web-wall', label: 'Web wall', transform: t, width: 3.9, height: 2.44, elevation: 0.68, ...(home ? { home } : {}) };
+    }
+    if (item === 'room-s' || item === 'room-m' || item === 'room-l') { // builder-ui: a fixed-size room, one click
+        const size = ROOM_PRESETS[item];
+        return { id: nextId(world, 'room'), kind: 'room', label: nextRoomName(world), transform: t, width: size.width, depth: size.depth, doors: ['front'] };
+    }
     if (item === 'mirror') {
         if (!link) return undefined;
         const target = world.entities.find(e => e.id === link);

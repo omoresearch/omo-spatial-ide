@@ -13,7 +13,9 @@ import type { WorldEntity, StationConfig, StationEntity, TabKind } from '../comm
 import { stations } from '../common/world-model';
 import { proposalLines } from './build-room'; // w3:build
 import { RoomInspector } from './build-room-inspector'; // w3:build
-import { WorldSizeSection } from './build-world-size'; // w3:build
+import { WorldBuilder } from './world-builder-panel'; // builder-ui
+import { InspectorExtras } from './builder-inspector'; // builder-ui
+import type { AdminController, AdminState } from './admin-controller'; // builder-ui
 import '../../src/browser/build-mode.css';
 
 function useBuild(build: BuildMode): void {
@@ -44,7 +46,7 @@ export function BuildToggle(props: { build: BuildMode }): React.ReactElement {
     </button>;
 }
 
-export function BuildPanel(props: { build: BuildMode }): React.ReactElement | null {
+export function BuildPanel(props: { build: BuildMode; admin?: AdminController; adminState?: AdminState }): React.ReactElement | null {
     const build = props.build;
     useBuild(build);
     const store = build.store;
@@ -71,12 +73,13 @@ export function BuildPanel(props: { build: BuildMode }): React.ReactElement | nu
             <span className="omo-build-sep" />
             <button type="button" className="omo-build-exit" data-testid="build-exit" onClick={() => build.exit()} title="Leave build mode (B)"><Icon name="x" size={14} /> Done</button>
         </div>
-        {/* t3:polish2 — pending changes sit under the palette (left column); the inspector keeps the right side, so they never cover each other. */}
-        <div className="omo-build-left"><Palette build={build} />{store.proposal && <ProposalBar build={build} />}</div>
+        {/* builder-ui — one World Builder panel in the right column: Talk / Add / Rooms / Inspect, with the proposal tray at its foot. */}
+        <WorldBuilder build={build} admin={props.admin} adminState={props.adminState}
+            inspector={selected && !setupFor ? <Inspector key={selected.id} build={build} entity={selected} /> : undefined}
+            tray={store.proposal ? <ProposalBar build={build} /> : undefined} />
         <div className={`omo-build-hint${s.tool === 'place' || s.tool === 'move' ? (s.ghostValid ? ' is-ok' : ' is-bad') : ''}`} role="status" data-testid="build-hint">{s.hint}</div>
         {s.notice && <div className={`omo-build-notice is-${s.noticeTone}`} role={s.noticeTone === 'warn' ? 'alert' : 'status'} data-testid="build-notice">{s.noticeTone === 'warn' ? <Icon name="alert" size={14} /> : <Icon name="check" size={14} />}{s.notice}</div>}
         {!s.worldRenderer && <div className="omo-build-renderer-note" data-testid="build-renderer-note">Blueprint view · New things show as outlines until the world renderer draws them.</div>}
-        {selected && !setupFor && <Inspector key={selected.id} build={build} entity={selected} />}
         {setupFor && <StationSetup key={setupFor.id} build={build} entity={setupFor} />}
     </div>;
 }
@@ -86,29 +89,6 @@ function ToolButton(props: { glyph: string; label: string; keyHint?: string; act
         title={props.keyHint ? `${props.label} (${props.keyHint})` : props.label} aria-label={props.label} onMouseDown={e => e.preventDefault()} onClick={props.onClick}>
         <BuildGlyph name={props.glyph} size={16} />{!props.iconOnly && <span>{props.label}</span>}
     </button>;
-}
-
-function Palette(props: { build: BuildMode }): React.ReactElement {
-    const { build } = props, s = build.state;
-    const groups: Array<PaletteItem['group']> = ['Spaces', 'Stations', 'Screens', 'Decor']; // w3:build: + Spaces
-    const hasDesk = !!build.store && stations(build.store.preview).length > 0;
-    return <aside className="omo-build-palette" aria-label="Build palette" data-testid="build-palette">
-        {groups.map(group => <section key={group} className={`omo-build-group is-${group.toLowerCase()}`}>
-            <h3>{group}</h3>
-            <div className="omo-build-items">{PALETTE.filter(item => item.group === group).map(item => {
-                const chosen = s.tool === 'place' && s.item === item.id;
-                const blocked = item.id === 'mirror' && !hasDesk;
-                return <button key={item.id} type="button" className={`omo-build-item${chosen ? ' is-chosen' : ''}`} data-testid={`build-item-${item.id}`} aria-pressed={chosen}
-                    disabled={blocked} title={blocked ? 'Add a desk first. A mirror follows one desk.' : `${item.title} · ${item.hint}`}
-                    onMouseDown={e => e.preventDefault()} onClick={() => chosen ? build.selectTool() : build.choose(item.id as PaletteId)}>
-                    <span className="omo-build-item-art"><BuildGlyph name={item.glyph} size={group === 'Decor' ? 20 : 24} /></span>
-                    <span className="omo-build-item-text"><strong>{item.title}</strong><small>{item.hint}</small></span>
-                </button>;
-            })}</div>
-        </section>)}
-        {build.store && <WorldSizeSection build={build} world={build.store.preview} />}{/* w3:build */}
-        <p className="omo-build-palette-foot">Place · <kbd>R</kbd> turn · <kbd>Esc</kbd> stop. Changes wait for <b>Apply</b>.</p>
-    </aside>;
 }
 
 function NumberField(props: { label: string; value: number; min: number; max: number; step: number; disabled?: boolean; onCommit: (n: number) => void; testid?: string }): React.ReactElement {
@@ -144,7 +124,6 @@ function Inspector(props: { build: BuildMode; entity: WorldEntity }): React.Reac
         <div className="omo-build-actions">
             <button type="button" disabled={locked} onClick={() => build.startMove()}><BuildGlyph name="move" size={14} /> Move</button>
             <button type="button" disabled={locked} onClick={() => build.rotate(1)}><BuildGlyph name="rotate" size={14} /> Turn</button>
-            <button type="button" className="is-danger" data-testid="build-remove" disabled={locked} onClick={() => build.remove()}><BuildGlyph name="trash" size={14} /> Remove</button>
         </div>
         {(e.kind === 'monitor-wall' || e.kind === 'web-wall') && <div className="omo-build-size">
             <NumberField label="Width" testid="build-width" value={e.width} min={e.kind === 'web-wall' ? 0.8 : 0.6} max={8} step={0.1} onCommit={n => build.resize(e.id, { width: n, height: e.height, elevation: e.elevation })} />
@@ -152,6 +131,7 @@ function Inspector(props: { build: BuildMode; entity: WorldEntity }): React.Reac
             <NumberField label="Lift" value={e.elevation} min={0} max={3} step={0.05} onCommit={n => build.resize(e.id, { width: e.width, height: e.height, elevation: n })} />
         </div>}
         {e.kind === 'room' && <RoomInspector build={build} room={e} />}{/* w3:build */}
+        <InspectorExtras build={build} entity={e} />{/* builder-ui: page address, tab layout, duplicate, delete with confirmation */}
         {(e.kind === 'monitor-wall' || e.kind === 'mirror') && <label className="omo-build-field"><span>Follows</span>
             <select data-testid="build-link-select" value={linkTarget ?? ''} onChange={ev => ev.target.value ? build.link(e.id, ev.target.value) : build.unlink(e.id)}>
                 {e.kind === 'monitor-wall' && <option value="">Nothing (its own view)</option>}

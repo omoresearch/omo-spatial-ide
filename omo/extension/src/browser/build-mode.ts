@@ -146,6 +146,7 @@ export class BuildMode {
     /** True while build mode owns clicks: the host must not open a workstation for a scene click. */
     get ownsClicks(): boolean { return this.state.active; }
     get store(): WorldStore | undefined { return this.boundStore?.store; }
+    get scene(): RoomScene | undefined { return this.bound?.scene; } proposeOps(ops: WorldOp[], label: string): boolean { return this.propose(ops, label); } // builder-ui
     subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
 
     /** Follow the current scene and store. Cheap; safe to call often. */
