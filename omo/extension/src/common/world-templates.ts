@@ -12,6 +12,7 @@
 import type { RoomTheme } from './room-state';
 import type { RoomEntity, StationConfig, TabKind, WallSide, WorldEntity, WorldSpec } from './world-model';
 import { validateWorld, worldFromRoomV1, WORLD_VERSION } from './world-model';
+import { STYLE_KITS } from './world-style-kits'; // sky:merge M1
 
 export type WorldTemplateId =
     | 'solo-builder' | 'classic-pair' | 'agent-lab' | 'research-library' | 'startup-war-room'
@@ -28,6 +29,7 @@ export interface WorldTemplate {
 }
 
 const HALF_PI = Math.PI / 2;
+const SKY = STYLE_KITS[0]; // sky:merge M1 — skyline-penthouse
 
 const TAB_LABEL: Record<TabKind, string> = { hermes: 'Hermes', claude: 'Claude', codex: 'Codex', shell: 'Shell', dsh: 'DeepSeek Harness' };
 
@@ -175,17 +177,14 @@ const RAW_TEMPLATES: Array<Omit<WorldTemplate, 'summary'>> = [
         id: 'nyc-skyscraper', // sky:render
         label: 'NYC skyscraper',
         description: 'A glass penthouse floor high above Manhattan at dusk: three desks facing the skyline, a web wall and a lounge.',
-        world: world('NYC skyscraper', 'skyline', 24, 18, [
-            station('terminal', 'Plan · Hermes', -4.6, -3.4, 0, setup('Plan · Hermes', 'hermes')),
-            station('terminal-2', 'Code · Claude', 0, -3.4, 0, setup('Code · Claude', 'claude')),
-            station('desk-3', 'Review · Codex', 4.6, -3.4, 0, setup('Review · Codex', 'codex')),
-            { id: 'web', kind: 'web-wall', label: 'Docs wall', transform: { x: 11.3, z: 1.5, rotation: -HALF_PI }, width: 4.8, height: 2.5, elevation: 0.7 },
-            decor('sofa', 'sofa', -7.2, 5.2, Math.PI / 4),
-            decor('rug', 'rug', -7.6, 5.6, 0, 1.4),
-            decor('plant-1', 'plant', -10.6, -7.6, 0, 1.4),
-            decor('plant-2', 'plant', 10.6, -7.6, 0, 1.4),
-            decor('plant-3', 'plant', 10.6, 7.4, 0, 1.2),
-            decor('lamp', 'lamp', -5.4, 6.6)
+        // sky:merge M1 — the exact floor of the baked skyline-penthouse kit: desks on its desk anchors, the web wall on its webwall_anchor.
+        world: world('NYC skyscraper', 'skyline', SKY.shell.width, SKY.shell.depth, [
+            station('terminal', 'Plan · Hermes', SKY.desks[0].x, SKY.desks[0].z, SKY.desks[0].rotation, setup('Plan · Hermes', 'hermes')),
+            station('terminal-2', 'Code · Claude', SKY.desks[1].x, SKY.desks[1].z, SKY.desks[1].rotation, setup('Code · Claude', 'claude')),
+            station('desk-3', 'Review · Codex', SKY.desks[2].x, SKY.desks[2].z, SKY.desks[2].rotation, setup('Review · Codex', 'codex')),
+            { id: 'web', kind: 'web-wall', label: 'Docs wall', transform: { ...SKY.webWall.transform }, width: SKY.webWall.width, height: SKY.webWall.height, elevation: SKY.webWall.elevation },
+            decor('plant-1', 'plant', SKY.decorSlots[0].x, SKY.decorSlots[0].z, 0, 1.2),
+            decor('plant-2', 'plant', SKY.decorSlots[3].x, SKY.decorSlots[3].z, 0, 1.2)
         ])
     },
     {

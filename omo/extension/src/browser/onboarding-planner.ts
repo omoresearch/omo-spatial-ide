@@ -16,6 +16,7 @@ import {
 import type { RoomTheme } from '../common/room-state';
 import type { RoomLayoutId, RoomKitId } from '../common/player-state';
 import { ROOM_LAYOUTS } from '../common/player-state';
+import { kitForTheme } from '../common/world-style-kits'; // sky:merge M1
 
 export type DeskAgent = 'hermes' | 'claude' | 'codex' | 'shell';
 
@@ -195,6 +196,7 @@ const ORIGIN: Transform = { x: 0, z: 0, rotation: 0 };
 /** Deterministic placement of every entity for a given world. Pure; used by the planner and by edits. */
 export function arrangement(world: WorldSpec, assign?: ReadonlyMap<string, string>): Arrangement {
     if (rooms(world).length) return zonedArrangement(world, assign); // w3:admin — a world with rooms is laid out room by room
+    const kitPlan = kitArrangement(world); if (kitPlan) return kitPlan; // sky:merge M1 — fits the baked skyline kit
     const desks = stations(world);
     const n = desks.length;
     const cols = n <= 3 ? Math.max(1, n) : n <= 4 ? 2 : n <= 6 ? 3 : 4;
@@ -248,6 +250,23 @@ export function arrangement(world: WorldSpec, assign?: ReadonlyMap<string, strin
         }
     }
     return { shell, transforms, sizes };
+}
+
+/**
+ * sky:merge M1 — a skyline world small enough for the baked penthouse kit (up to 3 desks, 1 web/monitor wall, no
+ * mirrors / review screens / rooms) takes the kit's exact floor: desks on its desk anchors, the wall on its
+ * webwall_anchor, decor on its free slots. Larger worlds keep the procedural skyline layout.
+ */
+export function kitArrangement(world: WorldSpec): Arrangement | undefined {
+    const kit = kitForTheme(world.shell.theme); if (!kit) return undefined;
+    const desks = stations(world), walls = world.entities.filter(e => e.kind === 'web-wall' || e.kind === 'monitor-wall');
+    const decor = world.entities.filter(e => e.kind === 'decor');
+    if (!desks.length || desks.length > kit.desks.length || walls.length > 1 || decor.length > kit.decorSlots.length || world.entities.some(e => e.kind === 'mirror' || e.kind === 'review-screen' || e.kind === 'room')) return undefined;
+    const transforms = new Map<string, Transform>(), sizes = new Map<string, { width: number; height: number; elevation: number }>();
+    desks.forEach((d, i) => transforms.set(d.id, { ...kit.desks[i] }));
+    walls.forEach(w => { transforms.set(w.id, { ...kit.webWall.transform }); sizes.set(w.id, { width: kit.webWall.width, height: kit.webWall.height, elevation: kit.webWall.elevation }); });
+    decor.forEach((d, i) => transforms.set(d.id, { x: kit.decorSlots[i].x, z: kit.decorSlots[i].z, rotation: 0 }));
+    return { shell: { theme: world.shell.theme, width: kit.shell.width, depth: kit.shell.depth }, transforms, sizes };
 }
 
 export interface Arrangement {

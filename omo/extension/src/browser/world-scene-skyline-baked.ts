@@ -63,7 +63,7 @@ function makeBackdrop(colorTex: THREE.Texture, depthTex: THREE.Texture, centre: 
     const m = new THREE.Mesh(new THREE.SphereGeometry(50, 64, 32), mat);
     m.name = 'omo-kit-backdrop'; m.frustumCulled = false; m.renderOrder = -10; m.raycast = () => undefined;
     // Follows the camera (like the open world's sky dome), so it never clips.
-    m.onBeforeRender = (_r, _s, camera) => { m.position.copy(camera.position); m.updateMatrixWorld(true); };
+    m.onBeforeRender = (_r, _s, camera) => { m.position.copy(camera.position); m.updateMatrix(); m.updateMatrixWorld(true); }; // works on a frozen tree too
     return m;
 }
 

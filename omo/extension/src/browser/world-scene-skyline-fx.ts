@@ -37,8 +37,13 @@ export class SkylineFx {
         this.composer.setSize(el.clientWidth || el.width, el.clientHeight || el.height);
     }
     render(): void { this.composer.render(); }
+    /** sky:merge M1 — use a style kit's baked reflection probe (full strength) instead of the generic room environment. */
+    useEnvironment(env: THREE.Texture | undefined): void {
+        const s = this.scene as THREE.Scene & { environmentIntensity?: number };
+        this.scene.environment = env ?? this.env; s.environmentIntensity = env ? 1 : 0.35;
+    }
     dispose(): void {
-        if (this.scene.environment === this.env) this.scene.environment = null;
+        this.scene.environment = null;
         this.env.dispose(); this.bloom.dispose(); this.composer.dispose();
     }
 }

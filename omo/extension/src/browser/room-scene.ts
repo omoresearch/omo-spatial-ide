@@ -29,6 +29,9 @@ import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
 import { buildPaths, pathsKey } from './world-scene-paths'; // w3:look (7)
 import { buildSkylineShell, restyleForSkyline, SKYLINE_COLORS, SKYLINE_FOG } from './world-scene-skyline'; // sky:render
 import { SkylineFx } from './world-scene-skyline-fx'; // sky:render
+import { SkylineKitLoader, buildKitStation } from './world-scene-skyline-baked'; // sky:merge M1
+import { activeKit, decorPropFor, kitDeskIndex } from '../common/world-style-kits'; // sky:merge M1
+import type { StyleKit } from '../common/world-style-kits'; // sky:merge M1
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
 function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMetadata | undefined {
@@ -229,6 +232,10 @@ export class RoomScene {
     private stationNumbers = new Map<string, number>();
     private lights?: { hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight; accent: THREE.PointLight };
     private skyFx?: SkylineFx; // sky:render — bloom + environment, skyline theme only
+    /** sky:merge M1 — the baked style-kit shell: loader per kit, its loaded shell, and kits whose assets are missing. */
+    private kitLoaders = new Map<string, SkylineKitLoader>();
+    private kitShells = new Map<string, { root: THREE.Group; env: THREE.Texture }>();
+    private kitMissing = new Set<string>();
     /** Overview camera distance scale for shells larger than the v1 12 x 10 room. */
     private roomScale = 1;
     private webSurface?: HTMLCanvasElement;
@@ -441,11 +448,14 @@ export class RoomScene {
         this.stationNumbers = new Map(stations.map((e, i) => [e.id, i + 1]));
         const blocks = [...footprints(world), ...roomFootprints(world)]; // w3:render — no ambient props inside rooms
         // Shell: rebuilt only when its size/theme or the footprints that hide ambient props change.
-        const shellKey = JSON.stringify([world.shell, blocks]);
+        // sky:merge M1 — a world that fits a style kit draws its baked shell once the kit has loaded (procedural shell until then / without kits/).
+        const kit = activeKit(world), kitShell = kit ? this.kitShell(kit) : undefined;
+        const shellKey = JSON.stringify([world.shell, blocks, kitShell ? kit!.id : '']);
         if (shellKey !== this.shellKey) {
-            if (this.shellRoot) { this.worldRoot.remove(this.shellRoot); disposeTree(this.shellRoot); }
-            this.shellRoot = world.shell.theme === 'skyline' ? buildSkylineShell(world.shell, blocks, this.camera) : buildShell(world.shell, blocks, ORB); /* sky:render */ this.worldRoot.add(this.shellRoot); freezeTree(this.shellRoot); this.shellKey = shellKey;
+            if (this.shellRoot) { this.worldRoot.remove(this.shellRoot); if (!this.shellRoot.userData.keep) disposeTree(this.shellRoot); }
+            this.shellRoot = kitShell ? kitShell.root : world.shell.theme === 'skyline' ? buildSkylineShell(world.shell, blocks, this.camera) : buildShell(world.shell, blocks, ORB); /* sky:render */ this.worldRoot.add(this.shellRoot); freezeTree(this.shellRoot); this.shellKey = shellKey;
         }
+        if (this.skyFx) this.skyFx.useEnvironment(kitShell?.env); // sky:merge M1 — the kit's baked reflection probe replaces the generic room environment
         const pk = pathsKey(world.shell, world.entities); // w3:look (7) — plaza, paths, lamps (open worlds)
         if (pk !== this.pathsKey) {
             if (this.pathsRoot) { this.worldRoot.remove(this.pathsRoot); disposeTree(this.pathsRoot); this.pathsRoot = undefined; }
@@ -457,7 +467,8 @@ export class RoomScene {
         for (const [id, item] of this.entities) if (!ids.has(id)) this.removeEntity(id, item);
         for (const entity of world.entities) {
             const standing = entity.kind !== 'station' && entity.kind !== 'decor' && !nearWall(world.shell, entity.transform.x, entity.transform.z, 0.8);
-            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing]);
+            const onKit = !!kitShell && this.onKitAnchor(kit!, entity); // sky:merge M1 — kit desks draw only the live screen
+            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing, onKit, kitShell && entity.kind === 'decor' ? kit!.id : '']);
             const item = this.entities.get(entity.id);
             if (item && item.key === key) {
                 if (JSON.stringify(item.entity.transform) !== JSON.stringify(entity.transform)) { placeRoot(item.built.root, entity); refreeze(item.built.root); }
@@ -465,8 +476,8 @@ export class RoomScene {
                 continue;
             }
             if (item) { this.worldRoot.remove(item.built.root); disposeTree(item.built.root); this.screens.delete(entity.id); this.lamps.delete(entity.id); }
-            const built = this.buildEntity(entity, jungle, standing);
-            if (world.shell.theme === 'skyline') restyleForSkyline(built.root); // sky:render
+            const built = this.buildEntity(entity, jungle, standing, onKit ? kit : undefined, kitShell ? kit : undefined);
+            if (world.shell.theme === 'skyline' && !onKit) restyleForSkyline(built.root); // sky:render
             this.worldRoot.add(built.root); freezeTree(built.root);
             this.entities.set(entity.id, { entity, key, built, label: item?.label });
             if (built.screen) { built.screen.userData.screenOf = entity.id; built.screen.userData.screenKind = entity.kind; this.screens.set(entity.id, built.screen); }
@@ -483,7 +494,8 @@ export class RoomScene {
         // Walking: footprint collision, bounds and reset spot of this world.
         if (this.walker) {
             const firstOpen = world.shell.open && (!previous || !previous.shell.open || this.homeKey !== world.name); // w3:look (6): a newly loaded open world starts in its plaza
-            this.walker.mover = worldMover(world); this.walker.home = worldHome(world.shell, world.entities);
+            this.walker.mover = worldMover(world, kitShell ? kit!.blocks.map((b, i) => ({ id: `kit-${i}`, x: b.x, z: b.z, rotation: 0, rect: { left: -b.hx, right: b.hx, front: -b.hz, back: b.hz } })) : []); // sky:merge M1 — baked furniture collides
+            this.walker.home = kitShell ? { x: kit!.spawn.x, z: kit!.spawn.z, yaw: kit!.spawn.yaw, pitch: 0 } : worldHome(world.shell, world.entities);
             if (firstOpen) { this.homeKey = world.name; this.walker.pose = { ...this.walker.home }; }
         }
         this.roomScale = worldScale(world.shell);
@@ -495,6 +507,8 @@ export class RoomScene {
         canvas.dataset.worldStations = JSON.stringify(stations.map(e => e.id));
         canvas.dataset.worldShell = JSON.stringify({ width: world.shell.width, depth: world.shell.depth, open: !!world.shell.open }); // w3:test
         canvas.dataset.worldRooms = JSON.stringify(world.entities.filter(e => e.kind === 'room').map(e => e.id)); // w3:test
+        canvas.dataset.styleKit = kit ? (kitShell ? kit.id : this.kitMissing.has(kit.id) ? 'missing' : 'loading') : ''; // sky:merge M1 — test hook
+        canvas.dataset.kitStations = JSON.stringify(kitShell ? stations.filter(e => this.onKitAnchor(kit!, e)).map(e => e.id) : []);
         canvas.dataset.deskPositions = JSON.stringify(Object.fromEntries(stations.map(e => [e.id, { x: e.transform.x, z: e.transform.z }])));
         this.lastView[0] = NaN; this.renderer.shadowMap.needsUpdate = true;
         if (previous) this.positionCamera();
@@ -522,12 +536,37 @@ export class RoomScene {
         (this.scene.background as THREE.Color).set(colors.background); (this.scene.fog as THREE.Fog).color.set(colors.background);
         if (this.lights) { this.lights.hemi.color.setHex(colors.hemiSky); this.lights.sun.color.setHex(colors.sun); this.lights.accent.color.setHex(colors.accent); }
     }
-    private buildEntity(entity: WorldEntity, jungle: boolean, standing: boolean): BuiltEntity {
+    /** sky:merge M1 — the loaded baked shell of `kit`, or undefined while it loads / when its assets are missing (starts the load once). */
+    private kitShell(kit: StyleKit): { root: THREE.Group; env: THREE.Texture } | undefined {
+        const ready = this.kitShells.get(kit.id);
+        if (ready || this.kitMissing.has(kit.id) || !this.renderer) return ready;
+        if (!this.kitLoaders.has(kit.id)) {
+            const loader = new SkylineKitLoader(this.renderer, kit);
+            this.kitLoaders.set(kit.id, loader);
+            loader.shell().then(loaded => {
+                if (this.disposed) return;
+                this.kitShells.set(kit.id, { root: loaded.root, env: loaded.env });
+                this.renderer.domElement.dataset.styleKitTriangles = String(loaded.triangles); this.renderer.domElement.dataset.styleKitMs = String(loaded.ms);
+                if (this.world && activeKit(this.world)?.id === kit.id) this.applyWorld(this.world);
+            }, error => {
+                // No kits/ installed (or a broken file): keep the procedural skyline for this session.
+                this.kitMissing.add(kit.id); this.kitLoaders.delete(kit.id);
+                console.warn(`[omo] style kit ${kit.id} not loaded, using the procedural shell:`, error instanceof Error ? error.message : error);
+                if (!this.disposed && this.world && activeKit(this.world)?.id === kit.id) this.renderer.domElement.dataset.styleKit = 'missing';
+            });
+        }
+        return undefined;
+    }
+    /** sky:merge M1 — a station on a kit desk anchor (the baked desk + monitor body are in the shell). */
+    private onKitAnchor(kit: StyleKit, entity: WorldEntity): boolean {
+        return entity.kind === 'station' && kitDeskIndex(kit, entity.transform) >= 0;
+    }
+    private buildEntity(entity: WorldEntity, jungle: boolean, standing: boolean, deskKit?: StyleKit, worldKit?: StyleKit): BuiltEntity {
         switch (entity.kind) {
             case 'station': {
                 let surface = this.terminalSurfaces.get(entity.id);
                 if (!surface) { surface = this.terminalSurface(); this.terminalSurfaces.set(entity.id, surface); }
-                const built = buildStation(entity, jungle, surface.texture);
+                const built = deskKit ? buildKitStation(entity, deskKit, surface.texture) : buildStation(entity, jungle, surface.texture); // sky:merge M1
                 if (!surface.frame) { this.terminalFrames[entity.id] ??= { lines: [] }; queueMicrotask(() => { if (!this.disposed && this.terminalSurfaces.get(entity.id) === surface) this.setTerminalFrame(this.terminalFrames[entity.id] ?? { lines: [] }, entity.id as TerminalWorkstation); }); }
                 return built;
             }
@@ -535,7 +574,18 @@ export class RoomScene {
             case 'review-screen': return buildReviewScreen(entity, this.codeSurface!.texture, standing);
             case 'mirror': return buildMirror(entity, entity.id === 'mirror' ? this.mirrorTexture! : this.linkedSurface(entity.id).texture, standing);
             case 'monitor-wall': return buildMonitorWall(entity, this.linkedSurface(entity.id).texture, standing);
-            case 'decor': return buildDecorEntity(entity, jungle);
+            case 'decor': {
+                const built = buildDecorEntity(entity, jungle);
+                // sky:merge M1 — in a kit world a decor entity is drawn with its CC0 catalogue model once it loads.
+                const prop = worldKit ? decorPropFor(worldKit, entity) : undefined, loader = worldKit && this.kitLoaders.get(worldKit.id);
+                if (prop && loader) loader.prop(prop.id).then(model => {
+                    if (this.disposed || this.entities.get(entity.id)?.built !== built) return;
+                    for (const child of [...built.root.children]) { built.root.remove(child); disposeTree(child); }
+                    model.traverse(n => { n.userData.entity = entity.id; });
+                    built.root.add(model); built.root.userData.prop = prop.id; refreezeNode(built.root); this.renderer.shadowMap.needsUpdate = true; this.invalidate();
+                }, () => undefined);
+                return built;
+            }
             case 'room': { const built = buildRoom(entity, jungle); setRoomCutaway(built.root, this.navigation !== 'walk', false); return built; } // w3:render — real rooms (world-scene-rooms.ts)
         }
     }
@@ -1246,6 +1296,7 @@ export class RoomScene {
         this.disposed=true;for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         this.skyFx?.dispose();this.skyFx=undefined; // sky:render
+        for(const k of this.kitShells.values()){if(k.root.parent!==this.worldRoot)disposeTree(k.root);k.env.dispose();}this.kitShells.clear(); // sky:merge M1
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
     }
 }
