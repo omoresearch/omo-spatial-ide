@@ -51,7 +51,7 @@ export function AdminPanel(props: { controller: AdminController; state: AdminSta
     const log = React.useRef<HTMLOListElement>(null);
     React.useEffect(() => { if (state.open) input.current?.focus({ preventScroll: true }); }, [state.open]);
     React.useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [state.entries.length, state.entries[state.entries.length - 1]?.status]);
-    if (!state.open) return null;
+    if (!state.open || state.embedded) return null; // builder-ui: the World Builder's Talk tab shows it instead
     const submit = (): void => { const value = text.trim(); if (!value || state.busy) return; setText(''); void controller.ask(value); };
     const hermesOn = state.useHermes && state.hermesConfirmed;
     return <section className="omo-admin-panel" data-testid="admin-panel" role="dialog" aria-label="World admin"
