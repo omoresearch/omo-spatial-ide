@@ -79,13 +79,14 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
 
         // 1. Talk.
         await click('[data-testid="builder-tab-talk"]'); await pause(400);
+        // count BEFORE asking: the proposal's ghost preview already shows its desks in the dataset
+        const desks0 = J((await ds()).worldStations, []).length, rooms0 = J((await ds()).worldRooms, []).length;
         await page.click('[data-testid="admin-prompt"]'); await page.keyboard.type('add a room for research with 2 desks'); await page.keyboard.press('Enter');
         await page.waitForSelector('[data-testid="admin-entry"][data-status="proposed"]', { timeout: 30000 });
         const plan = await page.evaluate(() => ({ steps: [...document.querySelectorAll('[data-testid="admin-ops"] li')].map(l => l.textContent), diff: document.querySelector('[data-testid="builder-plan-diff"]')?.textContent, ghost: document.querySelector('[data-testid="world-builder"]').dataset.ghostPreview }));
         check('Talk: plan shows steps and a diff summary', plan.steps.length > 0 && /\+\d+ rooms?/.test(plan.diff || '') && /\+2 desks/.test(plan.diff || ''), plan);
         check('Talk: ghost preview hook lists the proposed things', (plan.ghost || '').split(',').filter(Boolean).length >= 3, plan.ghost);
         await shot('1-talk-plan');
-        const desks0 = J((await ds()).worldStations, []).length, rooms0 = J((await ds()).worldRooms, []).length;
         await click('[data-testid="admin-apply"]'); await pause(1500);
         let d = await ds();
         check('Talk: Apply adds the room and 2 desks', J(d.worldRooms, []).length > rooms0 && J(d.worldStations, []).length === desks0 + 2, { rooms: J(d.worldRooms, []), desks: J(d.worldStations, []).length, desks0 });
