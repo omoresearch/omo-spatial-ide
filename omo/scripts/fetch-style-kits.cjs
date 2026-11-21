@@ -22,7 +22,7 @@ const ROOT = path.resolve(__dirname, '..');
 const LOCK = path.join(ROOT, 'style-kits.lock.json');
 const arg = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; };
 const has = (name) => process.argv.includes(name);
-const DEFAULT_LAB = '/home/harry/dev/omo-sky-lab/baked-render';
+const DEFAULT_LAB = path.resolve(ROOT, '..', '..', 'omo-sky-lab', 'baked-render');   // sibling checkout of the sky lab; override with --from or OMO_SKY_LAB
 
 /** Kit file plan: [destination relative to the kit dir, source relative to the lab dir]. */
 const BAKED = ['room.glb', 'lm_floor.exr', 'lm_arch.exr', 'lm_furn.exr', 'ao_floor.png', 'ao_arch.png', 'ao_furn.png', 'probe.exr', 'city.jpg', 'city_depth.png', 'lamps.json', 'props.json'];

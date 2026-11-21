@@ -1,6 +1,6 @@
 # sky:merge — skyline kit in the IDE (M1) and kit world building (M7)
 
-Branch `omo/skyline-merge`, worktree `/home/harry/dev/omo-skyline-merge`. Local commits only.
+Branch `omo/skyline-merge`, a local worktree. Local commits only.
 
 ## M1 — baked skyline kit wired into the room scene
 
