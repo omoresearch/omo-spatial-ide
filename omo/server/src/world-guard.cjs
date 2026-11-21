@@ -30,7 +30,7 @@ function canonicalEntity(e) {
         case 'monitor-wall': Object.assign(out, pick(e, ['width', 'height', 'elevation', 'link'])); break;
         case 'web-wall': Object.assign(out, pick(e, ['width', 'height', 'elevation', 'home'])); break;
         case 'mirror': out.link = e.link; break;
-        case 'decor': Object.assign(out, pick(e, ['decor', 'scale'])); break;
+        case 'decor': Object.assign(out, pick(e, ['decor', 'scale', 'prop'])); break; // sky:merge prop
         case 'room': Object.assign(out, pick(e, ['width', 'depth', 'theme'])); if (Array.isArray(e.doors)) out.doors = [...e.doors]; break; // w3:expand
         default: break;
     }

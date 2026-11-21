@@ -50,6 +50,8 @@ export const ONBOARDING_TEMPLATES: readonly OnboardingTemplate[] = [
         prompt: 'prehistoric jungle studio: 2 Hermes desks for writing and editing, a web wall for references, plants and a sofa' },
     { id: 'ops', title: 'Mission control', caption: '4 shells · 2 monitor walls', symbol: '◉',
         prompt: 'mission control in orbit: 4 shell desks for build, deploy, logs and alerts, 2 monitor walls, a web wall for dashboards' },
+    { id: 'skyline', title: 'NYC skyscraper', caption: '3 desks · glass floor at dusk', symbol: '▲',
+        prompt: 'skyline penthouse: a Hermes desk for planning, a Claude desk for code, a Codex desk for review, a web wall for docs, plants and a sofa' }, // sky:render
     { id: 'classic', title: 'Classic room', caption: 'The original Omo room', symbol: '▢',
         prompt: 'classic room: 2 desks, a web wall and a mirror' }
 ];
@@ -66,6 +68,7 @@ const ENTITY_WORD = /\b(walls?|mirrors?|desks?|stations?|workstations?|screens?|
 const STOP_START = new RegExp(`^(?:the|${QTY})\\b`);
 
 const JUNGLE_WORDS = /\b(jungle|forest|prehistoric|dino\w*|rain ?forest|garden|greenhouse|tropical|nature|leafy|green|botanic\w*|expedition)\b/g;
+const SKYLINE_WORDS = /\b(skyscraper|skyline|manhattan|new york|nyc|penthouse|high-?rise|tower|city)\b/g; // sky:render
 const SPACE_WORDS = /\b(space|orbit\w*|galax\w*|cosmic|observatory|moon|mars|sci-?fi|rocket|starship|mission control|astro\w*)\b/g;
 
 const DECOR_WORDS: Array<[RegExp, DecorKind]> = [
@@ -199,7 +202,8 @@ export function arrangement(world: WorldSpec, assign?: ReadonlyMap<string, strin
     const walls = world.entities.filter(e => e.kind === 'web-wall' || e.kind === 'monitor-wall');
     const width = n <= 2 && walls.length <= 2 ? 12 : clamp(half(Math.max(cols * 4.4 + 2.4, walls.length * 2.8 + 1)), 12, 40);
     const depth = n <= 2 ? 10 : clamp(half(rows * 3.2 + 7), 10, 40);
-    const shell: WorldShell = { theme: world.shell.theme, width, depth };
+    const sky = world.shell.theme === 'skyline'; // sky:render — a penthouse floor is roomy: glass all round, desks set in from it
+    const shell: WorldShell = { theme: world.shell.theme, width: sky ? Math.max(width, 24) : width, depth: sky ? Math.max(depth, 18) : depth };
     const transforms = new Map<string, Transform>();
     const sizes = new Map<string, { width: number; height: number; elevation: number }>();
     // Desks: the familiar classic positions for one or two desks, else a centred grid facing the back wall.
@@ -407,6 +411,7 @@ export function emptyWorld(name: string, theme: RoomTheme): WorldSpec {
 
 function detectTheme(text: string): RoomTheme | undefined {
     const jungle = (text.match(JUNGLE_WORDS) ?? []).length, space = (text.match(SPACE_WORDS) ?? []).length;
+    if ((text.match(SKYLINE_WORDS) ?? []).length) return 'skyline'; // sky:render
     if (jungle > space) return 'jungle';
     if (space > 0) return 'station';
     return undefined;

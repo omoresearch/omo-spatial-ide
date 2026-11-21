@@ -1,4 +1,5 @@
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
+import { StyleKitAssets } from './style-kit-assets'; // sky:merge
 import { ConnectionHandler, RpcConnectionHandler } from '@theia/core/lib/common/messaging';
 import { ContainerModule, injectable, inject } from '@theia/core/shared/inversify';
 import { OMO_RUNTIME_PATH, OmoRuntimeService } from '../common/runtime-protocol';
@@ -110,6 +111,8 @@ export default new ContainerModule(bind => {
         const signals = ctx.container.get<AgentSignalsBackend>(OmoAgentSignals);
         return new RpcConnectionHandler<object>(OMO_AGENT_SIGNALS_PATH, () => signals);
     }).inSingletonScope();
+    bind(StyleKitAssets).toSelf().inSingletonScope(); // sky:merge — /omo-kits static assets
+    bind(BackendApplicationContribution).toService(StyleKitAssets);
     bind(OmoRuntimeLifecycle).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(OmoRuntimeLifecycle);
     bind(ConnectionHandler).toDynamicValue(ctx => {
