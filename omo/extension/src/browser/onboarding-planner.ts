@@ -261,11 +261,15 @@ export function kitArrangement(world: WorldSpec): Arrangement | undefined {
     const kit = kitForTheme(world.shell.theme); if (!kit) return undefined;
     const desks = stations(world), walls = world.entities.filter(e => e.kind === 'web-wall' || e.kind === 'monitor-wall');
     const decor = world.entities.filter(e => e.kind === 'decor');
-    if (!desks.length || desks.length > kit.desks.length || walls.length > 1 || decor.length > kit.decorSlots.length || world.entities.some(e => e.kind === 'mirror' || e.kind === 'review-screen' || e.kind === 'room')) return undefined;
+    const reviews = world.entities.filter(e => e.kind === 'review-screen'), mirrors = world.entities.filter(e => e.kind === 'mirror');
+    if (!desks.length || desks.length > kit.desks.length || walls.length > 1 || reviews.length > 1 || mirrors.length > 1 || decor.length > kit.decorSlots.length || world.entities.some(e => e.kind === 'room')) return undefined;
     const transforms = new Map<string, Transform>(), sizes = new Map<string, { width: number; height: number; elevation: number }>();
     desks.forEach((d, i) => transforms.set(d.id, { ...kit.desks[i] }));
     walls.forEach(w => { transforms.set(w.id, { ...kit.webWall.transform }); sizes.set(w.id, { width: kit.webWall.width, height: kit.webWall.height, elevation: kit.webWall.elevation }); });
     decor.forEach((d, i) => transforms.set(d.id, { x: kit.decorSlots[i].x, z: kit.decorSlots[i].z, rotation: 0 }));
+    // Free wall spots of the baked floor: the south wall west of the web wall, and the west wall between the desks and the shelves.
+    reviews.forEach(r => transforms.set(r.id, { x: r3(kit.webWall.transform.x - kit.webWall.width / 2 - 2.6), z: kit.webWall.transform.z, rotation: Math.PI }));
+    mirrors.forEach(m => transforms.set(m.id, { x: r3(-kit.shell.width / 2 + 0.12), z: 2.6, rotation: Math.PI / 2 }));
     return { shell: { theme: world.shell.theme, width: kit.shell.width, depth: kit.shell.depth }, transforms, sizes };
 }
 
