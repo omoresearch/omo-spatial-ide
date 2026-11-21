@@ -14,6 +14,10 @@ import {
     applyWorldOps, defaultStation, entityRadius, growOpsFor, roomRect, rooms, stations, validateWorld,
     ROOM_MAX, ROOM_MIN, SHELL_MAX, SHELL_MIN, WALL_SIDES, WORLD_ID_RE, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS
 } from './world-model';
+import { KIT_PROPS, STYLE_KITS, kitForTheme, propEntity } from './world-style-kits'; // sky:merge M7
+import type { StyleKit, StyleKitProp } from './world-style-kits';
+import { WORLD_TEMPLATES } from './world-templates'; // sky:merge M7
+import type { WorldTemplate } from './world-templates';
 import type {
     DecorKind, EntityKind, RoomEntity, StationConfig, StationEntity, TabKind, Transform, WallSide, WorldEntity, WorldOp, WorldProposal, WorldSpec
 } from './world-model';
@@ -36,6 +40,9 @@ export interface RulePlanOptions {
 export const ADMIN_EXAMPLES: readonly string[] = [
     'add a desk for Codex and a big monitor wall linked to it', // t4:polish: no ordinal ('third' was wrong once a world had 4+ desks)
     'add a room for research with 4 desks', // w3:admin
+    'add a skyline lounge with 2 desks', // sky:merge M7
+    'place a sofa from the kit in the lounge', // sky:merge M7
+    'make me a skyline penthouse world', // sky:merge M7
     'make it an open world',
     'add 2 shell desks named Ops',
     'add a web wall showing https://example.com',
@@ -88,6 +95,7 @@ const TAB_TITLE: Record<TabKind, string> = { codex: 'Codex', claude: 'Claude', h
 
 const PROFILE_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const round = (n: number): number => Math.round(n * 100) / 100;
+const THEME_TITLE: Record<string, string> = { station: 'Space station', jungle: 'Prehistoric jungle', skyline: 'Skyline penthouse' }; // sky:merge M7
 const titleCase = (s: string): string => s.replace(/\b\w/g, c => c.toUpperCase());
 
 function slug(text: string): string {
@@ -127,8 +135,8 @@ export function describeOp(world: WorldSpec, op: WorldOp): string {
                 case 'web-wall': return `Add web wall ${label} ${round(e.width)} × ${round(e.height)} m${e.home ? `, home ${e.home}` : ''} ${at(e.transform)}`;
                 case 'mirror': return `Add mirror ${label} of ${name(e.link)} ${at(e.transform)}`;
                 case 'review-screen': return `Add code review screen ${label} ${at(e.transform)}`;
-                case 'decor': return `Add ${e.decor}${e.scale && e.scale !== 1 ? ` (size ×${round(e.scale)})` : ''} ${at(e.transform)}`;
-                case 'room': return `Add room ${label} ${round(e.width)} × ${round(e.depth)} m${doorText(e.doors)} ${at(e.transform)}`; // w3:admin
+                case 'decor': return `Add ${e.prop ? `${(KIT_PROPS.find(k => k.id === e.prop)?.label ?? e.prop).toLowerCase()} (kit model ${e.prop})` : e.decor}${e.scale && e.scale !== 1 ? ` (size ×${round(e.scale)})` : ''} ${at(e.transform)}`; // sky:merge M7
+                case 'room': return `Add room ${label} ${round(e.width)} × ${round(e.depth)} m${e.theme ? `, ${THEME_TITLE[e.theme]} style` : ''}${doorText(e.doors)} ${at(e.transform)}`; // w3:admin; sky:merge M7
             }
             return 'Add something';
         }
@@ -157,7 +165,7 @@ export function describeOp(world: WorldSpec, op: WorldOp): string {
         case 'rename': return `Rename ${name(op.id)} to “${op.label}”`;
         case 'shell': {
             const parts: string[] = [];
-            if (op.shell.theme) parts.push(`theme ${op.shell.theme === 'jungle' ? 'Prehistoric jungle' : 'Space station'}`);
+            if (op.shell.theme) parts.push(`theme ${THEME_TITLE[op.shell.theme]}`); // sky:merge M7
             if (op.shell.width !== undefined || op.shell.depth !== undefined) parts.push(`size ${round(op.shell.width ?? world.shell.width)} × ${round(op.shell.depth ?? world.shell.depth)} m`);
             if (op.shell.open === true) parts.push('open world (no outer walls)');
             if (op.shell.open === false) parts.push('walled room');
@@ -595,6 +603,7 @@ class Planner {
         for (const raw of this.clauses(prompt)) {
             const clause = raw.replace(/^(?:please|pls|can you|could you|would you|will you|let'?s|ok(?:ay)?|now|and|also|then|hermes,?|admin,?)\s+/i, '').replace(/^(?:please)\s+/i, '');
             const lower = ` ${clause.toLowerCase()} `;
+            if (WHOLE_WORLD_RE.test(lower)) { inherited = undefined; this.wholeWorld(clause, lower); continue; } // sky:merge M7
             const intent = detectIntent(lower) ?? inherited ?? (hasAddable(lower) ? 'add' : undefined);
             if (!intent) { this.notes.push(`I did not understand “${this.restore(clause)}”.`); continue; }
             inherited = intent === 'arrange' || intent === 'theme' || intent === 'name' || intent === 'room-size' || intent === 'open' || intent === 'door' ? undefined : intent;
@@ -623,9 +632,12 @@ class Planner {
     }
 
     add(clause: string, lower: string): void {
-        const kind = addKind(lower);
+        let kind = addKind(lower);
+        // sky:merge M7 — a style-kit catalogue prop ("an armchair", "a money tree", "a sofa from the kit").
+        const kitProp = this.kitPropIn(lower, kind);
+        if (kitProp) kind = kitProp.prop.fallback;
         if (!kind) { this.notes.push(`I could not tell what to add in “${this.restore(clause)}”.`); return; }
-        const kindIndex = kindPosition(lower, kind);
+        const kindIndex = kitProp ? kitProp.index : kindPosition(lower, kind);
         const count = Math.max(1, Math.min(8, countBefore(lower, kindIndex)));
         const name = extractName(lower, clause, this);
         const size = sizeWord(lower);
@@ -641,22 +653,57 @@ class Planner {
         const into = this.roomRefIn(lower);
         const previous = this.targetRoom;
         if (into) this.targetRoom = into.id;
-        try { this.addMany(kind, lower, count, name, size); } finally { this.targetRoom = previous; }
+        try { this.addMany(kind, lower, count, name, size, kitProp?.prop); } finally { this.targetRoom = previous; }
     }
 
-    addMany(kind: EntityKind | DecorKind, lower: string, count: number, name: string | undefined, size: number): void {
+    /**
+     * sky:merge M7 — the catalogue prop a clause asks for. Used when the clause names the kit ("from the kit"),
+     * names a thing only the catalogue has ("armchair", "coffee table"), or the target is a skyline world/room.
+     */
+    kitPropIn(lower: string, kind: EntityKind | DecorKind | undefined): { prop: StyleKitProp; index: number } | undefined {
+        if (kind && !DECOR_WORDS.some(([k]) => k === kind)) return undefined; // desks, walls and rooms are never props
+        const head = lower.replace(/\u0001\d+\u0001/g, ' ').split(/\s(?:in|inside|into|within|to|next to|near|beside|by|close to|behind|called|named)\s/)[0];
+        const found = findProp(head);
+        if (!found) {
+            if (kind && KIT_RE.test(lower)) this.notes.push(`The style kit has no ${kind}, so a plain one is used.`);
+            return undefined;
+        }
+        const room = this.roomRefIn(lower);
+        const skyline = (room?.theme ?? this.draft.shell.theme) === 'skyline';
+        // A catalogue-only word ("armchair") or a specific name ("money tree") picks the model anywhere; a plain decor word ("a plant") only in kit context.
+        const specific = /\s/.test(found.word) || !DECOR_WORDS.some(([, re]) => re.test(` ${found.word} `));
+        return !kind || specific || KIT_RE.test(lower) || skyline ? { prop: found.prop, index: found.index } : undefined;
+    }
+
+    /** sky:merge M7 — "make me a <description> world": the nearest template (style-kit worlds first) replaces the world. */
+    wholeWorld(clause: string, lower: string): void {
+        const locked = stations(this.draft).filter(e => e.station.locked);
+        if (locked.length) { this.notes.push(`A new world would remove locked desks (${locked.map(e => `“${entityName(e)}”`).join(', ')}). Unlock them first.`); return; }
+        const pick = nearestTemplate(lower);
+        const before = this.ops.length;
+        for (const e of [...this.draft.entities]) if (this.draft.entities.some(x => x.id === e.id) && !this.push({ op: 'remove', id: e.id })) { this.rollback(before); return; } // a removed desk takes its mirrors
+        const t = pick.template.world.shell;
+        if (!this.push({ op: 'shell', shell: { theme: t.theme, width: t.width, depth: t.depth, open: !!t.open } }, ` — from the “${pick.template.label}” template`)) { this.rollback(before); return; }
+        for (const e of pick.template.world.entities) if (!this.push({ op: 'add', entity: JSON.parse(JSON.stringify(e)) as WorldEntity })) { this.rollback(before); return; }
+        const given = extractName(lower, clause, this);
+        this.push({ op: 'name', name: given ?? pick.template.label });
+        this.lastRefs = [];
+        this.notes.push(`New world from the “${pick.template.label}” template${pick.kit ? ` (the ${pick.kit.label} style kit)` : ''}: it replaces everything in the current world when you press Apply.`);
+    }
+
+    addMany(kind: EntityKind | DecorKind, lower: string, count: number, name: string | undefined, size: number, prop?: StyleKitProp): void {
         const added: string[] = [];
         for (let i = 0; i < count; i++) {
             if (this.draft.entities.length >= WORLD_MAX_ENTITIES) { this.notes.push(`A world holds at most ${WORLD_MAX_ENTITIES} things, so ${count - i} were not added.`); break; }
             const label = name ? (count > 1 ? `${name} ${i + 1}` : name) : undefined;
-            const id = this.addOne(kind, lower, label, size);
+            const id = this.addOne(kind, lower, label, size, prop);
             if (!id) break;
             added.push(id);
         }
         if (added.length) this.lastRefs = added;
     }
 
-    addOne(kind: EntityKind | DecorKind, lower: string, given: string | undefined, size: number): string | undefined {
+    addOne(kind: EntityKind | DecorKind, lower: string, given: string | undefined, size: number, prop?: StyleKitProp): string | undefined {
         if (kind === 'station') {
             if (stations(this.draft).length >= WORLD_MAX_STATIONS) { this.notes.push(`A world holds at most ${WORLD_MAX_STATIONS} desks.`); return undefined; }
             const agents = AGENT_WORDS.filter(([, re]) => re.test(lower)).map(([k]) => k);
@@ -721,9 +768,9 @@ class Planner {
         }
         // decor
         const decor = kind as DecorKind;
-        const entity: WorldEntity = { id: this.uniqueId(given ?? decor), kind: 'decor', decor, transform: { x: 0, z: 0, rotation: 0 } };
+        const entity = (prop ? propEntity(this.uniqueId(given ?? prop.label), prop, { x: 0, z: 0, rotation: 0 }, given) : { id: this.uniqueId(given ?? decor), kind: 'decor', decor, transform: { x: 0, z: 0, rotation: 0 } }) as Extract<WorldEntity, { kind: 'decor' }>; // sky:merge M7
         if (given) entity.label = given;
-        if (size !== 1) entity.scale = clamp(size, 0.25, 4);
+        if (size !== 1) entity.scale = clamp(size * (prop?.scale ?? 1), 0.25, 4);
         const wall = decor === 'window' || decor === 'whiteboard' || decor === 'bookshelf';
         const corner = /\bcorners?\b/.test(lower);
         const W = this.draft.shell.width / 2, D = this.draft.shell.depth / 2;
@@ -801,6 +848,8 @@ class Planner {
         const cols = desks <= 1 ? 1 : desks <= 4 ? 2 : desks <= 9 ? 3 : 4, rows = Math.max(1, Math.ceil(desks / cols));
         const [width, depth] = dims ?? (desks ? [Math.ceil(cols * 4.4 + 2.4), Math.ceil(rows * 3.2 + 4.4)] : lounge ? [9, 7] : [10, 8]);
         const room: RoomEntity = { id: this.uniqueId(label), kind: 'room', label, width: clamp(Math.max(8, width), ROOM_MIN, ROOM_MAX), depth: clamp(Math.max(6, depth), ROOM_MIN, ROOM_MAX), transform: { x: 0, z: 0, rotation: 0 } };
+        const kit = kitIn(lower); // sky:merge M7 — "a skyline lounge", "a skyline-penthouse room called X"
+        if (kit) room.theme = kit.theme;
         if (dims) { room.width = clamp(dims[0], ROOM_MIN, ROOM_MAX); room.depth = clamp(dims[1], ROOM_MIN, ROOM_MAX); }
         if (!this.openUp()) return undefined;
         const spot = this.placeRoom(room, this.nearRef(lower));
@@ -824,7 +873,9 @@ class Planner {
                 this.addMany('station', ` ${deskLower} `, desks, base.slice(0, 50), 1);
                 // addMany labels them "<base> 1..n"; a single desk keeps the plain name.
             }
-            if (lounge && !desks) { this.addMany('sofa', ' add a sofa ', 1, undefined, 1); this.addMany('plant', ' add a plant ', 1, undefined, 1); }
+            if (kit && (lounge || !desks)) { // sky:merge M7 — kit furniture from the catalogue
+                for (const id of lounge ? KIT_LOUNGE : KIT_ROOM) { const prop = KIT_PROPS.find(k => k.id === id); if (prop) this.addMany(prop.fallback, ' add ', 1, undefined, 1, prop); }
+            } else if (lounge && !desks) { this.addMany('sofa', ' add a sofa ', 1, undefined, 1); this.addMany('plant', ' add a plant ', 1, undefined, 1); }
             if (/\bmonitor walls?\b/.test(lower) || /\bscreens?\b/.test(lower)) this.addMany('monitor-wall', ' add a monitor wall ', 1, undefined, 1);
             if (/\bweb walls?\b/.test(lower)) this.addMany('web-wall', ' add a web wall ', 1, undefined, 1);
         } finally { this.targetRoom = previous; this.slots = []; }
@@ -1124,9 +1175,9 @@ class Planner {
     }
 
     theme(lower: string): void {
-        const theme = /\bjungle\b/.test(lower) ? 'jungle' : /\b(space|station|orbital)\b/.test(lower) ? 'station' : undefined;
-        if (!theme) { this.notes.push('The themes are “space station” and “jungle”.'); return; }
-        if (this.draft.shell.theme === theme) { this.notes.push(`The world already uses the ${theme === 'jungle' ? 'jungle' : 'space station'} theme.`); return; }
+        const theme = /\bjungle\b/.test(lower) ? 'jungle' : KIT_RE.test(lower) ? 'skyline' : /\b(space|station|orbital)\b/.test(lower) ? 'station' : undefined; // sky:merge M7 skyline
+        if (!theme) { this.notes.push('The themes are “space station”, “jungle” and “skyline”.'); return; }
+        if (this.draft.shell.theme === theme) { this.notes.push(`The world already uses the ${THEME_TITLE[theme].toLowerCase()} theme.`); return; }
         this.push({ op: 'shell', shell: { theme } });
     }
 
@@ -1223,7 +1274,7 @@ function detectIntent(lower: string): Intent | undefined {
     if (/^(unlink|disconnect|detach)\b/.test(s)) return 'unlink';
     if (/^(link|connect|attach|hook up|point)\b/.test(s)) return 'link';
     if (/^(remove|delete|drop|get rid of|destroy|take away|take out|clear)\b/.test(s)) return 'remove';
-    if (/^(switch|change|use|make|set|turn)\b.*\b(jungle|space station|space theme|station theme|orbital)\b/.test(s)) return 'theme';
+    if (/^(switch|change|use|make|set|turn)\b.*\b(jungle|space station|space theme|station theme|orbital|skyline|penthouse|skyscraper)\b/.test(s) && !/\b(rooms?|lounges?|wings?|offices?|labs?)\b/.test(s)) return 'theme'; // sky:merge M7 skyline
     if (/^(make|resize|enlarge|shrink|grow|set|expand)\b.*\b(room|world|floor|wing|lounge|office|lab)\b.*\b(bigger|larger|smaller|wider|narrower|deeper|longer|shorter|huge|giant|massive|enormous|vast|gigantic|as big as (?:possible|it gets)|max(?:imum)?|biggest|largest|endless|infinite|minecraft|\d+(?:\.\d+)?\s*(?:x|×|by)\s*\d+)/.test(s) || /^(enlarge|grow|shrink|expand)\s+(?:the |this |my )?(room|world)\b/.test(s)) return 'room-size';
     if (/^(resize|enlarge|shrink)\b/.test(s)) return 'resize';
     if (/^(make|set)\s+(?:the|my|that|this|it|its|both)\b/.test(s) && /\b(bigger|larger|smaller|wider|taller|huge|giant|tiny|\d+(?:\.\d+)?\s*(?:x|×|by)\s*\d+)/.test(s)) return 'resize';
@@ -1356,6 +1407,57 @@ export function newProposalId(prefix = 'admin'): string {
     proposalSeq = (proposalSeq + 1) % 1e6;
     return `${prefix}-${Date.now().toString(36)}-${proposalSeq.toString(36)}`;
 }
+
+// ---------------------------------------------------------------------------------------------
+// sky:merge M7 — style kits and templates for the planner
+// ---------------------------------------------------------------------------------------------
+/** Words that name the skyline style kit (or say "from the kit"). */
+const KIT_RE = /\b(skyline|penthouse|skyscraper|manhattan|nyc|new york|high-?rise|kit|catalog(?:ue)?)\b/;
+const KIT_THEME_RE = /\b(skyline|penthouse|skyscraper|manhattan|nyc|new york|high-?rise)\b/;
+/** "make me a cosy skyline world", "build us a new research workspace", "create a jungle world called Camp". */
+const WHOLE_WORLD_RE = /^\s*(?:make|build|create|give|set ?up|start|generate|design)\s+(?:me|us)?\s*(?:a|an)\s+(?:new\s+|whole\s+|fresh\s+|starting\s+)?(?:[a-z][a-z'-]*\s+){0,8}?(?:world|workspace)\b(?!\s+(?:bigger|larger|smaller|wider|open))/;
+/** Catalogue furniture a kit lounge / an empty kit room starts with. */
+const KIT_LOUNGE = ['sofa_02', 'coffee_table_round_01', 'pachira_aquatica_01'];
+const KIT_ROOM = ['potted_plant_01'];
+
+/** The style kit a text names: its id or label, else the skyline words. */
+export function kitIn(lower: string): StyleKit | undefined {
+    return STYLE_KITS.find(k => lower.includes(k.id) || lower.includes(k.label.toLowerCase())) ?? (KIT_THEME_RE.test(lower) ? kitForTheme('skyline') : undefined);
+}
+/** The catalogue prop a phrase names (longest word wins) and where it starts. */
+function findProp(text: string): { prop: StyleKitProp; index: number; word: string } | undefined {
+    let best: { prop: StyleKitProp; index: number; len: number; word: string } | undefined;
+    for (const prop of KIT_PROPS) for (const w of [prop.id.toLowerCase(), prop.id.toLowerCase().replace(/_/g, ' '), ...prop.words]) {
+        const m = new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:s|es)?\\b`).exec(text);
+        if (m && (!best || w.length > best.len)) best = { prop, index: m.index, len: w.length, word: w };
+    }
+    return best && { prop: best.prop, index: best.index, word: best.word };
+}
+/**
+ * The template nearest to a description: a named style kit / theme decides first, then word overlap with the
+ * template label, id and description, then the desk count ("with 4 desks"). Always returns one.
+ */
+export function nearestTemplate(text: string): { template: WorldTemplate; kit?: StyleKit; score: number } {
+    const lower = ` ${text.toLowerCase()} `;
+    const kit = kitIn(lower);
+    const words = new Set(lower.replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w.length > 2 && !STOP.has(w)).map(w => w.replace(/s$/, '')));
+    const want = deskCountIn(lower) || countBefore(lower, (/\b(desks?|stations?)\b/.exec(lower)?.index ?? -1));
+    const theme = kit?.theme ?? (/\bjungle|prehistoric|dino/.test(lower) ? 'jungle' : /\b(space|orbital|station)\b/.test(lower) ? 'station' : undefined);
+    let best: { template: WorldTemplate; score: number } | undefined;
+    for (const t of WORLD_TEMPLATES) {
+        let score = 0;
+        if (theme && t.world.shell.theme === theme) score += 50;
+        const hay = `${t.id} ${t.label} ${t.description}`.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).map(w => w.replace(/s$/, ''));
+        for (const w of words) if (hay.includes(w)) score += 4;
+        if (/\bopen\b/.test(lower) && t.world.shell.open) score += 10;
+        const desks = t.world.entities.filter(e => e.kind === 'station').length;
+        if (/\b(desks?|stations?)\b/.test(lower) && want) score -= Math.min(10, Math.abs(desks - want));
+        if (!best || score > best.score) best = { template: t, score };
+    }
+    const template = best?.template ?? WORLD_TEMPLATES[0];
+    return { template, kit: kit && template.world.shell.theme === kit.theme ? kit : undefined, score: best?.score ?? 0 };
+}
+const STOP = new Set(['make', 'build', 'create', 'give', 'world', 'workspace', 'space', 'office', 'with', 'and', 'the', 'for', 'new', 'whole', 'starting', 'fresh', 'please', 'called', 'named', 'some', 'lot', 'lots']);
 
 /** Plan a request against a world. Never throws; never applies anything. */
 export function planWithRules(world: WorldSpec, prompt: string, options: RulePlanOptions = {}): RulePlanResult {
