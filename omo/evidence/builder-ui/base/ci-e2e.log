@@ -1,0 +1,125 @@
+PASS: Real rendered route includes persistent-runtime console, not just an unmounted component
+PASS: Room still starts in first person at eye height
+PASS: Session controls have their own layout row and never cover the 3D viewport
+PASS: Physical station stores an actual workspace and active tab binding
+PASS: No flat or hidden xterm panel replaces the in-world monitor
+PASS: In-world typing executes in the actual chosen project and records a real shell PID
+PASS: Actual command output, not an echoed command substring, reaches the physical monitor
+PASS: A real browser multiline clipboard event cannot execute a hidden shell command
+PASS: Single-line clipboard text waits for the operator to press Enter
+PASS: The same actual pasted line executes only after explicit Enter
+PASS: Real rename control changes persisted tab metadata without a replacement tab
+PASS: New shell is an independent tab inside the same persistent workspace
+PASS: Both tabs have distinct actual shell processes and independent environment state
+PASS: Switching tabs restores the first terminal output rather than clearing/restarting it
+PASS: Esc returns to walking while real shell work and output continue
+PASS: Page refresh reconnects the same workspace/tab without duplicates
+PASS: Renamed tab survives a full page reload and server metadata read
+PASS: Actual PID, exported environment and cwd survive browser refresh
+PASS: hermes launcher is on the real route with an availability state
+PASS: claude launcher is on the real route with an availability state
+PASS: codex launcher is on the real route with an availability state
+PASS: No uncaught browser errors occurred
+FINAL PASS: 22 real local-app runtime checks
+PASS: Real shell BEL, desk isolation, physical lamp, acknowledge and rearm
+PASS: both physical monitors select exact real shell text; visible highlight; real clipboard; explicit copy; output invalidation; Escape clears; native word and line gestures.
+PASS: Distant Web-wall label is hidden during first-person walking
+PASS: Nearby terminal label remains available
+PASS: A distant HTML workstation label cannot cover the physical terminal centre
+PASS: Normal terminal-centre click activates physical typing
+PASS: Web-wall label remains available when its actual screen is within reach
+PASS: Overview retains discoverable Web-wall labels regardless of walking reach
+PASS: Builtin Git provider stages the exact owned file through the real command palette
+PASS: Actual SCM message and commit action create the requested commit with a clean owned worktree
+PASS: Real JavaScript debugger pauses before execution with the source call stack visible
+PASS: JavaScript continue executes the actual owned program
+PASS: Real Python debugpy adapter pauses at entry with the source call stack visible
+PASS: Python continue executes the actual owned program
+PASS: All agent recorder logs stay empty; no real agent is launched and no Git remote is configured
+PASS: real CJK continuation, combining glyph raster, physical colour columns, cursor and exact clipboard; no terminal input from selecting/copying.
+PASS: owned temporary Git repo and isolated app; physical Code review, scoped real patches, long-preview label, literal filename/editor, unchanged index/HEAD/file.
+PASS: The full world exposes a task entry point
+PASS: A shell is not an agent task destination
+PASS: claude requires explicit launch confirmation
+PASS: claude has an isolated empty draft
+PASS: Writing a native task draft does not walk or send input
+PASS: hermes requires explicit launch confirmation
+PASS: hermes has an isolated empty draft
+PASS: Storage denial retains the native textarea text with a visible memory-only warning
+PASS: Writing a native task draft does not walk or send input
+PASS: codex requires explicit launch confirmation
+PASS: codex has an isolated empty draft
+PASS: Writing a native task draft does not walk or send input
+PASS: Switching agents restores the selected tab draft
+PASS: Multiline task text is blocked without real bracketed paste
+PASS: Actual PTY text reaches the physical terminal without submitting the task
+PASS: Pasting retains the draft and makes no completion claim
+PASS: Only the explicit physical-terminal Enter submits the exact draft to the selected fixture
+PASS: Task review shortcut reads actual project changes without submitting more input or changing Git
+PASS: This browser tab keeps the per-agent draft across reload without relaunching a process
+PASS: Task controls stay above, not over, the physical world
+PASS: claude: explicit launch confirmation and no other tab's task record
+PASS: claude: successful paste records exact text without submitting
+PASS: claude: submission report sends no terminal input and does not claim verified execution
+PASS: claude: real physical Enter delivers the original task and creates the owned project edit
+PASS: A real failed project review cannot unlock a task decision
+PASS: claude: real patch review and explicit accepted decision do not mutate Git, files or terminal input
+PASS: hermes: explicit launch confirmation and no other tab's task record
+PASS: hermes: successful paste records exact text without submitting
+PASS: Denied task-record storage keeps the usable record in memory with a visible warning
+PASS: hermes: submission report sends no terminal input and does not claim verified execution
+PASS: hermes: real physical Enter delivers the original task and creates the owned project edit
+PASS: hermes: real patch review and explicit changes-requested decision do not mutate Git, files or terminal input
+PASS: codex: explicit launch confirmation and no other tab's task record
+PASS: codex: successful paste records exact text without submitting
+PASS: codex: submission report sends no terminal input and does not claim verified execution
+PASS: codex: real physical Enter delivers the original task and creates the owned project edit
+PASS: codex: real patch review and explicit accepted decision do not mutate Git, files or terminal input
+PASS: All three isolated task records and user decisions survive reload without relaunch or resubmission
+{
+  "checks": [
+    "Explicit UI warns that only the captured commit is copied",
+    "Name and confirmation alone create no resource",
+    "Real persisted worktree uses captured HEAD; dirty/untracked source stays separate",
+    "Original HEAD/index unchanged and no agent launches",
+    "Refresh lists the existing worktree without creating another",
+    "Explicit Open selects worktree; physical shell edits only its working folder",
+    "Source files/HEAD/index unchanged after isolated physical terminal edit"
+  ],
+  "providerCalls": 0
+}
+{
+  "checks": [
+    "Empty overview opens in the actual room without starting an agent",
+    "The real prepared task appears with full details and an honest unsubmitted phase",
+    "Foreign-project record is neither displayed nor read from storage",
+    "Overview refresh starts no agent and sends no terminal input",
+    "Manual submission note updates without implying execution",
+    "Same browser-tab task note survives reload without another launch"
+  ],
+  "providerCalls": 0
+}
+PASS: Room setup exposes a saved physical layout choice
+PASS: Legacy rooms default to the classic layout
+PASS: The live setup preview moves the actual two desk objects
+PASS: Saving the layout does not start a terminal or agent
+PASS: Real WASD reaches both moved physical monitors, each with a different live shell
+PASS: Room layout and shell actions do not open the web wall
+PASS: Cancel restores the saved physical layout, not the unsaved preview
+PASS: Reload preserves the saved layout and original shell PID/environment
+PASS: Saving another layout moves desks without rebinding or restarting either shell
+PASS: No agent was started by choosing, saving, cancelling or reloading layouts
+PASS: The real shared-room service refuses a classic client joining a wide layout
+PASS: The same two clients can join once their saved layouts match, without starting a terminal
+PASS: Room setup exposes portable preset import
+PASS: Actual saved-room download contains appearance only, no source name or paths
+PASS: Export does not start an agent
+PASS: Import previews another project appearance without saving, renaming or rebinding the destination
+PASS: Cancel preserves the destination saved room
+PASS: Injected machine-local fields are refused without changing saved state or echoing content
+PASS: The file-size guard refuses oversized imports before File.text
+PASS: A cancelled late file read cannot replace a newer setup preview
+PASS: Explicit Save applies imported appearance to the destination while preserving its shell PID/environment
+PASS: Imported appearance and the original running shell survive reload
+PASS: Cancelling a camera-only import restores actual physical-screen projections in overview
+PASS: two real browser clients share live 3D presence; separate physical terminal processes, no automatic starts, leave/rejoin and reload continuity, disconnect cleanup.
