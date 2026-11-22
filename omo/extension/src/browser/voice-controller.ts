@@ -683,6 +683,14 @@ export class RoomVoiceController {
         return [...this.peers.values()].map(p => ({ id: p.id, polite: p.polite, signaling: p.pc.signalingState, connection: p.pc.connectionState, ice: p.pc.iceConnectionState, restarts: p.restarts, reasons: p.restartReasons, iceAdded: p.iceAdded, iceFailed: p.iceFailed, ...(p.lastIceError ? { lastIceError: p.lastIceError } : {}) }));
     }
 
+    /** promise:share — per peer: distance, the volume asked for, and the real gain node value (inspection/tests). */
+    debugGains(): Array<{ id: string; name: string; distance?: number; volume: number; gain?: number; spatial?: boolean; panning?: string }> {
+        return this.state.peers.map(p => {
+            const audio = this.peers.get(p.id)?.audio?.inspect?.();
+            return { id: p.id, name: p.name, distance: p.distance, volume: p.volume, ...(audio ?? {}) };
+        });
+    }
+
     /** Received audio per peer (inbound-rtp totals) and output ear levels: diagnostics for the voice check and tests. */
     async debugAudio(): Promise<{ ears: { left: number; right: number }; peers: Array<{ id: string; energy: number; packets: number; path?: string }> }> {
         const peers: Array<{ id: string; energy: number; packets: number; path?: string }> = [];
