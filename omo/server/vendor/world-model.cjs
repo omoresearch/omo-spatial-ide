@@ -1,4 +1,4 @@
-// GENERATED from omo/extension/src/common/world-model.ts (sha256 3df89f7e60819d15b1445efd942e28eab67c48f591f09a96d89265c843ade27c). Do not edit.
+// GENERATED from omo/extension/src/common/world-model.ts (sha256 5c23056836d055cf4a82c9e3c31b27072cf65e7377b2aaef4b519d6ce9e784fe). Do not edit.
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.worldStorageKey = exports.WORLD_ID_RE = exports.WALL_SIDES = exports.ROOM_MAX = exports.ROOM_MIN = exports.SHELL_MAX = exports.SHELL_MIN = exports.WORLD_MAX_BYTES = exports.WORLD_MAX_STATIONS = exports.WORLD_MAX_ENTITIES = exports.WORLD_VERSION = void 0;
@@ -55,7 +55,7 @@ function validEntity(e, shell) {
         case 'web-wall': return finite(v.width, 0.8, 8) && finite(v.height, 0.6, 4) && finite(v.elevation, 0, 3) && (v.home === undefined || (typeof v.home === 'string' && /^https?:\/\//.test(v.home) && v.home.length <= 2048));
         case 'mirror': return exports.WORLD_ID_RE.test(v.link);
         case 'review-screen': return true;
-        case 'decor': return ['plant', 'lamp', 'crystal', 'sofa', 'bookshelf', 'whiteboard', 'rug', 'window'].includes(v.decor) && (v.scale === undefined || finite(v.scale, 0.25, 4));
+        case 'decor': return ['plant', 'lamp', 'crystal', 'sofa', 'bookshelf', 'whiteboard', 'rug', 'window'].includes(v.decor) && (v.scale === undefined || finite(v.scale, 0.25, 4)) && (v.prop === undefined || (typeof v.prop === 'string' && /^[A-Za-z0-9_]{1,48}$/.test(v.prop))); // sky:merge prop
         case 'room': return validRoom(v);
         default: return false;
     }
@@ -64,13 +64,13 @@ function validEntity(e, shell) {
 function validRoom(v) {
     const quarter = Math.abs(Math.round(v.transform.rotation / (Math.PI / 2)) * (Math.PI / 2) - v.transform.rotation) < 1e-6;
     const doors = v.doors === undefined || (Array.isArray(v.doors) && v.doors.length <= 4 && new Set(v.doors).size === v.doors.length && v.doors.every(d => exports.WALL_SIDES.includes(d)));
-    return finite(v.width, exports.ROOM_MIN, exports.ROOM_MAX) && finite(v.depth, exports.ROOM_MIN, exports.ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle');
+    return finite(v.width, exports.ROOM_MIN, exports.ROOM_MAX) && finite(v.depth, exports.ROOM_MIN, exports.ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle' || v.theme === 'skyline');
 }
 function validateWorld(w) {
     const v = w;
     if (!v || v.version !== exports.WORLD_VERSION || !text(v.name, 120) || !Number.isInteger(v.revision) || v.revision < 0)
         return { ok: false, error: 'Not a version 2 world.' };
-    if (!v.shell || !['station', 'jungle'].includes(v.shell.theme) || !finite(v.shell.width, exports.SHELL_MIN, exports.SHELL_MAX) || !finite(v.shell.depth, exports.SHELL_MIN, exports.SHELL_MAX)
+    if (!v.shell || !['station', 'jungle', 'skyline'].includes(v.shell.theme) || !finite(v.shell.width, exports.SHELL_MIN, exports.SHELL_MAX) || !finite(v.shell.depth, exports.SHELL_MIN, exports.SHELL_MAX)
         || (v.shell.open !== undefined && typeof v.shell.open !== 'boolean'))
         return { ok: false, error: 'The room shell is invalid.' };
     if (!Array.isArray(v.entities) || v.entities.length > exports.WORLD_MAX_ENTITIES)
