@@ -19,7 +19,7 @@ import { ambientHost } from './agent-avatars';
 import { sceneControls } from './focus-screen';
 import { entityTitle } from './world-store';
 import type { WorldSpec } from '../common/world-model';
-import { shapeStore, SHAPE_TOGGLE_EVENT } from './shape-store';
+import { shapeStore, SHAPE_TOGGLE_EVENT, setShapeKeyHandler } from './shape-store';
 import { ShapeTopButton, ShapeGlyph } from './shape-topbar';
 import { ShapePill, captionFor, composePrompt, expandIdea, refinePrompt, resolveScreens, suggestionsFor } from './shape-logic';
 import '../../src/browser/world-tokens.css';
@@ -94,20 +94,20 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     // Space (no screen focused, not typing) and the top-bar button toggle Shape.
     React.useEffect(() => {
         const toggle = (): void => show(!openRef.current);
-        const key = (event: KeyboardEvent): void => {
-            if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.repeat) return;
-            const canvas = threeOf(build.scene).canvas; if (!canvas) return;
+        const key = (event: KeyboardEvent): boolean => {
+            if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.repeat) return false;
+            build.sync();
+            const canvas = threeOf(build.scene).canvas; if (!canvas) return false;
             const t = event.target;
-            if (t !== canvas && t !== document.body && t !== document.documentElement) return;
+            if (t !== canvas && t !== document.body && t !== document.documentElement) return false;
             const c = sceneControls(build.scene);
-            if (c && (c.typing || c.cameraOwned)) return; // a screen is focused: Space is the terminal's
-            if (build.active && !openRef.current) return; // plain build mode keeps its keys
-            event.preventDefault(); event.stopImmediatePropagation();
-            toggle();
+            if (c && (c.typing || c.cameraOwned)) return false; // a screen is focused: Space is the terminal's
+            if (build.active && !openRef.current) return false; // plain build mode keeps its keys
+            toggle(); return true;
         };
-        window.addEventListener('keydown', key, true);
+        setShapeKeyHandler(key);
         window.addEventListener(SHAPE_TOGGLE_EVENT, toggle);
-        return () => { window.removeEventListener('keydown', key, true); window.removeEventListener(SHAPE_TOGGLE_EVENT, toggle); };
+        return () => { setShapeKeyHandler(undefined); window.removeEventListener(SHAPE_TOGGLE_EVENT, toggle); };
     }, [build, show]);
     // A click in the room (pointing at a thing) gives the keys back to the prompt, so typing never drives build keys.
     React.useEffect(() => {
@@ -152,7 +152,8 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             y = Math.max(h + 72, Math.min(host.height - 190, y - 18));
             // Nothing covers the centre of the room: a card over the centre lifts above it (still above the change).
             const cx = host.width / 2, cy = host.height / 2;
-            if (Math.abs(x - cx) < w / 2 + 8 && y > cy - 24 && y - h < cy + 24) y = Math.max(h + 72, cy - 32);
+            const zone = host.height * 0.07;
+            if (Math.abs(x - cx) < w / 2 + host.width * 0.07 && y > cy - zone - 12 && y - h < cy + zone) y = Math.max(h + 72, cy - zone - 12);
             card.style.transform = `translate(${Math.round(x - w / 2)}px, ${Math.round(y - h)}px)`;
             card.dataset.anchor = `${Math.round(r.left + (v.x + 1) / 2 * r.width)},${Math.round(r.top + (1 - v.y) / 2 * r.height)}`;
         };
@@ -274,7 +275,11 @@ function breathe(three: THREE.Scene | undefined, ids: string[]): void {
             if (!m || Array.isArray(m)) return;
             if (m.userData.shapeBase === undefined) m.userData.shapeBase = m.opacity ?? 1;
             const base = m.userData.shapeBase as number;
-            const next = on ? ((child as THREE.Mesh).isMesh ? 0.06 + 0.12 * k : Math.min(1, base * (0.55 + 0.45 * k))) : base;
+            // The ghost glows through walls and the floor of the overview (x-ray), breathing between 40% and 100%.
+            if (m.userData.shapeDepth === undefined) m.userData.shapeDepth = m.depthTest;
+            const depth = on ? false : m.userData.shapeDepth as boolean;
+            if (m.depthTest !== depth) { m.depthTest = depth; m.needsUpdate = true; child.renderOrder = on ? 20 : child.renderOrder; touched = true; }
+            const next = on ? ((child as THREE.Mesh).isMesh ? 0.1 + 0.16 * k : 0.4 + 0.6 * k) : base;
             if (m.opacity !== next) { m.opacity = next; touched = true; }
         });
     });

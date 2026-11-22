@@ -21,3 +21,17 @@ export const shapeStore = {
     /** Ask the mounted Shape experience to open or close (the top-bar button uses this). */
     requestToggle(): void { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SHAPE_TOGGLE_EVENT)); }
 };
+
+/**
+ * The walking controls take every canvas key at window capture and stop it, so Shape's Space has to be
+ * registered before any room exists: at module load (this file is imported by the widget), like the admin's H.
+ * The mounted Shape experience sets `keyHandler`; it returns true when it took the key.
+ */
+let keyHandler: ((event: KeyboardEvent) => boolean) | undefined;
+export function setShapeKeyHandler(handler: ((event: KeyboardEvent) => boolean) | undefined): void { keyHandler = handler; }
+if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', event => {
+        if (!keyHandler) return;
+        try { if (keyHandler(event)) { event.preventDefault(); event.stopImmediatePropagation(); } } catch { /* never break typing */ }
+    }, true);
+}
