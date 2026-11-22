@@ -183,11 +183,16 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check('The history strip has the kept steps (2 dots)', dots.length === 2, dots.length);
         if (dots.length) { const box = await dots[0].boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await pause(400); }
         const tip = await page.evaluate(() => { const t = document.querySelector('[data-testid="shape-history-dot"] .omo-shape-tip'); return t ? { text: t.textContent, opacity: getComputedStyle(t).opacity } : null; });
-        check('Hovering a dot shows its sentence', !!tip && Number(tip.opacity) > 0.5 && /nook/i.test(tip.text) && /go back/i.test(tip.text), tip);
+        check('Hovering a dot shows its sentence and "Return to this point (you can redo)"', !!tip && Number(tip.opacity) > 0.5 && /nook/i.test(tip.text) && /Return to this point \(you can redo\)/.test(tip.text) && !/takes back/i.test(tip.text), tip);
         await shot('5-history');
         if (dots.length) await dots[0].click(); await pause(1200);
         const rewound = await savedWorld();
         check('Clicking the first dot undoes back to before it', JSON.stringify(rewound.entities) === JSON.stringify(before.entities) && (await page.$$('[data-testid="shape-history-dot"]')).length === 0, rewound.entities.length);
+        // ... and you can redo: the Redo button puts the changes back, dot by dot.
+        await click('[data-testid="shape-redo"]').catch(() => {}); await pause(700); await click('[data-testid="shape-redo"]').catch(() => {}); await pause(1000);
+        const redone = await savedWorld();
+        check('Redo puts the taken-back changes back (2 dots, the nook and the plant exist again)', (await page.$$('[data-testid="shape-history-dot"]')).length === 2 && !await page.$('[data-testid="shape-redo"]') && redone.entities.length === before.entities.length + 4, redone.entities.length);
+        { const d = await page.$$('[data-testid="shape-history-dot"]'); if (d.length) await d[0].click(); await pause(1200); }
 
         // 6. Browse, Esc, errors.
         await click('[data-testid="shape-browse"]'); await pause(600);

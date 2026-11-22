@@ -29,6 +29,8 @@ import '../../src/browser/shape-mode.css';
 interface Kept { id: string; sentence: string }
 /** Kept changes of this window (the strip survives closing and reopening Shape). */
 let keptLog: Kept[] = [];
+/** Kept changes a dot took back, newest last (Redo puts them back in order; a new Keep clears them). */
+let redoLog: Kept[] = [];
 /** The prompt of the pending proposal (a refinement builds on it) and the idea it came from. */
 interface Turn { prompt: string; idea?: string; where?: string; entryId?: string }
 
@@ -44,6 +46,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     const [browse, setBrowse] = React.useState(false);
     const [details, setDetails] = React.useState(false);
     const [kept, setKept] = React.useState<Kept[]>(keptLog);
+    const [redoable, setRedoable] = React.useState<Kept[]>(redoLog);
     const input = React.useRef<HTMLInputElement>(null);
     const caption = React.useRef<HTMLDivElement>(null);
     const leader = React.useRef<SVGSVGElement>(null);
@@ -273,15 +276,21 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
         if (!entry || !proposed) return;
         const sentence = captionFor(entry.plan!.proposal!.summary, turn?.idea, turn?.where, spokenNames(entry.plan!.proposal!.ops));
         admin.apply(entry.id);
-        if (admin.activeEntry?.status === 'applied') { keptLog = [...keptLog, { id: entry.id, sentence }].slice(-24); setKept(keptLog); }
+        if (admin.activeEntry?.status === 'applied') { keptLog = [...keptLog, { id: entry.id, sentence }].slice(-24); setKept(keptLog); redoLog = []; setRedoable(redoLog); }
         setTurn(undefined); focusPrompt();
     };
     const undo = (): void => { if (entry && proposed) admin.discard(entry.id); setTurn(undefined); focusPrompt(); };
     const rewind = (index: number): void => {
         if (proposed) undo();
         let n = keptLog.length - index;
-        while (n-- > 0 && store.canUndo) { build.undo(); keptLog = keptLog.slice(0, -1); }
-        setKept(keptLog); focusPrompt();
+        while (n-- > 0 && store.canUndo) { build.undo(); redoLog = [...redoLog, keptLog[keptLog.length - 1]]; keptLog = keptLog.slice(0, -1); }
+        setKept(keptLog); setRedoable(redoLog); focusPrompt();
+    };
+    const redo = (): void => {
+        if (proposed || !redoLog.length || !store.canRedo) return;
+        build.redo();
+        keptLog = [...keptLog, redoLog[redoLog.length - 1]]; redoLog = redoLog.slice(0, -1);
+        setKept(keptLog); setRedoable(redoLog); focusPrompt();
     };
     const onKey = (event: React.KeyboardEvent<HTMLInputElement>): void => {
         event.stopPropagation();
@@ -294,7 +303,8 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
         } else if (event.key === 'Escape') {
             event.preventDefault();
             if (proposed) undo(); else if (pills.length || text) { setPills([]); setText(''); } else show(false);
-        } else if (event.key === 'Backspace' && !text && pills.length) { setPills(pills.slice(0, -1)); }
+        } else if (event.key === 'Backspace' && !text && pills.length) { setPills(pills.slice(0, -1));
+        } else if (!text && (event.ctrlKey || event.metaKey) && ((event.key.toLowerCase() === 'z' && event.shiftKey) || event.key.toLowerCase() === 'y')) { event.preventDefault(); redo(); }
     };
 
     const typing = !!text.trim() || pills.length > 0;
@@ -319,12 +329,13 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
                 <i className="omo-shape-caption-stem" aria-hidden="true" />
             </div>}
             <div className="omo-shape-dock">
-                {kept.length > 0 && <div className="omo-shape-history" data-testid="shape-history" role="list" aria-label={`${kept.length} kept change${kept.length === 1 ? '' : 's'}`}>
+                {(kept.length > 0 || redoable.length > 0) && <div className="omo-shape-history" data-testid="shape-history" role="list" aria-label={`${kept.length} kept change${kept.length === 1 ? '' : 's'}`}>
                     <span className="omo-shape-history-label" aria-hidden="true">{kept.length} kept</span>
                     {kept.map((k, i) => <button type="button" role="listitem" key={k.id} className="omo-shape-dot" data-testid="shape-history-dot" data-sentence={k.sentence}
-                        aria-label={`Go back to before: ${k.sentence}`} onMouseDown={e => e.preventDefault()} onClick={() => rewind(i)}>
-                        <span className="omo-shape-tip"><b>{i + 1}.</b> {k.sentence}<small>{kept.length - i === 1 ? 'Click to take this change back' : `Click to go back to before this (takes back ${kept.length - i} changes)`}</small></span></button>)}
+                        aria-label={`Return to before: ${k.sentence} (you can redo)`} onMouseDown={e => e.preventDefault()} onClick={() => rewind(i)}>
+                        <span className="omo-shape-tip"><b>{i + 1}.</b> {k.sentence}<small>Return to this point (you can redo)</small></span></button>)}
                     <span className="omo-shape-now" aria-hidden="true">Now</span>
+                    {redoable.length > 0 && !proposed && <button type="button" className="omo-shape-redo" data-testid="shape-redo" title="Redo (Ctrl+Shift+Z)" onMouseDown={e => e.preventDefault()} onClick={redo}>Redo</button>}
                 </div>}
                 {busy && <div className="omo-shape-status" role="status" data-testid="shape-thinking"><span className="omo-shape-spinner" aria-hidden="true" />{hermes ? 'Asking Hermes…' : 'Shaping…'}</div>}
                 {!busy && failed && <div className="omo-shape-status is-note" role="status" data-testid="shape-note">{failed}</div>}

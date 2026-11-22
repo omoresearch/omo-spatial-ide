@@ -159,3 +159,7 @@ body.omo-shape-open .omo-scene-label { opacity: 0 !important; pointer-events: no
     opacity: 0; transition: opacity 180ms var(--sh-ease);
 }
 .omo-shape-tag[data-on="true"] { opacity: 1; }
+
+/* Redo after a dot took changes back: a quiet text button at the end of the strip. */
+.omo-shape-redo { margin-left: 6px; height: 22px; padding: 0 9px; border-radius: 8px; border: 1px solid var(--sh-line); background: rgba(255, 255, 255, .06); color: var(--sh-text-2) !important; font-weight: 500; font-size: 12px; line-height: 20px; font-family: inherit; pointer-events: auto; }
+.omo-shape-redo:hover { background: rgba(255, 255, 255, .12); color: var(--sh-text) !important; }
