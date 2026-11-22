@@ -142,6 +142,16 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check('Build overview: the room is framed left of the World Builder (no label behind the panel, centred in the visible area)', frame.labels.length > 0 && frame.labels.every(([, r]) => r <= frame.panelLeft) && Math.abs(frame.mid - frame.visibleMid) < (frame.panelLeft - frame.canvasLeft) * 0.2, frame);
         check('Build: disabled tools look disabled (opacity <= .4)', ind.disabled.length > 0 && ind.disabled.every(o => o <= 0.4), ind.disabled);
         await click('[data-testid="builder-tab-add"]').catch(() => {}); await pause(400);
+        // world-ui step 3 (d): one card grammar; per-object settings are not in the catalogue.
+        const cards = await page.evaluate(() => {
+            const list = [...document.querySelectorAll('[data-testid="build-palette"] .omo-wb-card')];
+            const one = el => { if (!el) return true; const lh = parseFloat(getComputedStyle(el).lineHeight) || 18; return el.getBoundingClientRect().height <= lh * 1.3; };
+            return { n: list.length, heights: [...new Set(list.map(c => Math.round(c.getBoundingClientRect().height)))], cols: [...new Set(list.map(c => Math.round(c.getBoundingClientRect().width)))].length,
+                oneLine: list.every(c => one(c.querySelector('strong')) && one(c.querySelector('small'))), badges: document.querySelectorAll('.omo-wb-card-art b').length,
+                options: !!document.querySelector('[data-testid="build-palette"] .omo-wb-options, [data-testid="build-palette"] [data-testid="builder-desk-tab-hermes"], [data-testid="build-palette"] [data-testid="builder-web-url"]'),
+                drawIsButton: !!document.querySelector('[data-testid="build-item-room"].omo-wb-draw') && !document.querySelector('[data-testid="build-item-room"].omo-wb-card') };
+        });
+        check('Add: one card grammar (same height, 2 columns, one-line title + subtitle, no size badges), Draw a room is a button, no settings box', cards.n >= 10 && cards.heights.length === 1 && cards.cols === 1 && cards.oneLine && cards.badges === 0 && !cards.options && cards.drawIsButton, cards);
         await shot('7-build-add');
         await click('[data-testid="builder-tab-talk"]').catch(() => {}); await pause(300);
         if (await page.$('[data-testid="admin-prompt"]')) {

@@ -29,12 +29,12 @@ export const PALETTE: PaletteItem[] = [
     { id: 'room-s', group: 'Spaces', title: 'Small room', hint: '6 × 6 m', glyph: 'room', wallMounted: false }, // builder-ui
     { id: 'room-m', group: 'Spaces', title: 'Medium room', hint: '10 × 8 m', glyph: 'room', wallMounted: false }, // builder-ui
     { id: 'room-l', group: 'Spaces', title: 'Large room', hint: '16 × 12 m', glyph: 'room', wallMounted: false }, // builder-ui
-    { id: 'agent-desk', group: 'Stations', title: 'Agent desk', hint: 'Hermes + shell tabs', glyph: 'desk-agent', wallMounted: false },
+    { id: 'agent-desk', group: 'Stations', title: 'Agent desk', hint: 'Hermes + Shell', glyph: 'desk-agent', wallMounted: false },
     { id: 'shell-desk', group: 'Stations', title: 'Shell desk', hint: 'One plain shell', glyph: 'desk-shell', wallMounted: false },
-    { id: 'monitor-wall', group: 'Screens', title: 'Monitor wall', hint: 'Mirror a desk, big', glyph: 'monitor-wall', wallMounted: true },
-    { id: 'web-wall', group: 'Screens', title: 'Web wall', hint: 'A real browser page', glyph: 'web-wall', wallMounted: true },
+    { id: 'monitor-wall', group: 'Screens', title: 'Monitor wall', hint: 'A desk, big', glyph: 'monitor-wall', wallMounted: true },
+    { id: 'web-wall', group: 'Screens', title: 'Web wall', hint: 'A live page', glyph: 'web-wall', wallMounted: true },
     { id: 'mirror', group: 'Screens', title: 'Mirror', hint: 'Follows one desk', glyph: 'mirror', wallMounted: true },
-    { id: 'review-screen', group: 'Screens', title: 'Review screen', hint: 'Git changes, read-only', glyph: 'review', wallMounted: true },
+    { id: 'review-screen', group: 'Screens', title: 'Review screen', hint: 'Git changes', glyph: 'review', wallMounted: true },
     { id: 'decor-plant', group: 'Decor', title: 'Plant', hint: 'Green, quiet', glyph: 'plant', wallMounted: false },
     { id: 'decor-lamp', group: 'Decor', title: 'Lamp', hint: 'Warm light', glyph: 'lamp', wallMounted: false },
     { id: 'decor-crystal', group: 'Decor', title: 'Crystal', hint: 'Soft glow', glyph: 'crystal', wallMounted: false },

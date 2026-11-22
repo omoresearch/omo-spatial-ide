@@ -100,14 +100,18 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         // 2. Add tab: monitor wall linked to Desk one + web wall with URL.
         await click('[data-testid="builder-tab-add"]'); await pause(400);
         const deskOne = await page.evaluate(() => { const w = Object.keys(localStorage).find(k => k.startsWith('omo.world.v2:')); const world = JSON.parse(localStorage.getItem(w)); const s = world.entities.find(e => e.kind === 'station' && /desk one/i.test(e.label || e.station.name)) || world.entities.find(e => e.kind === 'station'); return s.id; });
-        // world-ui: the follows picker is a custom select (no native <select>): open it, then pick the option.
-        await click('[data-testid="builder-monitor-link"]'); await pause(200);
-        await page.$eval(`[data-testid="builder-monitor-link-option"][data-value="${deskOne}"]`, e => e.click()); await pause(200);
-        check('Add: the custom follows select shows the picked desk', await page.$eval('[data-testid="builder-monitor-link"]', e => e.dataset.value) === deskOne);
-        await page.click('[data-testid="builder-web-url"]', { clickCount: 3 }); await page.keyboard.type(webUrl); await page.keyboard.press('Enter');
+        // world-ui step 3d: per-object options are not in the catalogue; they show in the placing strip of THAT thing.
+        // The follows picker is a custom select (no native <select>): open it, then pick the option.
+        const setFollows = async () => {
+            await click('[data-testid="builder-monitor-link"]'); await pause(200);
+            await page.$eval(`[data-testid="builder-monitor-link-option"][data-value="${deskOne}"]`, e => e.click()); await pause(200);
+            check('Add: the custom follows select shows the picked desk', await page.$eval('[data-testid="builder-monitor-link"]', e => e.dataset.value) === deskOne);
+        };
+        const setPage = async () => { await page.click('[data-testid="builder-web-url"]', { clickCount: 3 }); await page.keyboard.type(webUrl); await page.keyboard.press('Enter'); await pause(300); };
         const wrap = await page.$eval('.omo-scene-wrap', e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
-        const placeAt = async (item, spots) => {
+        const placeAt = async (item, spots, setup) => {
             await click(`[data-testid="build-item-${item}"]`); await pause(500);
+            if (setup) await setup();
             for (const [fx, fy] of spots) {
                 const x = wrap[0] + wrap[2] * fx, y = wrap[1] + wrap[3] * fy;
                 if (!await page.evaluate((x, y) => document.elementFromPoint(x, y)?.tagName === 'CANVAS', x, y)) continue;
@@ -118,9 +122,9 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             return '';
         };
         const spots = [[0.3, 0.4], [0.35, 0.5], [0.25, 0.6], [0.4, 0.35], [0.45, 0.45], [0.2, 0.45], [0.5, 0.3], [0.3, 0.7], [0.55, 0.6]];
-        const g1 = await placeAt('monitor-wall', spots);
+        const g1 = await placeAt('monitor-wall', spots, setFollows);
         await page.keyboard.press('Escape'); await pause(300);
-        const g2 = await placeAt('web-wall', spots.slice().reverse());
+        const g2 = await placeAt('web-wall', spots.slice().reverse(), setPage);
         await page.keyboard.press('Escape'); await pause(300);
         check('Add: placement ghosts placed a monitor wall and a web wall', !!g1 && !!g2, { g1, g2 });
         await shot('2-add-pending');
@@ -141,6 +145,14 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         // Find the desk on screen: hover candidate points until data-hover is the desk.
         let picked = false;
         await click('[data-testid="builder-tab-add"]');
+        // world-ui step 3c: the overview is framed left of the panel, so aim first just below the desk's own label.
+        const near = await page.evaluate(id => { const l = document.querySelector(`.omo-scene-label[data-workstation="${id}"]`); if (!l) return []; const r = l.getBoundingClientRect(); const out = []; for (let dy = 8; dy <= 120; dy += 8) for (const dx of [0, -24, 24, -48, 48]) out.push([r.left + r.width / 2 + dx, r.bottom + dy]); return out; }, deskId);
+        for (const [x, y] of near) {
+            if (picked) break;
+            if (!await page.evaluate((x, y) => document.elementFromPoint(x, y)?.tagName === 'CANVAS', x, y)) continue;
+            await page.mouse.move(x, y); await pause(60);
+            if ((await page.$eval('[data-testid="build-mode"]', e => e.dataset.hover || '')) === deskId) { await page.mouse.click(x, y); picked = true; }
+        }
         for (let fy = 0.25; fy <= 0.85 && !picked; fy += 0.05) for (let fx = 0.1; fx <= 0.7 && !picked; fx += 0.04) {
             const x = wrap[0] + wrap[2] * fx, y = wrap[1] + wrap[3] * fy;
             await page.mouse.move(x, y); await pause(60);

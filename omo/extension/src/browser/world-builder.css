@@ -165,3 +165,19 @@
 .omo-scene-wrap { --omo-wb-w: min(360px, calc(33vw - var(--omo-sp-3))); }
 @media (max-width: 1100px) { .omo-scene-wrap { --omo-wb-w: 300px; } }
 @media (prefers-reduced-motion: reduce) { .omo-wb * { transition: none !important; } }
+
+/* world-ui — ONE card grammar for the catalogue: 2 columns, 56 px tiles, a 32 px icon well, one-line title and
+   one-line subtitle (ellipsis + tooltip, never a 3-line wrap). No size badges; 'Draw a room' is a plain button. */
+.omo-wb-cards, .omo-wb-cards.is-small { grid-template-columns: 1fr 1fr; gap: 8px; }
+.omo-wb-card, .omo-wb-cards.is-small .omo-wb-card { flex-direction: row; align-items: center; gap: 12px; height: 56px; padding: 0 12px; text-align: left; border-radius: 10px; }
+.omo-wb-card-art, .omo-wb-cards.is-small .omo-wb-card-art { width: 32px; height: 32px; border-radius: 8px; color: var(--omo-text-2); }
+.omo-wb-card.is-chosen .omo-wb-card-art { color: var(--omo-accent); }
+.omo-wb-card-text strong, .omo-wb-cards.is-small .omo-wb-card-text strong { font-size: 13px; font-weight: 500; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.omo-wb-card-text small, .omo-wb-cards.is-small .omo-wb-card-text small { display: block; font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.omo-wb-draw { width: 100%; height: 36px; margin-top: 8px; justify-content: center; border-style: dashed !important; }
+.omo-wb-draw.is-on { border-color: var(--omo-accent) !important; color: var(--omo-text); }
+.omo-wb-group h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--omo-text-3); }
+.omo-wb-placing { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; border-radius: 10px; }
+.omo-wb-placing-head { display: flex; align-items: center; gap: 8px; }
+.omo-wb-placing-head > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.omo-wb-placing small { font-size: 12px; }

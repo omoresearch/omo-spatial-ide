@@ -240,11 +240,17 @@ function TalkTab(props: { build: BuildMode; admin?: AdminController; state?: Adm
 
 const TAB_CHOICES: Array<{ kind: TabKind; label: string }> = [{ kind: 'hermes', label: 'Hermes' }, { kind: 'shell', label: 'Shell' }, { kind: 'claude', label: 'Claude' }, { kind: 'codex', label: 'Codex' }];
 const ADD_GROUPS: Array<{ title: string; ids: PaletteId[] }> = [
-    { title: 'Rooms', ids: ['room-s', 'room-m', 'room-l', 'room'] },
+    { title: 'Rooms', ids: ['room-s', 'room-m', 'room-l'] },
     { title: 'Screens', ids: ['agent-desk', 'shell-desk', 'monitor-wall', 'web-wall', 'mirror', 'review-screen'] },
     { title: 'Furniture & decor', ids: PALETTE.filter(p => p.group === 'Decor').map(p => p.id) }
 ];
+const TITLE: Partial<Record<PaletteId, string>> = { 'room-s': 'Small', 'room-m': 'Medium', 'room-l': 'Large', 'review-screen': 'Code review' };
 
+/**
+ * world-ui — ONE card grammar: every card is the same 2-column tile (icon + title + one-line subtitle).
+ * Per-object settings are not in the catalogue: while placing, the placing strip shows the options of THAT
+ * thing (desk tabs, the desk a monitor wall follows, the web wall page); after placing, Inspect edits them.
+ */
 function AddTab(props: { build: BuildMode; world: WorldSpec }): React.ReactElement {
     const { build, world } = props, s = build.state;
     const desks = stations(world);
@@ -253,56 +259,60 @@ function AddTab(props: { build: BuildMode; world: WorldSpec }): React.ReactEleme
     const [webUrl, setWebUrl] = React.useState(() => placementPrefs.webHome);
     React.useEffect(() => { setPlacementPrefs({ deskTabs }); }, [deskTabs]);
     React.useEffect(() => { setPlacementPrefs({ monitorLink: desks.some(d => d.id === monitorLink) ? monitorLink : '' }); }, [monitorLink, desks.length]);
-    React.useEffect(() => { setPlacementPrefs({ webHome: webUrl }); }, [webUrl]);
+    const urlBad = webUrl.trim() !== '' && !webHomeUrl(webUrl);
+    React.useEffect(() => { setPlacementPrefs({ webHome: urlBad ? '' : webUrl }); }, [webUrl, urlBad]);
     const placing = s.tool === 'place' ? s.item : undefined;
     // A changed option while placing: restart the ghost so it shows the new choice.
     const refresh = (item: PaletteId): void => { if (placing === item) build.choose(item); };
-    const urlBad = webUrl.trim() !== '' && !webHomeUrl(webUrl);
-    const pick = (item: PaletteItem): void => {
-        if (placing === item.id) { build.selectTool(); return; }
-        if (item.id === 'web-wall' && urlBad) return;
-        build.choose(item.id);
-    };
+    const pick = (item: PaletteItem): void => { if (placing === item.id) { build.selectTool(); return; } build.choose(item.id); };
+    const subtitle = (item: PaletteItem): string => item.id === 'agent-desk' ? deskTabs.map(k => TAB_CHOICES.find(c => c.kind === k)?.label).join(' + ')
+        : item.id === 'monitor-wall' && monitorLink && desks.some(d => d.id === monitorLink) ? `Follows ${entityTitle(desks.find(d => d.id === monitorLink))}`
+        : item.id === 'web-wall' && webHomeUrl(webUrl) ? new URL(webHomeUrl(webUrl)).host : item.hint;
+    const placingItem = placing ? PALETTE.find(p => p.id === placing) : undefined;
     return <div className="omo-wb-add omo-build-palette" data-testid="build-palette">
-        {placing && <div className={`omo-wb-placing${s.ghostValid ? ' is-ok' : ' is-bad'}`} data-testid="builder-placing" role="status">
-            <BuildGlyph name={PALETTE.find(p => p.id === placing)?.glyph ?? 'build'} size={16} />
-            <span><strong>Placing {PALETTE.find(p => p.id === placing)?.title}</strong><small>{s.ghostValid ? 'Click the floor to place · R turn · Esc stop' : s.ghostReason || 'Aim at the floor'}</small></span>
-            <button type="button" className="omo-wb-link" onClick={() => build.selectTool()}>Stop <kbd>Esc</kbd></button>
+        {placingItem && <div className={`omo-wb-placing${s.ghostValid ? ' is-ok' : ' is-bad'}`} data-testid="builder-placing" role="status">
+            <div className="omo-wb-placing-head">
+                <BuildGlyph name={placingItem.glyph} size={16} />
+                <span><strong>Placing {placingItem.title.toLowerCase()}</strong><small>{s.ghostValid ? 'Click the floor · R turns · Esc stops' : s.ghostReason || 'Aim at the floor'}</small></span>
+                <button type="button" className="omo-wb-secondary" onMouseDown={e => e.preventDefault()} onClick={() => build.selectTool()}>Stop</button>
+            </div>
+            {placing === 'agent-desk' && <div className="omo-wb-field"><span>Tabs</span>
+                <div className="omo-wb-toggles" role="group" aria-label="Agent desk tabs">{TAB_CHOICES.map(c => {
+                    const on = deskTabs.includes(c.kind);
+                    return <button key={c.kind} type="button" aria-pressed={on} data-testid={`builder-desk-tab-${c.kind}`} className={on ? 'is-on' : ''}
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => { const next = on ? deskTabs.filter(k => k !== c.kind) : TAB_CHOICES.map(x => x.kind).filter(k => k === c.kind || deskTabs.includes(k)); if (next.length) { setDeskTabs(next); setPlacementPrefs({ deskTabs: next }); refresh('agent-desk'); } }}>{c.label}</button>;
+                })}</div></div>}
+            {placing === 'monitor-wall' && <div className="omo-wb-field"><span>Follows</span>
+                <OmoSelect testid="builder-monitor-link" ariaLabel="Monitor wall follows" value={desks.some(d => d.id === monitorLink) ? monitorLink : ''}
+                    options={[{ value: '', label: 'No desk (its own view)' }, ...desks.map(d => ({ value: d.id, label: entityTitle(d) }))]}
+                    onChange={v => { setMonitorLink(v); setPlacementPrefs({ monitorLink: v }); refresh('monitor-wall'); }} /></div>}
+            {placing === 'web-wall' && <label className="omo-wb-field"><span>Page</span>
+                <input data-testid="builder-web-url" type="url" spellCheck={false} placeholder="https://example.com" value={webUrl} aria-invalid={urlBad}
+                    onChange={e => setWebUrl(e.target.value)}
+                    onBlur={() => refresh('web-wall')} onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }} />
+                {urlBad && <small className="omo-wb-error">Use an http:// or https:// address.</small>}</label>}
         </div>}
         {ADD_GROUPS.map(group => <section key={group.title} className="omo-wb-group">
             <h3>{group.title}</h3>
-            <div className={`omo-wb-cards${group.title === 'Furniture & decor' ? ' is-small' : ''}`}>{group.ids.map(id => {
+            <div className="omo-wb-cards">{group.ids.map(id => {
                 const item = PALETTE.find(p => p.id === id); if (!item) return null;
                 const chosen = placing === id;
                 const blocked = id === 'mirror' && !desks.length;
+                const sub = subtitle(item), title = TITLE[id] ?? item.title;
                 return <button key={id} type="button" className={`omo-wb-card${chosen ? ' is-chosen' : ''}`} data-testid={`build-item-${id}`} aria-pressed={chosen}
-                    disabled={blocked || (id === 'web-wall' && urlBad)} title={blocked ? 'Add a desk first. A mirror follows one desk.' : `${item.title} · ${item.hint}`}
+                    disabled={blocked} title={blocked ? 'Add a desk first. A mirror follows one desk.' : `${item.title} · ${sub}`}
                     onMouseDown={e => e.preventDefault()} onClick={() => pick(item)}>
-                    <span className="omo-wb-card-art"><BuildGlyph name={item.glyph} size={group.title === 'Furniture & decor' ? 18 : 22} />{id.startsWith('room-') && <b>{id.slice(5).toUpperCase()}</b>}</span>
-                    <span className="omo-wb-card-text"><strong>{item.title}</strong><small>{id === 'agent-desk' ? `${deskTabs.length} tab${deskTabs.length === 1 ? '' : 's'}` : id === 'monitor-wall' && monitorLink ? `Follows ${entityTitle(desks.find(d => d.id === monitorLink))}` : id === 'web-wall' && webHomeUrl(webUrl) ? new URL(webHomeUrl(webUrl)).host : item.hint}</small></span>
+                    <span className="omo-wb-card-art"><BuildGlyph name={item.glyph} size={18} /></span>
+                    <span className="omo-wb-card-text"><strong>{title}</strong><small>{sub}</small></span>
                 </button>;
             })}</div>
-            {group.title === 'Screens' && <div className="omo-wb-options">
-                <div className="omo-wb-field"><span>Agent desk tabs</span>
-                    <div className="omo-wb-toggles" role="group" aria-label="Agent desk tabs">{TAB_CHOICES.map(c => {
-                        const on = deskTabs.includes(c.kind);
-                        return <button key={c.kind} type="button" aria-pressed={on} data-testid={`builder-desk-tab-${c.kind}`} className={on ? 'is-on' : ''}
-                            onMouseDown={e => e.preventDefault()}
-                            onClick={() => { const next = on ? deskTabs.filter(k => k !== c.kind) : TAB_CHOICES.map(x => x.kind).filter(k => k === c.kind || deskTabs.includes(k)); if (next.length) { setDeskTabs(next); setPlacementPrefs({ deskTabs: next }); refresh('agent-desk'); } }}>{c.label}</button>;
-                    })}</div></div>
-                <div className="omo-wb-field"><span>Monitor wall follows</span>
-                    <OmoSelect testid="builder-monitor-link" ariaLabel="Monitor wall follows" value={desks.some(d => d.id === monitorLink) ? monitorLink : ''}
-                        options={[{ value: '', label: 'No desk (its own view)' }, ...desks.map(d => ({ value: d.id, label: entityTitle(d) }))]}
-                        onChange={v => { setMonitorLink(v); setPlacementPrefs({ monitorLink: v }); refresh('monitor-wall'); }} /></div>
-                <label className="omo-wb-field"><span>Web wall page</span>
-                    <input data-testid="builder-web-url" type="url" spellCheck={false} placeholder="https://example.com" value={webUrl} aria-invalid={urlBad}
-                        onChange={e => { setWebUrl(e.target.value); setPlacementPrefs({ webHome: e.target.value }); }}
-                        onBlur={() => refresh('web-wall')} onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }} />
-                    {urlBad && <small className="omo-wb-error">Use an http:// or https:// address.</small>}</label>
-            </div>}
+            {group.title === 'Rooms' && <button type="button" className={`omo-wb-secondary omo-wb-draw${placing === 'room' ? ' is-on' : ''}`} data-testid="build-item-room" aria-pressed={placing === 'room'}
+                onMouseDown={e => e.preventDefault()} onClick={() => { if (placing === 'room') build.selectTool(); else build.choose('room'); }}>
+                <BuildGlyph name="room" size={16} /> Draw a room</button>}
         </section>)}
         <WorldSizeSection build={build} world={world} />
-        <p className="omo-wb-foot">Click a card, then the floor · <kbd>R</kbd> turn · <kbd>Esc</kbd> stop · past the edge the world grows · wall screens snap to walls.</p>
+        <p className="omo-wb-foot">Click a card, then the floor. <kbd>R</kbd> turns, <kbd>Esc</kbd> stops. Past the edge the world grows.</p>
     </div>;
 }
 
