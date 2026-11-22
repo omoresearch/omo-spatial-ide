@@ -77,7 +77,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
         const three = threeOf(build.scene).scene, canvas = threeOf(build.scene).canvas;
         const at = open && answer?.target ? build.store?.world.entities.find(e => e.id === answer.target)?.transform : undefined;
         if (!three || !at) { clearBeam(three); if (canvas) delete canvas.dataset.answerBeam; return undefined; }
-        showBeam(three, at); if (canvas) canvas.dataset.answerBeam = answer!.target!;
+        showBeam(three, at, 3.2, { room: build.scene, id: answer!.target! }); if (canvas) canvas.dataset.answerBeam = answer!.target!;
         const t = window.setTimeout(() => setAnswer(a => a === answer ? undefined : a), 20000);
         return () => { window.clearTimeout(t); clearBeam(three); if (canvas) delete canvas.dataset.answerBeam; };
     }, [open, answer, build.scene]);
