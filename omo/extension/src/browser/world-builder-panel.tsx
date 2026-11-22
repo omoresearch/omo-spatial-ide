@@ -92,13 +92,24 @@ export function WorldBuilder(props: WorldBuilderProps): React.ReactElement | nul
         window.addEventListener('keydown', key, true);
         return () => window.removeEventListener('keydown', key, true);
     }, [build]);
+    // world-ui — reframe the overview camera so the room is centred in the visible area left of this panel.
+    const panelRef = React.useRef<HTMLElement>(null);
+    React.useEffect(() => {
+        const scene = build.scene, el = panelRef.current, canvas = threeOf(scene).canvas;
+        if (!scene || !el || !canvas) return undefined;
+        const fit = (): void => { const c = canvas.getBoundingClientRect(), p = el.getBoundingClientRect(); scene.setViewInset?.(p.width > 0 ? Math.max(0, c.right - p.left + 12) : 0); };
+        fit();
+        const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : undefined;
+        ro?.observe(el); ro?.observe(canvas);
+        return () => { ro?.disconnect(); scene.setViewInset?.(0); };
+    }, [build.scene, !!store]);
     if (!store) return null;
     const world = store.world, preview = store.preview;
     const ghosts = store.proposal ? ghostIds(world, preview) : [];
     const summary = store.proposal ? diffSummary(world, preview) : '';
     const sel = selected ? preview.entities.find(e => e.id === selected) : undefined;
     const roomCount = preview.entities.filter(e => e.kind === 'room').length;
-    return <section className="omo-wb" data-testid="world-builder" data-view={view} data-ghost-preview={ghosts.join(',')} data-diff-summary={summary}
+    return <section ref={panelRef} className="omo-wb" data-testid="world-builder" data-view={view} data-ghost-preview={ghosts.join(',')} data-diff-summary={summary}
         role="complementary" aria-label="World Builder" onPointerDown={e => e.stopPropagation()}>
         <header className="omo-wb-head">
             <span className="omo-wb-mark" aria-hidden="true"><BuildGlyph name="build" size={16} /></span>

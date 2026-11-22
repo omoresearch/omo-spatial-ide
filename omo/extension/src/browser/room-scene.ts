@@ -1088,7 +1088,7 @@ export class RoomScene {
         return undefined;
     }
     private positionCamera(): void {
-        this.invalidate();
+        this.invalidate(); this.applyViewInset(); // world-ui
         if (this.navigation === 'walk') { this.walker?.step(0); return; }
         const {azimuth:a,elevation:e,distance:d}=this.state;
         // w3:look — open worlds: frame the rooms and entities (zoom scales the fitted distance; 24 = default zoom).
@@ -1102,6 +1102,7 @@ export class RoomScene {
         this.camera.position.set(Math.sin(a)*Math.cos(e)*d*fit,Math.sin(e)*d*fit,Math.cos(a)*Math.cos(e)*d*fit);
         this.camera.lookAt(0,0.7,0);
     }
+    private viewInset = 0; /** Public camera API: keep the overview centred in the area left of a right-side panel (px; 0 = full view). */ setViewInset(px: number): void { const v = Math.max(0, Math.round(px)); if (v !== this.viewInset) { this.viewInset = v; this.positionCamera(); } } private applyViewInset(): void { const w = this.host.clientWidth, h = this.host.clientHeight; if (!w || !h) return; const vis = this.navigation === 'overview' && this.viewInset > 0 && this.viewInset < w * 0.7 ? w - this.viewInset : w; if (vis < w) this.camera.setViewOffset(vis, h, 0, 0, w, h); else this.camera.clearViewOffset(); this.camera.aspect = vis / h; this.camera.updateProjectionMatrix(); this.lastView[0] = NaN; } // world-ui
     private resize():void {
         const w=this.host.clientWidth,h=this.host.clientHeight;if(!w||!h)return;
         this.renderer.setSize(w,h);this.skyFx?.setSize();/* sky:render */this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.lastView[0]=NaN;this.positionCamera();

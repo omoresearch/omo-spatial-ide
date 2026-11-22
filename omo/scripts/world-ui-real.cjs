@@ -131,6 +131,15 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check('Build: the toolbar sits just below the top bar (8-16 px gap) and left of the panel', ind.toolsTop !== null && ind.toolsTop - ind.barBottom >= 4 && ind.toolsTop - ind.barBottom <= 16 && ind.toolsRight <= ind.panelLeft, ind);
         check('Build: ONE mode indicator (no Building pill, no badge, no centre toast)', ind.building === 0 && !ind.badge && !ind.toast, ind);
         check('Top bar: nothing coloured is drawn under its blur (no glow smudge)', ind.under.length === 0, ind.under);
+        // world-ui step 3 (c): the overview reframes left of the panel: every world label is in the visible area, none behind the panel.
+        await pause(600);
+        const frame = await page.evaluate(() => {
+            const p = document.querySelector('[data-testid="world-builder"]').getBoundingClientRect(), c = document.querySelector('canvas[data-testid="omo-world-canvas"]').getBoundingClientRect();
+            const labels = [...document.querySelectorAll('.omo-scene-label')].filter(e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' && +cs.opacity > 0.05; }).map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right)]; });
+            const xs = labels.flat(); const mid = xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : NaN;
+            return { panelLeft: Math.round(p.left), canvasLeft: Math.round(c.left), labels, mid: Math.round(mid), visibleMid: Math.round((c.left + p.left) / 2) };
+        });
+        check('Build overview: the room is framed left of the World Builder (no label behind the panel, centred in the visible area)', frame.labels.length > 0 && frame.labels.every(([, r]) => r <= frame.panelLeft) && Math.abs(frame.mid - frame.visibleMid) < (frame.panelLeft - frame.canvasLeft) * 0.2, frame);
         check('Build: disabled tools look disabled (opacity <= .4)', ind.disabled.length > 0 && ind.disabled.every(o => o <= 0.4), ind.disabled);
         await click('[data-testid="builder-tab-add"]').catch(() => {}); await pause(400);
         await shot('7-build-add');
