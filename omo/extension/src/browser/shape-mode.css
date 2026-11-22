@@ -149,3 +149,13 @@ body.omo-shape-proposed .omo-scene-label { opacity: .12 !important; }
 body.omo-shape-open .omo-scene-label { opacity: 0 !important; pointer-events: none !important; transition: opacity .18s ease; }
 /* The card sits beside the change; the leader carries the pointing, so the stem shows only when it is straight above. */
 .omo-shape-caption:not([data-side="above"]) .omo-shape-caption-stem { display: none; }
+
+/* A tiny name tag over each ghosted thing while the change is pending (positioned each frame by shape-mode.tsx). */
+.omo-shape-tags { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.omo-shape-tag {
+    position: absolute; left: 0; top: 0; padding: 2px 7px; border-radius: 7px; white-space: nowrap; will-change: transform;
+    font-weight: 500; font-size: 12px; line-height: 16px; font-family: inherit; letter-spacing: .01em; color: #eafaff;
+    background: rgba(8, 22, 32, .78); border: 1px solid rgba(127, 224, 255, .55); box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+    opacity: 0; transition: opacity 180ms var(--sh-ease);
+}
+.omo-shape-tag[data-on="true"] { opacity: 1; }

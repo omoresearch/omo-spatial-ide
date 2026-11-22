@@ -15,7 +15,7 @@ export interface ShapePill { id: string; name: string }
 
 interface Idea { re: RegExp; words: string; caption: string; /** the first thing: the rest goes next to it */ near?: string }
 const IDEAS: Idea[] = [
-    { re: /\b(?:a |an |the )?(?:cosy |cozy |little |small )?reading (?:nook|corner)\b/i, words: 'a reading chair called Armchair, a lamp and a bookshelf', caption: 'A reading nook', near: 'armchair' },
+    { re: /\b(?:a |an |the )?(?:cosy |cozy |little |small )?reading (?:nook|corner)\b/i, words: 'a reading chair called Armchair, a floor lamp called Floor lamp and a bookshelf', caption: 'A reading nook', near: 'armchair' },
     { re: /\b(?:a |an |the )?(?:cosy |cozy )?(?:lounge|chill|relax(?:ing)?) (?:corner|nook|area|spot)\b/i, words: 'a sofa, a rug and a lamp', caption: 'A lounge corner' },
     { re: /\b(?:a |an |the )?(?:bit of |some )?greenery\b/i, words: '2 plants', caption: 'Some greenery' },
     { re: /\b(?:a |an |the )?(?:planning|ideas?) (?:corner|wall|spot)\b/i, words: 'a whiteboard and a lamp', caption: 'A planning corner' }
@@ -30,8 +30,9 @@ export function expandIdea(text: string): { prompt: string; idea?: string } {
             const where = text.trim().slice(m[1].length).replace(idea.re, '').trim();
             const [first, ...rest] = idea.words.replace(/ and /, ', ').split(/,\s*/);
             // "a reading chair called Armchair": the kit's lounge armchair, named so the rest can sit next to it (the name follows the place).
-            const [thing, named] = first.split(/ (?=called )/);
-            return { prompt: [`${m[1]} ${thing}${where ? ` ${where}` : ''}${named ? ` ${named}` : ''}`, ...rest.map(r => `add ${r} next to the ${idea.near}`)].join(', then '), idea: idea.caption };
+            const named = (w: string): [string, string] => { const [thing, name] = w.split(/ (?=called )/); return [thing, name ? ` ${name}` : '']; };
+            const [thing, name] = named(first);
+            return { prompt: [`${m[1]} ${thing}${where ? ` ${where}` : ''}${name}`, ...rest.map(named).map(([t, n]) => `add ${t} next to the ${idea.near}${n}`)].join(', then '), idea: idea.caption };
         }
         return { prompt: text.replace(idea.re, idea.words), idea: idea.caption };
     }

@@ -54,15 +54,17 @@ function plant(g: THREE.Group, p: Palette, rnd: () => number): void {
 }
 
 function lamp(g: THREE.Group, p: Palette): void {
-    mesh(g, new THREE.CylinderGeometry(0.22, 0.26, 0.05, 10), facet(p.metal, 0.4, 0.5), [0, 0.025, 0]);
-    mesh(g, new THREE.CylinderGeometry(0.022, 0.022, 1.45, 6), facet(p.metal, 0.4, 0.5), [0, 0.75, 0]);
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 0.34, 8, 1, true), new THREE.MeshStandardMaterial({ color: p.glow, roughness: 0.9, side: THREE.DoubleSide, emissive: p.glow, emissiveIntensity: 0.35, flatShading: true }));
-    shade.position.set(0, 1.58, 0); shade.castShadow = true; g.add(shade);
+    // A floor lamp that reads from the overview: a weighted base, a real pole and a big drum shade.
+    mesh(g, new THREE.CylinderGeometry(0.2, 0.25, 0.06, 14), facet(p.metal, 0.4, 0.5), [0, 0.03, 0]);
+    mesh(g, new THREE.CylinderGeometry(0.032, 0.032, 1.42, 8), facet(p.metal, 0.4, 0.5), [0, 0.74, 0]);
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 0.42, 14, 1, true), new THREE.MeshStandardMaterial({ color: p.glow, roughness: 0.9, side: THREE.DoubleSide, emissive: p.glow, emissiveIntensity: 0.35, flatShading: true }));
+    shade.position.set(0, 1.6, 0); shade.castShadow = true; g.add(shade);
+    mesh(g, new THREE.CylinderGeometry(0.24, 0.24, 0.01, 14), facet(p.glow, 0.9, 0), [0, 1.81, 0]); // the shade's top
     const bulb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), new THREE.MeshStandardMaterial({ color: p.glow, emissive: p.glow, emissiveIntensity: 2.2 }));
     bulb.position.set(0, 1.5, 0); g.add(bulb);
     // A warm pool of light on the floor (a flat emissive disc, no real light).
     const pool = new THREE.Mesh(new THREE.CircleGeometry(0.7, 20), new THREE.MeshBasicMaterial({ color: p.glow, transparent: true, opacity: 0.12, depthWrite: false }));
-    pool.rotation.x = -Math.PI / 2; pool.position.y = 0.012; pool.raycast = () => undefined; g.add(pool);
+    pool.name = 'omo-lamp-pool'; pool.rotation.x = -Math.PI / 2; pool.position.y = 0.012; pool.raycast = () => undefined; g.add(pool);
 }
 
 function crystal(g: THREE.Group, p: Palette, rnd: () => number): void {

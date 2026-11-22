@@ -19,7 +19,7 @@ const world = () => model.worldFromRoomV1(room);
 test('a reading nook becomes things the rules planner knows, and plans 3 adds', () => {
   const r = shape.expandIdea('add a reading nook by the window');
   assert.equal(r.idea, 'A reading nook');
-  assert.equal(r.prompt, 'add a reading chair by the window called Armchair, then add a lamp next to the armchair, then add a bookshelf next to the armchair');
+  assert.equal(r.prompt, 'add a reading chair by the window called Armchair, then add a floor lamp next to the armchair called Floor lamp, then add a bookshelf next to the armchair');
   const plan = planWithRules(world(), r.prompt);
   const adds = plan.proposal.ops.filter(o => o.op === 'add');
   assert.equal(adds.length, 3);
@@ -28,13 +28,13 @@ test('a reading nook becomes things the rules planner knows, and plans 3 adds', 
   assert.ok(chair, JSON.stringify(adds.map(o => o.entity)));
   assert.equal(chair.entity.prop, 'mid_century_lounge_chair');
   assert.equal(chair.entity.label, 'Armchair');
-  assert.equal(shape.captionFor(plan.proposal.summary, r.idea, undefined, shape.spokenNames(plan.proposal.ops)), 'A reading nook: armchair, lamp and bookshelf.');
+  assert.equal(shape.captionFor(plan.proposal.summary, r.idea, undefined, shape.spokenNames(plan.proposal.ops)), 'A reading nook: armchair, floor lamp and bookshelf.');
 });
 
 test('"make it bigger" refines the pending prompt: every added thing is big', () => {
   const first = shape.expandIdea('add a reading nook by the window').prompt;
   const next = shape.refinePrompt(first, 'make it bigger');
-  assert.match(next, /a big reading chair by the window called Armchair, then add a big lamp next to the armchair, then add a big bookshelf/);
+  assert.match(next, /a big reading chair by the window called Armchair, then add a big floor lamp next to the armchair called Floor lamp, then add a big bookshelf/);
   const plan = planWithRules(world(), next);
   assert.ok(plan.proposal.ops.every(o => o.op !== 'add' || o.entity.scale > 1), JSON.stringify(plan.proposal.ops));
   assert.equal(shape.refinePrompt('add a sofa', 'move it left'), 'add a sofa then move it left');

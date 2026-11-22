@@ -111,6 +111,11 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check('The ghost is the real furniture (tinted models, not boxes)', real1.real.split(',').filter(Boolean).length === 3 && real1.meshes > 0, real1);
         const props1 = await page.$eval(CANVAS, e => e.dataset.ghostProps ?? '');
         check('The nook armchair is the kit lounge armchair (mid_century_lounge_chair), named in the caption', /\barmchair:mid_century_lounge_chair\b/.test(props1) && /\barmchair\b/i.test(c1) && !/lounge chair/i.test(c1), { props1, c1 });
+        const tags1 = await page.$$eval('[data-testid="shape-ghost-tag"]', ts => ts.map(t => { const r = t.getBoundingClientRect(); return { id: t.dataset.id, text: t.textContent, on: t.dataset.on, font: getComputedStyle(t).fontSize, box: [r.left, r.top, r.right, r.bottom].map(Math.round) }; }));
+        const tagsApart = tags1.every((a, i) => tags1.every((b, j) => j <= i || a.box[2] <= b.box[0] || b.box[2] <= a.box[0] || a.box[3] <= b.box[1] || b.box[3] <= a.box[1]));
+        check('The ghost tags never overlap each other', tags1.length === 3 && tagsApart, tags1.map(t => t.box));
+        check('Every ghosted thing has a 12 px name tag matching the caption (Armchair, Floor lamp, Shelves)', tags1.length === 3 && tags1.every(t => t.on === 'true' && t.font === '12px' && c1.toLowerCase().includes(t.text.toLowerCase()))
+            && JSON.stringify(tags1.map(t => t.text).sort()) === JSON.stringify(['Armchair', 'Floor lamp', 'Shelves']), { tags1, c1 });
         await shot('2-ghost-caption');
 
         // 3. Refine, then keep.
@@ -123,7 +128,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const after = await savedWorld();
         const added = (after?.entities ?? []).filter(e => !(before?.entities ?? []).some(b => b.id === e.id));
         check('Enter keeps: the nook exists in the saved world', added.length === 3 && added.every(e => e.kind === 'decor' && (e.scale ?? 1) > 1), added.map(e => `${e.id}:${e.decor}:${e.scale}`));
-        check('After Keep the caption is gone and the strip has 1 dot', !await page.$('[data-testid="shape-caption"]') && (await page.$$('[data-testid="shape-history-dot"]')).length === 1);
+        check('After Keep the caption and the ghost tags are gone and the strip has 1 dot', !await page.$('[data-testid="shape-caption"]') && !await page.$('[data-testid="shape-ghost-tag"]') && (await page.$$('[data-testid="shape-history-dot"]')).length === 1);
 
         // 4. Point to refer: click a sofa.
         const world = await savedWorld();

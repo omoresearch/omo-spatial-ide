@@ -18,8 +18,8 @@ import { threeOf } from './build-scene';
 import { ambientHost } from './agent-avatars';
 import { sceneControls } from './focus-screen';
 import { entityTitle } from './world-store';
-import type { WorldSpec } from '../common/world-model';
-import { activeKit, decorPropFor } from '../common/world-style-kits';
+import type { WorldSpec, WorldEntity } from '../common/world-model';
+import { activeKit, decorPropFor, kitProp } from '../common/world-style-kits';
 import { shapeStore, SHAPE_TOGGLE_EVENT, setShapeKeyHandler } from './shape-store';
 import { ShapeTopButton, ShapeGlyph } from './shape-topbar';
 import { ShapePill, captionFor, composePrompt, expandIdea, refinePrompt, resolveScreens, spokenNames, suggestionsFor, whereOf } from './shape-logic';
@@ -47,6 +47,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     const input = React.useRef<HTMLInputElement>(null);
     const caption = React.useRef<HTMLDivElement>(null);
     const leader = React.useRef<SVGSVGElement>(null);
+    const tags = React.useRef<HTMLDivElement>(null);
     const enteredBuild = React.useRef(false);
     const navBefore = React.useRef<'walk' | 'overview' | undefined>(undefined);
     const openRef = React.useRef(open); openRef.current = open;
@@ -162,6 +163,30 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             const toHost = (p: THREE.Vector3): { x: number; y: number; z: number } => { const v = p.clone().project(t.camera!); return { x: r.left + (v.x + 1) / 2 * r.width - host.left, y: r.top + (1 - v.y) / 2 * r.height - host.top, z: v.z }; };
             // The whole change on screen (all pending things): the card never covers it.
             const all = ghostBounds(t.scene, pendingIds);
+            // A tiny name tag over each ghosted thing (the caption's nouns), only while the change is pending.
+            // Tags never overlap: the lower ones (nearer the floor) stay put, a clashing tag steps up, then sideways.
+            const placed: Array<{ l: number; t: number; r: number; b: number }> = [];
+            const wanted = (Array.from(tags.current?.children ?? []) as HTMLElement[]).map(tag => {
+                const b = ghostBounds(t.scene, [tag.dataset.id ?? '']);
+                return { tag, q: b ? toHost(new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y + 0.08, (b.min.z + b.max.z) / 2)) : undefined };
+            }).sort((m, n) => (n.q?.y ?? 0) - (m.q?.y ?? 0));
+            for (const { tag, q } of wanted) {
+                const on = !!q && q.z <= 1;
+                if (tag.dataset.on !== String(on)) tag.dataset.on = String(on);
+                if (!q || !on) continue;
+                const tw = tag.offsetWidth, th = tag.offsetHeight, gapT = 4;
+                const clash = (x: number, y: number): boolean => placed.some(o => x - tw / 2 < o.r + gapT && x + tw / 2 > o.l - gapT && y - th < o.b + gapT && y > o.t - gapT);
+                let x = q.x, y = q.y;
+                for (const [dx, dy] of [[0, 0], [0, -1], [-1, 0], [1, 0], [0, -2], [-1, -1], [1, -1]] as const) { // straight up first: the tag stays over its own thing
+                    const o = placed.find(p => q.x - tw / 2 < p.r + gapT && q.x + tw / 2 > p.l - gapT);
+                    const nx = q.x + dx * (o ? (tw / 2 + (o.r - o.l) / 2 + gapT) : tw), ny = q.y + dy * (th + gapT);
+                    if (!clash(nx, ny)) { x = nx; y = ny; break; }
+                }
+                placed.push({ l: x - tw / 2, t: y - th, r: x + tw / 2, b: y });
+                tag.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
+                tag.dataset.at = `${Math.round(x + host.left)},${Math.round(y + host.top)}`;
+                tag.dataset.box = [x - tw / 2 + host.left, y - th + host.top, x + tw / 2 + host.left, y + host.top].map(Math.round).join(',');
+            }
             const at = ghostAnchor(t.scene, main) ?? anchorOf(build.store?.preview, main); if (!at) return;
             const a = toHost(new THREE.Vector3(at.x, at.y, at.z));
             let g = { l: a.x - 30, t: a.y - 30, r: a.x + 30, b: a.y + 30 };
@@ -265,6 +290,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     return <>{button}
         <div className="omo-shape" data-testid="shape-mode" data-proposed={String(proposed)} data-busy={String(busy)} onPointerDown={e => e.stopPropagation()}>
             {proposal && <svg className="omo-shape-leader" ref={leader} aria-hidden="true" data-on="false"><line x1="0" y1="0" x2="0" y2="0" /><circle className="is-halo" r="16" cx="0" cy="0" /><circle r="4.5" cx="0" cy="0" /></svg>}
+            {proposal && <div className="omo-shape-tags" ref={tags} aria-hidden="true">{pendingIds.map(id => <span key={id} className="omo-shape-tag" data-testid="shape-ghost-tag" data-id={id} data-on="false">{tagName(store.preview.entities.find(e => e.id === id))}</span>)}</div>}
             {proposal && <div className="omo-shape-caption" ref={caption} data-testid="shape-caption" role="dialog" aria-label="Proposed change">
                 <p data-testid="shape-caption-text">{sentence}</p>
                 <div className="omo-shape-caption-row">
@@ -303,6 +329,13 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     </>;
 }
 
+/** The tag over a ghosted thing: its name in sentence case ("Floor lamp"), as the caption says it. */
+function tagName(e: WorldEntity | undefined): string {
+    if (!e) return '';
+    if (e.kind !== 'decor') return entityTitle(e);
+    const name = e.label ?? kitProp(e.prop)?.label ?? e.decor;
+    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+}
 function firstSentence(s: string): string { return (s.split(/(?<=[.!?])\s+/)[0] ?? '').trim(); }
 
 /** Ids the pending proposal adds or changes (the preview differs from the applied world). */
@@ -361,7 +394,7 @@ function ghostGlass(): THREE.ShaderMaterial {
     if (ghostMaterial) return ghostMaterial;
     ghostMaterial = new THREE.ShaderMaterial({
         name: 'omo-shape-ghost',
-        uniforms: { uColor: { value: new THREE.Color(GHOST) }, uOpacity: { value: 0.45 } },
+        uniforms: { uColor: { value: new THREE.Color(GHOST) }, uOpacity: { value: 0.56 } },
         vertexShader: `
             #include <common>
             #include <skinning_pars_vertex>
@@ -380,8 +413,10 @@ function ghostGlass(): THREE.ShaderMaterial {
             uniform vec3 uColor; uniform float uOpacity;
             varying vec3 vN; varying vec3 vV;
             void main() {
-                float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);
-                gl_FragColor = vec4(uColor * (0.62 + 0.9 * f), clamp(uOpacity * (0.7 + 1.1 * f), 0.0, 0.92));
+                float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.0);
+                // a solid cyan fill (~0.5) with a bright near-white rim: every ghosted thing reads as a shape
+                vec3 c = mix(uColor * 0.9, vec3(0.86, 0.98, 1.0), clamp(f * 1.1, 0.0, 1.0));
+                gl_FragColor = vec4(c, clamp(uOpacity * 0.92 + 0.42 * f, 0.0, 0.96));
             }`,
         transparent: true, depthWrite: false, side: THREE.FrontSide
     });
@@ -420,7 +455,7 @@ function ghostReal(three: THREE.Scene, ids: string[], k: number): { present: Set
         present.add(id);
         root.traverse(n => {
             const mesh = n as THREE.Mesh; if (!mesh.isMesh) return;
-            if (n.name === 'omo-shape-shadow') return;
+            if (n.name === 'omo-shape-shadow' || n.name === 'omo-lamp-pool') return; // a lamp's light pool is not furniture
             live.add(mesh);
             if (!mesh.userData.shapeOrig) {
                 mesh.userData.shapeOrig = mesh.material; mesh.userData.shapeCast = mesh.castShadow; mesh.userData.shapeOrder = mesh.renderOrder;
@@ -444,7 +479,7 @@ function ghostReal(three: THREE.Scene, ids: string[], k: number): { present: Set
     for (const disc of [...shadows.children]) if (!used.has(disc.name)) { shadows.remove(disc); (disc as THREE.Mesh).geometry.dispose(); ((disc as THREE.Mesh).material as THREE.Material).dispose(); touched = true; }
     if (!shadows.children.length) three.remove(shadows);
     for (const mesh of [...ghosted]) if (!live.has(mesh)) { restoreMesh(mesh); touched = true; }
-    if (ghostMaterial) { const o = 0.35 + 0.25 * k; if (ghostMaterial.uniforms.uOpacity.value !== o) { ghostMaterial.uniforms.uOpacity.value = o; touched = true; } }
+    if (ghostMaterial) { const o = 0.52 + 0.08 * k; if (ghostMaterial.uniforms.uOpacity.value !== o) { ghostMaterial.uniforms.uOpacity.value = o; touched = true; } }
     return { present, touched };
 }
 /** The pending change breathes: real models as ghost glass; build mode's blueprint boxes only while a model loads. */
