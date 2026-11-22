@@ -102,6 +102,10 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check('Nothing covers the centre of the room (with the caption up)', (await centreFree()).every(t => t === 'CANVAS'), await centreFree());
         const savedMid = await savedWorld();
         check('Nothing is saved before Keep', JSON.stringify(savedMid?.entities ?? []) === JSON.stringify(before?.entities ?? []));
+        await page.waitForFunction(() => (document.querySelector('canvas[data-testid="omo-world-canvas"]')?.dataset.ghostReal ?? '').split(',').filter(Boolean).length >= 3, { timeout: 20000 }).catch(() => {});
+        await pause(600);
+        const real1 = await page.$eval(CANVAS, e => ({ real: e.dataset.ghostReal ?? '', meshes: Number(e.dataset.ghostMeshes ?? 0) }));
+        check('The ghost is the real furniture (tinted models, not boxes)', real1.real.split(',').filter(Boolean).length === 3 && real1.meshes > 0, real1);
         await shot('2-ghost-caption');
 
         // 3. Refine, then keep.

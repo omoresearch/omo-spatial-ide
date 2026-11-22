@@ -19,6 +19,7 @@ import { ambientHost } from './agent-avatars';
 import { sceneControls } from './focus-screen';
 import { entityTitle } from './world-store';
 import type { WorldSpec } from '../common/world-model';
+import { activeKit, decorPropFor } from '../common/world-style-kits';
 import { shapeStore, SHAPE_TOGGLE_EVENT, setShapeKeyHandler } from './shape-store';
 import { ShapeTopButton, ShapeGlyph } from './shape-topbar';
 import { ShapePill, captionFor, composePrompt, expandIdea, refinePrompt, resolveScreens, suggestionsFor, whereOf } from './shape-logic';
@@ -153,7 +154,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
         const tick = (): void => {
             frame = requestAnimationFrame(tick);
             const t = threeOf(build.scene);
-            breathe(t.scene, pendingIds);
+            breathe(t.scene, pendingIds, build.store?.preview);
             const card = caption.current; if (!card || !t.camera || !t.canvas) return;
             const main = pendingIds.slice(0, 1); // the card points at the main thing (the first new or changed one)
             const at = ghostAnchor(t.scene, main) ?? anchorOf(build.store?.preview, main); if (!at) return;
@@ -293,24 +294,149 @@ function anchorOf(world: WorldSpec | undefined, ids: string[]): { x: number; y: 
     return { x, y: 1.5, z };
 }
 const GHOST = 0x4fd2ff;
-/** Top centre of the pending things as build mode drew them (world space): the caption points here. */
+/** World-space bounds of the pending things: the real models once drawn, else build mode's blueprints. */
+function ghostBounds(three: THREE.Scene | undefined, ids: string[]): THREE.Box3 | undefined {
+    if (!three) return undefined;
+    const box = new THREE.Box3(), one = new THREE.Box3();
+    const layer = three.getObjectByName('omo-build-layer');
+    layer?.updateMatrixWorld(true);
+    for (const id of ids) {
+        const real = realModel(three, id);
+        if (real) { one.setFromObject(real); if (!one.isEmpty()) { box.union(one); continue; } }
+        layer?.traverse(node => { if (node.userData?.buildEntityId === id) box.expandByObject(node); });
+    }
+    return box.isEmpty() ? undefined : box;
+}
+/** Top centre of the pending things (world space): the caption points here. */
 function ghostAnchor(three: THREE.Scene | undefined, ids: string[]): { x: number; y: number; z: number } | undefined {
-    const layer = three?.getObjectByName('omo-build-layer'); if (!layer) return undefined;
-    const box = new THREE.Box3(); let any = false;
-    layer.updateMatrixWorld(true);
-    layer.traverse(node => { const id = node.userData?.buildEntityId as string | undefined; if (id && ids.includes(id)) { box.expandByObject(node); any = true; } });
-    if (!any || box.isEmpty()) return undefined;
+    const box = ghostBounds(three, ids); if (!box) return undefined;
     const c = box.getCenter(new THREE.Vector3());
     return { x: c.x, y: box.max.y, z: c.z };
 }
-/** The pending blueprints of build mode's layer pulse softly (a breathing ghost). Read-only lookup by name. */
-function breathe(three: THREE.Scene | undefined, ids: string[]): void {
-    const layer = three?.getObjectByName('omo-build-layer'); if (!layer) return;
+
+// ---- the ghost: the room's real furniture for a pending id, drawn as tinted glass with a contact shadow
+
+/** The room scene's drawn root for an entity when it holds a real model (a kit world's decor waits for its CC0 prop). */
+function realModel(three: THREE.Scene, id: string): THREE.Object3D | undefined {
+    const root = three.getObjectByName(`omo-entity:${id}`);
+    if (!root) return undefined;
+    let meshes = 0; root.traverse(n => { if ((n as THREE.Mesh).isMesh) meshes++; });
+    if (!meshes) return undefined;
+    // A kit world draws decor with its CC0 catalogue model once it loads: until then the blueprint stays.
+    if (root.userData.kind === 'decor' && !root.userData.prop && waitsForProp.has(id)) return undefined;
+    return root;
+}
+/** Pending decor ids whose kit catalogue model is still on its way (set each frame from the preview world). */
+let waitsForProp = new Set<string>();
+function propsAwaited(world: WorldSpec | undefined, ids: string[]): Set<string> {
+    const kit = world ? activeKit(world) : undefined; if (!kit || !world) return new Set();
+    return new Set(world.entities.filter(e => ids.includes(e.id) && e.kind === 'decor' && !!decorPropFor(kit, e)).map(e => e.id));
+}
+let ghostMaterial: THREE.ShaderMaterial | undefined;
+function ghostGlass(): THREE.ShaderMaterial {
+    if (ghostMaterial) return ghostMaterial;
+    ghostMaterial = new THREE.ShaderMaterial({
+        name: 'omo-shape-ghost',
+        uniforms: { uColor: { value: new THREE.Color(GHOST) }, uOpacity: { value: 0.45 } },
+        vertexShader: `
+            #include <common>
+            #include <skinning_pars_vertex>
+            varying vec3 vN; varying vec3 vV;
+            void main() {
+                #include <beginnormal_vertex>
+                #include <skinbase_vertex>
+                #include <skinnormal_vertex>
+                #include <defaultnormal_vertex>
+                #include <begin_vertex>
+                #include <skinning_vertex>
+                #include <project_vertex>
+                vN = normalize(transformedNormal); vV = normalize(-mvPosition.xyz);
+            }`,
+        fragmentShader: `
+            uniform vec3 uColor; uniform float uOpacity;
+            varying vec3 vN; varying vec3 vV;
+            void main() {
+                float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);
+                gl_FragColor = vec4(uColor * (0.62 + 0.9 * f), clamp(uOpacity * (0.7 + 1.1 * f), 0.0, 0.92));
+            }`,
+        transparent: true, depthWrite: false, side: THREE.FrontSide
+    });
+    return ghostMaterial;
+}
+let shadowTexture: THREE.CanvasTexture | undefined;
+function contactShadowTexture(): THREE.CanvasTexture {
+    if (shadowTexture) return shadowTexture;
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d')!, grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(0,0,0,0.62)'); grad.addColorStop(0.45, 'rgba(0,0,0,0.38)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+    shadowTexture = new THREE.CanvasTexture(c);
+    return shadowTexture;
+}
+/** Meshes now drawn as ghost glass (original material and shadow flag kept in userData to restore). */
+const ghosted = new Set<THREE.Mesh>();
+function ghostShadows(three: THREE.Scene): THREE.Group {
+    let g = three.getObjectByName('omo-shape-ghost-shadows') as THREE.Group | undefined;
+    if (!g) { g = new THREE.Group(); g.name = 'omo-shape-ghost-shadows'; three.add(g); }
+    return g;
+}
+function restoreMesh(mesh: THREE.Mesh): void {
+    if (mesh.userData.shapeOrig) { mesh.material = mesh.userData.shapeOrig as THREE.Material; mesh.castShadow = !!mesh.userData.shapeCast; mesh.renderOrder = mesh.userData.shapeOrder as number ?? 0; }
+    delete mesh.userData.shapeOrig; delete mesh.userData.shapeCast; delete mesh.userData.shapeOrder;
+    ghosted.delete(mesh);
+}
+/** Each frame: the pending things' real meshes become breathing cyan glass over a soft contact shadow. */
+function ghostReal(three: THREE.Scene, ids: string[], k: number): { present: Set<string>; touched: boolean } {
+    const present = new Set<string>(); let touched = false;
+    const live = new Set<THREE.Mesh>();
+    const shadows = ghostShadows(three);
+    const used = new Set<string>();
+    for (const id of ids) {
+        const root = realModel(three, id); if (!root) continue;
+        present.add(id);
+        root.traverse(n => {
+            const mesh = n as THREE.Mesh; if (!mesh.isMesh) return;
+            if (n.name === 'omo-shape-shadow') return;
+            live.add(mesh);
+            if (!mesh.userData.shapeOrig) {
+                mesh.userData.shapeOrig = mesh.material; mesh.userData.shapeCast = mesh.castShadow; mesh.userData.shapeOrder = mesh.renderOrder;
+                mesh.material = ghostGlass(); mesh.castShadow = false; mesh.renderOrder = 21;
+                ghosted.add(mesh); touched = true;
+            }
+        });
+        const b = new THREE.Box3().setFromObject(root); if (b.isEmpty()) continue;
+        const key = `shadow:${id}`; used.add(key);
+        let disc = shadows.getObjectByName(key) as THREE.Mesh | undefined;
+        if (!disc) {
+            disc = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, depthWrite: false, toneMapped: false }));
+            disc.name = key; disc.rotation.x = -Math.PI / 2; disc.renderOrder = 19; disc.raycast = () => undefined;
+            shadows.add(disc); touched = true;
+        }
+        const w = Math.max(0.4, (b.max.x - b.min.x) * 1.25), d = Math.max(0.4, (b.max.z - b.min.z) * 1.25);
+        disc.position.set((b.min.x + b.max.x) / 2, Math.max(0.012, b.min.y + 0.012), (b.min.z + b.max.z) / 2);
+        disc.scale.set(w, d, 1);
+        (disc.material as THREE.MeshBasicMaterial).opacity = 0.75 + 0.2 * k;
+    }
+    for (const disc of [...shadows.children]) if (!used.has(disc.name)) { shadows.remove(disc); (disc as THREE.Mesh).geometry.dispose(); ((disc as THREE.Mesh).material as THREE.Material).dispose(); touched = true; }
+    if (!shadows.children.length) three.remove(shadows);
+    for (const mesh of [...ghosted]) if (!live.has(mesh)) { restoreMesh(mesh); touched = true; }
+    if (ghostMaterial) { const o = 0.35 + 0.25 * k; if (ghostMaterial.uniforms.uOpacity.value !== o) { ghostMaterial.uniforms.uOpacity.value = o; touched = true; } }
+    return { present, touched };
+}
+/** The pending change breathes: real models as ghost glass; build mode's blueprint boxes only while a model loads. */
+function breathe(three: THREE.Scene | undefined, ids: string[], world?: WorldSpec): void {
+    if (!three) return;
+    waitsForProp = propsAwaited(world, ids);
     const k = ids.length ? 0.5 + 0.5 * Math.sin(performance.now() / 520) : 0;
-    let touched = false;
-    layer.traverse(node => {
+    const real = ghostReal(three, ids, k);
+    let touched = real.touched;
+    const layer = three.getObjectByName('omo-build-layer');
+    layer?.traverse(node => {
         const id = node.userData?.buildEntityId as string | undefined; if (!id) return;
         const on = ids.includes(id);
+        // The real model is the ghost: its blueprint box steps aside (kept as the fallback while it loads).
+        const hide = on && real.present.has(id);
+        if (node.visible === hide) { node.visible = !hide; touched = true; }
         node.traverse(child => {
             const m = (child as THREE.Mesh).material as THREE.Material & { opacity?: number; color?: THREE.Color } | undefined;
             if (!m || Array.isArray(m)) return;
@@ -326,6 +452,7 @@ function breathe(three: THREE.Scene | undefined, ids: string[]): void {
             if (m.opacity !== next) { m.opacity = next; touched = true; }
         });
     });
-    if (touched && three) ambientHost(three)?.invalidate();
+    if (touched || ids.length) ambientHost(three)?.invalidate(real.touched);
+    const canvas = document.querySelector<HTMLElement>('canvas[data-testid="omo-world-canvas"]');
+    if (canvas) { const r = [...real.present].join(','), n = String(ghosted.size); if (canvas.dataset.ghostReal !== r) canvas.dataset.ghostReal = r; if (canvas.dataset.ghostMeshes !== n) canvas.dataset.ghostMeshes = n; }
 }
-
