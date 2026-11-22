@@ -1147,7 +1147,7 @@ export class RoomScene {
             const el = Math.max(0.15, e * KIT_OVERVIEW_TILT), frame = kitOverviewFrame(kit!.shell, 1.6, { azimuth: a, elevation: el, aspect: this.camera.aspect, fov: this.camera.fov });
             const k = frame.distance * d / 24, t = frame.target;
             this.camera.position.set(t.x+Math.sin(a)*Math.cos(el)*k,t.y+Math.sin(el)*k,t.z+Math.cos(a)*Math.cos(el)*k);
-            this.camera.lookAt(t.x,t.y,t.z);
+            this.camera.lookAt(t.x,t.y,t.z); this.applyFocus(t);
             // The city backdrop fades above the floor plate: the highest view ray to a floor corner is its horizon.
             const c = this.camera.position, hw = kit!.shell.width/2, hd = kit!.shell.depth/2; let horizon = -1;
             for (const x of [-hw, hw]) for (const z of [-hd, hd]) { const dx = x-c.x, dy = -c.y, dz = z-c.z; horizon = Math.max(horizon, dy/Math.hypot(dx,dy,dz)); }
@@ -1158,11 +1158,54 @@ export class RoomScene {
         if (content) {
             const k = content.distance * d / 24, t = content.target;
             this.camera.position.set(t.x+Math.sin(a)*Math.cos(e)*k,t.y+Math.sin(e)*k,t.z+Math.cos(a)*Math.cos(e)*k);
-            this.camera.lookAt(t.x,t.y,t.z); return;
+            this.camera.lookAt(t.x,t.y,t.z); this.applyFocus(t); return;
         }
         const fit = Math.max(1, 1.28 / this.camera.aspect) * this.roomScale;
         this.camera.position.set(Math.sin(a)*Math.cos(e)*d*fit,Math.sin(e)*d*fit,Math.cos(a)*Math.cos(e)*d*fit);
-        this.camera.lookAt(0,0.7,0);
+        this.camera.lookAt(0,0.7,0); this.applyFocus({x:0,y:0.7,z:0});
+    }
+    /**
+     * shape — public camera API: ease the overview to centre and zoom on a world-space box (a proposed change) over
+     * `ms`, keeping the orbit angle; `undefined` eases back to the plain overview. Drag/zoom still work on top.
+     */
+    frameFocus(box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | undefined, ms = 500): void {
+        const from = this.focusWeight, to = box ? 1 : 0;
+        if (box) {
+            const c = { x: (box.min.x + box.max.x) / 2, y: Math.max(0.3, (box.min.y + box.max.y) / 2 * 0.6), z: (box.min.z + box.max.z) / 2 };
+            const radius = Math.max(1.2, Math.hypot(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) / 2);
+            // Fit the change to ~45% of the view height (and width), never closer than 2.8 m or farther than the overview.
+            const half = THREE.MathUtils.degToRad(this.camera.fov / 2), fit = radius / Math.sin(Math.min(half, Math.atan(Math.tan(half) * this.camera.aspect))) / 0.45;
+            const next = { target: new THREE.Vector3(c.x, c.y, c.z), distance: Math.max(2.8, fit) };
+            // Already framed (a refinement): glide from the old frame to the new one.
+            const prev = this.focus && from > 0 ? { target: this.focus.target.clone(), distance: this.focus.distance } : undefined;
+            this.focus = { target: (prev?.target ?? next.target).clone(), distance: prev?.distance ?? next.distance };
+            this.focusGlide = prev ? { from: prev, to: next } : undefined;
+        } else this.focusGlide = undefined;
+        cancelAnimationFrame(this.focusFrame);
+        const start = performance.now(), span = Math.max(1, ms);
+        const step = (): void => {
+            if (this.disposed) return;
+            const u = Math.min(1, (performance.now() - start) / span), ease = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+            const g = this.focusGlide;
+            if (g && this.focus) { this.focus.target.lerpVectors(g.from.target, g.to.target, ease); this.focus.distance = THREE.MathUtils.lerp(g.from.distance, g.to.distance, ease); }
+            this.focusWeight = from + (to - from) * ease; this.positionCamera();
+            if (u < 1) this.focusFrame = requestAnimationFrame(step); else if (!to) this.focus = undefined;
+        };
+        step();
+    }
+    /** How far the overview has eased to the focus (0 = plain overview, 1 = framed on the change). */
+    get focusAmount(): number { return this.focusWeight; }
+    private focus?: { target: THREE.Vector3; distance: number };
+    private focusWeight = 0;
+    private focusFrame = 0;
+    private focusGlide?: { from: { target: THREE.Vector3; distance: number }; to: { target: THREE.Vector3; distance: number } };
+    private applyFocus(t: { x: number; y: number; z: number }): void {
+        const f = this.focus, w = this.focusWeight;
+        if (!f || w <= 0 || this.navigation === 'walk') return;
+        const base = new THREE.Vector3(t.x, t.y, t.z), off = this.camera.position.clone().sub(base), dist = off.length() || 1;
+        const target = base.lerp(f.target, w), d = THREE.MathUtils.lerp(dist, Math.min(dist, f.distance), w);
+        this.camera.position.copy(target).addScaledVector(off.normalize(), d);
+        this.camera.lookAt(target);
     }
     private viewInset = 0; /** Public camera API: keep the overview centred in the area left of a right-side panel (px; 0 = full view). */ setViewInset(px: number): void { const v = Math.max(0, Math.round(px)); if (v !== this.viewInset) { this.viewInset = v; this.positionCamera(); } } private applyViewInset(): void { const w = this.host.clientWidth, h = this.host.clientHeight; if (!w || !h) return; const vis = this.navigation === 'overview' && this.viewInset > 0 && this.viewInset < w * 0.7 ? w - this.viewInset : w; if (vis < w) this.camera.setViewOffset(vis, h, 0, 0, w, h); else this.camera.clearViewOffset(); this.camera.aspect = vis / h; this.camera.updateProjectionMatrix(); this.lastView[0] = NaN; } // world-ui
     private resize():void {
@@ -1372,10 +1415,10 @@ export class RoomScene {
         const code=this.screens.get('code')??of('review-screen')[0]?.built.screen;if(code)this.setData('codeReviewQuad',JSON.stringify(quad(code,...half(code))));
         const web=this.screens.get('web')??of('web-wall')[0]?.built.screen;if(web)this.setData('webQuad',JSON.stringify(quad(web,...half(web))));
     }
-    resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();this.invalidate();return;}this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
+    resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();this.invalidate();return;}cancelAnimationFrame(this.focusFrame);this.focus=undefined;this.focusWeight=0;this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
     dispose():void{
         this.setPeers([]);
-        this.disposed=true;for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
+        this.disposed=true;cancelAnimationFrame(this.focusFrame);for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         this.skyFx?.dispose();this.skyFx=undefined; // sky:render
         for(const k of this.kitShells.values()){if(k.root.parent!==this.worldRoot)disposeTree(k.root);k.env.dispose();}this.kitShells.clear(); // sky:merge M1

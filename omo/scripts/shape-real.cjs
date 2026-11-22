@@ -90,8 +90,16 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
 
         // 2. Describe a change.
         const before = await savedWorld();
+        const view0 = await page.$eval(CANVAS, c => { const r = c.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
         await type('add a reading nook by the window'); await page.keyboard.press('Enter');
         await waitCaption();
+        // The camera frames the change: it eases (~500 ms) to centre and zoom on the ghost group.
+        await page.waitForFunction(() => document.querySelector('canvas[data-testid="omo-world-canvas"]')?.dataset.shapeFramed === 'true', { timeout: 15000 }).catch(() => {});
+        await pause(900);
+        const frame1 = await page.evaluate(() => { const c = document.querySelector('[data-testid="shape-caption"]'); return { framed: document.querySelector('canvas[data-testid="omo-world-canvas"]')?.dataset.shapeFramed, ghost: c?.dataset.ghostRect }; });
+        const fg = frame1.ghost?.split(',').map(Number) ?? [0, 0, 0, 0];
+        const fcx = (fg[0] + fg[2]) / 2 - (view0[0] + view0[2] / 2), fcy = (fg[1] + fg[3]) / 2 - (view0[1] + view0[3] / 2);
+        check('The camera frames the change: the ghost group is near the view centre and fills a good part of it', frame1.framed === 'true' && Math.abs(fcx) < view0[2] * 0.12 && Math.abs(fcy) < view0[3] * 0.15 && (fg[3] - fg[1]) > view0[3] * 0.3, { frame1, off: [Math.round(fcx), Math.round(fcy)], h: fg[3] - fg[1] });
         const g1 = await ghost(), c1 = await captionText();
         const cap1 = await page.evaluate(() => { const e = document.querySelector('[data-testid="shape-caption"]'); const r = e?.getBoundingClientRect(); return e ? { n: document.querySelectorAll('[data-testid="shape-caption"]').length, anchor: e.dataset.anchor, box: [r.left, r.top, r.right, r.bottom].map(Math.round), keep: !!e.querySelector('[data-testid="shape-keep"]'), undo: !!e.querySelector('[data-testid="shape-undo"]') } : null; });
         check('The plan shows as a pending ghost in the room (3 new things)', g1.ids.split(',').filter(Boolean).length === 3, g1);
@@ -131,6 +139,8 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const after = await savedWorld();
         const added = (after?.entities ?? []).filter(e => !(before?.entities ?? []).some(b => b.id === e.id));
         check('Enter keeps: the nook exists in the saved world', added.length === 3 && added.every(e => e.kind === 'decor' && (e.scale ?? 1) > 1), added.map(e => `${e.id}:${e.decor}:${e.scale}`));
+        await pause(700);
+        check('After Keep the camera eases back to the plain overview', await page.$eval(CANVAS, c => c.dataset.shapeFramed) === 'false');
         check('After Keep the caption and the ghost tags are gone and the strip has 1 dot', !await page.$('[data-testid="shape-caption"]') && !await page.$('[data-testid="shape-ghost-tag"]') && (await page.$$('[data-testid="shape-history-dot"]')).length === 1);
 
         // 4. Point to refer: click a sofa.

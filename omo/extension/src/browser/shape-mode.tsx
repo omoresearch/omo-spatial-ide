@@ -48,6 +48,8 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     const caption = React.useRef<HTMLDivElement>(null);
     const leader = React.useRef<SVGSVGElement>(null);
     const tags = React.useRef<HTMLDivElement>(null);
+    /** The proposal the camera is framed on ('' = the plain overview). */
+    const framed = React.useRef('');
     const enteredBuild = React.useRef(false);
     const navBefore = React.useRef<'walk' | 'overview' | undefined>(undefined);
     const openRef = React.useRef(open); openRef.current = open;
@@ -151,11 +153,16 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     const pendingIds = React.useMemo(() => pendingOf(build.store?.world, build.store?.preview), [proposed, build.store?.preview]);
     React.useEffect(() => {
         if (!open || !proposed || !pendingIds.length) return undefined;
-        let frame = 0;
+        let frame = 0; const since = performance.now(), key = `${entry?.id ?? ''}:${pendingIds.join(',')}`;
         const tick = (): void => {
             frame = requestAnimationFrame(tick);
             const t = threeOf(build.scene);
             breathe(t.scene, pendingIds, build.store?.preview);
+            // Frame the change: once its real models are drawn (or after 700 ms), the overview eases onto the ghost group.
+            if (framed.current !== key && t.scene && t.navigation === 'overview' && (waitsForProp.size === 0 || ghostedAll(t.scene, pendingIds) || performance.now() - since > 700)) {
+                const box = ghostBounds(t.scene, pendingIds);
+                if (box) { framed.current = key; frameOn(build.scene, box); }
+            }
             const card = caption.current; if (!card || !t.camera || !t.canvas) return;
             const main = pendingIds.slice(0, 1); // the leader points at the main thing (the first new or changed one)
             const r = t.canvas.getBoundingClientRect();
@@ -207,11 +214,14 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
                 ['left', g.l - gap - w, (g.t + g.b) / 2 - h / 2], ['right', g.r + gap, (g.t + g.b) / 2 - h / 2],
                 ['above', (g.l + g.r) / 2 - w / 2, g.t - gap - h], ['below', (g.l + g.r) / 2 - w / 2, g.b + gap]
             ];
-            let pick: [string, number, number] | undefined;
-            for (const [side, x0, y0] of spots) {
+            // The free spot nearest the reticle wins (the order breaks ties), so the leader stays short.
+            const lowLeft: [string, number, number] = ['low-left', g.l - gap - w, a.y - h / 2], lowRight: [string, number, number] = ['low-right', g.r + gap, a.y - h / 2];
+            let pick: [string, number, number] | undefined, best = Infinity;
+            for (const [i, [side, x0, y0]] of [...spots, lowLeft, lowRight].entries()) {
                 const x = Math.max(pad, Math.min(host.width - w - pad, x0)), y = Math.max(top, Math.min(bottom - h, y0));
                 if (hits(x, y, g, 8) || hits(x, y, centre)) continue;
-                pick = [side, x, y]; break;
+                const dx = Math.max(x - a.x, 0, a.x - (x + w)), dy = Math.max(y - a.y, 0, a.y - (y + h)), d = Math.hypot(dx, dy) + i * 12;
+                if (d < best) { best = d; pick = [side, x, y]; }
             }
             if (!pick) { // nowhere free: the corner farthest from the change
                 const far = (g.l + g.r) / 2 > cx ? pad : host.width - w - pad;
@@ -236,6 +246,9 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
         tick();
         return () => { cancelAnimationFrame(frame); breathe(threeOf(build.scene).scene, []); };
     }, [open, proposed, pendingIds.join(',')]);
+    // Keep / Undo / close: the camera eases back to the plain overview.
+    // (A refinement keeps the frame while it thinks, then glides to the new change.)
+    React.useEffect(() => { if ((!open || (!proposed && !busy)) && framed.current) { framed.current = ''; frameOn(build.scene, undefined); } }, [open, proposed, busy]);
 
     if (!admin || !adminState) return null;
     const store = build.store;
@@ -375,6 +388,13 @@ function ghostFloor(three: THREE.Scene | undefined, ids: string[], eye: THREE.Ve
     const dx = eye.x - cx, dz = eye.z - cz, len = Math.hypot(dx, dz) || 1, ux = dx / len, uz = dz / len;
     const reach = Math.min(Math.abs(ux) > 1e-3 ? hw / Math.abs(ux) : Infinity, Math.abs(uz) > 1e-3 ? hd / Math.abs(uz) : Infinity) + 0.25;
     return { x: cx + ux * reach, y: Math.max(0.02, box.min.y + 0.02), z: cz + uz * reach };
+}
+/** True when every pending id is drawn with its real model (no kit prop still loading). */
+function ghostedAll(three: THREE.Scene, ids: string[]): boolean { return ids.every(id => !!realModel(three, id)); }
+/** shape — ease the room's overview camera onto a box (the change), or back (undefined): RoomScene.frameFocus. */
+function frameOn(scene: BuildMode['scene'], box: THREE.Box3 | undefined): void {
+    scene?.frameFocus(box, 500);
+    const canvas = threeOf(scene).canvas; if (canvas) canvas.dataset.shapeFramed = box ? 'true' : 'false';
 }
 /** Top centre of the pending things (world space): the caption points here. */
 function ghostAnchor(three: THREE.Scene | undefined, ids: string[]): { x: number; y: number; z: number } | undefined {
