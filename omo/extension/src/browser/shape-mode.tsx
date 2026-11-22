@@ -522,7 +522,32 @@ function ghostReal(three: THREE.Scene, ids: string[], k: number): { present: Set
         disc.scale.set(w, d, 1);
         (disc.material as THREE.MeshBasicMaterial).opacity = 0.75 + 0.2 * k;
     }
-    for (const disc of [...shadows.children]) if (!used.has(disc.name)) { shadows.remove(disc); (disc as THREE.Mesh).geometry.dispose(); ((disc as THREE.Mesh).material as THREE.Material).dispose(); touched = true; }
+    // The scope on the floor: one faint cyan outline (and a whisper of fill) round the whole group.
+    const group = new THREE.Box3();
+    for (const id of present) { const root = realModel(three, id); if (root) group.expandByObject(root); }
+    if (!group.isEmpty() && present.size > 1) {
+        used.add('omo-shape-footprint');
+        let foot = shadows.getObjectByName('omo-shape-footprint') as THREE.Group | undefined;
+        if (!foot) {
+            foot = new THREE.Group(); foot.name = 'omo-shape-footprint';
+            const pts: THREE.Vector3[] = [], r = 0.18;
+            for (let q = 0; q < 4; q++) for (let i = 0; i <= 6; i++) {
+                const a = (q + i / 6) * Math.PI / 2, cx = q === 0 || q === 3 ? 0.5 - r : -0.5 + r, cz = q < 2 ? 0.5 - r : -0.5 + r;
+                pts.push(new THREE.Vector3(cx + Math.cos(a) * r, 0, cz + Math.sin(a) * r));
+            }
+            pts.push(pts[0].clone());
+            const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x9be8ff, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }));
+            line.name = 'omo-shape-footprint-line'; line.renderOrder = 22; line.raycast = () => undefined;
+            const fill = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: GHOST, transparent: true, opacity: 0.07, depthWrite: false, toneMapped: false }));
+            fill.rotation.x = -Math.PI / 2; fill.renderOrder = 18; fill.raycast = () => undefined;
+            foot.add(fill, line); shadows.add(foot); touched = true;
+        }
+        const m = 0.3, w = group.max.x - group.min.x + 2 * m, d = group.max.z - group.min.z + 2 * m;
+        foot.position.set((group.min.x + group.max.x) / 2, Math.max(0.015, group.min.y + 0.015), (group.min.z + group.max.z) / 2);
+        foot.scale.set(w, 1, d);
+        ((foot.children[1] as THREE.Line).material as THREE.LineBasicMaterial).opacity = 0.6 + 0.3 * k;
+    }
+    for (const disc of [...shadows.children]) if (!used.has(disc.name)) { shadows.remove(disc); disc.traverse(n => { const o = n as THREE.Mesh; o.geometry?.dispose(); (o.material as THREE.Material | undefined)?.dispose?.(); }); touched = true; }
     if (!shadows.children.length) three.remove(shadows);
     for (const mesh of [...ghosted]) if (!live.has(mesh)) { restoreMesh(mesh); touched = true; }
     if (ghostMaterial) { const o = 0.52 + 0.08 * k; if (ghostMaterial.uniforms.uOpacity.value !== o) { ghostMaterial.uniforms.uOpacity.value = o; touched = true; } }
@@ -563,5 +588,6 @@ function breathe(three: THREE.Scene | undefined, ids: string[], world?: WorldSpe
         const r = [...real.present].join(','), n = String(ghosted.size);
         const props = (world?.entities ?? []).filter(e => ids.includes(e.id) && e.kind === 'decor').map(e => `${e.id}:${e.kind === 'decor' ? e.prop ?? e.decor : ''}`).join(',');
         if (canvas.dataset.ghostReal !== r) canvas.dataset.ghostReal = r; if (canvas.dataset.ghostMeshes !== n) canvas.dataset.ghostMeshes = n; if (canvas.dataset.ghostProps !== props) canvas.dataset.ghostProps = props;
+        const foot = String(!!three.getObjectByName('omo-shape-footprint')); if (canvas.dataset.ghostFootprint !== foot) canvas.dataset.ghostFootprint = foot;
     }
 }

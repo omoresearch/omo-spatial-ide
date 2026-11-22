@@ -124,6 +124,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const anc = cap1b?.anchor?.split(',').map(Number), gr1 = cap1b?.ghost?.split(',').map(Number);
         const onFloor = !!anc && !!gr1 && anc[1] >= gr1[1] + 0.6 * (gr1[3] - gr1[1]) && tags1.every(t => !(anc[0] >= t.box[0] && anc[0] <= t.box[2] && anc[1] >= t.box[1] && anc[1] <= t.box[3]));
         check('The reticle sits on the floor at the group (low in the ghost bounds, off every tag), not on a thing', onFloor, { anchor: cap1b?.anchor, ghost: cap1b?.ghost });
+        check('One faint floor outline marks the scope of the whole change', await page.$eval(CANVAS, c => c.dataset.ghostFootprint) === 'true');
         check('The ghost tags never overlap each other', tags1.length === 3 && tagsApart, tags1.map(t => t.box));
         check('Every ghosted thing has a 12 px name tag matching the caption (Armchair, Floor lamp, Shelves)', tags1.length === 3 && tags1.every(t => t.on === 'true' && t.font === '12px' && c1.toLowerCase().includes(t.text.toLowerCase()))
             && JSON.stringify(tags1.map(t => t.text).sort()) === JSON.stringify(['Armchair', 'Floor lamp', 'Shelves']), { tags1, c1 });
@@ -137,7 +138,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await page.keyboard.press('Enter');
         await waitCaption(c1);
         const g2 = await ghost(), c2 = await captionText();
-        check('Refining replaces the ghost (bigger things)', g2.ids.split(',').filter(Boolean).length === 3 && (g2.diff !== g1.diff || c2 !== c1) && /big/i.test(c2), { c1, c2, d1: g1.diff, d2: g2.diff });
+        check('Refining replaces the ghost (bigger things, every one says big)', g2.ids.split(',').filter(Boolean).length === 3 && (g2.diff !== g1.diff || c2 !== c1) && /big armchair, big floor lamp and big shelves/i.test(c2), { c1, c2, d1: g1.diff, d2: g2.diff });
         await shot('3-refined');
         await page.focus('[data-testid="shape-input"]'); await page.keyboard.press('Enter'); await pause(1200);
         const after = await savedWorld();
