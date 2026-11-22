@@ -144,8 +144,9 @@ export function buildReviewScreen(entity: ReviewScreenEntity, texture: THREE.Tex
  */
 export function buildDecorEntity(entity: DecorEntity, jungle: boolean, boardLines: readonly string[] = []): BuiltEntity {
     const group = rootFor(entity);
-    const look = buildDecor(entity.decor, entity.id, jungle);
     const mind = entity.decor === 'whiteboard' && /^(note|sign)-/.test(entity.id) && !!entity.label && typeof document !== 'undefined';
+    // promise:share: other whiteboards (data boards) print their note; onboarding's topic boards and stands draw their own.
+    const look = buildDecor(entity.decor, entity.id, jungle, entity.decor === 'whiteboard' && !mind ? entity.label : undefined);
     if (mind && entity.id.startsWith('sign-')) {
         look.children.filter(c => c instanceof THREE.Mesh && (c.material as THREE.Material) instanceof THREE.MeshBasicMaterial).forEach(c => look.remove(c));
         const { canvas, texture } = canvasTexture(BOARD_PX.w, BOARD_PX.h);

@@ -3,6 +3,19 @@ import { createPortal } from 'react-dom';
 import type { RemoteRoomController, RemoteRoomView } from './remote-room-controller';
 import type { SavedRemoteRoom } from '../common/remote-room-protocol';
 import type { RoomInviteRole } from '../common/room-wire-protocol'; // t3:mp2
+import '../../src/browser/world-share.css'; // promise:share
+
+/** promise:share (L7) — the world actions under the room panel. `canEdit` = false for a viewer or member in a shared room. */
+export interface WorldShareActions { onShareWorld(): void; onOpenWorld(): void; onBuildFromData(): void; canEdit: boolean }
+function WorldShareRow(props: { actions?: WorldShareActions }): React.ReactElement | null {
+    const a = props.actions; if (!a) return null;
+    const why = a.canEdit ? undefined : 'Your role in this room cannot change the world. Ask the host for builder.';
+    return <div className="omo-world-share-row" data-testid="world-share-row">
+        <button type="button" data-testid="world-share" title="Download this world as a .omo-world.json file (layout only: no terminals, tokens or paths)" onClick={a.onShareWorld}>Share this world</button>
+        <button type="button" data-testid="world-open" disabled={!a.canEdit} title={why ?? 'Open a .omo-world.json file as a new world (you see it first; Apply keeps it)'} onClick={a.onOpenWorld}>Open a world file</button>
+        <button type="button" data-testid="world-from-data" disabled={!a.canEdit} title={why ?? 'A CSV file or a repo folder becomes rooms with note boards'} onClick={a.onBuildFromData}>Build a world from data</button>
+    </div>;
+}
 
 /**
  * Remote room panel (w2 mp-client lane): connection chip, "Join a remote room" (paste invite link),
@@ -37,12 +50,14 @@ export function RemoteRoomPopover(props: { anchor: HTMLElement | null; children:
     return createPortal(<div className="omo-world-widget omo-remote-layer" style={{ top: pos.top, left: pos.left }}>{props.children}</div>, document.body);
 }
 
-export function RemoteRoomPanel(props: { controller: RemoteRoomController; view: RemoteRoomView; onClose(): void }): React.ReactElement {
+export function RemoteRoomPanel(props: { controller: RemoteRoomController; view: RemoteRoomView; onClose(): void; world?: WorldShareActions }): React.ReactElement {
     const { controller, view } = props;
     const s = view.status;
     const [tab, setTab] = React.useState<'join' | 'host'>('join');
     const [name, setName] = React.useState('Builder');
     const [link, setLink] = React.useState('');
+    const [code, setCode] = React.useState(''); // promise:share
+    const [codeServer, setCodeServer] = React.useState(() => { try { return window.localStorage.getItem('omo.roomServer') ?? ''; } catch { return ''; } });
     const [server, setServer] = React.useState('');
     const [ownerToken, setOwnerToken] = React.useState('');
     const [roomId, setRoomId] = React.useState('');
@@ -75,6 +90,7 @@ export function RemoteRoomPanel(props: { controller: RemoteRoomController; view:
                     <button type="button" data-testid="remote-room-invite" onClick={() => void controller.createInvite(inviteRole)}>Create invite link</button></>}
                 <button type="button" data-testid="remote-room-leave" onClick={() => controller.leave()}>Leave room</button>
             </div>
+            {view.invite?.code && <p className="omo-room-code" data-testid="remote-room-code-out">Room code <b data-testid="remote-room-code-value">{view.invite.code}</b> · works once · same expiry as the link. Others type it under “Join with a code” with this server: <code>{s.server}</code></p>}
             {view.invite && <label className="omo-field">Invite link{view.invite.role ? ` for a ${view.invite.role}` : ''} · works once · valid until {new Date(view.invite.expiresAt).toLocaleString()}
                 <input readOnly data-testid="remote-room-invite-link" value={view.invite.link} onFocus={e => e.currentTarget.select()} /></label>}
             <small>Shared: the room, avatars, chat, voice and the world layout. Not shared: your terminals and agents stay on this computer.</small>
@@ -87,7 +103,14 @@ export function RemoteRoomPanel(props: { controller: RemoteRoomController; view:
             {tab === 'join' ? <form onSubmit={e => { e.preventDefault(); void controller.joinInvite(link, name); }}>
                 <label className="omo-field">Invite link<input data-testid="remote-room-link" placeholder="https://rooms.example.com/omo-room/join/our-room#invite=…" value={link} onChange={e => setLink(e.target.value)} autoComplete="off" spellCheck={false} /></label>
                 <button type="submit" className="omo-primary" data-testid="remote-room-join" disabled={busy || !link.trim() || !name.trim()}>{busy ? 'Connecting…' : 'Join room'}</button>
-            </form> : <form onSubmit={e => { e.preventDefault(); void controller.hostRoom({ server, ownerToken, roomId, seedCurrent: seed }, name).then(() => setOwnerToken('')); }}>
+            </form> : null}
+            {tab === 'join' && <form data-testid="remote-room-code-form" onSubmit={e => { e.preventDefault(); try { window.localStorage.setItem('omo.roomServer', codeServer.trim()); } catch { /* private mode */ } void controller.joinCode(codeServer, code, name); }}>
+                <strong className="omo-remote-or">Join with a code</strong>
+                <label className="omo-field">Room code<input data-testid="remote-room-code-input" placeholder="MARS-4827" maxLength={12} value={code} onChange={e => setCode(e.target.value.toUpperCase())} autoComplete="off" spellCheck={false} /></label>
+                <label className="omo-field">Room server<input data-testid="remote-room-code-server" placeholder="https://rooms.example.com" value={codeServer} onChange={e => setCodeServer(e.target.value)} spellCheck={false} /></label>
+                <button type="submit" className="omo-primary" data-testid="remote-room-code-join" disabled={busy || !code.trim() || !name.trim()}>{busy ? 'Connecting…' : 'Join with code'}</button>
+            </form>}
+            {tab === 'host' && <form onSubmit={e => { e.preventDefault(); try { window.localStorage.setItem('omo.roomServer', server.trim()); } catch { /* private mode */ } void controller.hostRoom({ server, ownerToken, roomId, seedCurrent: seed }, name).then(() => setOwnerToken('')); }}>
                 <label className="omo-field">Room server<input data-testid="remote-room-server" placeholder="https://rooms.example.com" value={server} onChange={e => setServer(e.target.value)} spellCheck={false} /></label>
                 <label className="omo-field">Owner key<input type="password" data-testid="remote-room-owner-token" placeholder="omo1.…" value={ownerToken} onChange={e => setOwnerToken(e.target.value)} autoComplete="off" /></label>
                 <label className="omo-field">Room code (optional · read from the key)<input data-testid="remote-room-code" placeholder="our-room" maxLength={32} value={roomId} onChange={e => setRoomId(e.target.value.toLowerCase())} /></label>
@@ -103,6 +126,7 @@ export function RemoteRoomPanel(props: { controller: RemoteRoomController; view:
                 </div>)}
             </div>}
         </>}
+        <WorldShareRow actions={props.world} />{/* promise:share */}
         {(view.error || (s.phase === 'failed' && s.error)) && <p role="alert" className="omo-error" data-testid="remote-room-error">{view.error || s.error}</p>}
     </section>;
 }

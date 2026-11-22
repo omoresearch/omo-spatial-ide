@@ -31,9 +31,11 @@
  *    from `world-model.ts` and rejects stale `baseRevision` with code `conflict`.
  *  - No op, chat line or signal ever starts an agent or types into a terminal.
  */
+import { isRoomCode } from './room-code'; // promise:share
+import { withPoint } from './shared-pointer'; // promise:share
 import type { PlayerPose } from './player-state';
 import type { WorldOp, WorldSpec } from './world-model';
-import { validateWorld, WORLD_MAX_BYTES } from './world-model';
+import { SHELL_MAX, validateWorld, WORLD_MAX_BYTES } from './world-model';
 import type { ChatEmote, ChatMessage, ChatSay, PresenceColour, RoomMember, VoiceSignal, VoiceSignalEnvelope, VoiceStatus } from './presence-protocol';
 import { CHAT_EMOTES, PRESENCE_COLOURS, chatSay, presenceColour, voiceSignal, voiceStatus } from './presence-protocol';
 
@@ -67,8 +69,9 @@ export const ROOM_MEMBER_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
 /** Invite codes, member tokens and owner tokens: opaque URL-safe strings. t2:pkg: '.' allowed (the room server's keys are `omo1.<room>.<member>.<secret>`, invites `omoinv1.<payload>.<sig>`). */
 export const ROOM_SECRET_RE = /^[A-Za-z0-9_.-]{16,256}$/;
 const RID_RE = /^[A-Za-z0-9_-]{1,64}$/;
-/** Half of the largest WorldShell size (40 m): poses are room-space metres, clamped by the world, not the v1 room. */
-export const ROOM_POSE_LIMIT_M = 20;
+/** Half of the largest WorldShell size (SHELL_MAX): poses are room-space metres, clamped by the world, not the v1 room.
+ *  promise:share: was a fixed 20 m from the 40 m world era, which dropped every pose (and pointer) in a bigger open world. */
+export const ROOM_POSE_LIMIT_M = SHELL_MAX / 2;
 
 /**
  * WebSocket close codes. Codes in ROOM_CLOSE_FINAL mean "do NOT auto-reconnect"; any other close
@@ -144,7 +147,9 @@ export interface RemoteRoomMember extends RoomMember {
 export type RoomAuth =
     | { kind: 'invite'; roomId: string; invite: string }
     | { kind: 'member'; roomId: string; token: string }
-    | { kind: 'owner'; roomId: string; ownerToken: string; roomName?: string; seedWorld?: WorldSpec };
+    | { kind: 'owner'; roomId: string; ownerToken: string; roomName?: string; seedWorld?: WorldSpec }
+    /** promise:share — a short room code ('MARS-4827'). The server maps it to its signed invite; `roomId` is learnt from `welcome`. */
+    | { kind: 'code'; roomId?: undefined; code: string };
 
 export type RoomErrorCode =
     | 'bad-frame'      // shape/size/JSON error
@@ -232,7 +237,7 @@ export interface SignalPushFrame { t: 'signal'; envelope: VoiceSignalEnvelope }
 /** One member's agent summaries changed. */
 export interface AgentsPushFrame { t: 'agents'; memberId: string; agents: AgentStatusSummary[] }
 /** Owner-only reply: the invite link to share. */
-export interface InviteFrame { t: 'invite'; rid: string; link: string; expiresAt: number; maxUses?: number; role?: RoomInviteRole }
+export interface InviteFrame { t: 'invite'; rid: string; link: string; expiresAt: number; maxUses?: number; role?: RoomInviteRole; /** promise:share — short room code for the same invite. */ code?: string }
 /** t3:mp2 — reply to member-role. */
 export interface RoleAckFrame { t: 'role-ack'; rid: string; member: string; role: RoomInviteRole }
 export interface PongFrame { t: 'pong'; at: number; serverTime: number }
@@ -324,7 +329,7 @@ export function wirePose(input: unknown): PlayerPose {
     const p = input as PlayerPose;
     if (!p || ![p.x, p.z, p.yaw, p.pitch].every(n => typeof n === 'number' && Number.isFinite(n))
         || Math.abs(p.x) > ROOM_POSE_LIMIT_M || Math.abs(p.z) > ROOM_POSE_LIMIT_M || Math.abs(p.yaw) > Math.PI + 1e-6 || Math.abs(p.pitch) > 1.2) throw new Error('Invalid room position.');
-    return { x: p.x, z: p.z, yaw: p.yaw, pitch: p.pitch };
+    return withPoint({ x: p.x, z: p.z, yaw: p.yaw, pitch: p.pitch }, (p as { point?: unknown }).point); // promise:share: optional pointer spot
 }
 function worldOps(input: unknown): WorldOp[] {
     if (!Array.isArray(input) || input.length === 0 || input.length > ROOM_WORLD_OPS_MAX) throw new Error(`A world batch holds 1–${ROOM_WORLD_OPS_MAX} operations.`);
@@ -358,6 +363,7 @@ function chatMessage(input: unknown): ChatMessage {
     return out;
 }
 function auth(input: unknown): RoomAuth {
+    if (isObj(input) && input.kind === 'code') { if (!isRoomCode(input.code)) throw new Error('Invalid room code.'); return { kind: 'code', code: input.code }; } // promise:share
     if (!isObj(input) || typeof input.roomId !== 'string' || !ROOM_ID_RE.test(input.roomId)) throw new Error('Invalid room code.');
     switch (input.kind) {
         case 'invite': if (typeof input.invite !== 'string' || !ROOM_SECRET_RE.test(input.invite)) throw new Error('Invalid invite code.'); return { kind: 'invite', roomId: input.roomId, invite: input.invite };
@@ -462,7 +468,7 @@ export function parseServerFrame(raw: unknown): RoomServerFrame | undefined {
         }
         case 'agents': if (typeof f.memberId !== 'string' || !ROOM_MEMBER_ID_RE.test(f.memberId)) throw new Error('Invalid agents push.'); return { t: 'agents', memberId: f.memberId, agents: agentSummaries(f.agents) };
         case 'invite': if (typeof f.link !== 'string' || f.link.length > 2048 || !time(f.expiresAt)) throw new Error('Invalid invite.');
-            return { t: 'invite', rid: needRid(f.rid), link: f.link, expiresAt: f.expiresAt, ...(int(f.maxUses, 1, 100) ? { maxUses: f.maxUses } : {}), ...((ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role) ? { role: f.role as RoomInviteRole } : {}) };
+            return { t: 'invite', rid: needRid(f.rid), link: f.link, expiresAt: f.expiresAt, ...(int(f.maxUses, 1, 100) ? { maxUses: f.maxUses } : {}), ...((ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role) ? { role: f.role as RoomInviteRole } : {}), ...(isRoomCode(f.code) ? { code: f.code } : {}) };
         case 'role-ack':
             if (typeof f.member !== 'string' || !ROOM_MEMBER_ID_RE.test(f.member) || !(ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role)) throw new Error('Invalid role reply.');
             return { t: 'role-ack', rid: needRid(f.rid), member: f.member, role: f.role as RoomInviteRole };

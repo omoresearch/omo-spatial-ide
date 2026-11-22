@@ -213,6 +213,7 @@ export class VoiceHub {
         if (scene !== this.sceneRef || layout !== this.layoutRef) { this.sceneRef = scene; this.layoutRef = layout; this.avatars.attach(this.threeScene(), layout, this.canvas()); }
         this.watchDesks();
         const c = this.canvas(); if (c && this.voice && c.dataset.voiceTransport !== this.voice.transportKind) c.dataset.voiceTransport = this.voice.transportKind; // t3:mp2: inspection
+        if (c && this.voice) { const g = JSON.stringify(this.voice.debugGains()); if (c.dataset.voiceGains !== g) c.dataset.voiceGains = g; } // promise:share: real gain node values (inspection)
         this.view = this.compute();
         this.avatars.setAgents(this.view.agents);
         this.avatars.setPeers(this.peerIndicators(presence));

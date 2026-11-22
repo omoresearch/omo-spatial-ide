@@ -23,7 +23,7 @@ function palette(jungle: boolean): Palette {
         : { wood: 0xa98d6c, woodDark: 0x5b4a3a, fabric: 0x5f7f96, fabricDark: 0x45627a, metal: 0x34404d, leaf: [0x4c7e62, 0x6d9b71, 0x5fa58a], pot: 0xd1c7af, glow: 0xffe6bf, crystal: 0x8fe3f0, rug: [0x2c3a52, 0x8ab6c8, 0xd7c6a3] };
 }
 
-export function buildDecor(kind: DecorKind, id: string, jungle: boolean): THREE.Group {
+export function buildDecor(kind: DecorKind, id: string, jungle: boolean, note?: string): THREE.Group {
     const g = new THREE.Group(); const p = palette(jungle); const rnd = seeded(id);
     switch (kind) {
         case 'plant': plant(g, p, rnd); break;
@@ -31,7 +31,7 @@ export function buildDecor(kind: DecorKind, id: string, jungle: boolean): THREE.
         case 'crystal': crystal(g, p, rnd); break;
         case 'sofa': sofa(g, p); break;
         case 'bookshelf': bookshelf(g, p, rnd); break;
-        case 'whiteboard': whiteboard(g, p, rnd); break;
+        case 'whiteboard': whiteboard(g, p, rnd, note); break; // promise:share: a labelled board shows its note
         case 'rug': rug(g, p); break;
         case 'window': windowPane(g, jungle); break;
     }
@@ -112,7 +112,25 @@ function bookshelf(g: THREE.Group, p: Palette, rnd: () => number): void {
     }
 }
 
-function whiteboard(g: THREE.Group, p: Palette, rnd: () => number): void {
+/** promise:share (L7) — the note on a data board: up to 3 wrapped lines of its label, dark ink on the white board. */
+function noteTexture(text: string): THREE.CanvasTexture | undefined {
+    if (typeof document === 'undefined') return undefined;
+    const { canvas, texture } = canvasTexture(704, 400);
+    const c = canvas.getContext('2d'); if (!c) return undefined;
+    c.fillStyle = '#f4f6f4'; c.fillRect(0, 0, 704, 400);
+    c.fillStyle = '#1f3d66'; c.font = '600 54px sans-serif'; c.textBaseline = 'top';
+    const words = text.split(/\s+/), lines: string[] = [];
+    let line = '';
+    for (const w of words) { const next = line ? `${line} ${w}` : w; if (c.measureText(next).width > 640 && line) { lines.push(line); line = w; } else line = next; }
+    if (line) lines.push(line);
+    const shown = lines.slice(0, 4); if (lines.length > 4) shown[3] = `${shown[3].slice(0, 18)}…`;
+    shown.forEach((l, i) => c.fillText(l, 32, 40 + i * 84, 640));
+    c.fillStyle = '#c0463e'; c.fillRect(32, 372, 120, 8);
+    texture.anisotropy = 4;
+    return texture;
+}
+
+function whiteboard(g: THREE.Group, p: Palette, rnd: () => number, note?: string): void {
     const metal = facet(p.metal, 0.5, 0.4);
     for (const x of [-0.92, 0.92]) {
         mesh(g, new THREE.BoxGeometry(0.05, 1.9, 0.05), metal, [x, 0.95, 0]);
@@ -122,6 +140,12 @@ function whiteboard(g: THREE.Group, p: Palette, rnd: () => number): void {
     // promise:onboarding (5): the writing surface has a real 2 cm thickness (a zero-thickness plane reads as a black line edge-on).
     const board = mesh(g, new THREE.BoxGeometry(1.76, 1.0, 0.02), new THREE.MeshStandardMaterial({ color: 0xf4f6f4, roughness: 0.35 }), [0, 1.3, 0.035], false);
     board.receiveShadow = true;
+    const map = note ? noteTexture(note) : undefined;
+    if (map) {
+        (board.material as THREE.MeshStandardMaterial).map = map; board.userData.note = note; board.userData.ownsMap = true;
+        mesh(g, new THREE.BoxGeometry(1.2, 0.03, 0.08), metal, [0, 0.76, 0.05]);
+        return;
+    }
     // A few marker strokes: a box diagram and two lines of "writing".
     const ink = [0x2f6db5, 0xc0463e, 0x2e8a5a];
     const stroke = (w: number, h: number, x: number, y: number, c: number): void => { mesh(g, new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c }), [x, y, 0.046], false); };

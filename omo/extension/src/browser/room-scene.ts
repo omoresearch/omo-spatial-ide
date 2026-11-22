@@ -30,6 +30,10 @@ import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
 import { buildPaths, pathsKey } from './world-scene-paths'; // w3:look (7)
 import { buildSkylineShell, restyleForSkyline, SKYLINE_COLORS, SKYLINE_FOG } from './world-scene-skyline'; // sky:render
 import { SkylineFx } from './world-scene-skyline-fx'; // sky:render
+import { PointerBeams } from './shared-pointer-view'; // promise:share
+import { BEAM_CHEST_HEIGHT, POINT_MAX_REACH, pointerBeams, sharedPoint } from '../common/shared-pointer'; // promise:share
+import type { SharedPoint } from '../common/shared-pointer';
+import { PRESENCE_COLOUR_HEX } from '../common/presence-protocol'; // promise:share
 import { SkylineKitLoader, buildKitStation } from './world-scene-skyline-baked'; // sky:merge M1
 import { activeKit, decorPropFor, kitDeskIndex } from '../common/world-style-kits'; // sky:merge M1
 import type { StyleKit } from '../common/world-style-kits'; // sky:merge M1
@@ -391,6 +395,36 @@ export class RoomScene {
         this.data.set(key, value); this.renderer.domElement.dataset[key] = value;
     }
     getPlayerPose():PlayerPose { return {...(this.walker?.pose ?? PLAYER_HOME)}; }
+    // --- promise:share (L10): shared pointer. Only a spot (x, y, z) is shared; nothing is read from a screen. ---
+    private pointerView?: PointerBeams;
+    private myPoint?: SharedPoint;
+    private myColour = '#7fe3d0';
+    private pointerSig = '';
+    /** The spot under the crosshair (walking): the frontmost hit on any surface, within reach. */
+    aimPoint(): SharedPoint | undefined {
+        if (!this.renderer || this.navigation !== 'walk') return undefined;
+        const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(0, 0), this.camera); ray.far = POINT_MAX_REACH;
+        const targets = [...(this.shellRoot ? [this.shellRoot] : []), ...this.roots, ...this.screens.values()];
+        const hit = ray.intersectObjects(targets, true).find(h => h.object.visible && !(h.object.parent?.name === 'omo-shared-pointer'));
+        const p = hit ? hit.point : ray.ray.at(6, new THREE.Vector3());
+        return sharedPoint({ x: p.x, y: Math.max(0, Math.min(8, p.y)), z: p.z });
+    }
+    /** Show (spot) or hide (undefined) your own beam, in your colour. */
+    setMyPointer(point: SharedPoint | undefined, colour?: string): void {
+        this.myPoint = point; if (colour) this.myColour = colour;
+        this.drawPointers();
+    }
+    private drawPointers(): void {
+        if (!this.renderer) return;
+        this.pointerView ??= new PointerBeams(this.scene);
+        const me = this.getPlayerPose();
+        const specs = pointerBeams([...this.peerAvatars.values()].map(a => ({ id: a.member.id, name: a.member.name, colour: a.member.colour, pose: a.member.pose })))
+            .map(b => ({ id: b.id, colour: b.colour ? PRESENCE_COLOUR_HEX[b.colour as keyof typeof PRESENCE_COLOUR_HEX] ?? '#ff56c8' : '#ff56c8', from: b.from, to: b.to }));
+        if (this.myPoint) specs.push({ id: '__self', colour: this.myColour, from: { x: me.x, y: BEAM_CHEST_HEIGHT, z: me.z }, to: this.myPoint });
+        if (this.pointerView.set(specs)) this.invalidate();
+        const sig = JSON.stringify(specs.map(s => ({ id: s.id === '__self' ? 'self' : s.id, colour: s.colour, to: s.to })));
+        if (sig !== this.pointerSig) { this.pointerSig = sig; this.setData('pointers', sig); }
+    }
     // --- omo focus lane: the one public read focus mode needs (walker + a station's screen mesh). ---
     focusTarget(station?: Workstation): { controls?: FirstPersonControls; screen?: THREE.Mesh } { return { controls: this.walker, screen: station ? this.screens.get(station) : undefined }; }
     setPeers(members:RoomMember[]):void {
@@ -417,6 +451,7 @@ export class RoomScene {
             avatar.member=member;avatar.root.position.set(member.pose.x,0,member.pose.z);avatar.root.rotation.y=member.pose.yaw;
         }
         this.peerVersion++;
+        this.drawPointers(); // promise:share
         if (this.renderer) { this.renderer.shadowMap.needsUpdate = true; this.invalidate(); }
     }
     private material(color: THREE.ColorRepresentation, metalness = 0.1): THREE.MeshStandardMaterial {
@@ -1534,10 +1569,17 @@ export class RoomScene {
         this.setData('terminalQuads',JSON.stringify(Object.fromEntries(of('station').map(item=>[item.entity.id,quad(item.built.screen!,...half(item.built.screen!))]))));
         const code=this.screens.get('code')??of('review-screen')[0]?.built.screen;if(code)this.setData('codeReviewQuad',JSON.stringify(quad(code,...half(code))));
         const web=this.screens.get('web')??of('web-wall')[0]?.built.screen;if(web)this.setData('webQuad',JSON.stringify(quad(web,...half(web))));
+        // promise:share (L7) — data boards: the note each board prints and where it is on screen (inspection for the real-browser check).
+        const boards:Array<{id:string;note:string;box:number[];visible:boolean}>=[];
+        for(const item of this.entities.values()){if(item.entity.kind!=='decor')continue;let board:THREE.Mesh|undefined;item.built.root.traverse(n=>{if(!board&&(n as THREE.Mesh).isMesh&&typeof n.userData.note==='string')board=n as THREE.Mesh;});if(!board)continue;
+            const front=board.getWorldPosition(a).project(this.camera).z;const pts=quad(board,...half(board));const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);const box=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)].map(Math.round);
+            boards.push({id:item.entity.id,note:board.userData.note as string,box,visible:front>=-1&&front<=1&&box[2]>0&&box[0]<w&&box[3]>0&&box[1]<h});}
+        this.setData('boardNotes',JSON.stringify(boards));
     }
     resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();this.invalidate();return;}cancelAnimationFrame(this.focusFrame);this.focus=undefined;this.focusWeight=0;this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
     dispose():void{
         this.setPeers([]);
+        this.pointerView?.dispose();this.pointerView=undefined; // promise:share
         this.disposed=true;cancelAnimationFrame(this.focusFrame);for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         this.skyFx?.dispose();this.skyFx=undefined; // sky:render
