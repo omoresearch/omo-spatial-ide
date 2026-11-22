@@ -239,9 +239,12 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
                 <i className="omo-shape-caption-stem" aria-hidden="true" />
             </div>}
             <div className="omo-shape-dock">
-                {kept.length > 0 && <div className="omo-shape-history" data-testid="shape-history" role="list" aria-label="Kept changes">
+                {kept.length > 0 && <div className="omo-shape-history" data-testid="shape-history" role="list" aria-label={`${kept.length} kept change${kept.length === 1 ? '' : 's'}`}>
+                    <span className="omo-shape-history-label" aria-hidden="true">{kept.length} kept</span>
                     {kept.map((k, i) => <button type="button" role="listitem" key={k.id} className="omo-shape-dot" data-testid="shape-history-dot" data-sentence={k.sentence}
-                        aria-label={`Undo back to before: ${k.sentence}`} onMouseDown={e => e.preventDefault()} onClick={() => rewind(i)}><span className="omo-shape-tip">{k.sentence}<small>Click to undo back to here</small></span></button>)}
+                        aria-label={`Go back to before: ${k.sentence}`} onMouseDown={e => e.preventDefault()} onClick={() => rewind(i)}>
+                        <span className="omo-shape-tip"><b>{i + 1}.</b> {k.sentence}<small>{kept.length - i === 1 ? 'Click to take this change back' : `Click to go back to before this (takes back ${kept.length - i} changes)`}</small></span></button>)}
+                    <span className="omo-shape-now" aria-hidden="true">Now</span>
                 </div>}
                 {busy && <div className="omo-shape-status" role="status" data-testid="shape-thinking"><span className="omo-shape-spinner" aria-hidden="true" />{hermes ? 'Asking Hermes…' : 'Shaping…'}</div>}
                 {!busy && failed && <div className="omo-shape-status is-note" role="status" data-testid="shape-note">{failed}</div>}
@@ -307,7 +310,7 @@ function breathe(three: THREE.Scene | undefined, ids: string[]): void {
             if (m.depthTest !== depth) { m.depthTest = depth; m.needsUpdate = true; child.renderOrder = on ? 20 : child.renderOrder; touched = true; }
             if (m.color && m.userData.shapeColor === undefined) m.userData.shapeColor = m.color.getHex();
             if (m.color) { const c = on ? GHOST : m.userData.shapeColor as number; if (m.color.getHex() !== c) { m.color.setHex(c); touched = true; } }
-            const next = on ? ((child as THREE.Mesh).isMesh ? 0.3 + 0.25 * k : 0.75 + 0.25 * k) : base;
+            const next = on ? ((child as THREE.Mesh).isMesh ? 0.38 + 0.24 * k : 0.8 + 0.2 * k) : base;
             if (m.opacity !== next) { m.opacity = next; touched = true; }
         });
     });

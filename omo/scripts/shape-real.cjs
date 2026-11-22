@@ -150,7 +150,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check('The history strip has the kept steps (2 dots)', dots.length === 2, dots.length);
         if (dots.length) { const box = await dots[0].boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await pause(400); }
         const tip = await page.evaluate(() => { const t = document.querySelector('[data-testid="shape-history-dot"] .omo-shape-tip'); return t ? { text: t.textContent, opacity: getComputedStyle(t).opacity } : null; });
-        check('Hovering a dot shows its sentence', !!tip && Number(tip.opacity) > 0.5 && /nook/i.test(tip.text), tip);
+        check('Hovering a dot shows its sentence', !!tip && Number(tip.opacity) > 0.5 && /nook/i.test(tip.text) && /go back/i.test(tip.text), tip);
         await shot('5-history');
         if (dots.length) await dots[0].click(); await pause(1200);
         const rewound = await savedWorld();

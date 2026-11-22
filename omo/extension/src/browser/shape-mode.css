@@ -76,13 +76,16 @@
 @keyframes omo-shape-spin { to { transform: rotate(360deg); } }
 
 /* ---- history strip: one dot per kept change ---- */
-.omo-shape-history { display: flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 10px; background: rgba(16, 21, 29, .4); backdrop-filter: var(--sh-blur); -webkit-backdrop-filter: var(--sh-blur); }
-.omo-shape-dot { position: relative; width: 16px; height: 16px; padding: 0; border: 0; background: transparent; display: grid; place-items: center; }
-.omo-shape-dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, .5); transition: transform 180ms var(--sh-ease), background 180ms; }
-.omo-shape-dot:last-child::before { background: var(--sh-text); }
-.omo-shape-dot:hover::before { transform: scale(1.5); background: var(--sh-text); }
+.omo-shape-history { position: relative; display: flex; align-items: center; gap: 0; height: 28px; padding: 0 12px; border-radius: 14px; background: rgba(16, 21, 29, .62); border: 1px solid var(--sh-line-soft); backdrop-filter: var(--sh-blur); -webkit-backdrop-filter: var(--sh-blur); animation: omo-shape-fade 180ms var(--sh-ease) both; }
+.omo-shape-history-label, .omo-shape-now { font-weight: 500; font-size: 12px; line-height: 28px; color: var(--sh-text-3); padding: 0 6px; }
+.omo-shape-now { color: var(--sh-text-2); }
+.omo-shape-dot { position: relative; width: 28px; height: 28px; padding: 0; border: 0; background: transparent; display: grid; place-items: center; }
+.omo-shape-dot::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(255, 255, 255, .18); z-index: 0; }
+.omo-shape-dot::before { content: ''; position: relative; z-index: 1; width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .55); box-shadow: 0 0 0 3px rgba(16, 21, 29, .9); transition: transform 180ms var(--sh-ease), background 180ms; }
+.omo-shape-dot:last-of-type::before { background: var(--sh-accent); }
+.omo-shape-dot:hover::before, .omo-shape-dot:focus-visible::before { transform: scale(1.4); background: var(--sh-text); }
 .omo-shape-tip {
-    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(4px); opacity: 0; pointer-events: none; transition: opacity 160ms, transform 160ms var(--sh-ease);
+    position: absolute; bottom: 34px; z-index: 2; left: 50%; transform: translateX(-50%) translateY(4px); opacity: 0; pointer-events: none; transition: opacity 160ms, transform 160ms var(--sh-ease);
     width: max-content; max-width: 280px; padding: 8px 12px; border-radius: 10px; background: var(--sh-glass-strong); border: 1px solid var(--sh-line);
     box-shadow: var(--sh-shadow); font-weight: 400; font-size: 13px; line-height: 1.35; font-family: inherit; color: var(--sh-text); text-align: left; white-space: normal;
 }
