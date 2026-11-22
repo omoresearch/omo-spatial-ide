@@ -18,6 +18,7 @@ import type { WorldEntity, WorldSpec } from '../common/world-model';
 import { footprint } from './build-catalog';
 import { refreeze } from './world-scene-kit';
 import { MAGIC_WARM, MAGIC_WARM_SOFT, clamp01, easeInOutCubic, easeOutBack, easeOutCubic, magicOn, prefersReducedMotion } from './world-magic-settings';
+import { CameraDirector } from './world-magic-camera';
 
 /** What the creation layer needs from the room (closures over RoomScene fields; no private-field casts). */
 export interface CreationHost {
@@ -33,12 +34,31 @@ export interface CreationHost {
     camera?(): THREE.Camera | undefined;
 }
 
-const SEQ = { seam: 0.7, partsStart: 0.35, spread: 0.5, part: 0.7, motesStart: 0.2, motes: 1.8 } as const;
-/** Kind stagger: rooms first, then screens/desks, then decor (seconds added to every part delay). */
-const KIND_DELAY: Record<string, number> = { room: 0, station: 0.5, monitors: 0.6, web: 0.6, mirror: 0.65, review: 0.65, decor: 0.75 };
+/**
+ * The beat sheet (seconds after Apply). The ghost's glow is handed over, never dropped: its rim shell holds, then
+ * drains while the solid parts grow into it.
+ *   0.00  seam starts tracing the footprint (bright, additive), floor pad glows; ghost shell holds; camera leans in
+ *   0.15  floor + trim fade up from the ghost's opacity; 0.30 walls RISE from the floor (scale.y 0.02 -> 1, back ease)
+ *   0.85  desks drop in (one after the other), then screens, then decor
+ *   1.75  closing pulse: one soft ring of light runs across the new floor
+ *   2.20  labels (sprites, floor plates, HTML tags) fade in over the last 0.4 s
+ */
+const SEQ = { seam: 0.6, seamHold: 1.25, seamOut: 0.5, shellHold: 0.35, shellOut: 1.1, part: 0.75, motesStart: 0.1, motes: 1.6, pulse: 1.75, pulseLen: 0.8, label: 0.4 } as const;
+/** Kind stagger: rooms first, then desks, then screens, then decor (seconds added to every part delay). */
+const KIND_DELAY: Record<string, number> = { room: 0.15, station: 0.85, 'monitor-wall': 1.0, 'web-wall': 1.0, mirror: 1.05, 'review-screen': 1.05, decor: 1.15 };
+/** Extra delay per entity of the same diff (desk two lands after desk one). */
+const ENTITY_STAGGER = 0.16;
 /** Whole sequence length in seconds (the progress hook runs 0 -> 1 over this). */
-export const CREATE_SECONDS = Math.max(SEQ.partsStart + 0.75 + SEQ.spread + SEQ.part, SEQ.motesStart + SEQ.motes);
+export const CREATE_SECONDS = 2.6;
+/** Seam width on screen (CSS px) and its soft halo. */
+const SEAM_PX = 7, HALO_PX = 26;
 const DISSOLVE_SECONDS = 0.9;
+/** A pending entity's own materials are drawn at this fraction of their opacity (the materialise starts from it). */
+const GHOST_OPACITY = 0.16;
+/** Labels: room title sprites, floor name plates (they read last, never mid-build). */
+function isLabel(node: THREE.Object3D): boolean {
+    return (node as THREE.Sprite).isSprite || node.userData.part === 'name-plate' || node.userData.part === 'room-title';
+}
 
 // ------------------------------------------------------------------ shared resources
 
@@ -86,26 +106,44 @@ function seamGeometry(hw: number, z0: number, z1: number, width = 0.035): THREE.
     pts.push(corners[corners.length - 1]);
     const len: number[] = [0]; for (let i = 1; i < pts.length; i++) len.push(len[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
     const total = len[len.length - 1] || 1;
-    const pos: number[] = [], u: number[] = [], idx: number[] = [];
+    const pos: number[] = [], u: number[] = [], side: number[] = [], idx: number[] = [];
     for (let i = 0; i < pts.length; i++) {
         const p = pts[i], q = pts[Math.min(pts.length - 1, i + 1)], o = pts[Math.max(0, i - 1)];
         let dx = q[0] - o[0], dz = q[1] - o[1]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
         const nx = -dz * width / 2, nz = dx * width / 2;
-        pos.push(p[0] + nx, 0.012, p[1] + nz, p[0] - nx, 0.012, p[1] - nz); u.push(len[i] / total, len[i] / total);
+        pos.push(p[0] + nx, 0.075, p[1] + nz, p[0] - nx, 0.075, p[1] - nz); u.push(len[i] / total, len[i] / total); side.push(1, -1);
         if (i < pts.length - 1) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
     }
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('u', new THREE.Float32BufferAttribute(u, 1)); g.setIndex(idx);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('u', new THREE.Float32BufferAttribute(u, 1)); g.setAttribute('side', new THREE.Float32BufferAttribute(side, 1)); g.setIndex(idx);
     return g;
 }
-function seamMaterial(): THREE.ShaderMaterial {
+function seamMaterial(halo = false): THREE.ShaderMaterial {
+    // HDR colour (> 1): white-hot core at the travelling head, warm gold behind it; additive so it lights the floor.
     return new THREE.ShaderMaterial({
-        uniforms: { color: { value: new THREE.Color(MAGIC_WARM) }, head: { value: 0 }, fade: { value: 1 } },
-        vertexShader: 'attribute float u; varying float vU; void main(){ vU = u; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-        fragmentShader: `uniform vec3 color; uniform float head, fade; varying float vU;
-            void main(){ float d = head - vU; if (d < 0.0) discard; float g = exp(-d * 14.0);
-                gl_FragColor = vec4(color * (0.75 + 1.9 * g), (0.32 + 0.68 * g) * fade); }`,
+        uniforms: { color: { value: new THREE.Color(MAGIC_WARM).multiplyScalar(halo ? 1.1 : 2.6) }, head: { value: 0 }, fade: { value: 1 }, halo: { value: halo ? 1 : 0 }, base: { value: 0 } },
+        vertexShader: 'attribute float u; attribute float side; varying float vU; varying float vS; void main(){ vU = u; vS = side; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `uniform vec3 color; uniform float head, fade, halo, base; varying float vU; varying float vS;
+            void main(){ float d = head - vU; float across = 1.0 - abs(vS);
+                float core = halo > 0.5 ? across * across * 0.55 : smoothstep(0.0, 0.55, across);
+                if (d < 0.0) { if (base <= 0.0) discard; gl_FragColor = vec4(color * 0.45, core * base * fade); return; }
+                float g = exp(-d * 9.0);
+                vec3 c = mix(color, vec3(2.2, 2.1, 1.9), g * (1.0 - halo));
+                gl_FragColor = vec4(c * (0.8 + 1.6 * g), core * (0.55 + 0.45 * g) * fade); }`,
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    });
+}
+/** The closing pulse: one soft ring of light expanding across the floor rectangle (uv space, aspect-corrected). */
+function pulseMaterial(aspect: number): THREE.ShaderMaterial {
+    return new THREE.ShaderMaterial({
+        uniforms: { color: { value: new THREE.Color(MAGIC_WARM_SOFT).multiplyScalar(1.6) }, r: { value: 0 }, fade: { value: 0 }, aspect: { value: aspect } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `uniform vec3 color; uniform float r, fade, aspect; varying vec2 vUv;
+            void main(){ vec2 q = (vUv - 0.5) * vec2(aspect, 1.0); float d = length(q) / (0.5 * length(vec2(aspect, 1.0)));
+                float ring = exp(-pow((d - r) * 7.0, 2.0)); float inner = smoothstep(r, 0.0, d) * 0.18;
+                vec2 e = abs(vUv - 0.5) * 2.0; float edge = 1.0 - smoothstep(0.92, 1.0, max(e.x, e.y));
+                gl_FragColor = vec4(color, (ring * 0.62 + inner) * fade * edge); }`,
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
     });
 }
 /** Soft inner glow pad on the floor of a footprint. */
@@ -114,7 +152,7 @@ function padMaterial(): THREE.ShaderMaterial {
         uniforms: { color: { value: new THREE.Color(MAGIC_WARM) }, fade: { value: 0 } },
         vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
         fragmentShader: `uniform vec3 color; uniform float fade; varying vec2 vUv;
-            void main(){ vec2 q = abs(vUv - 0.5) * 2.0; float e = max(q.x, q.y); float a = (smoothstep(0.55, 1.0, e) * 0.22 + 0.035) * fade;
+            void main(){ vec2 q = abs(vUv - 0.5) * 2.0; float e = max(q.x, q.y); float a = (smoothstep(0.5, 1.0, e) * 0.34 + 0.05) * fade;
                 gl_FragColor = vec4(color, a); }`,
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
     });
@@ -125,11 +163,17 @@ function place(o: THREE.Object3D, e: WorldEntity): void { o.position.set(e.trans
 
 // ------------------------------------------------------------------ records
 
-interface PartState { node: THREE.Object3D; pos: THREE.Vector3; scale: THREE.Vector3; delay: number; rise: number }
-interface MatSwap { mesh: THREE.Mesh; original: THREE.Material | THREE.Material[]; clone: THREE.Material; set?: { color?: THREE.Color; emissive?: THREE.Color }; adopted?: boolean; base: { color?: THREE.Color; emissive?: THREE.Color; emissiveIntensity?: number; opacity: number; transparent: boolean } }
+/** How a part arrives: 'rise' grows up out of the floor (room walls), 'drop' falls in from above (desks, props),
+ *  'fade' only fades up in place (floors), 'label' stays hidden until the last 0.4 s. */
+type Motion = 'rise' | 'drop' | 'fade' | 'label';
+interface PartState { node: THREE.Object3D; pos: THREE.Vector3; scale: THREE.Vector3; delay: number; rise: number; motion: Motion }
+interface LabelFade { mat: THREE.Material; opacity: number; clone?: THREE.Material; owner?: THREE.Object3D }
+interface MatSwap { label?: boolean; mesh: THREE.Mesh; original: THREE.Material | THREE.Material[]; clone: THREE.Material; set?: { color?: THREE.Color; emissive?: THREE.Color }; adopted?: boolean; base: { color?: THREE.Color; emissive?: THREE.Color; emissiveIntensity?: number; opacity: number; transparent: boolean } }
 interface Creation {
     id: string; entity: WorldEntity; start: number; root?: THREE.Object3D; firstChild?: THREE.Object3D;
-    parts: PartState[]; swaps: MatSwap[]; fx: THREE.Group; seam?: THREE.ShaderMaterial; pad?: THREE.ShaderMaterial;
+    parts: PartState[]; swaps: MatSwap[]; fx: THREE.Group; seam?: THREE.ShaderMaterial; halo?: THREE.ShaderMaterial; pad?: THREE.ShaderMaterial;
+    pulse?: THREE.ShaderMaterial; order: number; floor0: number; labels: LabelFade[]; html: Array<{ el: HTMLElement; base: number }>;
+    shell?: { mat: THREE.ShaderMaterial; meshes: THREE.Mesh[] };
     motes?: { points: THREE.Points; from: Float32Array; to: Float32Array; phase: Float32Array };
     frames: number; seen: number[];
 }
@@ -151,10 +195,14 @@ export class WorldCreation {
     private armed = false;
     private record: Record<string, { p: number; frames: number; mode: 'animated' | 'instant'; seen: number[] }> = {};
     private fpsWindow = { frames: 0, t0: 0, last: 0 };
+    private readonly director?: CameraDirector;
+    /** Materialisations started by the current diff (desk two lands after desk one; the camera frames them all). */
+    private batch: Creation[] = [];
 
     constructor(private readonly host: CreationHost) {
         this.group.name = 'omo-world-magic-create';
         host.scene.add(this.group);
+        if (host.camera) this.director = new CameraDirector(host.camera, host.canvas);
     }
 
     /** A WorldStore change (dispatched by build mode right after it redrew the room). */
@@ -171,6 +219,7 @@ export class WorldCreation {
         if (this.ghosts.size) { this.breathe(nowMs); this.recheckGhosts(); busy = true; }
         if (this.creations.size) { this.stepCreations(nowMs); busy = true; }
         if (this.dissolves.length) { this.stepDissolves(nowMs); busy = true; }
+        if (this.director?.tick(nowMs)) { this.host.invalidate(); busy = true; }
         return busy;
     }
 
@@ -178,6 +227,7 @@ export class WorldCreation {
         for (const c of this.creations.values()) this.finish(c, false);
         for (const g of this.ghosts.values()) this.unghost(g);
         for (const d of this.dissolves) this.disposeFx(d.fx);
+        this.director?.dispose();
         this.creations.clear(); this.ghosts.clear(); this.dissolves = [];
         this.host.scene.remove(this.group); this.rim.dispose();
     }
@@ -195,7 +245,7 @@ export class WorldCreation {
             for (const [id, e] of next) {
                 const was = this.shown.get(id), wasGhost = this.ghosts.has(id);
                 if (isPending(id)) { if (!wasGhost && !this.sameAsBefore(e)) this.ghost(id); continue; }
-                if (wasGhost) { this.unghost(this.ghosts.get(id)!); this.ghosts.delete(id); this.materialise(e, now); }
+                if (wasGhost) { const g = this.ghosts.get(id)!; this.ghosts.delete(id); this.materialise(e, now, g); }
                 else if (!was && !this.sameAsBefore(e)) this.materialise(e, now);
             }
         } else {
@@ -203,6 +253,7 @@ export class WorldCreation {
             for (const [id, e] of next) if (isPending(id) && !this.ghosts.has(id) && !this.sameAsBefore(e)) this.ghost(id);
         }
         for (const id of [...this.ghosts.keys()]) if (!next.has(id) || !isPending(id)) { const g = this.ghosts.get(id)!; this.unghost(g); this.ghosts.delete(id); }
+        if (this.batch.length) { this.frame(this.batch, now); this.batch = []; }
         this.shown = next;
         this.armed = false;
         this.publish();
@@ -238,7 +289,7 @@ export class WorldCreation {
             if (node.userData.magicOverlay) return;
             if (mesh.isMesh && mesh.geometry?.getAttribute('normal')) {
                 const swap = swapMaterial(mesh); if (!swap) return;
-                const c = swap.clone as THREE.MeshStandardMaterial; c.transparent = true; c.opacity = swap.base.opacity * 0.16; c.depthWrite = false;
+                const c = swap.clone as THREE.MeshStandardMaterial; c.transparent = true; c.opacity = swap.base.opacity * GHOST_OPACITY; c.depthWrite = false;
                 g.swaps.push(swap);
                 const o = new THREE.Mesh(mesh.geometry, this.rimShared()); o.userData.magicOverlay = true; o.raycast = () => undefined; o.renderOrder = 9;
                 mesh.add(o); g.overlays.push(o);
@@ -275,15 +326,22 @@ export class WorldCreation {
 
     private instant(): boolean { return !magicOn() || prefersReducedMotion(); }
 
-    private materialise(entity: WorldEntity, now: number): void {
+    private materialise(entity: WorldEntity, now: number, ghost?: Ghost): void {
         this.cancelCreation(entity.id);
-        if (this.instant()) { this.record[entity.id] = { p: 1, frames: 0, mode: 'instant', seen: [1] }; this.host.chime?.('create'); return; }
+        if (this.instant()) { if (ghost) this.unghost(ghost); this.record[entity.id] = { p: 1, frames: 0, mode: 'instant', seen: [1] }; this.host.chime?.('create'); return; }
         const root = this.host.root(entity.id);
         const fx = new THREE.Group(); fx.name = `omo-magic-create-${entity.id}`; this.group.add(fx);
-        const c: Creation = { id: entity.id, entity, start: now, root, firstChild: root?.children[0], parts: [], swaps: [], fx, frames: 0, seen: [] };
+        const order = entity.kind === 'room' ? 0 : this.batch.filter(b => b.entity.kind !== 'room').length;
+        const c: Creation = { id: entity.id, entity, start: now, root, firstChild: root?.children[0], parts: [], swaps: [], fx, frames: 0, seen: [], order, floor0: ghost ? GHOST_OPACITY : 0, labels: [], html: [] };
+        // Hand the ghost over: its glowing rim stays exactly where and as bright as it was (a world-space copy that
+        // does not move with the parts), and drains while the solid parts grow into it. Never off-then-on.
+        if (ghost) { this.adoptShell(c, ghost); this.unghost(ghost); }
         if (root) this.captureParts(c, root);
+        this.captureHtmlLabels(c);
         this.buildSeam(c);
         this.buildMotes(c);
+        if (entity.kind === 'room') this.buildPulse(c);
+        this.batch.push(c);
         noRaycast(fx);
         this.creations.set(entity.id, c);
         this.record[entity.id] = { p: 0, frames: 0, mode: 'animated', seen: [0] };
@@ -299,30 +357,117 @@ export class WorldCreation {
         root.updateMatrixWorld(true);
         const measured = parts.map(node => { box.setFromObject(node); box.getSize(size); return { node, minY: Number.isFinite(box.min.y) ? box.min.y : 0, h: Number.isFinite(size.y) ? size.y : 0.5 }; });
         measured.sort((a, b) => a.minY - b.minY || b.h - a.h);
-        const n = measured.length;
-        c.parts = measured.map((m, i) => ({ node: m.node, pos: m.node.position.clone(), scale: m.node.scale.clone(), delay: SEQ.partsStart + (KIND_DELAY[c.entity.kind] ?? 0.5) + (n > 1 ? i / (n - 1) : 0) * SEQ.spread, rise: 0.18 + Math.min(0.6, m.h * 0.35) }));
+        const room = c.entity.kind === 'room';
+        const kindDelay = (KIND_DELAY[c.entity.kind] ?? 1.0) + c.order * ENTITY_STAGGER;
+        const solid = measured.filter(m => !isLabel(m.node));
+        const n = solid.length, drop = 0.9 + 0.25 * this.distanceScale(c.entity);
+        c.parts = measured.map(m => {
+            const base = { node: m.node, pos: m.node.position.clone(), scale: m.node.scale.clone() };
+            if (isLabel(m.node)) return { ...base, delay: CREATE_SECONDS - SEQ.label, rise: 0, motion: 'label' as Motion };
+            const i = solid.indexOf(m), f = n > 1 ? i / (n - 1) : 0;
+            if (room) {
+                const wall = m.node.name === 'omo-room-walls' || m.node.name === 'omo-room-lintels';
+                return { ...base, delay: wall ? 0.3 : kindDelay, rise: 0, motion: (wall ? 'rise' : 'fade') as Motion };
+            }
+            // Desks / screens / props drop in from above, lowest part first, a beat apart.
+            return { ...base, delay: kindDelay + f * 0.3, rise: drop * (0.7 + 0.3 * f), motion: 'drop' as Motion };
+        });
+        const labelNodes = new Set<THREE.Object3D>(c.parts.filter(p => p.motion === 'label').map(p => p.node));
         root.traverse(node => {
+            if (node.userData.magicOverlay) return;
+            let under = false; for (let q: THREE.Object3D | null = node; q && !under; q = q.parent) under = labelNodes.has(q);
+            if (under || (node as THREE.Sprite).isSprite) { this.captureLabel(c, node); return; }
             const mesh = node as THREE.Mesh;
-            if (!mesh.isMesh || node.userData.magicOverlay) return;
+            if (!mesh.isMesh) return;
             const swap = swapMaterial(mesh); if (!swap) return;
             (swap.clone as THREE.Material).transparent = true; c.swaps.push(swap);
         });
     }
 
+    /** A label (room title sprite, floor name plate, desk tag): hidden through the build, fades in over the last 0.4 s. */
+    private captureLabel(c: Creation, node: THREE.Object3D): void {
+        const m = node as THREE.Mesh | THREE.Sprite;
+        if (!(m as THREE.Mesh).isMesh && !(m as THREE.Sprite).isSprite) return;
+        const swap = swapMaterial(m as THREE.Mesh); if (!swap) return;
+        swap.clone.transparent = true; swap.clone.opacity = 0;
+        c.labels.push({ mat: swap.clone, opacity: swap.base.opacity }); c.swaps.push(swap); swap.label = true;
+    }
+
+    /** The HTML workstation tags of this entity (DOM buttons over the canvas). */
+    private captureHtmlLabels(c: Creation): void {
+        const host = this.host.canvas.parentElement; if (!host) return;
+        for (const el of Array.from(host.querySelectorAll<HTMLElement>('[data-workstation]'))) {
+            if (el.dataset.workstation !== c.id) continue;
+            const base = Number(getComputedStyle(el).opacity) || 1;
+            el.style.opacity = '0'; c.html.push({ el, base });
+        }
+    }
+
+    /** World-space copy of the ghost's rim shell: same geometry, same matrices, frozen breath (no brightening). */
+    private adoptShell(c: Creation, g: Ghost): void {
+        const mat = rimMaterial();
+        mat.uniforms.breath.value = this.rim.uniforms.breath.value; mat.uniforms.opacity.value = 1;
+        const meshes: THREE.Mesh[] = [];
+        for (const o of g.overlays) {
+            if (!o.parent) continue;
+            o.updateMatrixWorld(true);
+            const copy = new THREE.Mesh(o.geometry, mat);
+            copy.matrixAutoUpdate = false; copy.matrix.copy(o.matrixWorld); copy.matrixWorld.copy(o.matrixWorld); copy.matrixWorldAutoUpdate = false;
+            copy.renderOrder = 9; copy.userData.sharedGeometry = true; copy.raycast = () => undefined;
+            c.fx.add(copy); meshes.push(copy);
+        }
+        c.shell = { mat, meshes };
+    }
+
+    /** The overview camera leans toward the centre of everything this diff creates. */
+    private frame(batch: Creation[], now: number): void {
+        if (!this.director) return;
+        const box = new THREE.Box3(), p = new THREE.Vector3();
+        for (const c of batch) {
+            const fp = footprint(c.entity), cos = Math.cos(c.entity.transform.rotation), sin = Math.sin(c.entity.transform.rotation);
+            for (const [lx, lz] of [[-fp.width / 2, fp.offsetZ - fp.depth / 2], [fp.width / 2, fp.offsetZ + fp.depth / 2]]) {
+                box.expandByPoint(p.set(c.entity.transform.x + lx * cos + lz * sin, 0.7, c.entity.transform.z - lx * sin + lz * cos));
+            }
+        }
+        if (box.isEmpty()) return;
+        this.director.begin(box.getCenter(p), now, now + 1600);
+    }
+
     private buildSeam(c: Creation): void {
-        const fp = footprint(c.entity);
-        const seamMat = seamMaterial(), padMat = padMaterial();
-        const strip = new THREE.Mesh(seamGeometry(fp.width / 2, fp.offsetZ - fp.depth / 2, fp.offsetZ + fp.depth / 2, (c.entity.kind === 'room' ? 0.05 : 0.035) * this.distanceScale(c.entity)), seamMat);
-        strip.renderOrder = 8;
+        const fp = footprint(c.entity), px = this.worldPerPixel(c.entity);
+        const hw = fp.width / 2, z0 = fp.offsetZ - fp.depth / 2, z1 = fp.offsetZ + fp.depth / 2;
+        const seamMat = seamMaterial(), haloMat = seamMaterial(true), padMat = padMaterial();
+        const room = c.entity.kind === 'room';
+        if (c.floor0 > 0) seamMat.uniforms.base.value = 0.5; // the pending outline was there: it never blinks out
+        const strip = new THREE.Mesh(seamGeometry(hw, z0, z1, Math.max(0.05, (room ? SEAM_PX : SEAM_PX * 0.7) * px)), seamMat);
+        const halo = new THREE.Mesh(seamGeometry(hw, z0, z1, Math.max(0.2, (room ? HALO_PX : HALO_PX * 0.6) * px)), haloMat);
+        strip.renderOrder = 8; halo.renderOrder = 8;
         const pad = new THREE.Mesh(new THREE.PlaneGeometry(fp.width, fp.depth), padMat);
-        pad.rotation.x = -Math.PI / 2; pad.position.set(0, 0.01, fp.offsetZ); pad.renderOrder = 7;
-        const holder = new THREE.Group(); place(holder, c.entity); holder.add(pad, strip);
-        c.fx.add(holder); c.seam = seamMat; c.pad = padMat;
+        pad.rotation.x = -Math.PI / 2; pad.position.set(0, 0.07, fp.offsetZ); pad.renderOrder = 7;
+        const holder = new THREE.Group(); place(holder, c.entity); holder.add(pad, halo, strip);
+        c.fx.add(holder); c.seam = seamMat; c.halo = haloMat; c.pad = padMat;
+    }
+
+    /** The closing beat: one soft ring of light across the new floor as it settles. */
+    private buildPulse(c: Creation): void {
+        const fp = footprint(c.entity), mat = pulseMaterial(fp.width / Math.max(0.1, fp.depth));
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(fp.width, fp.depth), mat);
+        plane.rotation.x = -Math.PI / 2; plane.position.set(0, 0.085, fp.offsetZ); plane.renderOrder = 8;
+        const holder = new THREE.Group(); place(holder, c.entity); holder.add(plane); c.fx.add(holder); c.pulse = mat;
+    }
+
+    /** World units per CSS pixel at this entity, seen from the live camera (seam width is set in pixels). */
+    private worldPerPixel(entity: WorldEntity): number {
+        const cam = this.host.camera?.() as THREE.PerspectiveCamera | undefined, h = this.host.canvas.clientHeight || 600;
+        if (!cam || !cam.isPerspectiveCamera) return 0.02;
+        const at = new THREE.Vector3(entity.transform.x, 0, entity.transform.z), d = cam.position.distanceTo(at);
+        const sin = Math.max(0.3, Math.abs(cam.position.y) / Math.max(0.1, d)); // the floor is seen at a slant
+        return 2 * d * Math.tan(cam.fov * Math.PI / 360) / (cam.zoom * h) / Math.sqrt(sin);
     }
 
     private buildMotes(c: Creation): void {
         const fp = footprint(c.entity), dot = softDot();
-        const n = this.host.quality() === 'low' ? 10 : c.entity.kind === 'room' ? 46 : 30;
+        const n = this.host.quality() === 'low' ? 12 : c.entity.kind === 'room' ? 60 : 26;
         const from = new Float32Array(n * 3), to = new Float32Array(n * 3), phase = new Float32Array(n);
         const cos = Math.cos(c.entity.transform.rotation), sin = Math.sin(c.entity.transform.rotation);
         const top = c.entity.kind === 'room' ? 0.06 : fp.elevation + fp.height;
@@ -334,7 +479,7 @@ export class WorldCreation {
             from.set([wx(sx, sz), sy, wz(sx, sz)], i * 3); to.set([wx(lx, lz), ty, wz(lx, lz)], i * 3); phase[i] = Math.random();
         }
         const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(from.slice(), 3));
-        const mat = new THREE.PointsMaterial({ color: MAGIC_WARM_SOFT, size: 0.07 * this.distanceScale(c.entity), map: dot, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+        const mat = new THREE.PointsMaterial({ color: MAGIC_WARM_SOFT, size: 0.17 * this.distanceScale(c.entity), map: dot, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
         const points = new THREE.Points(geo, mat); points.frustumCulled = false; points.renderOrder = 12;
         c.fx.add(points); c.motes = { points, from, to, phase };
     }
@@ -362,26 +507,55 @@ export class WorldCreation {
         // The renderer rebuilt this entity mid-sequence (async CC0 model): animate the new parts from here.
         const root = this.host.root(c.id);
         if (root && (root !== c.root || root.children[0] !== c.firstChild)) {
-            this.restoreParts(c); c.root = root; c.firstChild = root.children[0]; c.parts = []; c.swaps = []; this.captureParts(c, root);
+            this.restoreParts(c); c.root = root; c.firstChild = root.children[0]; c.parts = []; c.swaps = []; c.labels = []; c.html = []; this.captureParts(c, root); this.captureHtmlLabels(c);
         }
+        const g0 = c.floor0;
         for (const part of c.parts) {
-            const k = clamp01((t - part.delay) / SEQ.part);
-            const e = easeOutBack(k, 1.45), o = easeOutCubic(k);
-            part.node.position.set(part.pos.x, part.pos.y + (e - 1) * part.rise, part.pos.z);
-            part.node.scale.set(part.scale.x * (0.9 + 0.1 * e), part.scale.y * Math.max(0.001, 0.55 + 0.45 * e), part.scale.z * (0.9 + 0.1 * e));
+            if (part.motion === 'label') continue;
+            if (part.motion === 'rise') {
+                // Walls grow up out of the floor: scale.y 0.02 -> 1 with a soft overshoot.
+                const k = clamp01((t - part.delay) / 0.95), e = easeOutBack(k, 1.6);
+                part.node.position.copy(part.pos);
+                part.node.scale.set(part.scale.x, part.scale.y * Math.max(0.02, e), part.scale.z);
+                part.node.userData.magicK = g0 + (1 - g0) * clamp01(k * 3);
+            } else if (part.motion === 'drop') {
+                const k = clamp01((t - part.delay) / SEQ.part), e = easeOutBack(k, 1.25);
+                part.node.position.set(part.pos.x, part.pos.y + (1 - e) * part.rise, part.pos.z);
+                const sq = k > 0 && k < 1 ? 1 - 0.06 * Math.sin(k * Math.PI) : 1; // a little stretch while falling
+                part.node.scale.set(part.scale.x * (2 - sq), part.scale.y * sq, part.scale.z * (2 - sq));
+                part.node.userData.magicK = k <= 0 ? 0 : clamp01(k * 2.2);
+            } else {
+                const k = clamp01((t - part.delay) / 0.6);
+                part.node.position.copy(part.pos); part.node.scale.copy(part.scale);
+                part.node.userData.magicK = g0 + (1 - g0) * easeOutCubic(k);
+            }
             refreeze(part.node);
-            part.node.userData.magicK = o;
         }
+        const lk = easeInOutCubic(clamp01((t - (CREATE_SECONDS - SEQ.label)) / SEQ.label));
         for (const s of c.swaps) {
+            if (s.label) { s.clone.opacity = s.base.opacity * lk; s.clone.visible = lk > 0.001; continue; }
             let node: THREE.Object3D | null = s.mesh, k = 1;
             while (node && node.userData.magicK === undefined) node = node.parent;
             if (node) k = node.userData.magicK as number;
             applyFade(s, k);
         }
-        if (c.seam && c.pad) {
-            c.seam.uniforms.head.value = 1.02 * easeInOutCubic(clamp01(t / SEQ.seam));
-            const out = clamp01((t - 0.75) / 0.5); c.seam.uniforms.fade.value = 1 - out;
+        for (const h of c.html) h.el.style.opacity = String(h.base * lk);
+        if (c.shell) {
+            // Holds the ghost's exact strength, then drains as this entity's solid parts arrive.
+            const begin = (KIND_DELAY[c.entity.kind] ?? 1) + c.order * ENTITY_STAGGER + SEQ.shellHold;
+            c.shell.mat.uniforms.opacity.value = 1 - easeInOutCubic(clamp01((t - begin) / SEQ.shellOut));
+        }
+        if (c.seam && c.pad && c.halo) {
+            const head = 1.02 * easeInOutCubic(clamp01(t / SEQ.seam));
+            const out = clamp01((t - SEQ.seamHold) / SEQ.seamOut);
+            c.seam.uniforms.head.value = head; c.halo.uniforms.head.value = head;
+            c.seam.uniforms.fade.value = 1 - out; c.halo.uniforms.fade.value = (1 - out) * (0.7 + 0.3 * Math.sin(t * 9));
             c.pad.uniforms.fade.value = Math.min(clamp01(t / 0.25), 1 - out);
+        }
+        if (c.pulse) {
+            const k = clamp01((t - SEQ.pulse) / SEQ.pulseLen);
+            c.pulse.uniforms.r.value = easeOutCubic(k) * 1.15;
+            c.pulse.uniforms.fade.value = k <= 0 || k >= 1 ? 0 : Math.sin(Math.PI * k) * (1 - 0.3 * k);
         }
         if (c.motes) {
             const pos = c.motes.points.geometry.getAttribute('position') as THREE.BufferAttribute, arr = pos.array as Float32Array;
@@ -395,7 +569,7 @@ export class WorldCreation {
             }
             pos.needsUpdate = true;
             const mt = t - SEQ.motesStart;
-            (c.motes.points.material as THREE.PointsMaterial).opacity = 0.85 * Math.min(clamp01(mt / 0.25), 1 - clamp01((mt - SEQ.motes + 0.3) / 0.3));
+            (c.motes.points.material as THREE.PointsMaterial).opacity = 0.95 * Math.min(clamp01(mt / 0.25), 1 - clamp01((mt - SEQ.motes + 0.3) / 0.3));
         }
         c.frames++;
         const rec = this.record[c.id]; rec.p = Number(p.toFixed(3)); rec.frames = c.frames;
@@ -407,9 +581,11 @@ export class WorldCreation {
     private restoreParts(c: Creation): void {
         for (const part of c.parts) { part.node.position.copy(part.pos); part.node.scale.copy(part.scale); delete part.node.userData.magicK; refreeze(part.node); }
         for (const s of c.swaps) restoreMaterial(s);
+        for (const h of c.html) h.el.style.opacity = '';
     }
     private finish(c: Creation, done: boolean): void {
         this.restoreParts(c);
+        this.batch = this.batch.filter(b => b !== c);
         this.disposeFx(c.fx);
         this.creations.delete(c.id);
         if (done) { const rec = this.record[c.id]; if (rec) { rec.p = 1; if (rec.seen[rec.seen.length - 1] !== 1) rec.seen.push(1); } }
@@ -462,7 +638,7 @@ export class WorldCreation {
     private disposeFx(fx: THREE.Group): void {
         this.group.remove(fx);
         fx.traverse(n => {
-            const m = n as THREE.Mesh; if (m.geometry) m.geometry.dispose();
+            const m = n as THREE.Mesh; if (m.geometry && !m.userData.sharedGeometry) m.geometry.dispose();
             const mat = m.material as THREE.Material | undefined; if (mat && mat !== this.rim) mat.dispose();
         });
     }
@@ -500,8 +676,11 @@ function applyFade(s: MatSwap, k: number): void {
     // The room changed this material since our last write (a lamp status): adopt it as the new base.
     if (s.set?.color && c.color && !c.color.equals(s.set.color)) { s.base.color = c.color.clone(); s.adopted = true; }
     if (s.set?.emissive && c.emissive && !c.emissive.equals(s.set.emissive)) { s.base.emissive = c.emissive.clone(); s.adopted = true; }
-    c.opacity = s.base.opacity * clamp01(k * 1.4);
-    if (c.emissive && s.base.emissive) { c.emissive.copy(s.base.emissive).lerp(WARM, glow); c.emissiveIntensity = (s.base.emissiveIntensity ?? 1) + glow * 1.1; }
-    else if (c.color && s.base.color) c.color.copy(s.base.color).lerp(WARM, glow * 0.6);
+    // Straight from the ghost's opacity (k starts at GHOST_OPACITY on a handover) up to solid; a gentle warmth that
+    // only drains (never flashes brighter than the ghost was).
+    c.opacity = s.base.opacity * clamp01(k);
+    c.depthWrite = k > 0.7;
+    if (c.emissive && s.base.emissive) { c.emissive.copy(s.base.emissive).lerp(WARM, glow * 0.55); c.emissiveIntensity = (s.base.emissiveIntensity ?? 1) + glow * 0.45; }
+    else if (c.color && s.base.color) c.color.copy(s.base.color).lerp(WARM, glow * 0.35);
     s.set = { color: c.color?.clone(), emissive: c.emissive?.clone() };
 }
