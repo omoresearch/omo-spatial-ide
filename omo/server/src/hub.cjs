@@ -9,6 +9,7 @@ const { applyBatch } = require('./world-guard.cjs');
 const { issueInvite } = require('./store.cjs');
 const { PROTOCOL_VERSION, LIMITS, MIN_ROLE, parseClient } = require('./protocol.cjs');
 const { Buckets } = require('./rate.cjs');
+const { RoomCodeTable } = require('../vendor/room-code.cjs'); // promise:share: short room codes for invites
 
 const CLOSE = Object.freeze({ normal: 1000, policy: 1008, tooBig: 1009, auth: 4001, forbidden: 4003, replaced: 4009, rate: 4029, full: 4030, removed: 4040, shutdown: 1001 });
 
@@ -27,6 +28,8 @@ class Hub {
         this.rooms = new Map();     // roomId -> live room { rec, conns: Map<memberId, conn>, chat: [], agents: Map, saveTimer }
         this.authCache = new Map(); // sha256(token) -> { roomId, memberId, tokenHash }
         this.scrypt = new Semaphore(4);
+        // promise:share — short codes ('MARS-4827') -> the signed invite. Memory only; an entry lives exactly as long as its invite.
+        this.codes = new RoomCodeTable(n => crypto.randomInt(n));
         this.rate = {
             pose: new Buckets({ capacity: 40, perSecond: 20 }),
             chat: new Buckets({ capacity: P.CHAT_RATE_COUNT, perSecond: P.CHAT_RATE_COUNT / (P.CHAT_RATE_WINDOW_MS / 1000) }),
@@ -78,6 +81,12 @@ class Hub {
     }
     nameTaken(r, name, exceptId) { const k = name.toLowerCase(); return Object.values(r.rec.members).some(m => m.id !== exceptId && m.name.toLowerCase() === k); }
 
+    /**
+     * promise:share — what a typed room code stands for: { ok, value: { token, roomId, invite } } or { ok: false, message }.
+     * Throws only for a malformed code (readable message).
+     */
+    lookupCode(code) { return this.codes.lookup(code); }
+
     /** Redeem a signed, expiring, single-use invite. Returns the new member's token (shown once). */
     async redeemInvite(inviteToken, rawName) {
         const name = U.displayName(rawName);
@@ -100,6 +109,7 @@ class Hub {
         this.saveNow(r);
         try { this.data.writeInviteRecord(r.rec.id, { ...record, usedAt: now, usedBy: memberId }); } catch (e) { this.log('invite record update failed', e.message); }
         this.data.audit({ event: 'invite-used', room: r.rec.id, invite: payload.i, member: memberId, role: payload.role });
+        this.codes.removeWhere(v => v.roomId === r.rec.id && v.invite === payload.i); // promise:share: a used invite's code is gone too
         this.broadcast(r, { type: 'member-added', member: this.publicMember(r, r.rec.members[memberId]) });
         return { roomId: r.rec.id, roomName: r.rec.name, memberId, role: payload.role, name, token: U.formatToken(r.rec.id, memberId, secret) };
     }
@@ -258,7 +268,9 @@ class Hub {
             case 'invite-create': {
                 if (this.limited(conn, 'admin', m.id)) return;
                 const out = issueInvite(this.data, r.rec, { role: m.role, ttlMs: m.ttlMs, note: m.note, createdBy: member.id, publicUrl: this.publicUrl });
-                this.reply(conn, m.id, { invite: out.record, token: out.token, link: out.link });
+                // promise:share: a short room code for the same invite (same expiry, single use). The code holds no token.
+                const code = this.codes.issue({ token: out.token, roomId: r.rec.id, invite: out.record.id }, out.record.expiresAt);
+                this.reply(conn, m.id, { invite: out.record, token: out.token, link: out.link, code });
                 return;
             }
             case 'invite-list': {
@@ -272,6 +284,7 @@ class Hub {
                 const rec = this.data.readInviteRecords(r.rec.id).find(x => x.id === m.invite);
                 if (!rec) { this.fail(conn, m.id, 'No such invite.'); return; }
                 r.rec.revokedInvites[m.invite] = { at: Date.now(), by: member.id };
+                this.codes.removeWhere(v => v.roomId === r.rec.id && v.invite === m.invite); // promise:share
                 this.saveNow(r);
                 this.data.writeInviteRecord(r.rec.id, { ...rec, revokedAt: Date.now() });
                 this.data.audit({ event: 'invite-revoked', room: r.rec.id, invite: m.invite, by: member.id });

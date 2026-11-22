@@ -5,6 +5,11 @@ Status: client side built. Needs the mp-server lane's room server to go live.
 ## What it does
 
 - Join a remote room: paste an invite link. Host a room: server URL + owner token + room code.
+- Room codes (promise:share): "Create invite link" also shows a short code like `MARS-4827` (4 letters + 4 digits;
+  never I, L, O, 0 or 1). "Join with a code" takes the code + the room server address. The code is only
+  randomness: the server keeps a memory table code -> signed invite, with the invite's own expiry; the code is
+  removed when the invite is used or revoked. A wrong, used or expired code gives a readable error. Codes are
+  redacted from the frame trace. Common code: `extension/src/common/room-code.ts` (vendored to the server).
 - The IDE backend connects out over WSS (Node 22+ global WebSocket). The browser never holds a token.
 - Avatars, HUD, chat, emotes, @mentions and voice work the same in a local room and a remote room.
 - The shared world (WorldSpec) is read and changed through the server with `baseRevision`.

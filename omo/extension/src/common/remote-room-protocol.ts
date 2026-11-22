@@ -65,6 +65,8 @@ export type RemoteWorldResult =
 export interface OmoRemoteRoomService {
     // --- connection ---
     joinInvite(link: string, join: RemoteJoinRequest): Promise<RemoteRoomStatus>;
+    /** promise:share — join with a short room code ('MARS-4827') on a room server. */
+    joinCode(server: string, code: string, join: RemoteJoinRequest): Promise<RemoteRoomStatus>;
     host(input: RemoteHostRequest, join: RemoteJoinRequest): Promise<RemoteRoomStatus>;
     /** Rejoin a saved room with its stored member token. */
     rejoin(server: string, roomId: string, join: RemoteJoinRequest): Promise<RemoteRoomStatus>;
@@ -77,7 +79,7 @@ export interface OmoRemoteRoomService {
     /** Delete the stored member token for one room. */
     forget(server: string, roomId: string): Promise<void>;
     /** Owner only. `role` (t3:mp2): what the invited person may do; default member. */
-    createInvite(options?: { ttlMinutes?: number; maxUses?: number; role?: RoomInviteRole }): Promise<{ link: string; expiresAt: number; role?: RoomInviteRole }>;
+    createInvite(options?: { ttlMinutes?: number; maxUses?: number; role?: RoomInviteRole }): Promise<{ link: string; expiresAt: number; role?: RoomInviteRole; code?: string }>;
     /** t3:mp2 — owner only: change another member's role (viewer, member, builder). */
     setMemberRole(memberId: string, role: RoomInviteRole): Promise<void>;
     // --- presence, voice, chat: the same contract as OmoPresenceService ---

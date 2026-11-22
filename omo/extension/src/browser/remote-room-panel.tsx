@@ -43,6 +43,8 @@ export function RemoteRoomPanel(props: { controller: RemoteRoomController; view:
     const [tab, setTab] = React.useState<'join' | 'host'>('join');
     const [name, setName] = React.useState('Builder');
     const [link, setLink] = React.useState('');
+    const [code, setCode] = React.useState(''); // promise:share
+    const [codeServer, setCodeServer] = React.useState(() => { try { return window.localStorage.getItem('omo.roomServer') ?? ''; } catch { return ''; } });
     const [server, setServer] = React.useState('');
     const [ownerToken, setOwnerToken] = React.useState('');
     const [roomId, setRoomId] = React.useState('');
@@ -75,6 +77,7 @@ export function RemoteRoomPanel(props: { controller: RemoteRoomController; view:
                     <button type="button" data-testid="remote-room-invite" onClick={() => void controller.createInvite(inviteRole)}>Create invite link</button></>}
                 <button type="button" data-testid="remote-room-leave" onClick={() => controller.leave()}>Leave room</button>
             </div>
+            {view.invite?.code && <p className="omo-room-code" data-testid="remote-room-code-out">Room code <b data-testid="remote-room-code-value">{view.invite.code}</b> · works once · same expiry as the link. Others type it under “Join with a code” with this server: <code>{s.server}</code></p>}
             {view.invite && <label className="omo-field">Invite link{view.invite.role ? ` for a ${view.invite.role}` : ''} · works once · valid until {new Date(view.invite.expiresAt).toLocaleString()}
                 <input readOnly data-testid="remote-room-invite-link" value={view.invite.link} onFocus={e => e.currentTarget.select()} /></label>}
             <small>Shared: the room, avatars, chat, voice and the world layout. Not shared: your terminals and agents stay on this computer.</small>
@@ -87,7 +90,14 @@ export function RemoteRoomPanel(props: { controller: RemoteRoomController; view:
             {tab === 'join' ? <form onSubmit={e => { e.preventDefault(); void controller.joinInvite(link, name); }}>
                 <label className="omo-field">Invite link<input data-testid="remote-room-link" placeholder="https://rooms.example.com/omo-room/join/our-room#invite=…" value={link} onChange={e => setLink(e.target.value)} autoComplete="off" spellCheck={false} /></label>
                 <button type="submit" className="omo-primary" data-testid="remote-room-join" disabled={busy || !link.trim() || !name.trim()}>{busy ? 'Connecting…' : 'Join room'}</button>
-            </form> : <form onSubmit={e => { e.preventDefault(); void controller.hostRoom({ server, ownerToken, roomId, seedCurrent: seed }, name).then(() => setOwnerToken('')); }}>
+            </form> : null}
+            {tab === 'join' && <form data-testid="remote-room-code-form" onSubmit={e => { e.preventDefault(); try { window.localStorage.setItem('omo.roomServer', codeServer.trim()); } catch { /* private mode */ } void controller.joinCode(codeServer, code, name); }}>
+                <strong className="omo-remote-or">Join with a code</strong>
+                <label className="omo-field">Room code<input data-testid="remote-room-code-input" placeholder="MARS-4827" maxLength={12} value={code} onChange={e => setCode(e.target.value.toUpperCase())} autoComplete="off" spellCheck={false} /></label>
+                <label className="omo-field">Room server<input data-testid="remote-room-code-server" placeholder="https://rooms.example.com" value={codeServer} onChange={e => setCodeServer(e.target.value)} spellCheck={false} /></label>
+                <button type="submit" className="omo-primary" data-testid="remote-room-code-join" disabled={busy || !code.trim() || !name.trim()}>{busy ? 'Connecting…' : 'Join with code'}</button>
+            </form>}
+            {tab === 'host' && <form onSubmit={e => { e.preventDefault(); try { window.localStorage.setItem('omo.roomServer', server.trim()); } catch { /* private mode */ } void controller.hostRoom({ server, ownerToken, roomId, seedCurrent: seed }, name).then(() => setOwnerToken('')); }}>
                 <label className="omo-field">Room server<input data-testid="remote-room-server" placeholder="https://rooms.example.com" value={server} onChange={e => setServer(e.target.value)} spellCheck={false} /></label>
                 <label className="omo-field">Owner key<input type="password" data-testid="remote-room-owner-token" placeholder="omo1.…" value={ownerToken} onChange={e => setOwnerToken(e.target.value)} autoComplete="off" /></label>
                 <label className="omo-field">Room code (optional · read from the key)<input data-testid="remote-room-code" placeholder="our-room" maxLength={32} value={roomId} onChange={e => setRoomId(e.target.value.toLowerCase())} /></label>

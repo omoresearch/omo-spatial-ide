@@ -31,6 +31,7 @@
  *    from `world-model.ts` and rejects stale `baseRevision` with code `conflict`.
  *  - No op, chat line or signal ever starts an agent or types into a terminal.
  */
+import { isRoomCode } from './room-code'; // promise:share
 import type { PlayerPose } from './player-state';
 import type { WorldOp, WorldSpec } from './world-model';
 import { validateWorld, WORLD_MAX_BYTES } from './world-model';
@@ -144,7 +145,9 @@ export interface RemoteRoomMember extends RoomMember {
 export type RoomAuth =
     | { kind: 'invite'; roomId: string; invite: string }
     | { kind: 'member'; roomId: string; token: string }
-    | { kind: 'owner'; roomId: string; ownerToken: string; roomName?: string; seedWorld?: WorldSpec };
+    | { kind: 'owner'; roomId: string; ownerToken: string; roomName?: string; seedWorld?: WorldSpec }
+    /** promise:share — a short room code ('MARS-4827'). The server maps it to its signed invite; `roomId` is learnt from `welcome`. */
+    | { kind: 'code'; roomId?: undefined; code: string };
 
 export type RoomErrorCode =
     | 'bad-frame'      // shape/size/JSON error
@@ -232,7 +235,7 @@ export interface SignalPushFrame { t: 'signal'; envelope: VoiceSignalEnvelope }
 /** One member's agent summaries changed. */
 export interface AgentsPushFrame { t: 'agents'; memberId: string; agents: AgentStatusSummary[] }
 /** Owner-only reply: the invite link to share. */
-export interface InviteFrame { t: 'invite'; rid: string; link: string; expiresAt: number; maxUses?: number; role?: RoomInviteRole }
+export interface InviteFrame { t: 'invite'; rid: string; link: string; expiresAt: number; maxUses?: number; role?: RoomInviteRole; /** promise:share — short room code for the same invite. */ code?: string }
 /** t3:mp2 — reply to member-role. */
 export interface RoleAckFrame { t: 'role-ack'; rid: string; member: string; role: RoomInviteRole }
 export interface PongFrame { t: 'pong'; at: number; serverTime: number }
@@ -358,6 +361,7 @@ function chatMessage(input: unknown): ChatMessage {
     return out;
 }
 function auth(input: unknown): RoomAuth {
+    if (isObj(input) && input.kind === 'code') { if (!isRoomCode(input.code)) throw new Error('Invalid room code.'); return { kind: 'code', code: input.code }; } // promise:share
     if (!isObj(input) || typeof input.roomId !== 'string' || !ROOM_ID_RE.test(input.roomId)) throw new Error('Invalid room code.');
     switch (input.kind) {
         case 'invite': if (typeof input.invite !== 'string' || !ROOM_SECRET_RE.test(input.invite)) throw new Error('Invalid invite code.'); return { kind: 'invite', roomId: input.roomId, invite: input.invite };
@@ -462,7 +466,7 @@ export function parseServerFrame(raw: unknown): RoomServerFrame | undefined {
         }
         case 'agents': if (typeof f.memberId !== 'string' || !ROOM_MEMBER_ID_RE.test(f.memberId)) throw new Error('Invalid agents push.'); return { t: 'agents', memberId: f.memberId, agents: agentSummaries(f.agents) };
         case 'invite': if (typeof f.link !== 'string' || f.link.length > 2048 || !time(f.expiresAt)) throw new Error('Invalid invite.');
-            return { t: 'invite', rid: needRid(f.rid), link: f.link, expiresAt: f.expiresAt, ...(int(f.maxUses, 1, 100) ? { maxUses: f.maxUses } : {}), ...((ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role) ? { role: f.role as RoomInviteRole } : {}) };
+            return { t: 'invite', rid: needRid(f.rid), link: f.link, expiresAt: f.expiresAt, ...(int(f.maxUses, 1, 100) ? { maxUses: f.maxUses } : {}), ...((ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role) ? { role: f.role as RoomInviteRole } : {}), ...(isRoomCode(f.code) ? { code: f.code } : {}) };
         case 'role-ack':
             if (typeof f.member !== 'string' || !ROOM_MEMBER_ID_RE.test(f.member) || !(ROOM_INVITE_ROLES as readonly unknown[]).includes(f.role)) throw new Error('Invalid role reply.');
             return { t: 'role-ack', rid: needRid(f.rid), member: f.member, role: f.role as RoomInviteRole };

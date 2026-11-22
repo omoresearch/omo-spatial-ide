@@ -6,6 +6,7 @@
  * Safety: member tokens live only in RemoteRoomTokenStore (config dir, 0600). Owner tokens are
  * used for one handshake and dropped. Nothing here reads or writes terminals or starts agents.
  */
+import { normaliseRoomCode } from '../common/room-code'; // promise:share
 import { randomUUID } from 'crypto';
 import type { PlayerPose } from '../common/player-state';
 import { PLAYER_HOME } from '../common/player-state';
@@ -125,6 +126,14 @@ export class RemoteRoomClient {
         return this.start({ server: invite.server, socketUrl: invite.socketUrl, roomId: invite.roomId, join: clean, auth, memberId: saved?.memberId });
     }
 
+    /** promise:share — a short room code. The room is learnt from `welcome`; the member token is stored like an invite join. */
+    async joinCode(serverUrl: string, rawCode: string, join: RemoteJoinRequest): Promise<RemoteRoomStatus> {
+        if (!(serverUrl ?? '').trim()) throw new Error('Type the room server address too, like https://rooms.example.com.');
+        const server = roomServerOrigin(serverUrl);
+        const code = normaliseRoomCode(rawCode);
+        return this.start({ server, socketUrl: roomSocketUrl(server), roomId: '', join: this.cleanJoin(join), auth: { kind: 'code', code } });
+    }
+
     async host(input: RemoteHostRequest, join: RemoteJoinRequest): Promise<RemoteRoomStatus> {
         const server = roomServerOrigin(input.server);
         if (!ROOM_ID_RE.test(input.roomId)) throw new Error('Room code must be 3–32 lowercase letters, numbers or hyphens.');
@@ -180,11 +189,11 @@ export class RemoteRoomClient {
         await this.options.store.remove(server, roomId);
     }
 
-    async createInvite(options: { ttlMinutes?: number; maxUses?: number; role?: RoomInviteRole } = {}): Promise<{ link: string; expiresAt: number; role?: RoomInviteRole }> {
+    async createInvite(options: { ttlMinutes?: number; maxUses?: number; role?: RoomInviteRole } = {}): Promise<{ link: string; expiresAt: number; role?: RoomInviteRole; code?: string }> {
         if (this.role !== 'owner') throw new Error('Only the room owner can create invite links.');
         const reply = await this.request({ t: 'invite-create', rid: this.rid(), ...options });
         if (reply.t !== 'invite') throw new Error('The room server did not return an invite.');
-        return { link: reply.link, expiresAt: reply.expiresAt, ...(reply.role ? { role: reply.role } : {}) };
+        return { link: reply.link, expiresAt: reply.expiresAt, ...(reply.role ? { role: reply.role } : {}), ...(reply.code ? { code: reply.code } : {}) };
     }
     /** t3:mp2 — owner only: change another member's role. */
     async setMemberRole(memberId: string, role: RoomInviteRole): Promise<void> {
@@ -362,6 +371,7 @@ export class RemoteRoomClient {
                 try { frame = parseServerFrame(event.data); } catch (error) { this.log(`remote room: dropped bad frame: ${String(error)}`); return; }
                 if (!frame) return;
                 if (frame.t === 'welcome') {
+                    if (target.auth.kind === 'code') target.roomId = frame.roomId; // promise:share: the code named the room
                     if (!this.options.store.claim(target.server, target.roomId, frame.memberId, this.claimId)) {
                         // Another tab of this IDE is already this member; joining would kick it out.
                         this.phase = 'failed'; this.error = 'Another tab of this IDE is already in this room as you. Use a new invite link for a second person.';
@@ -509,6 +519,7 @@ export function remoteRoomConnection(store: RemoteRoomTokenStore, options: Omit<
     const client = new RemoteRoomClient({ ...options, store });
     return {
         joinInvite: (link, join) => client.joinInvite(link, join),
+        joinCode: (server, code, join) => client.joinCode(server, code, join), // promise:share
         host: (input, join) => client.host(input, join),
         rejoin: (server, roomId, join) => client.rejoin(server, roomId, join),
         reconnectNow: () => client.reconnectNow(),

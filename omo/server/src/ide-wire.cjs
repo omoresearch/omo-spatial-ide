@@ -26,7 +26,7 @@ const IDE_ROLES = ['viewer', 'member', 'builder', 'owner'];
 const ideRole = role => (IDE_ROLES.includes(role) ? role : 'viewer');
 const INVITE_ROLES = ['viewer', 'member', 'builder'];
 /** t3:mp2 — test-only frame trace: secrets are redacted before anything is written. */
-const redact = text => String(text).replace(/"(ownerToken|token|memberToken|invite)":"[^"]*"/g, '"$1":"<redacted>"').replace(/#invite=[^"\s]*/g, '#invite=<redacted>');
+const redact = text => String(text).replace(/"(ownerToken|token|memberToken|invite|code)":"[^"]*"/g, '"$1":"<redacted>"').replace(/#invite=[^"\s]*/g, '#invite=<redacted>');
 
 /** Invite link the IDE accepts: <origin>/omo-room/join/<roomId>#invite=<code> (code in the fragment). */
 function ideInviteLink(origin, roomId, token) { return `${origin.replace(/\/+$/, '')}${IDE_INVITE_PATH}${encodeURIComponent(roomId)}#invite=${encodeURIComponent(token)}`; }
@@ -90,7 +90,7 @@ function serveIdeSocket(ws, ctx) {
                     const kind = pending.get(m.id); pending.delete(m.id);
                     if (kind === 'world-get') raw({ t: 'world', rid: m.id, world: m.world });
                     else if (kind === 'world-ops') raw({ t: 'world-ack', rid: m.id, revision: m.revision });
-                    else if (kind === 'invite-create') raw({ t: 'invite', rid: m.id, link: ideInviteLink(origin, roomId, m.token), expiresAt: m.invite.expiresAt, role: m.invite.role });
+                    else if (kind === 'invite-create') raw({ t: 'invite', rid: m.id, link: ideInviteLink(origin, roomId, m.token), expiresAt: m.invite.expiresAt, role: m.invite.role, ...(m.code ? { code: m.code } : {}) }); // promise:share: + room code
                     else if (kind && kind.startsWith('member-role:')) { const [, member, role] = kind.split(':'); raw({ t: 'role-ack', rid: m.id, member, role }); }
                     return;
                 }
@@ -115,10 +115,21 @@ function serveIdeSocket(ws, ctx) {
         const a = f.auth || {};
         roomId = typeof a.roomId === 'string' ? a.roomId : '';
         const deny = (code, message) => { authFail.take(ip); raw({ t: 'error', rid: helloRid, code, message, fatal: true }); closeIde(4001, code); };
-        if (!U.ROOM_ID_RE.test(roomId)) return deny('auth', 'Unknown room.');
         if (!authFail.has(ip)) { raw({ t: 'error', rid: helloRid, code: 'rate', message: 'Too many failed sign-ins. Wait.', fatal: true }); return closeIde(4008, 'rate'); }
+        // promise:share — a short room code: the server's table names the room and the signed invite behind it.
+        let codeInvite;
+        if (a.kind === 'code') {
+            let found;
+            try { found = hub.lookupCode(String(a.code || '')); } catch (e) { return deny('auth', e.message); }
+            if (!found.ok) return deny(found.reason === 'expired' ? 'invite-expired' : 'auth', found.message);
+            roomId = found.value.roomId; codeInvite = found.value.token;
+        }
+        if (!U.ROOM_ID_RE.test(roomId)) return deny('auth', 'Unknown room.');
         let token;
-        if (a.kind === 'invite') {
+        if (codeInvite) {
+            try { token = (await hub.redeemInvite(codeInvite, `Guest ${crypto.randomBytes(2).toString('hex')}`)).token; }
+            catch (e) { return deny('invite-expired', /invalid, expired/.test(e.message) ? 'That room code has expired or was already used. Ask the host for a new one.' : e.message); }
+        } else if (a.kind === 'invite') {
             // The hub redeems with a name; the IDE sends its name in `join`, so redeem with a placeholder and rename on join.
             try { token = (await hub.redeemInvite(String(a.invite || ''), `Guest ${crypto.randomBytes(2).toString('hex')}`)).token; }
             catch (e) { return deny('invite-expired', e.message); }
