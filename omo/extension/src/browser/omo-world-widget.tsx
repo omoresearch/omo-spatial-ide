@@ -65,6 +65,7 @@ import { FocusOverlay } from './focus-overlay';
 import { ShortcutsLane } from './shortcuts-lane'; // omo keys6 lane
 import { OmoImmersiveService } from './immersive-service'; // omo immersive lane
 import { WorldTopBar, WorldView } from './world-topbar'; // world-ui: the one slim top bar
+import { ShapeMode } from './shape-mode'; // shape
 import { CommandPalette, PaletteCommand, isPaletteKey, PALETTE_TOGGLE_EVENT } from './command-palette'; // world-ui
 import { SettingsSheet, SheetSection } from './settings-sheet'; // world-ui
 import { Icon } from './icons'; // omo immersive lane
@@ -1104,7 +1105,7 @@ export class OmoWorldWidget extends ReactWidget {
                                 <Icon name="expand" size={14} />Immersive world <kbd>G</kbd></button></>}
                         {/* world-ui: the old 'Walk up and click this screen' banner is now a quiet crosshair hint. */}{this.room && !this.configuring && this.immersive.mode.active && this.consoleState.phase === 'idle' && !this.buildMode.active
                             && <div className="omo-crosshair-hint" data-testid="crosshair-hint" aria-hidden="true">Click a screen to use it</div>}
-                        {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* builder-ui */}
+                        {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* builder-ui */}{this.room && !this.configuring && <ShapeMode build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* shape */}
                         {/* t3:polish2 — the Admin button lives inside the 3D view (it was over the voice panel). */}{this.room && !this.configuring && this.admin && this.adminState && !this.adminState.open && <AdminButton open={false} onClick={() => { this.worldScene?.releaseTyping(); this.admin?.toggle(true); }}/>}
                     </SceneView>
                     {/* w2:admin (mount hook) */}{this.room && !this.configuring && this.admin && this.adminState && <>

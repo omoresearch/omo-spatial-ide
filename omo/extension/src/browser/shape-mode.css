@@ -1,0 +1,128 @@
+/* shape — Shape mode: one floating glass prompt, three chips, an anchored caption, a history strip.
+ * Dark glass, Inter, one accent (mint, only Keep and the focus ring), 15 px prompt text, 44 px prompt, 180 ms. */
+.omo-shape {
+    --sh-glass: rgba(16, 21, 29, .72);
+    --sh-glass-strong: rgba(16, 21, 29, .86);
+    --sh-line: rgba(255, 255, 255, .12);
+    --sh-line-soft: rgba(255, 255, 255, .07);
+    --sh-text: #f0f4f6; --sh-text-2: #b9c4cb; --sh-text-3: #8f9ba4;
+    --sh-accent: var(--omo-w-accent, #8fe3c4); --sh-accent-ink: var(--omo-w-accent-ink, #06231a);
+    --sh-shadow: 0 18px 48px rgba(0, 0, 0, .38), 0 2px 8px rgba(0, 0, 0, .22);
+    --sh-blur: blur(22px) saturate(160%);
+    --sh-ease: cubic-bezier(.2, .8, .2, 1);
+    position: absolute; inset: 0; z-index: 8; pointer-events: none;
+    font-family: Inter, 'Inter var', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--sh-text);
+    -webkit-font-smoothing: antialiased;
+}
+.omo-shape button { font: inherit; color: inherit; cursor: pointer; }
+.omo-shape button:focus-visible, .omo-shape input:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(143, 227, 196, .55); }
+
+/* ---- the dock: history strip, status, prompt, chips (bottom centre) ---- */
+.omo-shape-dock {
+    position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+    width: clamp(560px, 44vw, 640px); max-width: calc(100% - 32px);
+    display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none;
+    animation: omo-shape-rise 180ms var(--sh-ease) both;
+}
+.omo-shape-dock > * { pointer-events: auto; }
+@keyframes omo-shape-rise { from { opacity: 0; transform: translate(-50%, 10px) scale(.985); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+
+.omo-shape-prompt {
+    box-sizing: border-box; width: 100%; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px;
+    background: var(--sh-glass); border: 1px solid var(--sh-line); border-radius: 22px;
+    backdrop-filter: var(--sh-blur); -webkit-backdrop-filter: var(--sh-blur); box-shadow: var(--sh-shadow), inset 0 1px 0 rgba(255, 255, 255, .06);
+    transition: border-color 180ms var(--sh-ease), background 180ms var(--sh-ease);
+}
+.omo-shape-prompt:focus-within { border-color: rgba(255, 255, 255, .22); background: var(--sh-glass-strong); }
+.omo-shape-mark { display: grid; place-items: center; color: var(--sh-text-2); flex: 0 0 auto; }
+.omo-shape[data-busy="true"] .omo-shape-mark { color: var(--sh-accent); animation: omo-shape-pulse 1.2s ease-in-out infinite; }
+@keyframes omo-shape-pulse { 50% { opacity: .35; } }
+.omo-shape-prompt input {
+    flex: 1 1 auto; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--sh-text);
+    font: 400 15px/44px inherit; font-family: inherit; letter-spacing: -.005em; caret-color: var(--sh-accent);
+}
+.omo-shape-prompt input:focus-visible { box-shadow: none; }
+.omo-shape-prompt input::placeholder { color: var(--sh-text-3); }
+.omo-shape-pill {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 4px 0 10px; border-radius: 14px;
+    background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .16); font: 500 13px/1 inherit; font-family: inherit; color: var(--sh-text);
+    white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; animation: omo-shape-pop 180ms var(--sh-ease) both;
+}
+.omo-shape-pill button { width: 20px; height: 20px; border: 0; border-radius: 10px; background: transparent; color: var(--sh-text-3); font-size: 15px; line-height: 1; padding: 0; }
+.omo-shape-pill button:hover { background: rgba(255, 255, 255, .1); color: var(--sh-text); }
+@keyframes omo-shape-pop { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+.omo-shape-browse {
+    flex: 0 0 auto; height: 32px; padding: 0 12px; border: 0; border-radius: 16px; background: transparent; color: var(--sh-text-3) !important;
+    font: 500 13px/32px inherit; font-family: inherit; transition: color 180ms, background 180ms;
+}
+.omo-shape-browse:hover, .omo-shape-browse[aria-pressed="true"] { color: var(--sh-text) !important; background: rgba(255, 255, 255, .07); }
+
+.omo-shape-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; animation: omo-shape-fade 220ms 60ms var(--sh-ease) both; }
+.omo-shape-chip {
+    height: 30px; padding: 0 14px; border-radius: 15px; border: 1px solid var(--sh-line-soft); background: rgba(16, 21, 29, .5);
+    backdrop-filter: var(--sh-blur); -webkit-backdrop-filter: var(--sh-blur); color: var(--sh-text-2) !important; font: 400 13px/28px inherit; font-family: inherit;
+    transition: color 180ms var(--sh-ease), background 180ms var(--sh-ease), border-color 180ms var(--sh-ease);
+}
+.omo-shape-chip:hover { color: var(--sh-text) !important; background: rgba(30, 38, 50, .7); border-color: var(--sh-line); }
+@keyframes omo-shape-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.omo-shape-status {
+    display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 14px; background: rgba(16, 21, 29, .55);
+    backdrop-filter: var(--sh-blur); -webkit-backdrop-filter: var(--sh-blur); font: 400 13px/28px inherit; font-family: inherit; color: var(--sh-text-2);
+    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.omo-shape-status.is-note { color: #f3d3a0; }
+.omo-shape-spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .18); border-top-color: var(--sh-accent); animation: omo-shape-spin .8s linear infinite; }
+@keyframes omo-shape-spin { to { transform: rotate(360deg); } }
+
+/* ---- history strip: one dot per kept change ---- */
+.omo-shape-history { display: flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 10px; background: rgba(16, 21, 29, .4); backdrop-filter: var(--sh-blur); -webkit-backdrop-filter: var(--sh-blur); }
+.omo-shape-dot { position: relative; width: 16px; height: 16px; padding: 0; border: 0; background: transparent; display: grid; place-items: center; }
+.omo-shape-dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, .5); transition: transform 180ms var(--sh-ease), background 180ms; }
+.omo-shape-dot:last-child::before { background: var(--sh-text); }
+.omo-shape-dot:hover::before { transform: scale(1.5); background: var(--sh-text); }
+.omo-shape-tip {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(4px); opacity: 0; pointer-events: none; transition: opacity 160ms, transform 160ms var(--sh-ease);
+    width: max-content; max-width: 280px; padding: 8px 12px; border-radius: 10px; background: var(--sh-glass-strong); border: 1px solid var(--sh-line);
+    box-shadow: var(--sh-shadow); font: 400 13px/1.35 inherit; font-family: inherit; color: var(--sh-text); text-align: left; white-space: normal;
+}
+.omo-shape-tip small { display: block; margin-top: 2px; font-size: 12px; color: var(--sh-text-3); }
+.omo-shape-dot:hover .omo-shape-tip, .omo-shape-dot:focus-visible .omo-shape-tip { opacity: 1; transform: translateX(-50%); }
+
+/* ---- the caption card, anchored above the change (positioned each frame by shape-mode.tsx) ---- */
+.omo-shape-caption {
+    position: absolute; left: 0; top: 0; width: max-content; max-width: 360px; box-sizing: border-box; padding: 14px 16px 12px; pointer-events: auto;
+    background: var(--sh-glass-strong); border: 1px solid var(--sh-line); border-radius: 16px; box-shadow: var(--sh-shadow), inset 0 1px 0 rgba(255, 255, 255, .06);
+    backdrop-filter: var(--sh-blur); -webkit-backdrop-filter: var(--sh-blur); will-change: transform;
+    animation: omo-shape-fade 180ms var(--sh-ease) both;
+}
+.omo-shape-caption p { margin: 0 0 12px; font: 500 15px/1.4 inherit; font-family: inherit; letter-spacing: -.005em; color: var(--sh-text); }
+.omo-shape-caption-row { display: flex; align-items: center; gap: 8px; }
+.omo-shape-caption-row button { height: 32px; padding: 0 12px; border-radius: 10px; font: 500 13px/30px inherit; font-family: inherit; display: inline-flex; align-items: center; gap: 8px; transition: background 180ms, color 180ms; }
+.omo-shape-caption kbd { font: 500 11px/1 inherit; font-family: inherit; opacity: .6; letter-spacing: .02em; }
+.omo-shape-keep { border: 0; background: var(--sh-accent); color: var(--sh-accent-ink) !important; }
+.omo-shape-keep:hover { background: #a6ecd2; }
+.omo-shape-undo { border: 1px solid var(--sh-line); background: rgba(255, 255, 255, .06); color: var(--sh-text) !important; }
+.omo-shape-undo:hover { background: rgba(255, 255, 255, .12); }
+.omo-shape-details-toggle { margin-left: auto; border: 0; background: transparent; color: var(--sh-text-3) !important; padding: 0 4px !important; }
+.omo-shape-details-toggle:hover { color: var(--sh-text) !important; }
+.omo-shape-details { margin: 10px 0 0; padding: 10px 0 0 18px; border-top: 1px solid var(--sh-line-soft); font: 400 12px/1.5 inherit; font-family: inherit; color: var(--sh-text-2); max-height: 160px; overflow: auto; }
+.omo-shape-details li.is-note { color: #f3d3a0; list-style: '· '; }
+.omo-shape-caption-stem { position: absolute; left: 50%; bottom: -7px; width: 12px; height: 12px; margin-left: -6px; transform: rotate(45deg); background: var(--sh-glass-strong); border-right: 1px solid var(--sh-line); border-bottom: 1px solid var(--sh-line); }
+
+/* ---- the top-bar button ---- */
+.omo-topbar-shape { order: -1; display: inline-flex !important; align-items: center; gap: 6px; padding: 0 12px !important; margin: 0 2px; }
+.omo-topbar-shape.is-on { color: var(--omo-w-text, #ecf1f4) !important; background: rgba(255, 255, 255, .12) !important; }
+
+/* ---- the rest of the HUD steps back while shaping ---- */
+body.omo-shaping .omo-topbar-side > :not(.omo-topbar-shape), body.omo-shaping .omo-topbar-views,
+body.omo-shaping .omo-hud-layer, body.omo-shaping .omo-navigation-switch, body.omo-shaping .omo-scene-controls,
+body.omo-shaping .omo-presence-strip, body.omo-shaping .omo-runtime-strip { opacity: .3; transition: opacity 180ms var(--sh-ease, ease); }
+body.omo-shaping .omo-crosshair-hint, body.omo-shaping .omo-admin-toggle { display: none !important; }
+/* Shape is the main way to build: the editor chrome stays hidden until "Browse". */
+body.omo-shaping:not(.omo-shape-browse) .omo-wb,
+body.omo-shaping:not(.omo-shape-browse) .omo-build-topbar,
+body.omo-shaping:not(.omo-shape-browse) .omo-build-hint,
+body.omo-shaping:not(.omo-shape-browse) .omo-build-renderer-note { display: none !important; }
+body.omo-shaping.omo-shape-browse .omo-shape-dock { left: calc((100% - var(--omo-wb-w, 360px) - 24px) / 2); }
+@media (prefers-reduced-motion: reduce) { .omo-shape *, .omo-shape { animation: none !important; transition: none !important; } }
