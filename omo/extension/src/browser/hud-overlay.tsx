@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { createPortal } from '@theia/core/shared/react-dom';
+import { createPortal } from 'react-dom';
 import type { HudHub, HudView } from './hud-hub';
 import type { ChatState } from './chat-controller';
 import { ChatPanel } from './chat-panel';

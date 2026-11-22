@@ -2,7 +2,7 @@ import { starterTheme } from './starter-world'; // world-ui (g)
 import * as React from 'react';
 import { injectable, inject, postConstruct, optional } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
-import type { Message } from '@theia/core/shared/@lumino/messaging';
+import type { Message } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';

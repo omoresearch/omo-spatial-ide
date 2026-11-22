@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { createPortal } from '@theia/core/shared/react-dom';
+import { createPortal } from 'react-dom';
 import type { MonitorFrame, TerminalWorkstation } from './room-scene';
 import { MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { createPortal } from '@theia/core/shared/react-dom';
+import { createPortal } from 'react-dom';
 import type { TerminalWorkstation, Workstation } from './room-scene';
 import { currentStations, stationName } from './world-stations'; // w2:runtime
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';
