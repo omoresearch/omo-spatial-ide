@@ -15,6 +15,8 @@ const MAX_STATE_BYTES = 64 * 1024;
 
 export class OmoPagesStore implements OmoPagesService {
     private state?: PageState;
+    private written = '';
+    private writtenAt = 0;
     constructor(private readonly workspaceRoot: () => Promise<string | undefined>, private readonly now: () => number = Date.now) {}
 
     /** <workspace>/.omo/pages, created on first use; refuses a workspace that is not a real directory. */
@@ -44,10 +46,16 @@ export class OmoPagesStore implements OmoPagesService {
         const text = JSON.stringify(state ?? {});
         if (Buffer.byteLength(text) > MAX_STATE_BYTES || !state || !Array.isArray(state.desks)) throw new Error('The page state is not valid.');
         this.state = { ...state, at: Number(state.at) || this.now() };
+        // Disk only when a page folder exists (opening a room never creates .omo/pages), and only on a change
+        // or once a minute: the served state is the in-memory one.
+        const sig = JSON.stringify({ ...this.state, at: 0 }), now = this.now();
+        if (sig === this.written && now - this.writtenAt < 60_000) return;
         try {
-            const dir = await this.dir();
+            const dir = await this.dir(false);
+            if (!fs.existsSync(dir)) return;
             const file = path.join(dir, STATE_FILE), tmp = `${file}.${process.pid}.tmp`;
             fs.writeFileSync(tmp, JSON.stringify(this.state)); fs.renameSync(tmp, file);
+            this.written = sig; this.writtenAt = now;
         } catch { /* memory only: the dashboard still reads the live state from this server */ }
     }
 

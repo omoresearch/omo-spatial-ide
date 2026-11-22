@@ -7,7 +7,7 @@
  *   - landing: a simple landing page with the user's words.
  * Nothing here writes files: the backend page store does (node/omo-pages-store.ts).
  */
-import type { PageRequest } from './omo-agent';
+import { deskStatus, entityName, PageRequest, WorldSnapshot } from './omo-agent';
 
 export const PAGE_REFRESH_MS = 5000;
 export const PAGES_ROUTE = '/omo-pages';
@@ -110,4 +110,15 @@ export function renderPage(req: PageRequest, state: PageState, roomMap: string):
     if (req.template === 'dashboard') return dashboardPage(req, state);
     if (req.template === 'landing') return landingPage(req);
     return notesPage(req, roomMap, state.at);
+}
+
+/** The live state a dashboard shows, from the world snapshot (desk names, status, tabs, place). */
+export function pageStateFrom(snap: Pick<WorldSnapshot, 'world' | 'places' | 'runtime'>, at = Date.now()): PageState {
+    const desks: DashboardDesk[] = [];
+    for (const e of snap.world.entities) {
+        if (e.kind !== 'station') continue;
+        const live = snap.runtime.desks.find(d => d.id === e.id);
+        desks.push({ id: e.id, name: entityName(e), status: deskStatus(live), tabs: (live?.tabs.length ? live.tabs : e.station.tabs).map(t => t.name), where: snap.places.find(p => p.id === e.id)?.where ?? '' });
+    }
+    return { at, world: snap.world.name || 'Omo', desks, ...(snap.runtime.web ? { web: { title: snap.runtime.web.title, url: snap.runtime.web.url } } : {}) };
 }
