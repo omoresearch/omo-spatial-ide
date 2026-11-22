@@ -21,7 +21,7 @@ const {ROOT,CANVAS,openWorld,walkTo,clickStation,pause}=require('./world-test-dr
   server=spawn(process.execPath,[path.join(ROOT,'scripts/start.cjs'),'--workspace',project,'--port',String(port)],{cwd:ROOT,env:childEnv,detached:true,shell:false,stdio:['ignore',log,log]});fs.closeSync(log);let spawnError;server.on('error',error=>{spawnError=error;});
   let ready=false;for(let i=0;i<150;i++){if(spawnError)throw spawnError;if(server.exitCode!==null||server.signalCode!==null)throw new Error('Owned review app exited before readiness');try{if((await fetch(childEnv.OMO_URL,{signal:AbortSignal.timeout(500)})).ok){ready=true;break;}}catch{}await pause(200);}assert.ok(ready,'The owned review app must start');
   process.env.OMO_URL=childEnv.OMO_URL;w=await openWorld('git-review-owned');const p=w.page;
-  assert.ok((await p.$eval('.omo-footer',e=>e.textContent)).includes(project),'The actual app must use the owned nested project');
+  assert.ok((await p.$eval('.omo-footer',e=>e.dataset.projectPath||'')).includes(project),'The actual app must use the owned nested project');
   async function selectFile(){const handle=await p.evaluateHandle(name=>[...document.querySelectorAll('button[data-review-path]')].find(e=>e.getAttribute('data-review-path')===name),name);const button=handle.asElement();assert.ok(button,'The exact literal filename must be listed');await button.click();await handle.dispose();}
   assert.ok(await p.$('[data-testid="review-action"]'),'The real world has no change-review entry point');
   await walkTo(p,-4.8,-1.4);await p.waitForFunction(()=>JSON.parse(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.stationTargets||'{}').code?.visible);
