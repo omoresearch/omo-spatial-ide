@@ -174,24 +174,109 @@ export function findEntity(snap: Pick<WorldSnapshot, 'places' | 'world' | 'runti
 
 export interface OmoAnswer { text: string; /** the entity the answer is about: the UI beams to it */ target?: string }
 interface AnswerRule { re: RegExp; answer(m: RegExpExecArray, snap: WorldSnapshot): OmoAnswer }
-const near = (snap: WorldSnapshot, p: Place): string => {
-    const other = snap.places.filter(o => o.id !== p.id && o.kind !== 'decor').map(o => [Math.hypot(o.x - p.x, o.z - p.z), o] as const).sort((a, b) => a[0] - b[0])[0];
-    return other && other[0] < 2.6 ? `, next to ${other[1].name}` : '';
-};
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+// ---- plain words: a name you would say and a landmark you can see (fix 3) ------------------------------------
+
+const COUNT = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+const ORDINAL = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth'];
+const AGENT_WORD: Record<string, string> = { claude: 'Claude', codex: 'Codex', hermes: 'Hermes', dsh: 'dsh' };
+const KIND_DEFAULT: Record<string, string> = { 'web-wall': 'Web wall', 'monitor-wall': 'Monitor wall', 'review-screen': 'Code review' };
+/** The name you would say: "Claude's desk (Code · Claude)" for a desk with one agent, else its own name. */
+export function spokenName(snap: Pick<WorldSnapshot, 'world'>, e: WorldEntity): string {
+    const name = entityName(e);
+    if (e.kind === 'station') {
+        const agents = [...new Set(e.station.tabs.map(t => t.kind).filter(k => AGENT_WORD[k]))];
+        const twin = agents.length === 1 && snap.world.entities.some(o => o.id !== e.id && o.kind === 'station' && o.station.tabs.some(t => t.kind === agents[0]));
+        if (agents.length !== 1 || twin) return name;
+        const who = AGENT_WORD[agents[0]], spoken = `${who}${/s$/i.test(who) ? "'" : "'s"} desk`;
+        return norm(name) === norm(`${AGENT_WORD[agents[0]]} desk`) ? spoken : `${spoken} (${name})`;
+    }
+    if (KIND_DEFAULT[e.kind] === name) return `the ${name.toLowerCase()}`;
+    if (e.kind === 'decor' && !e.label) return `the ${name.toLowerCase()}`;
+    return name;
+}
+interface Frame { right: { x: number; z: number }; ahead: { x: number; z: number } }
+/** The way the desks face (most common rotation): left/right/ahead/behind are said as you sit at them. */
+function deskFrame(world: WorldSpec): Frame | undefined {
+    const desks = world.entities.filter(e => e.kind === 'station');
+    if (!desks.length) return undefined;
+    const counts = new Map<number, number>();
+    for (const d of desks) { const k = ((Math.round(d.transform.rotation / (Math.PI / 2)) % 4) + 4) % 4; counts.set(k, (counts.get(k) ?? 0) + 1); }
+    const k = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0], r = k * Math.PI / 2;
+    // rotation 0 faces -z (north); the right hand then points +x.
+    return { right: { x: Math.round(Math.cos(r)), z: Math.round(-Math.sin(r)) }, ahead: { x: Math.round(-Math.sin(r)), z: Math.round(-Math.cos(r)) } };
+}
+/** "the middle of the three desks", "the left one of the two desks", "the second from the left of the five desks". */
+function deskRank(world: WorldSpec, e: WorldEntity, f: Frame): string | undefined {
+    const all = world.entities.filter(o => o.kind === 'station');
+    if (all.length === 1) return 'the only desk';
+    const row = all.filter(o => Math.abs(o.transform.rotation - e.transform.rotation) < 0.1 && Math.abs((o.transform.x - e.transform.x) * f.ahead.x + (o.transform.z - e.transform.z) * f.ahead.z) < 1.5);
+    if (row.length < 2) return undefined;
+    row.sort((a, b) => (a.transform.x * f.right.x + a.transform.z * f.right.z) - (b.transform.x * f.right.x + b.transform.z * f.right.z));
+    const i = row.findIndex(o => o.id === e.id), n = row.length, of = `of the ${COUNT[n] ?? n} desks${row.length < all.length ? ' in that row' : ''}`;
+    if (i === 0) return `the left one ${of}`;
+    if (i === n - 1) return `the right one ${of}`;
+    if (n === 3) return `the middle ${of}`;
+    return i < n / 2 ? `the ${ORDINAL[i]} from the left ${of}` : `the ${ORDINAL[n - 1 - i]} from the right ${of}`;
+}
+/** The wall a wall thing hangs on, said from the desks: "the wall behind the desks", "the left wall", "the windows". */
+function wallWords(world: WorldSpec, side: Side, f: Frame | undefined): string {
+    if (isGlassSide(world, side)) return 'the windows';
+    if (!f) return `the ${side} wall`;
+    const out = { north: { x: 0, z: -1 }, south: { x: 0, z: 1 }, west: { x: -1, z: 0 }, east: { x: 1, z: 0 } }[side];
+    const a = out.x * f.ahead.x + out.z * f.ahead.z, r = out.x * f.right.x + out.z * f.right.z;
+    return a > 0.5 ? 'the wall the desks face' : a < -0.5 ? 'the wall behind the desks' : r > 0.5 ? 'the right-hand wall (seen from the desks)' : 'the left-hand wall (seen from the desks)';
+}
+/**
+ * Plain words for where a thing is, with a landmark you can see: a desk by its place in its row ("the middle of the
+ * three desks"), a screen by its wall ("on the wall behind the desks"), anything else by what it stands next to.
+ * Never a compass word or the world's name as if it were a place; a named room (when there are several) is said last.
+ */
+export function spokenPlace(snap: Pick<WorldSnapshot, 'world' | 'places'>, p: Place): { name: string; where: string } {
+    const world = snap.world, e = world.entities.find(x => x.id === p.id);
+    if (!e) return { name: p.name, where: 'here' };
+    const f = deskFrame(world), name = spokenName(snap, e);
+    const named = world.entities.filter(x => x.kind === 'room').length > 1 ? ` in ${p.room}` : '';
+    const nearest = snap.places.filter(o => o.id !== p.id && (o.kind === 'station' || o.kind === 'web-wall' || o.kind === 'monitor-wall'))
+        .map(o => [Math.hypot(o.x - p.x, o.z - p.z), o] as const).sort((a, b) => a[0] - b[0])[0];
+    const by = (max: number): string => {
+        if (!nearest || nearest[0] > max) return '';
+        const o = world.entities.find(x => x.id === nearest[1].id);
+        return o ? `, next to ${o.kind === 'station' ? spokenName(snap, o).replace(/ \(.*\)$/, '') : spokenName(snap, o)}` : '';
+    };
+    if (e.kind === 'station') {
+        const rank = f && deskRank(world, e, f);
+        if (rank) return { name, where: `${rank}${named}` };
+        return { name, where: `${by(4) ? by(4).replace(/^, /, '') : 'on its own'}${named}` };
+    }
+    if (WALL_KINDS.has(e.kind) && !world.shell.open) return { name, where: `on ${wallWords(world, wallSide(world, p), f).replace(/^the windows$/, 'the window side')}${by(2.6)}${named}` };
+    const W = world.shell.width / 2, D = world.shell.depth / 2;
+    const edge = world.shell.open ? undefined : ([['north', p.z + D], ['south', D - p.z], ['west', p.x + W], ['east', W - p.x]] as Array<[Side, number]>).sort((a, b) => a[1] - b[1])[0];
+    const near = by(2.6);
+    if (near) return { name, where: `${near.replace(/^, /, '')}${named}` };
+    if (edge && edge[1] < 1.6) {
+        const wall = wallWords(world, edge[0], f);
+        return { name, where: `${wall === 'the windows' ? 'by the windows' : `against ${wall}`}${named}` };
+    }
+    return { name, where: `in the middle of the room${named}` };
+}
+
 const ANSWERS: AnswerRule[] = [
     { re: /^(?:omo[, ]+)?(?:where(?:'s| is| are)|where\s+did\s+i\s+put|find|locate|show me)\s+(.+?)\s*\??$/i, answer: (m, snap) => {
         const p = findEntity(snap, m[1]);
         if (!p) return { text: `I can't find ${m[1].replace(/\?$/, '')} in this room.${/\bdesk\b/i.test(m[1]) ? ' Say “add a desk for Claude” to make one.' : ''}` };
-        return { text: `${cap(p.name)} is ${p.where}${near(snap, p)}.`, target: p.id };
+        const s = spokenPlace(snap, p);
+        return { text: `${cap(s.name)} is ${s.where}, highlighted.`, target: p.id };
     } },
     { re: /^(?:omo[, ]+)?what(?:'s| is)\s+(?:on|showing on|open on|playing on)\s+(.+?)\s*\??$/i, answer: (m, snap) => {
         const p = findEntity(snap, m[1]) ?? (/\bwall|screen|web\b/i.test(m[1]) ? snap.places.find(x => x.kind === 'web-wall') : undefined);
         if (!p) return { text: `I can't find ${m[1]} in this room.` };
         const e = snap.world.entities.find(x => x.id === p.id)!;
-        if (e.kind === 'web-wall') { const shows = webShows(e, snap.runtime); return { text: shows === 'no page open' ? `${cap(p.name)} has no page open.` : `${cap(p.name)} is ${shows}.`, target: p.id }; }
+        if (e.kind === 'web-wall') { const shows = webShows(e, snap.runtime), n = cap(spokenName(snap, e)); return { text: shows === 'no page open' ? `${n} has no page open.` : `${n} is ${shows}.`, target: p.id }; }
         if (e.kind === 'station') return { text: deskLine(snap, e), target: p.id };
-        return { text: `${cap(p.name)} is ${p.where}.`, target: p.id };
+        const s = spokenPlace(snap, p);
+        return { text: `${cap(s.name)} is ${s.where}, highlighted.`, target: p.id };
     } },
     { re: /^(?:omo[, ]+)?what(?:'s| is)\s+(?:running|happening|going on)\s+(?:on|at|in)\s+(.+?)\s*\??$/i, answer: (m, snap) => {
         const p = findEntity(snap, m[1]);

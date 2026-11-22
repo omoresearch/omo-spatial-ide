@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import type { RoomScene } from './room-scene';
 import type { WorldSpec } from '../common/world-model';
 import type { PlayerPose } from '../common/player-state';
-import { answerQuestion, findEntity, OmoAnswer, PageRequest, pageWallSpot, placePose, WallSpot, rememberPlace, RuntimeSnapshot, VisitedPlace, whereWasI, worldSnapshot, WorldSnapshot, agoWords, entityName } from '../common/omo-agent';
+import { answerQuestion, findEntity, spokenPlace, OmoAnswer, PageRequest, pageWallSpot, placePose, WallSpot, rememberPlace, RuntimeSnapshot, VisitedPlace, whereWasI, worldSnapshot, WorldSnapshot, agoWords, entityName } from '../common/omo-agent';
 import { renderPage, pageStateFrom, PAGES_ROUTE } from '../common/omo-pages';
 import { ambientHost } from './agent-avatars';
 import { sceneControls } from './focus-screen';
@@ -77,7 +77,8 @@ export class OmoAgent {
         if (!p) return `I can't find ${phrase} in this room.`;
         const ok = this.walkTo(p.id);
         if (ok) this.visit(p.id);
-        return ok ? `Walking to ${p.name} (${p.where}).` : `${p.name} is ${p.where}.`;
+        const s = spokenPlace(snap, p);
+        return ok ? `Walking to ${s.name}, ${s.where}.` : `${s.name.charAt(0).toUpperCase()}${s.name.slice(1)} is ${s.where}.`;
     }
     /** "where was I": back to the last screen you used (or the place before the one you stand at). */
     whereWasI(): string {

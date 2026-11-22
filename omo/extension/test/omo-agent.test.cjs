@@ -68,16 +68,16 @@ test('answers: where is the Claude desk / what is on the web wall / what is runn
   const snap = agent.worldSnapshot(lounge(), runtime);
   const a = agent.answerQuestion(snap, 'where is the Claude desk?');
   assert.equal(a.target, 'terminal');
-  assert.match(a.text, /^Claude desk is in the .* of Lounge.*\.$/);
+  assert.equal(a.text, "Claude's desk is the left one of the two desks, highlighted.");
   const b = agent.answerQuestion(snap, "what's on the web wall?");
   assert.equal(b.target, 'web');
-  assert.equal(b.text, 'Web wall is showing “Desk dashboard” (127.0.0.1:3755/omo-pages/desk-dashboard.html).');
+  assert.equal(b.text, 'The web wall is showing “Desk dashboard” (127.0.0.1:3755/omo-pages/desk-dashboard.html).');
   const c = agent.answerQuestion(snap, 'what is running on desk two');
   assert.equal(c.target, 'terminal-2');
   assert.equal(c.text, 'Desk two is running a plain shell; shell open.');
   const d = agent.answerQuestion(snap, 'where is the mirror');
   assert.equal(d.target, 'mirror');
-  assert.match(d.text, /^Mirror · Desk one is on the north wall of Lounge|^Mirror · Desk one is in the north-east corner of Lounge/);
+  assert.equal(d.text, 'Mirror · Desk one is on the wall the desks face, highlighted.');
   const e = agent.answerQuestion(snap, 'where is the piano?');
   assert.equal(e.target, undefined);
   assert.match(e.text, /can't find the piano/);
@@ -283,3 +283,31 @@ test('fix 2: a made page hangs on a solid wall (never the penthouse glass), clea
   assert.equal(agent.pageWallSpot({ ...w, shell: { ...w.shell, open: true } }), undefined);
 });
 
+test('fix 3: answers in plain words with a landmark you can see; never the world name as a place, never compass words', () => {
+  const templates = require2('../src/common/world-templates.ts');
+  const w = templates.instantiateTemplate('nyc-skyscraper', { name: 'promises' });
+  const snap = agent.worldSnapshot(w);
+  const say = q => agent.answerQuestion(snap, q).text;
+  assert.equal(say('where is the Claude desk'), "Claude's desk (Code · Claude) is the middle of the three desks, highlighted.");
+  assert.equal(say('where is the Hermes desk'), "Hermes' desk (Plan · Hermes) is the left one of the three desks, highlighted.");
+  assert.equal(say('where is the Codex desk'), "Codex's desk (Review · Codex) is the right one of the three desks, highlighted.");
+  assert.equal(say('where is the docs wall'), 'Docs wall is on the wall behind the desks, highlighted.');
+  assert.equal(say('where is the plant'), 'The plant is by the windows, highlighted.');
+  assert.equal(say('what is on the docs wall'), 'Docs wall has no page open.');
+  for (const q of ['where is the Claude desk', 'where is the Hermes desk', 'where is the docs wall', 'where is the plant', 'where is plant-2']) {
+    const t = say(q);
+    assert.doesNotMatch(t, /\bpromises\b/, `world name is not a place: ${t}`);
+    assert.doesNotMatch(t, /\b(north|south|east|west)\b/, `no compass words: ${t}`);
+    assert.match(t, /^[A-Z]/, `starts with a capital: ${t}`);
+  }
+  // Rooms in an open world: the room's own name is said last.
+  const open = { version: 2, name: 'campus', revision: 1, shell: { theme: 'station', width: 60, depth: 60, open: true }, entities: [
+    { id: 'a', kind: 'room', label: 'Studio', width: 10, depth: 8, transform: { x: 10, z: 0, rotation: 0 } },
+    { id: 'b', kind: 'room', label: 'Lab', width: 10, depth: 8, transform: { x: -10, z: 0, rotation: 0 } },
+    { id: 'd1', kind: 'station', label: 'Solo', station: { name: 'Solo', tabs: [{ name: 'Shell', kind: 'shell' }] }, transform: { x: 10, z: 0, rotation: 0 } }] };
+  assert.equal(agent.answerQuestion(agent.worldSnapshot(open), 'where is solo').text, 'Solo is the only desk in Studio, highlighted.');
+  // Several desks with the same agent: their own names, not "Claude's desk".
+  const two = templates.instantiateTemplate('nyc-skyscraper');
+  for (const d of two.entities.filter(e => e.kind === 'station')) d.station.tabs = [{ name: 'Claude', kind: 'claude' }];
+  assert.match(agent.answerQuestion(agent.worldSnapshot(two), 'where is code · claude').text, /^Code · Claude is the middle of the three desks, highlighted\.$/);
+});
