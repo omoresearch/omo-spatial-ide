@@ -42,6 +42,18 @@ export interface FirstMinuteProps {
 type Scene = 'welcome' | 'seed' | 'mind' | 'ready';
 type Read = 'idle' | 'reading' | 'done' | 'error';
 
+/** Chat titles in the room list: about one line beside the room name (520 px column, 13 px text). */
+export const CHAT_LINE_MAX = 46;
+/** Cut text at the last whole word that fits in max characters, then add an ellipsis; never mid-word. */
+export function clipWords(text: string, max: number): string {
+    const t = text.replace(/\s+/g, ' ').trim();
+    if (t.length <= max) return t;
+    const cut = t.slice(0, max + 1);
+    const at = cut.lastIndexOf(' ');
+    const head = (at > 0 ? cut.slice(0, at) : t.slice(0, max)).replace(/[\s·,;:.\-–—]+$/u, '');
+    return `${head}…`;
+}
+
 const Kbd = (): React.ReactElement => <kbd aria-hidden="true">↵</kbd>;
 
 export function FirstMinute(props: FirstMinuteProps): React.ReactElement {
@@ -144,7 +156,7 @@ export function FirstMinute(props: FirstMinuteProps): React.ReactElement {
 
         {scene === 'mind' && <div className="omo-fm-scene omo-fm-side" key="mind">
             <div className="omo-fm-seedpill"><i /><b>Your world</b><q data-testid="first-minute-echo">{seed.trim() || 'A penthouse above the city'}</q></div>
-            <p className="omo-fm-eyebrow">Stage 2 · Import your mind</p>
+            <p className="omo-fm-eyebrow">Stage 2 · Bring your mind with you</p>
             <h2 data-testid="first-minute-mind-head" aria-live="polite">{head === 'a' ? <>Bring your mind <em>with you.</em></> : head === 'b' ? <>Reading, <em>on this device.</em></> : <>Your mind <em>has rooms now.</em></>}</h2>
             <p className="omo-fm-sub">Your chats become rooms. Read here, never uploaded.</p>
             {read !== 'done' && <div className="omo-fm-sources" role="group" aria-label="Sources">
@@ -161,7 +173,7 @@ export function FirstMinute(props: FirstMinuteProps): React.ReactElement {
                     <div><small>Screens</small><span>{counts.screens}</span></div>
                     <div><small>Notes</small><span>{made.notes + made.signs}</span></div>
                 </div>
-                <ul className="omo-fm-rooms">{result!.rooms.map(r => <li key={r.title}><b>{r.title}</b><span>{r.screens.map(s => s.title).join(' · ')}</span></li>)}</ul>
+                <ul className="omo-fm-rooms">{result!.rooms.map(r => <li key={r.title}><b>{r.title}</b><span title={r.screens.map(s => s.title).join(' · ')}>{clipWords(r.screens.map(s => s.title).join(' · '), CHAT_LINE_MAX)}</span></li>)}</ul>
                 {!result!.rooms.length && <p className="omo-fm-sub">No chats were found on this computer. Your world starts with its home room.</p>}
             </div>}
             <div className="omo-fm-actions">
@@ -170,7 +182,7 @@ export function FirstMinute(props: FirstMinuteProps): React.ReactElement {
                     <button type="button" className="omo-fm-link" data-testid="first-minute-skip" onClick={skip}>Skip for now</button>
                 </> : read === 'reading' ? <span className="omo-fm-local" data-testid="first-minute-reading"><span className="dot" />Reading on this device · 0 bytes sent</span> : <>
                     <button ref={primary} type="button" className="omo-fm-btn primary" data-testid="first-minute-form" onClick={() => setScene('ready')}>Form my world <Kbd /></button>
-                    <span className="omo-fm-local" data-testid="first-minute-bytes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>{counts?.bytesSent ?? 0} bytes left this device</span>
+                    <span className="omo-fm-local" data-testid="first-minute-bytes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>{counts?.bytesSent ?? 0} bytes leave this device</span>
                 </>}
             </div>
             {!props.mind && <p className="omo-fm-note">Reading chats needs the Omo app on this computer. Skip for now and add them later.</p>}

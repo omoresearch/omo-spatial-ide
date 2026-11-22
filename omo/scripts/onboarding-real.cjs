@@ -6,7 +6,7 @@
  *   1. A first run shows the welcome: "Your mind, given a place." and Get started.
  *   2. Stage 1: "If your mind had a home, what would it look like?" — one input; type the sentence, Enter.
  *   3. Stage 2: "Bring your mind with you." Hermes + Claude Code sources, Read on this device / Skip for now.
- *      Read -> "Your mind has rooms now", fixture topics as rooms, "0 bytes left this device"; the page made no request
+ *      Read -> "Your mind has rooms now", fixture topics as rooms, "0 bytes leave this device"; the page made no request
  *      off this machine and the world behind has the topic rooms with a sign + note boards (no fixture secret shown).
  *   4. Ready: "Your world is ready." -> Enter your world -> the world is shown (walk mode), saved with the rooms.
  *   5. Timer: sentence (Enter) -> world shown < 60 s (wall clock here AND the app's own data-omo-first-minute-ms).
@@ -106,8 +106,18 @@ const SECRETS = ['sk-FAKEfixtureKEY', 'sk-proj-FAKEfixture', 'ghp_FAKEfixture', 
         const off = requests.slice(before).filter(r => { try { const u = new URL(r.url); return !['127.0.0.1', 'localhost'].includes(u.hostname) && !/^(data|blob|chrome-extension):/.test(r.url); } catch { return false; } });
         check('Reading made no request off this machine (every page request during the read is 127.0.0.1)', off.length === 0, { during: requests.length - before, off: off.map(r => r.url).slice(0, 5) });
         const s3 = await page.evaluate(() => ({ head: document.querySelector('[data-testid="first-minute-mind-head"]')?.textContent, chats: document.querySelector('[data-testid="first-minute-chats"]')?.textContent, rooms: document.querySelector('[data-testid="first-minute-rooms"]')?.textContent, bytes: document.querySelector('[data-testid="first-minute-bytes"]')?.textContent, list: [...document.querySelectorAll('.omo-fm-rooms b')].map(b => b.textContent), page: document.querySelector('[data-testid="first-minute"]').innerText }));
-        check('"Your mind has rooms now": the fixture topics are rooms, "0 bytes left this device"', s3.head === 'Your mind has rooms now.' && Number(s3.chats) >= 9 && Number(s3.rooms) >= 4 && s3.bytes === '0 bytes left this device' && ['Moonbase', 'Recipe App', 'Garden'].every(t => s3.list.includes(t)), { ...s3, page: undefined });
+        check('"Your mind has rooms now": the fixture topics are rooms, "0 bytes leave this device"', s3.head === 'Your mind has rooms now.' && Number(s3.chats) >= 9 && Number(s3.rooms) >= 4 && s3.bytes === '0 bytes leave this device' && ['Moonbase', 'Recipe App', 'Garden'].every(t => s3.list.includes(t)), { ...s3, page: undefined });
         check('No fixture secret, email or home path is on screen', SECRETS.every(x => !s3.page.includes(x)));
+        const copy = await page.evaluate(() => {
+            const btn = document.querySelector('[data-testid="first-minute-form"]'); btn.focus();
+            const cs = getComputedStyle(btn), shadows = cs.boxShadow === 'none' ? 0 : cs.boxShadow.split(/,(?![^(]*\))/).length;
+            const lines = [...document.querySelectorAll('.omo-fm-rooms span')].map(s => ({ shown: s.textContent, full: s.title, color: getComputedStyle(s).color }));
+            return { eyebrow: document.querySelector('.omo-fm-eyebrow')?.textContent, left: /bytes left/.test(document.body.innerText), shadows, ring: cs.boxShadow.includes(' 0px 0px 0px '), outline: cs.outlineStyle, lines };
+        });
+        const wordCut = l => { if (l.shown === l.full) return true; if (!l.shown.endsWith('…')) return false; const head = l.shown.slice(0, -1); return l.full.startsWith(head) && /[\s·,;:.\-–—]/.test(l.full[head.length] ?? ' '); };
+        check('Copy: eyebrow "Stage 2 · Bring your mind with you", no "bytes left", one soft CTA glow (no ring, no outline), chat titles cut at a word and #a8adb8',
+            copy.eyebrow === 'Stage 2 · Bring your mind with you' && !copy.left && copy.shadows === 1 && !copy.ring && copy.outline === 'none' && copy.lines.length >= 4 && copy.lines.every(wordCut) && copy.lines.every(l => l.color === 'rgb(168, 173, 184)'), copy);
+        await page.evaluate(() => document.activeElement?.blur());
         await page.waitForFunction(() => JSON.parse(document.querySelector('canvas[data-testid="omo-world-canvas"]')?.dataset.worldRooms || '[]').some(id => id.startsWith('mind-')), { timeout: 15000 }).catch(() => {});
         const w2 = await canvasWorld();
         const mindRooms = (w2?.rooms ?? []).filter(id => id.startsWith('mind-'));
