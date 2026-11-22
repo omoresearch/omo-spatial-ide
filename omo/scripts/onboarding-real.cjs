@@ -98,6 +98,9 @@ const SECRETS = ['sk-FAKEfixtureKEY', 'sk-proj-FAKEfixture', 'ghp_FAKEfixture', 
         await page.waitForFunction(() => (document.querySelector('canvas[data-testid="omo-world-canvas"]')?.dataset.worldName ?? '') === 'Lighthouse library', { timeout: 15000 }).catch(() => {});
         const w1 = await canvasWorld();
         check('The world behind is planned from the sentence (named "Lighthouse library", penthouse + bookshelf and window)', w1?.name === 'Lighthouse library' && w1.entities.some(id => /^bookshelf/.test(id)) && w1.entities.some(id => /^window/.test(id)), w1);
+        const bd = await page.$eval(CANVAS, c => ({ backdrop: c.dataset.backdrop, city: Number(c.dataset.backdropCity), kit: c.dataset.styleKit }));
+        const right = await region({ x: 1000, y: 120, width: 420, height: 170 }); // the sky above the room, below the progress bars
+        check('Before "Form my world" the backdrop is a neutral dim gradient: no city, sky dome or tower behind the sentence', bd.backdrop === 'neutral' && bd.city === 0 && right.max <= 60, { ...bd, right });
         await shot('3-mind');
         const before = requests.length;
         await click('[data-testid="first-minute-read"]');
@@ -141,6 +144,8 @@ const SECRETS = ['sk-FAKEfixtureKEY', 'sk-proj-FAKEfixture', 'ghp_FAKEfixture', 
         const gone = !await page.$('[data-testid="first-minute"]');
         const saved = await savedWorld();
         check('Enter your world: the overlay is gone and you walk in the world', gone && (await canvasWorld())?.nav === 'walk');
+        const bd2 = await page.$eval(CANVAS, c => ({ backdrop: c.dataset.backdrop, city: Number(c.dataset.backdropCity) }));
+        check('After Enter your world the planned backdrop is back (world mode)', bd2.backdrop === 'world', bd2);
         check('The saved world holds the home and the topic rooms with their note boards', !!saved && saved.name === 'Lighthouse library' && saved.entities.filter(e => e.kind === 'room' && e.id.startsWith('mind-')).length === mindRooms.length && saved.entities.some(e => e.id.startsWith('note-') && e.kind === 'decor' && e.decor === 'whiteboard'), { name: saved?.name, n: saved?.entities.length });
         check('The saved world holds no fixture secret, email or home path', SECRETS.every(x => !JSON.stringify(saved).includes(x)));
 

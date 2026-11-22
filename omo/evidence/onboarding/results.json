@@ -71,6 +71,19 @@
    }
   },
   {
+   "name": "Before \"Form my world\" the backdrop is a neutral dim gradient: no city, sky dome or tower behind the sentence",
+   "pass": true,
+   "detail": {
+    "backdrop": "neutral",
+    "city": 0,
+    "kit": "skyline-penthouse",
+    "right": {
+     "max": 51,
+     "mean": 4.81
+    }
+   }
+  },
+  {
    "name": "Reading made no request off this machine (every page request during the read is 127.0.0.1)",
    "pass": true,
    "detail": {
@@ -181,6 +194,14 @@
    "pass": true
   },
   {
+   "name": "After Enter your world the planned backdrop is back (world mode)",
+   "pass": true,
+   "detail": {
+    "backdrop": "world",
+    "city": 3
+   }
+  },
+  {
    "name": "The saved world holds the home and the topic rooms with their note boards",
    "pass": true,
    "detail": {
@@ -196,14 +217,14 @@
    "name": "From the sentence to the world shown in under 60 s (wall clock of this run)",
    "pass": true,
    "detail": {
-    "ms": 10784
+    "ms": 11004
    }
   },
   {
    "name": "The app measured the same first minute itself (data-omo-first-minute-ms < 60000)",
    "pass": true,
    "detail": {
-    "appMs": 10747
+    "appMs": 10968
    }
   },
   {
@@ -211,7 +232,7 @@
    "pass": true,
    "detail": {
     "theme": "station",
-    "ms": 287
+    "ms": 243
    }
   },
   {

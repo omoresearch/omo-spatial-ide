@@ -255,6 +255,9 @@ export class RoomScene {
     private stationNumbers = new Map<string, number>();
     private lights?: { hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight; accent: THREE.PointLight };
     private skyFx?: SkylineFx; // sky:render — bloom + environment, skyline theme only
+    /** promise:onboarding — 'neutral' while the first minute is open: no city, sky or tower behind the sentence, a dim gradient instead. */
+    private backdrop: 'world' | 'neutral' = 'world';
+    private neutralSky?: THREE.CanvasTexture;
     /** sky:merge M1 — the baked style-kit shell: loader per kit, its loaded shell, and kits whose assets are missing. */
     private kitLoaders = new Map<string, SkylineKitLoader>();
     private kitShells = new Map<string, { root: THREE.Group; env: THREE.Texture }>();
@@ -480,6 +483,7 @@ export class RoomScene {
         }
         if (this.skyFx) this.skyFx.useEnvironment(kitShell?.env); // sky:merge M1 — the kit's baked reflection probe replaces the generic room environment
         this.applyKitView(); // world-ui (1, 3)
+        this.applyBackdrop(); // promise:onboarding
         const pk = pathsKey(world.shell, world.entities); // w3:look (7) — plaza, paths, lamps (open worlds)
         if (pk !== this.pathsKey) {
             if (this.pathsRoot) { this.worldRoot.remove(this.pathsRoot); disposeTree(this.pathsRoot); this.pathsRoot = undefined; }
@@ -543,7 +547,40 @@ export class RoomScene {
     /** w3:render — background + fog colour: the classic room backdrop, or the open world's sky. */
     private applySky(world: WorldSpec): void {
         const jungle = world.shell.theme === 'jungle', color = world.shell.theme === 'skyline' ? SKYLINE_COLORS.background : world.shell.open ? openSky(jungle) : shellColors(jungle).background; // sky:render
+        if (this.backdrop === 'neutral') { this.scene.background = this.neutralGradient(); (this.scene.fog as THREE.Fog).color.set('#0e1015'); return; } // promise:onboarding
+        if (!(this.scene.background instanceof THREE.Color)) this.scene.background = new THREE.Color(color);
         (this.scene.background as THREE.Color).set(color); (this.scene.fog as THREE.Fog).color.set(color);
+    }
+    /**
+     * promise:onboarding — the backdrop behind the first minute. 'neutral' hides the planned city, the dusk sky dome, our
+     * tower's facade and a style kit's city panorama, and paints a dim neutral gradient (with matching fog), so the
+     * sentence ("a lighthouse library at the edge of the sea") never sits in front of Manhattan. 'world' = as planned.
+     */
+    setBackdrop(mode: 'world' | 'neutral'): void {
+        if (this.disposed || mode === this.backdrop) return;
+        this.backdrop = mode;
+        if (this.world) { this.applySky(this.world); this.applyBackdrop(); }
+    }
+    private applyBackdrop(): void {
+        if (!this.renderer) return;
+        const neutral = this.backdrop === 'neutral';
+        let shown = 0;
+        this.shellRoot?.traverse(node => {
+            if (!/^omo-(skyline-(city|sky|tower)|kit-backdrop)$/.test(node.name)) return;
+            node.visible = !neutral; if (node.visible) shown++;
+        });
+        const canvas = this.renderer.domElement;
+        canvas.dataset.backdrop = this.backdrop; canvas.dataset.backdropCity = String(shown); // test hooks
+        this.invalidate();
+    }
+    private neutralGradient(): THREE.CanvasTexture {
+        if (this.neutralSky) return this.neutralSky;
+        const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+        const g = c.getContext('2d')!, grad = g.createLinearGradient(0, 0, 0, 256);
+        grad.addColorStop(0, '#07080b'); grad.addColorStop(0.55, '#0e1015'); grad.addColorStop(1, '#16181d');
+        g.fillStyle = grad; g.fillRect(0, 0, 4, 256);
+        const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; this.neutralSky = t;
+        return t;
     }
     /** sky:render — skyline theme on/off: dusk lights, far haze, bloom + environment. */
     private applySkyline(on: boolean): void {
@@ -559,6 +596,7 @@ export class RoomScene {
     }
     private applyTheme(jungle: boolean): void {
         const colors = shellColors(jungle);
+        if (!(this.scene.background instanceof THREE.Color)) this.scene.background = new THREE.Color(colors.background); // promise:onboarding (neutral gradient)
         (this.scene.background as THREE.Color).set(colors.background); (this.scene.fog as THREE.Fog).color.set(colors.background);
         if (this.lights) { this.lights.hemi.color.setHex(colors.hemiSky); this.lights.sun.color.setHex(colors.sun); this.lights.accent.color.setHex(colors.accent); }
     }
@@ -1421,6 +1459,7 @@ export class RoomScene {
         this.disposed=true;cancelAnimationFrame(this.focusFrame);for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         this.skyFx?.dispose();this.skyFx=undefined; // sky:render
+        this.neutralSky?.dispose();this.neutralSky=undefined; // promise:onboarding
         for(const k of this.kitShells.values()){if(k.root.parent!==this.worldRoot)disposeTree(k.root);k.env.dispose();}this.kitShells.clear(); // sky:merge M1
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
     }

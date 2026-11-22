@@ -263,7 +263,7 @@ export function buildSkylineShell(shell: WorldShell, blocks: readonly Footprint[
     add(root, new THREE.BoxGeometry(W + 0.6, 0.9, D + 0.6), std(0x0d0e12, 0.6, 0.2), 0, -0.65, 0, false);
     const towerH = SKYLINE_ALTITUDE - 1.1;
     const tower = new THREE.BoxGeometry(W + 2, towerH, D + 2); tower.translate(0, -towerH / 2 - 1.1, 0);
-    root.add(noRay(new THREE.Mesh(tower, facadeMaterial(camera, 0.4))));
+    const facade = new THREE.Mesh(tower, facadeMaterial(camera, 0.4)); facade.name = 'omo-skyline-tower'; root.add(noRay(facade));
     // Ceiling (faces down only, so the overview sees in from above) with warm coves.
     const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(W, D), std(0x3a3833, 0.85, 0.0));
     ceiling.rotation.x = Math.PI / 2; ceiling.position.y = H; ceiling.receiveShadow = true; root.add(ceiling);
