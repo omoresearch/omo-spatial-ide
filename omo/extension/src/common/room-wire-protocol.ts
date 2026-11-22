@@ -32,6 +32,7 @@
  *  - No op, chat line or signal ever starts an agent or types into a terminal.
  */
 import { isRoomCode } from './room-code'; // promise:share
+import { withPoint } from './shared-pointer'; // promise:share
 import type { PlayerPose } from './player-state';
 import type { WorldOp, WorldSpec } from './world-model';
 import { validateWorld, WORLD_MAX_BYTES } from './world-model';
@@ -327,7 +328,7 @@ export function wirePose(input: unknown): PlayerPose {
     const p = input as PlayerPose;
     if (!p || ![p.x, p.z, p.yaw, p.pitch].every(n => typeof n === 'number' && Number.isFinite(n))
         || Math.abs(p.x) > ROOM_POSE_LIMIT_M || Math.abs(p.z) > ROOM_POSE_LIMIT_M || Math.abs(p.yaw) > Math.PI + 1e-6 || Math.abs(p.pitch) > 1.2) throw new Error('Invalid room position.');
-    return { x: p.x, z: p.z, yaw: p.yaw, pitch: p.pitch };
+    return withPoint({ x: p.x, z: p.z, yaw: p.yaw, pitch: p.pitch }, (p as { point?: unknown }).point); // promise:share: optional pointer spot
 }
 function worldOps(input: unknown): WorldOp[] {
     if (!Array.isArray(input) || input.length === 0 || input.length > ROOM_WORLD_OPS_MAX) throw new Error(`A world batch holds 1–${ROOM_WORLD_OPS_MAX} operations.`);

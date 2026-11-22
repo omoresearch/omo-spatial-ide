@@ -8,7 +8,7 @@ const path = require('path');
 const crypto = require('crypto');
 const SRC = path.resolve(__dirname, '../../extension/src/common');
 const OUT = path.resolve(__dirname, '../vendor');
-const FILES = [['world-model.ts', 'world-model.cjs'], ['player-state.ts', 'player-state.cjs'], ['presence-protocol.ts', 'presence-protocol.cjs'], ['room-code.ts', 'room-code.cjs']]; // promise:share: + room codes
+const FILES = [['world-model.ts', 'world-model.cjs'], ['player-state.ts', 'player-state.cjs'], ['presence-protocol.ts', 'presence-protocol.cjs'], ['room-code.ts', 'room-code.cjs'], ['shared-pointer.ts', 'shared-pointer.cjs']]; // promise:share: + room codes
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 function sources() { return FILES.map(([src, out]) => ({ src, out, text: fs.readFileSync(path.join(SRC, src), 'utf8') })); }
 if (process.argv.includes('--check')) {

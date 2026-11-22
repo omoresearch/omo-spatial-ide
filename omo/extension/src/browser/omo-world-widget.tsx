@@ -90,6 +90,8 @@ import { OnboardingPlanBackend } from './onboarding-admin';
 import { OnboardingWorldSink, saveOnboardingWorld, readLocalWorld } from './onboarding-store';
 import { v1RoomFor } from './onboarding-planner';
 import { classifyDesks, setDeskPriority } from './desk-activity'; // w3:perf
+import { SharedPointerController, PointerScene } from './shared-pointer-controller'; // promise:share
+import { PRESENCE_COLOUR_HEX } from '../common/presence-protocol'; // promise:share
 // --- end w2:onboard ---
 
 export const TERMINAL_STATION_ID = 'terminal-1';
@@ -290,6 +292,7 @@ export class OmoWorldWidget extends ReactWidget {
     private codeReviewFrame?:CodeReviewFrame;
     // --- omo voice lane (mount hook) ---
     private voiceHub?: VoiceHub;
+    private pointer?: SharedPointerController; // promise:share
     // --- end omo voice lane ---
     private hudHub?: HudHub; // omo parity2 lane
     // --- omo focus lane (mount hook) ---
@@ -326,7 +329,9 @@ export class OmoWorldWidget extends ReactWidget {
         this.addClass('omo-world-widget'); this.node.tabIndex = -1;
         this.toDispose.push({ dispose: () => this.invalidatePresetRead() });
         try {const saved=sessionStorage.getItem('omo.presence.tab.v1');if(saved&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(saved))this.tabIdentity=saved;sessionStorage.setItem('omo.presence.tab.v1',this.tabIdentity);}catch{/* Memory-only identity; never guesses another tab's terminals. */}
-        this.presence=new PresenceController({service:this.presenceService,pose:()=>this.worldScene?.getPlayerPose()??{...PLAYER_HOME},schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:state=>this.presenceChanged(state)});
+        this.pointer=new SharedPointerController({scene:()=>this.worldScene as unknown as PointerScene|undefined,colour:()=>{const me=this.presenceState.snapshot?.members.find(m=>m.id===this.presenceState.snapshot?.selfId);return me?.colour?PRESENCE_COLOUR_HEX[me.colour]:undefined;}}); // promise:share
+        this.toDispose.push({dispose:()=>{this.pointer?.dispose();this.pointer=undefined;}});
+        this.presence=new PresenceController({service:this.presenceService,pose:()=>{const base=this.worldScene?.getPlayerPose()??{...PLAYER_HOME};return this.pointer?this.pointer.pose(base):base;}/* promise:share: + pointer spot while Q is held */,schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:state=>this.presenceChanged(state)});
         this.toDispose.push({dispose:()=>{void this.presence?.dispose().catch(()=>undefined);}});
         // --- omo voice lane (mount hook): read-only access to presence, scene and desks. Starts nothing. ---
         this.voiceHub=new VoiceHub({presenceService:this.presenceService,voiceSettings:this.voiceSettings/* w2:voice */,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',
