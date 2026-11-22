@@ -1,0 +1,161 @@
+=== SLICE agent-task-real-app.cjs 01:55:49 load=12.78
+PASS: The full world exposes a task entry point
+PASS: A shell is not an agent task destination
+PASS: claude requires explicit launch confirmation
+PASS: claude has an isolated empty draft
+PASS: Writing a native task draft does not walk or send input
+PASS: hermes requires explicit launch confirmation
+PASS: hermes has an isolated empty draft
+PASS: Storage denial retains the native textarea text with a visible memory-only warning
+PASS: Writing a native task draft does not walk or send input
+PASS: codex requires explicit launch confirmation
+PASS: codex has an isolated empty draft
+PASS: Writing a native task draft does not walk or send input
+PASS: Switching agents restores the selected tab draft
+PASS: Multiline task text is blocked without real bracketed paste
+PASS: Actual PTY text reaches the physical terminal without submitting the task
+PASS: Pasting retains the draft and makes no completion claim
+PASS: Only the explicit physical-terminal Enter submits the exact draft to the selected fixture
+PASS: Task review shortcut reads actual project changes without submitting more input or changing Git
+PASS: This browser tab keeps the per-agent draft across reload without relaunching a process
+PASS: Task controls stay above, not over, the physical world
+=== EXIT agent-task-real-app.cjs 0
+=== SLICE task-review-real-app.cjs 01:56:34 load=21.20
+PASS: claude: explicit launch confirmation and no other tab's task record
+PASS: claude: successful paste records exact text without submitting
+PASS: claude: submission report sends no terminal input and does not claim verified execution
+PASS: claude: real physical Enter delivers the original task and creates the owned project edit
+PASS: A real failed project review cannot unlock a task decision
+PASS: claude: real patch review and explicit accepted decision do not mutate Git, files or terminal input
+PASS: hermes: explicit launch confirmation and no other tab's task record
+PASS: hermes: successful paste records exact text without submitting
+PASS: Denied task-record storage keeps the usable record in memory with a visible warning
+PASS: hermes: submission report sends no terminal input and does not claim verified execution
+PASS: hermes: real physical Enter delivers the original task and creates the owned project edit
+PASS: hermes: real patch review and explicit changes-requested decision do not mutate Git, files or terminal input
+PASS: codex: explicit launch confirmation and no other tab's task record
+PASS: codex: successful paste records exact text without submitting
+PASS: codex: submission report sends no terminal input and does not claim verified execution
+PASS: codex: real physical Enter delivers the original task and creates the owned project edit
+PASS: codex: real patch review and explicit accepted decision do not mutate Git, files or terminal input
+PASS: All three isolated task records and user decisions survive reload without relaunch or resubmission
+=== EXIT task-review-real-app.cjs 0
+=== SLICE task-workspaces-real-app.cjs 01:57:18 load=18.24
+{
+  "checks": [
+    "Explicit UI warns that only the captured commit is copied",
+    "Name and confirmation alone create no resource",
+    "Real persisted worktree uses captured HEAD; dirty/untracked source stays separate",
+    "Original HEAD/index unchanged and no agent launches",
+    "Refresh lists the existing worktree without creating another",
+    "Explicit Open selects worktree; physical shell edits only its working folder",
+    "Source files/HEAD/index unchanged after isolated physical terminal edit"
+  ],
+  "providerCalls": 0
+}
+=== EXIT task-workspaces-real-app.cjs 0
+=== SLICE task-overview-real-app.cjs 01:57:38 load=15.26
+{
+  "checks": [
+    "Empty overview opens in the actual room without starting an agent",
+    "The real prepared task appears with full details and an honest unsubmitted phase",
+    "Foreign-project record is neither displayed nor read from storage",
+    "Overview refresh starts no agent and sends no terminal input",
+    "Manual submission note updates without implying execution",
+    "Same browser-tab task note survives reload without another launch"
+  ],
+  "providerCalls": 0
+}
+=== EXIT task-overview-real-app.cjs 0
+=== SLICE room-layout-real-app.cjs 01:58:04 load=14.10
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert.ok((await p.$eval('.omo-footer', e => e.textContent)).includes(fixture.project))
+
+    at /home/harry/dev/omo-theia-177/omo/extension/test/room-layout-real-app.cjs:18:16 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+Real app room-layout-real-app.cjs failed with exit 1
+Real app server diagnostics:
+2026-11-22T14:57:20.572Z plugin-ext:LocalPluginDeployerResolver WARN The local plugin referenced by local-dir:/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/deployedPlugins does not exist.
+2026-11-22T14:57:20.577Z core:Stopwatch INFO Backend application startup sequence completed (async work may still be pending): 9.7 ms [0.436 s since backend process start]
+2026-11-22T14:57:20.577Z core:Stopwatch INFO All backend contributions settled: 96.8 ms [0.436 s since backend process start]
+2026-11-22T14:57:20.627Z core:Stopwatch INFO Resolve plugins list: 55.0 ms [0.486 s since backend process start]
+2026-11-22T14:57:20.631Z root ERROR Failed to load plugin localization bundles from file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-9lqbtR/ms-python.python/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-9lqbtR/ms-python.python/./l10n'
+2026-11-22T14:57:20.632Z root ERROR Failed to load plugin localization bundles from file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-9lqbtR/ms-python.debugpy/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-9lqbtR/ms-python.debugpy/./l10n'
+2026-11-22T14:57:20.633Z root ERROR Failed to load plugin localization bundles from file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-9lqbtR/ms-python.python/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-9lqbtR/ms-python.python/./l10n'
+2026-11-22T14:57:20.713Z core:Stopwatch INFO Deploy batch of 93 accepted plugins: 86.1 ms [0.572 s since backend process start]
+2026-11-22T14:57:20.713Z core:Stopwatch INFO Deploy plugins list: 141.3 ms [0.572 s since backend process start]
+2026-11-22T14:57:38.235Z core:BackendApplication INFO >>> Stopping backend contributions...
+2026-11-22T14:57:38.237Z core:BackendApplication INFO <<< All backend contributions have been stopped.
+Backend main: entry point loaded [0.184 s since backend process start]
+Backend server: loading modules... [0.185 s since backend process start]
+Backend server: container created [0.267 s since backend process start]
+Backend server: modules loaded [0.323 s since backend process start]
+2026-11-22T14:57:40.428Z core:EnvVariablesServerImpl INFO Configuration directory URI: 'file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile'
+Backend server: resolving application [0.335 s since backend process start]
+2026-11-22T14:57:40.470Z plugin-ext:PluginApiContribution INFO Configuring to accept webviews on '^.+\.webview\..+$' hostname.
+2026-11-22T14:57:40.508Z core:Stopwatch WARN Backend PluginLocalizationServer.initialize took longer than the expected maximum 50 milliseconds: 70.3 ms [0.414 s since backend process start]
+2026-11-22T14:57:40.509Z core:SettingServiceImpl INFO Settings file not found at '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/backend-settings.json'. Falling back to defaults.
+2026-11-22T14:57:40.509Z core:Stopwatch WARN Backend ShellIntegrationInjector.initialize took longer than the expected maximum 50 milliseconds: 71.4 ms [0.416 s since backend process start]
+2026-11-22T14:57:40.513Z core:BackendApplication INFO configured all backend app contributions
+2026-11-22T14:57:40.516Z core:BackendApplication INFO Theia app listening on http://127.0.0.1:33493.
+2026-11-22T14:57:40.517Z plugin-ext:LocalPluginDeployerResolver WARN The local plugin referenced by local-dir:/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/plugins does not exist.
+2026-11-22T14:57:40.517Z plugin-ext:LocalPluginDeployerResolver WARN The local plugin referenced by local-dir:/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/deployedPlugins does not exist.
+2026-11-22T14:57:40.521Z core:Stopwatch INFO Backend application startup sequence completed (async work may still be pending): 9.2 ms [0.427 s since backend process start]
+2026-11-22T14:57:40.521Z core:Stopwatch INFO All backend contributions settled: 91.5 ms [0.427 s since backend process start]
+2026-11-22T14:57:40.573Z core:Stopwatch INFO Resolve plugins list: 56.8 ms [0.479 s since backend process start]
+2026-11-22T14:57:40.578Z root ERROR Failed to load plugin localization bundles from file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-P7dVI4/ms-python.debugpy/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-P7dVI4/ms-python.debugpy/./l10n'
+2026-11-22T14:57:40.578Z root ERROR Failed to load plugin localization bundles from file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-P7dVI4/ms-python.python/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-P7dVI4/ms-python.python/./l10n'
+2026-11-22T14:57:40.580Z root ERROR Failed to load plugin localization bundles from file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-P7dVI4/ms-python.python/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-P7dVI4/ms-python.python/./l10n'
+2026-11-22T14:57:40.657Z core:Stopwatch INFO Deploy batch of 93 accepted plugins: 83.5 ms [0.563 s since backend process start]
+2026-11-22T14:57:40.657Z core:Stopwatch INFO Deploy plugins list: 140.6 ms [0.563 s since backend process start]
+2026-11-22T14:58:03.824Z core:BackendApplication INFO >>> Stopping backend contributions...
+2026-11-22T14:58:03.826Z core:BackendApplication INFO <<< All backend contributions have been stopped.
+Backend main: entry point loaded [0.184 s since backend process start]
+Backend server: loading modules... [0.185 s since backend process start]
+Backend server: container created [0.267 s since backend process start]
+Backend server: modules loaded [0.322 s since backend process start]
+2026-11-22T14:58:06.047Z core:EnvVariablesServerImpl INFO Configuration directory URI: 'file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile'
+Backend server: resolving application [0.333 s since backend process start]
+2026-11-22T14:58:06.088Z plugin-ext:PluginApiContribution INFO Configuring to accept webviews on '^.+\.webview\..+$' hostname.
+2026-11-22T14:58:06.130Z core:Stopwatch WARN Backend PluginLocalizationServer.initialize took longer than the expected maximum 50 milliseconds: 73.7 ms [0.415 s since backend process start]
+2026-11-22T14:58:06.131Z core:SettingServiceImpl INFO Settings file not found at '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/backend-settings.json'. Falling back to defaults.
+2026-11-22T14:58:06.132Z core:Stopwatch WARN Backend ShellIntegrationInjector.initialize took longer than the expected maximum 50 milliseconds: 75.6 ms [0.417 s since backend process start]
+2026-11-22T14:58:06.135Z core:BackendApplication INFO configured all backend app contributions
+2026-11-22T14:58:06.138Z core:BackendApplication INFO Theia app listening on http://127.0.0.1:33493.
+2026-11-22T14:58:06.139Z plugin-ext:LocalPluginDeployerResolver WARN The local plugin referenced by local-dir:/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/plugins does not exist.
+2026-11-22T14:58:06.139Z plugin-ext:LocalPluginDeployerResolver WARN The local plugin referenced by local-dir:/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/deployedPlugins does not exist.
+2026-11-22T14:58:06.144Z core:Stopwatch INFO Backend application startup sequence completed (async work may still be pending): 10.0 ms [0.429 s since backend process start]
+2026-11-22T14:58:06.144Z core:Stopwatch INFO All backend contributions settled: 95.4 ms [0.429 s since backend process start]
+2026-11-22T14:58:06.197Z core:Stopwatch INFO Resolve plugins list: 57.8 ms [0.482 s since backend process start]
+2026-11-22T14:58:06.201Z root ERROR Failed to load plugin localization bundles from file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-pkdUoG/ms-python.python/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-pkdUoG/ms-python.python/./l10n'
+2026-11-22T14:58:06.202Z root ERROR Failed to load plugin localization bundles from file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-pkdUoG/ms-python.debugpy/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-pkdUoG/ms-python.debugpy/./l10n'
+2026-11-22T14:58:06.204Z root ERROR Failed to load plugin localization bundles from file:///home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-pkdUoG/ms-python.python/./l10n. Error: ENOENT: no such file or directory, scandir '/home/harry/dev/omo-theia-177/omo/evidence/ci-theia-profile/.omo-ide-runtime-pkdUoG/ms-python.python/./l10n'
+2026-11-22T14:58:06.274Z core:Stopwatch INFO Deploy batch of 93 accepted plugins: 77.7 ms [0.560 s since backend process start]
+2026-11-22T14:58:06.275Z core:Stopwatch INFO Deploy plugins list: 135.8 ms [0.560 s since backend process start]
+2026-11-22T14:58:16.491Z core:BackendApplication INFO >>> Stopping backend contributions...
+2026-11-22T14:58:16.493Z core:BackendApplication INFO <<< All backend contributions have been stopped.
+
+=== EXIT room-layout-real-app.cjs 1
+=== SLICE room-preset-real-app.cjs 01:58:16 load=12.08
+PASS: Room setup exposes portable preset import
+PASS: Actual saved-room download contains appearance only, no source name or paths
+PASS: Export does not start an agent
+PASS: Import previews another project appearance without saving, renaming or rebinding the destination
+PASS: Cancel preserves the destination saved room
+PASS: Injected machine-local fields are refused without changing saved state or echoing content
+PASS: The file-size guard refuses oversized imports before File.text
+PASS: A cancelled late file read cannot replace a newer setup preview
+PASS: Explicit Save applies imported appearance to the destination while preserving its shell PID/environment
+PASS: Imported appearance and the original running shell survive reload
+PASS: Cancelling a camera-only import restores actual physical-screen projections in overview
+=== EXIT room-preset-real-app.cjs 0
+=== SLICE shared-room-real-app.cjs 01:58:56 load=9.72
+PASS: two real browser clients share live 3D presence; separate physical terminal processes, no automatic starts, leave/rejoin and reload continuity, disconnect cleanup.
+=== EXIT shared-room-real-app.cjs 0

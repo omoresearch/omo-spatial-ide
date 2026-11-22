@@ -1,0 +1,83 @@
+LF, CRLF and tab are sent through the existing bracketed semantic paste guard
+R2 clipboard notifications use the current view and tab, never frame.osc52
+R2 notification is discarded when the active tab changes during the write-only fetch
+R2 truecolour metadata is accepted only as exact safe rows and cells
+WASD moves the player through the room in the facing direction
+a failed launch shows the error and leaves no fake tab or success label
+a foreground-process busy flag does not prevent draft preparation or synthesize submission
+a missing browser fails honestly and never tries to open a page
+a new shell is started directly by the click, Hermes uses the selected profile
+a no-op or failed rename never displays a success or invented name
+a refresh reconnects the stored project+station binding to the same tab without new sessions
+a rename response from the previous project cannot overwrite the current room
+a view that attaches after dispose is detached at once and never polled
+a web wall starts no browser until explicit open, then polls real backend frames through its service
+acknowledge is local-only and only a genuinely new bell raises attention again
+agent launches need an explicit confirm; only then newTab is sent with confirmedStart true
+an unavailable host is reported honestly and no workspace is opened
+audio updates use the owned page and only display acknowledged volume/mute state
+binding opens the station workspace once, attaches the active tab at 80x22 and polls frames by sequence
+binding the station to an existing workspace calls bindStation, then reopens without starting agents
+browser paste is text insertion, not Enter keys, and size/control guards refuse unsafe input
+busy and exited state comes from runtime metadata in poll results
+clear history needs confirmation
+click and scroll target the owned page; invalid coordinates are not forwarded
+closing a wall during a pending open closes the late page and never starts a poll
+closing and reviving a tab each need explicit confirmation flags
+closing the project releases the monitor view but a later project can still connect
+controller forwards actual cells and drops them when a later legacy frame omits metadata
+copy returns the selected text to the caller and never uses a clipboard itself
+defaults an absent source layout to a fresh Classic preset
+delete workspace needs confirmation, asks again when work is busy, then detaches the monitor
+dispose while the workspace is opening prevents a late attach
+does not accept URL, command, profile, or arbitrary string fields
+exports the frozen constants and round-trips the exact preset shape
+extension/test/agent-task-draft.test.cjs
+extension/test/agent-task-run.test.cjs
+extension/test/room-layout.test.cjs
+extension/test/runtime-r2-contract.test.cjs
+extension/test/runtime-station-mirror.test.cjs
+extension/test/runtime-tab-restore-real-tmux.test.cjs
+extension/test/station-mirror-lifecycle.test.cjs
+extension/test/station-scene.test.cjs
+extension/test/task-workspace-controller.test.cjs
+extension/test/terminal-fit.test.cjs
+extension/test/web-wall-scroll.test.cjs
+extension/test/workstation-label-visibility.test.cjs
+extension/test/world-navigation.test.cjs
+failed navigation keeps the actual last page rather than inventing a successful URL
+frame history, scroll offset, bell and bracketed-paste reach the controller state
+interrupted agents are shown as interrupted and never auto-restarted; dispose only detaches
+invalid or stale bell counters do not create alerts or poison later valid frames
+invalid tab names are refused without touching the backend
+manual resume: shells, busy and non-running tabs are refused; idle agents need confirmation; Codex says fresh
+monitor cell runs map per-cell palette colours and fall back to defaults
+movement stays inside the room and stops at desks instead of walking through them
+old and disposed screenshot responses cannot overwrite the current wall
+paste errors return false and keep the draft available to the caller
+paste fails closed when the frame never reported a paste mode
+paste: capped at 256 KiB, multi-line refused unless bracketed paste is advertised, single line allowed
+persists a supplied wide layout and keeps legacy records classic-shaped
+physical screen input reaches browser text and allowed keys, never a terminal shell
+poll failures show reconnecting and a detached view is re-attached without new sessions
+prepareTask refuses empty, unsafe, malformed, oversized and unsafe multiline text before paste
+prepareTask uses semantic paste only, never terminal input or an Enter action
+reads only the appearance allowlist and returns fresh data
+real frame bell increments become unread visual attention without repeating the count
+rejects an oversized UTF-8 input before parsing and does not echo it
+rejects corrupt, cross-project, unknown-version, unbounded camera, and unknown layout state
+renaming a tab uses the real runtime action without replacing its process or attached view
+render runs use terminal columns for colours and preserve full combining glyphs
+restores a versioned world with stable project and workstation bindings
+scroll, wheel and find go to the attached view; find reports the match count
+stale or older frames never overwrite newer monitor output, and only one poll is in flight
+stale targets are refused and a late paste cannot update another tab notice
+switching project detaches the old view, opens the new binding and ignores the old poll result
+switching to a project with no saved binding detaches the old view and opens nothing
+taskTarget is an exact snapshot only for the live attached running non-shell tab
+taskTarget refuses pending, acting and non-running tabs
+the most common background key is treated as the terminal background
+typing forwards to the same attached view; without a view nothing is sent and the UI says so
+unavailable CLIs are disabled with the reason and install hint, and cannot be launched
+workspace board lists live metadata; rename and keep-awake update the open workspace
+workspace profile is for future tabs; it is saved, not applied to running tabs
