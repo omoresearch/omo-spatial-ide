@@ -15,7 +15,7 @@ const { ownedAppFixture } = require('./owned-app-fixture.cjs');
         process.env.OMO_URL = fixture.env.OMO_URL;
         world = await openWorld('room-layout-owned');
         const p = world.page;
-        assert.ok((await p.$eval('.omo-footer', e => e.textContent)).includes(fixture.project));
+        assert.ok((await p.$eval('.omo-footer', e => e.dataset.projectPath || '')).includes(fixture.project));
         await p.click('[data-testid="edit-room"]');
         check('Room setup exposes a saved physical layout choice', await p.$('[data-testid="room-layout"]'));
         check('Legacy rooms default to the classic layout', await p.$eval('[data-testid="room-layout"]', e => e.value === 'classic'));

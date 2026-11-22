@@ -1120,7 +1120,7 @@ export class OmoWorldWidget extends ReactWidget {
                 </section>
             </div>
             {/* world-ui: no raw project path in the chrome (it is in Settings → Room and the folder tooltip). */}
-            <footer className="omo-footer"><span>◈ &nbsp; {this.configuring ? 'A workspace with a sense of place.' : this.room?.projectName}</span><span role={this.error ? 'alert' : 'status'} className={this.error ? 'omo-error' : ''}>{this.error || this.feedback || 'Built on Theia · Local first'}</span></footer>
+            <footer className="omo-footer" data-project-path={this.project?.path.toString() ?? ''} /* migrating: world-ui hid the path text; tests read the owned project here */><span>◈ &nbsp; {this.configuring ? 'A workspace with a sense of place.' : this.room?.projectName}</span><span role={this.error ? 'alert' : 'status'} className={this.error ? 'omo-error' : ''}>{this.error || this.feedback || 'Built on Theia · Local first'}</span></footer>
         </main>;
     }
 }
