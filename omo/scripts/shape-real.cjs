@@ -96,8 +96,9 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const cap1 = await page.evaluate(() => { const e = document.querySelector('[data-testid="shape-caption"]'); const r = e?.getBoundingClientRect(); return e ? { n: document.querySelectorAll('[data-testid="shape-caption"]').length, anchor: e.dataset.anchor, box: [r.left, r.top, r.right, r.bottom].map(Math.round), keep: !!e.querySelector('[data-testid="shape-keep"]'), undo: !!e.querySelector('[data-testid="shape-undo"]') } : null; });
         check('The plan shows as a pending ghost in the room (3 new things)', g1.ids.split(',').filter(Boolean).length === 3, g1);
         check('ONE caption card: one plain sentence + Keep / Undo', !!cap1 && cap1.n === 1 && cap1.keep && cap1.undo && /^[A-Z][^.]*\.$/.test(c1) && !/\bop\b|diff|proposal/i.test(c1), { c1, cap1 });
-        const anchored = !!cap1?.anchor && (() => { const [ax, ay] = cap1.anchor.split(',').map(Number); return cap1.box[3] <= ay + 4 && Math.abs((cap1.box[0] + cap1.box[2]) / 2 - ax) < 220; })();
+        const anchored = !!cap1?.anchor && (() => { const [ax, ay] = cap1.anchor.split(',').map(Number); return cap1.box[3] <= ay + 4 && Math.abs((cap1.box[0] + cap1.box[2]) / 2 - ax) < 200 && ay - cap1.box[3] < 260; })();
         check('The caption is anchored above the change (its centre projected to the screen)', anchored, cap1);
+        check('A leader line joins the caption to the change', await page.$eval('.omo-shape-leader', e => e.dataset.on === 'true').catch(() => false));
         check('Nothing covers the centre of the room (with the caption up)', (await centreFree()).every(t => t === 'CANVAS'), await centreFree());
         const savedMid = await savedWorld();
         check('Nothing is saved before Keep', JSON.stringify(savedMid?.entities ?? []) === JSON.stringify(before?.entities ?? []));
@@ -130,6 +131,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await pause(500);
         const pill = await page.$eval('[data-testid="shape-pill"]', e => ({ id: e.dataset.entity, text: e.textContent.replace('×', '').trim() })).catch(() => null);
         check('Clicking a sofa adds it to the prompt as a pill', !!pickedId && !!pill && pill.id === pickedId, { pickedId, pill, sofas: sofas.map(s => s.id) });
+        await page.mouse.move(wrap[0] + 40, wrap[1] + wrap[3] - 40); await pause(900);
         await shot('4-pill');
         if (pill) {
             await type('move this closer to the screen'); await page.keyboard.press('Enter');

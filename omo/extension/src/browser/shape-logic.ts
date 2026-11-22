@@ -12,9 +12,9 @@ import type { WorldSpec, WorldEntity } from '../common/world-model';
 
 export interface ShapePill { id: string; name: string }
 
-interface Idea { re: RegExp; words: string; caption: string }
+interface Idea { re: RegExp; words: string; caption: string; /** the first thing: the rest goes next to it */ near?: string }
 const IDEAS: Idea[] = [
-    { re: /\b(?:a |an |the )?(?:cosy |cozy |little |small )?reading (?:nook|corner)\b/i, words: 'an armchair, a lamp and a bookshelf', caption: 'A reading nook' },
+    { re: /\b(?:a |an |the )?(?:cosy |cozy |little |small )?reading (?:nook|corner)\b/i, words: 'an armchair, a lamp and a bookshelf', caption: 'A reading nook', near: 'armchair' },
     { re: /\b(?:a |an |the )?(?:cosy |cozy )?(?:lounge|chill|relax(?:ing)?) (?:corner|nook|area|spot)\b/i, words: 'a sofa, a rug and a lamp', caption: 'A lounge corner' },
     { re: /\b(?:a |an |the )?(?:bit of |some )?greenery\b/i, words: '2 plants', caption: 'Some greenery' },
     { re: /\b(?:a |an |the )?(?:planning|ideas?) (?:corner|wall|spot)\b/i, words: 'a whiteboard and a lamp', caption: 'A planning corner' }
@@ -22,7 +22,16 @@ const IDEAS: Idea[] = [
 
 /** "add a reading nook by the window" -> "add an armchair, a lamp and a bookshelf by the window" (+ the idea's name). */
 export function expandIdea(text: string): { prompt: string; idea?: string } {
-    for (const idea of IDEAS) if (idea.re.test(text)) return { prompt: text.replace(idea.re, idea.words), idea: idea.caption };
+    for (const idea of IDEAS) if (idea.re.test(text)) {
+        // "add a reading nook by the window" -> "add an armchair by the window, then add a lamp next to the armchair, …" (one cluster).
+        const m = idea.near ? /^(add|put|place|make|build|create|give me)\s+(.*)$/i.exec(text.trim()) : null;
+        if (m && idea.near) {
+            const where = text.trim().slice(m[1].length).replace(idea.re, '').trim();
+            const [first, ...rest] = idea.words.replace(/ and /, ', ').split(/,\s*/);
+            return { prompt: [`${m[1]} ${first}${where ? ` ${where}` : ''}`, ...rest.map(r => `add ${r} next to the ${idea.near}`)].join(', then '), idea: idea.caption };
+        }
+        return { prompt: text.replace(idea.re, idea.words), idea: idea.caption };
+    }
     // "make it warmer at night" has no rule: warm light is lamps.
     if (/\b(warmer|cosier|cozier|softer light|warm light)\b/i.test(text) && !/\b(add|place|put)\b/i.test(text)) return { prompt: 'add 2 lamps', idea: 'Warmer light' };
     return { prompt: text };
@@ -106,6 +115,12 @@ export function captionFor(summary: string, idea?: string, where?: string): stri
     } else sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1);
     if (where) sentence += ` ${where}`;
     return `${sentence}.`;
+}
+
+/** "… by the window" -> "by the window": where the change goes, for the caption. */
+export function whereOf(text: string): string | undefined {
+    const m = /\b((?:by|near|next to|beside|in front of|against|under|behind|in the|on the) (?:the |a |my )?[a-z][a-z ]{1,30})$/i.exec(text.trim().replace(/[.!?]+$/, ''));
+    return m ? m[1].toLowerCase() : undefined;
 }
 
 /** Three short chips that fit the room. */

@@ -21,7 +21,7 @@ import { entityTitle } from './world-store';
 import type { WorldSpec } from '../common/world-model';
 import { shapeStore, SHAPE_TOGGLE_EVENT, setShapeKeyHandler } from './shape-store';
 import { ShapeTopButton, ShapeGlyph } from './shape-topbar';
-import { ShapePill, captionFor, composePrompt, expandIdea, refinePrompt, resolveScreens, suggestionsFor } from './shape-logic';
+import { ShapePill, captionFor, composePrompt, expandIdea, refinePrompt, resolveScreens, suggestionsFor, whereOf } from './shape-logic';
 import '../../src/browser/world-tokens.css';
 import '../../src/browser/shape-mode.css';
 
@@ -29,7 +29,7 @@ interface Kept { id: string; sentence: string }
 /** Kept changes of this window (the strip survives closing and reopening Shape). */
 let keptLog: Kept[] = [];
 /** The prompt of the pending proposal (a refinement builds on it) and the idea it came from. */
-interface Turn { prompt: string; idea?: string; entryId?: string }
+interface Turn { prompt: string; idea?: string; where?: string; entryId?: string }
 
 function useBump(): () => void { const [, bump] = React.useReducer((n: number) => n + 1, 0); return bump as () => void; }
 
@@ -45,6 +45,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     const [kept, setKept] = React.useState<Kept[]>(keptLog);
     const input = React.useRef<HTMLInputElement>(null);
     const caption = React.useRef<HTMLDivElement>(null);
+    const leader = React.useRef<SVGSVGElement>(null);
     const enteredBuild = React.useRef(false);
     const navBefore = React.useRef<'walk' | 'overview' | undefined>(undefined);
     const openRef = React.useRef(open); openRef.current = open;
@@ -118,6 +119,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     }, [open, build]);
     React.useEffect(() => () => { if (openRef.current) shapeStore.set(false); document.body.classList.remove('omo-shape-browse'); }, []);
     React.useEffect(() => { document.body.classList.toggle('omo-shape-browse', open && browse); }, [open, browse]);
+    React.useEffect(() => { document.body.classList.toggle('omo-shape-proposed', open && proposed); return () => document.body.classList.remove('omo-shape-proposed'); }, [open, proposed]);
     // The room closed or was rebuilt (no store): leave Shape.
     React.useEffect(() => { if (open && !build.store) show(false); });
 
@@ -141,7 +143,8 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             const t = threeOf(build.scene);
             breathe(t.scene, pendingIds);
             const card = caption.current; if (!card || !t.camera || !t.canvas) return;
-            const at = anchorOf(build.store?.preview, pendingIds); if (!at) return;
+            const main = pendingIds.slice(0, 1); // the card points at the main thing (the first new or changed one)
+            const at = ghostAnchor(t.scene, main) ?? anchorOf(build.store?.preview, main); if (!at) return;
             const r = t.canvas.getBoundingClientRect();
             const v = new THREE.Vector3(at.x, at.y, at.z).project(t.camera);
             const host = card.offsetParent?.getBoundingClientRect() ?? r;
@@ -155,7 +158,17 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             const zone = host.height * 0.07;
             if (Math.abs(x - cx) < w / 2 + host.width * 0.07 && y > cy - zone - 12 && y - h < cy + zone) y = Math.max(h + 72, cy - zone - 12);
             card.style.transform = `translate(${Math.round(x - w / 2)}px, ${Math.round(y - h)}px)`;
-            card.dataset.anchor = `${Math.round(r.left + (v.x + 1) / 2 * r.width)},${Math.round(r.top + (1 - v.y) / 2 * r.height)}`;
+            const ax = r.left + (v.x + 1) / 2 * r.width, ay = r.top + (1 - v.y) / 2 * r.height;
+            card.dataset.anchor = `${Math.round(ax)},${Math.round(ay)}`;
+            // A thin leader from the card's stem to the change, ending in a soft ring on it.
+            const lead = leader.current;
+            if (lead) {
+                const hx = ax - host.left, hy = ay - host.top, sx = x, sy = y + 6;
+                lead.setAttribute('data-on', String(v.z <= 1));
+                lead.querySelector('line')?.setAttribute('x1', String(Math.round(sx))); lead.querySelector('line')?.setAttribute('y1', String(Math.round(sy)));
+                lead.querySelector('line')?.setAttribute('x2', String(Math.round(hx))); lead.querySelector('line')?.setAttribute('y2', String(Math.round(hy)));
+                for (const c of Array.from(lead.querySelectorAll('circle'))) { c.setAttribute('cx', String(Math.round(hx))); c.setAttribute('cy', String(Math.round(hy))); }
+            }
         };
         tick();
         return () => { cancelAnimationFrame(frame); breathe(threeOf(build.scene).scene, []); };
@@ -175,14 +188,14 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
         const fresh = expandIdea(base);
         const refining = proposed && turn;
         const prompt = refining ? refinePrompt(turn!.prompt, fresh.prompt) : fresh.prompt;
-        setTurn({ prompt, idea: refining ? turn!.idea ?? fresh.idea : fresh.idea });
+        setTurn({ prompt, idea: refining ? turn!.idea ?? fresh.idea : fresh.idea, where: whereOf(typed) ?? (refining ? turn!.where : undefined) });
         setText(''); setPills([]); setDetails(false);
         void admin.ask(prompt);
         focusPrompt();
     };
     const keep = (): void => {
         if (!entry || !proposed) return;
-        const sentence = captionFor(entry.plan!.proposal!.summary, turn?.idea);
+        const sentence = captionFor(entry.plan!.proposal!.summary, turn?.idea, turn?.where);
         admin.apply(entry.id);
         if (admin.activeEntry?.status === 'applied') { keptLog = [...keptLog, { id: entry.id, sentence }].slice(-24); setKept(keptLog); }
         setTurn(undefined); focusPrompt();
@@ -207,13 +220,14 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     };
 
     const proposal = proposed ? entry!.plan!.proposal! : undefined;
-    const sentence = proposal ? captionFor(proposal.summary, turn?.idea) : '';
+    const sentence = proposal ? captionFor(proposal.summary, turn?.idea, turn?.where) : '';
     const failed = !busy && entry && (entry.status === 'failed' || entry.status === 'answered' || entry.status === 'stale') ? firstSentence(entry.plan?.notes[0] ?? entry.outcome ?? entry.plan?.explanation ?? '') : '';
     const chips = suggestionsFor(store.world);
     const hermes = adminState.useHermes && adminState.hermesConfirmed;
 
     return <>{button}
         <div className="omo-shape" data-testid="shape-mode" data-proposed={String(proposed)} data-busy={String(busy)} onPointerDown={e => e.stopPropagation()}>
+            {proposal && <svg className="omo-shape-leader" ref={leader} aria-hidden="true" data-on="false"><line x1="0" y1="0" x2="0" y2="0" /><circle className="is-halo" r="16" cx="0" cy="0" /><circle r="4.5" cx="0" cy="0" /></svg>}
             {proposal && <div className="omo-shape-caption" ref={caption} data-testid="shape-caption" role="dialog" aria-label="Proposed change">
                 <p data-testid="shape-caption-text">{sentence}</p>
                 <div className="omo-shape-caption-row">
@@ -238,6 +252,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
                     <input ref={input} data-testid="shape-input" value={text} maxLength={400} spellCheck={false} autoComplete="off"
                         placeholder={proposed ? 'Refine it… or press Enter to keep' : pills.length ? 'Say what to do with it…' : 'Describe a change…'} aria-label="Describe a change"
                         onChange={e => setText(e.currentTarget.value)} onKeyDown={onKey} />
+                    {(text.trim() || pills.length > 0) && <kbd className="omo-shape-enter" aria-hidden="true">↵</kbd>}
                     <button type="button" className="omo-shape-browse" data-testid="shape-browse" aria-pressed={browse} onMouseDown={e => e.preventDefault()} onClick={() => setBrowse(!browse)} title="Pick from the catalogue instead">Browse</button>
                 </form>
                 {!proposed && !busy && !pills.length && <div className="omo-shape-chips" data-testid="shape-chips">
@@ -262,6 +277,17 @@ function anchorOf(world: WorldSpec | undefined, ids: string[]): { x: number; y: 
     const x = ents.reduce((s, e) => s + e.transform.x, 0) / ents.length, z = ents.reduce((s, e) => s + e.transform.z, 0) / ents.length;
     return { x, y: 1.5, z };
 }
+const GHOST = 0x4fd2ff;
+/** Top centre of the pending things as build mode drew them (world space): the caption points here. */
+function ghostAnchor(three: THREE.Scene | undefined, ids: string[]): { x: number; y: number; z: number } | undefined {
+    const layer = three?.getObjectByName('omo-build-layer'); if (!layer) return undefined;
+    const box = new THREE.Box3(); let any = false;
+    layer.updateMatrixWorld(true);
+    layer.traverse(node => { const id = node.userData?.buildEntityId as string | undefined; if (id && ids.includes(id)) { box.expandByObject(node); any = true; } });
+    if (!any || box.isEmpty()) return undefined;
+    const c = box.getCenter(new THREE.Vector3());
+    return { x: c.x, y: box.max.y, z: c.z };
+}
 /** The pending blueprints of build mode's layer pulse softly (a breathing ghost). Read-only lookup by name. */
 function breathe(three: THREE.Scene | undefined, ids: string[]): void {
     const layer = three?.getObjectByName('omo-build-layer'); if (!layer) return;
@@ -279,7 +305,9 @@ function breathe(three: THREE.Scene | undefined, ids: string[]): void {
             if (m.userData.shapeDepth === undefined) m.userData.shapeDepth = m.depthTest;
             const depth = on ? false : m.userData.shapeDepth as boolean;
             if (m.depthTest !== depth) { m.depthTest = depth; m.needsUpdate = true; child.renderOrder = on ? 20 : child.renderOrder; touched = true; }
-            const next = on ? ((child as THREE.Mesh).isMesh ? 0.1 + 0.16 * k : 0.4 + 0.6 * k) : base;
+            if (m.color && m.userData.shapeColor === undefined) m.userData.shapeColor = m.color.getHex();
+            if (m.color) { const c = on ? GHOST : m.userData.shapeColor as number; if (m.color.getHex() !== c) { m.color.setHex(c); touched = true; } }
+            const next = on ? ((child as THREE.Mesh).isMesh ? 0.3 + 0.25 * k : 0.75 + 0.25 * k) : base;
             if (m.opacity !== next) { m.opacity = next; touched = true; }
         });
     });

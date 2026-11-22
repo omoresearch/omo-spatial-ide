@@ -19,7 +19,7 @@ const world = () => model.worldFromRoomV1(room);
 test('a reading nook becomes things the rules planner knows, and plans 3 adds', () => {
   const r = shape.expandIdea('add a reading nook by the window');
   assert.equal(r.idea, 'A reading nook');
-  assert.match(r.prompt, /armchair, a lamp and a bookshelf by the window/);
+  assert.equal(r.prompt, 'add an armchair by the window, then add a lamp next to the armchair, then add a bookshelf next to the armchair');
   const plan = planWithRules(world(), r.prompt);
   assert.equal(plan.proposal.ops.filter(o => o.op === 'add').length, 3);
   assert.equal(shape.captionFor(plan.proposal.summary, r.idea), 'A reading nook: armchair, lamp and bookshelf.');
@@ -28,7 +28,7 @@ test('a reading nook becomes things the rules planner knows, and plans 3 adds', 
 test('"make it bigger" refines the pending prompt: every added thing is big', () => {
   const first = shape.expandIdea('add a reading nook by the window').prompt;
   const next = shape.refinePrompt(first, 'make it bigger');
-  assert.match(next, /a big armchair, a big lamp and a big bookshelf/);
+  assert.match(next, /a big armchair by the window, then add a big lamp next to the armchair, then add a big bookshelf/);
   const plan = planWithRules(world(), next);
   assert.ok(plan.proposal.ops.every(o => o.op !== 'add' || o.entity.scale > 1), JSON.stringify(plan.proposal.ops));
   assert.equal(shape.refinePrompt('add a sofa', 'move it left'), 'add a sofa then move it left');
@@ -61,4 +61,10 @@ test('chips: three, fit the room', () => {
   assert.equal(chips.length, 3);
   assert.deepEqual(chips, ['Add a reading nook by the window', 'Make it warmer at night', 'Add a desk for Claude']);
   for (const c of chips) assert.ok(planWithRules(world(), shape.expandIdea(c).prompt).proposal, c);
+});
+
+test('where: the place in the request goes into the caption', () => {
+  assert.equal(shape.whereOf('add a reading nook by the window'), 'by the window');
+  assert.equal(shape.whereOf('make it bigger'), undefined);
+  assert.equal(shape.captionFor('Add armchair; Add lamp; Add bookshelf', 'A reading nook', 'by the window'), 'A reading nook: armchair, lamp and bookshelf by the window.');
 });
