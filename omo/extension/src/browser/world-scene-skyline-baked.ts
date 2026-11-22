@@ -87,6 +87,27 @@ function dropStrayCabinet(mesh: THREE.Mesh, room: THREE.Object3D): void {
     mesh.userData.strayDropped = dropped;
 }
 
+/**
+ * world-ui r4 fix 1 — ceiling pendants (baked space): over the dining table and over the bar. The overview cut-away
+ * removes their cords, so their shades seemed to float; their triangles move to a child mesh the overview hides.
+ */
+const PENDANT_ZONES = [{ x0: 3.3, x1: 5.7, z0: -9.9, z1: -8.8 }, { x0: 14.6, x1: 17.4, z0: -2.1, z1: -1.1 }];
+function splitPendants(mesh: THREE.Mesh, room: THREE.Object3D): THREE.Mesh | undefined {
+    const g = mesh.geometry, idx = g.index; if (!idx || g.groups.length) return undefined;
+    const m = new THREE.Matrix4(); for (let n: THREE.Object3D | null = mesh; n && n !== room; n = n.parent) { n.updateMatrix(); m.premultiply(n.matrix); }
+    const pos = g.getAttribute('position') as THREE.BufferAttribute, v = new THREE.Vector3(), c = new THREE.Vector3();
+    const keep: number[] = [], move: number[] = [];
+    for (let t = 0; t < idx.count; t += 3) {
+        c.set(0, 0, 0); for (let k = 0; k < 3; k++) c.add(v.fromBufferAttribute(pos, idx.getX(t + k)).applyMatrix4(m)); c.multiplyScalar(1 / 3);
+        const hang = c.y > 1.45 && PENDANT_ZONES.some(z => c.x > z.x0 && c.x < z.x1 && c.z > z.z0 && c.z < z.z1);
+        (hang ? move : keep).push(idx.getX(t), idx.getX(t + 1), idx.getX(t + 2));
+    }
+    if (!move.length) return undefined;
+    const g2 = g.clone(); g2.setIndex(move); g.setIndex(keep);
+    const p = new THREE.Mesh(g2, mesh.material); p.name = `${mesh.name}-pendant`; p.userData.pendant = true; p.raycast = () => undefined;
+    mesh.add(p); return p;
+}
+
 /** world-ui r4/5 — shift a live prop (baked space: x 0..W, z -D..0) so its whole bounding box stays 5 cm inside the walls. */
 function keepInside(o: THREE.Object3D, W: number, D: number, pad = 0.05): void {
     o.updateMatrixWorld(true); const b = new THREE.Box3().setFromObject(o);
@@ -197,6 +218,8 @@ export class SkylineKitLoader {
             }
             mesh.material = cache.get(key)!;
         });
+        const hanging: THREE.Mesh[] = []; room.traverse(n => { const mesh = n as THREE.Mesh; if (mesh.isMesh && !mesh.userData.pendant) hanging.push(mesh); });
+        for (const mesh of hanging) splitPendants(mesh, room); // world-ui r4 fix 1
         for (const L of lamps) {
             const pl = new THREE.PointLight(new THREE.Color(...L.color), L.intensity * (/^DeskLamp/.test((L as { name?: string }).name ?? '') ? 0.45 : 0.8), L.distance, 2); // world-ui (1): desk lamps no longer burn the desk tops
             pl.position.set(...L.pos); baked.add(pl);
@@ -222,7 +245,21 @@ export class SkylineKitLoader {
         // world-ui (3): one clipping plane on every baked material. Walking: far above the roof (no effect). Overview:
         // at 2.3 m, so the ceiling, roof, beams and pendants are cut away and the furnished floor is seen from above.
         const cut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4); root.userData.cutPlane = cut;
-        baked.traverse(n => { const m = (n as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined; if (m) for (const mt of Array.isArray(m) ? m : [m]) mt.clippingPlanes = [cut]; });
+        // world-ui r4 fix 1: walls, glass and mullions (LM_ARCH + the glass panes) are cut lower than the furniture
+        // (a dollhouse cut-away), so the front parapet no longer hides the floor in the overview.
+        const wallCut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4); root.userData.wallCutPlane = wallCut;
+        const arch = new Set<THREE.Material>([tint, refl]);
+        room.traverse(n => { let g: THREE.Object3D | null = n; while (g && !/^LM_/.test(g.name)) g = g.parent; const m = (n as THREE.Mesh).material as THREE.Material | undefined; if (g?.name === 'LM_ARCH' && m && !Array.isArray(m)) arch.add(m); });
+        const pendantCut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4); root.userData.pendantCutPlane = pendantCut;
+        const pendantMats = new Map<THREE.Material, THREE.Material>();
+        baked.traverse(n => {
+            const mesh = n as THREE.Mesh; if (!mesh.userData.pendant) return;
+            const src = mesh.material as THREE.Material; let mt = pendantMats.get(src);
+            if (!mt) { mt = src.clone(); if ((mt as THREE.MeshStandardMaterial).lightMap) patchBaked(mt as THREE.MeshStandardMaterial); pendantMats.set(src, mt); }
+            mesh.material = mt;
+        });
+        const pend = new Set(pendantMats.values());
+        baked.traverse(n => { const m = (n as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined; if (m) for (const mt of Array.isArray(m) ? m : [m]) mt.clippingPlanes = pend.has(mt) ? [pendantCut] : arch.has(mt) ? [wallCut] : [cut]; });
         return { root, env, backdrop, triangles: Math.round(triangles), ms: Math.round(performance.now() - t0) };
     }
 }
@@ -239,7 +276,8 @@ export function buildKitStation(entity: StationEntity, kit: StyleKit, texture: T
     screen.position.set(0, ds.y, ds.z + 0.008); group.add(screen);
     // Invisible hit box over the desk top so a click on the desk (not only the small screen) selects the station.
     const hit = box(group, [1.9, 0.05, 0.9], [0, 0.8, 0], 0x000000); (hit.material as THREE.Material).visible = false; hit.castShadow = false; hit.receiveShadow = false;
-    const lamp = glow(group, [0.18, 0.012, 0.012], [0, ds.y - ds.height / 2 - 0.025, ds.z + 0.012], 0x6d7c86);
+    // world-ui r4 fix 1: a thin status strip on the bezel's lower edge (was an 18 cm pale bar floating under the screen).
+    const lamp = glow(group, [0.08, 0.004, 0.004], [0, ds.y - ds.height / 2 - 0.006, ds.z + 0.01], 0x6d7c86, 0.6);
     lamp.castShadow = false;
     namePlate(group, entity, { y: 0.66, z: 0.49, scale: 0.62 });
     return { root: group, screen, lamp };

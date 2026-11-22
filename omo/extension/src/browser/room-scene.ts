@@ -147,7 +147,7 @@ function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: 
  * it changes only this constant (the shell builder applies it to any shell size).
  */
 /** world-ui r4/5 — the kit overview: cut-away height (m) and the tilt factor on the user's overview elevation. */
-const KIT_CUT = 2.3, KIT_OVERVIEW_TILT = 0.8;
+const KIT_CUT = 2.3, KIT_WALL_CUT = 0.9, KIT_OVERVIEW_TILT = 0.8;
 const ORB: OrbSpot = { x: -2.9, y: 2.2, z: -4.2, ringZ: -4.1, scale: 0.62 }; // w2:polish — clear of the web wall
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
 const MAX_PIXEL_RATIO = 1.5;
@@ -569,6 +569,10 @@ export class RoomScene {
         this.renderer.localClippingEnabled = !!shell;
         const cut = shell?.root.userData.cutPlane as THREE.Plane | undefined;
         if (cut) { const c = overview ? KIT_CUT : 1e4; if (cut.constant !== c) { cut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
+        const wallCut = shell?.root.userData.wallCutPlane as THREE.Plane | undefined; // world-ui r4 fix 1: dollhouse walls
+        const pendantCut = shell?.root.userData.pendantCutPlane as THREE.Plane | undefined; // world-ui r4 fix 1: no floating pendant shades
+        if (pendantCut) pendantCut.constant = overview ? -1 : 1e4;
+        if (wallCut) { const c = overview ? KIT_WALL_CUT : 1e4; if (wallCut.constant !== c) { wallCut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
         shell?.root.userData.setOverview?.(overview); // world-ui r4/5: city backdrop below the floor only, highlights compressed
         if (this.skyFx) {
             this.skyFx.setBloom(kit ? (overview ? kit.render.overviewBloom : kit.render.bloom) : { strength: 0.3, radius: 0.4, threshold: 1.8 });
@@ -1140,7 +1144,7 @@ export class RoomScene {
         // world-ui r4/5 — a baked kit floor: a lower camera (elevation x KIT_OVERVIEW_TILT) that fits the floor plate to the view.
         const kit = this.world ? activeKit(this.world) : undefined, kitOn = !!kit && this.kitShells.has(kit.id);
         if (kitOn) {
-            const el = Math.max(0.15, e * KIT_OVERVIEW_TILT), frame = kitOverviewFrame(kit!.shell, KIT_CUT, { azimuth: a, elevation: el, aspect: this.camera.aspect, fov: this.camera.fov });
+            const el = Math.max(0.15, e * KIT_OVERVIEW_TILT), frame = kitOverviewFrame(kit!.shell, 1.6, { azimuth: a, elevation: el, aspect: this.camera.aspect, fov: this.camera.fov });
             const k = frame.distance * d / 24, t = frame.target;
             this.camera.position.set(t.x+Math.sin(a)*Math.cos(el)*k,t.y+Math.sin(el)*k,t.z+Math.cos(a)*Math.cos(el)*k);
             this.camera.lookAt(t.x,t.y,t.z);
