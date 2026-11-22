@@ -475,6 +475,7 @@ export class RoomScene {
             this.shellRoot = kitShell ? kitShell.root : world.shell.theme === 'skyline' ? buildSkylineShell(world.shell, blocks, this.camera) : buildShell(world.shell, blocks, ORB); /* sky:render */ this.worldRoot.add(this.shellRoot); freezeTree(this.shellRoot); this.shellKey = shellKey;
         }
         if (this.skyFx) this.skyFx.useEnvironment(kitShell?.env); // sky:merge M1 — the kit's baked reflection probe replaces the generic room environment
+        this.applyKitView(); // world-ui (1, 3)
         const pk = pathsKey(world.shell, world.entities); // w3:look (7) — plaza, paths, lamps (open worlds)
         if (pk !== this.pathsKey) {
             if (this.pathsRoot) { this.worldRoot.remove(this.pathsRoot); disposeTree(this.pathsRoot); this.pathsRoot = undefined; }
@@ -555,6 +556,19 @@ export class RoomScene {
         const colors = shellColors(jungle);
         (this.scene.background as THREE.Color).set(colors.background); (this.scene.fog as THREE.Fog).color.set(colors.background);
         if (this.lights) { this.lights.hemi.color.setHex(colors.hemiSky); this.lights.sun.color.setHex(colors.sun); this.lights.accent.color.setHex(colors.accent); }
+    }
+    /** world-ui (1, 3) — kit view: the kit's clamped bloom + exposure; in the overview the baked ceiling/roof is cut away (dollhouse). */
+    private applyKitView(): void {
+        if (!this.renderer || !this.world) return;
+        const kit = activeKit(this.world), shell = kit ? this.kitShells.get(kit.id) : undefined, overview = this.navigation !== 'walk';
+        this.renderer.localClippingEnabled = !!shell;
+        const cut = shell?.root.userData.cutPlane as THREE.Plane | undefined;
+        if (cut) { const c = overview ? 2.3 : 1e4; if (cut.constant !== c) { cut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
+        if (this.skyFx) {
+            this.skyFx.setBloom(kit ? (overview ? kit.render.overviewBloom : kit.render.bloom) : { strength: 0.3, radius: 0.4, threshold: 1.8 });
+            this.renderer.toneMappingExposure = kit && shell ? kit.render.exposure : 1.0;
+        }
+        this.invalidate();
     }
     /** sky:merge M1 — the loaded baked shell of `kit`, or undefined while it loads / when its assets are missing (starts the load once). */
     private kitShell(kit: StyleKit): { root: THREE.Group; env: THREE.Texture } | undefined {
@@ -864,7 +878,7 @@ export class RoomScene {
     setNavigation(mode: 'walk' | 'overview'): void {
         this.navigation = mode; this.camera.fov = mode === 'walk' ? 65 : 38; this.camera.updateProjectionMatrix();
         this.walker?.setEnabled(mode === 'walk');
-        this.cutRooms(); // w3:render — rooms: full walls when walking, low cutaway walls in the overview
+        this.cutRooms(); this.applyKitView(); // w3:render — rooms: full walls when walking, low cutaway walls in the overview; world-ui (3) kit cut-away + bloom
         if (this.world) { this.applyScaleView(); this.parkCheck.x = NaN; this.walked(this.walker?.pose ?? PLAYER_HOME); } // w3:render — overview: parked screens resume
         if (this.walker) this.smoother.snap(this.walker.pose);
         if (this.renderer) { this.renderer.domElement.dataset.navigation = mode; }

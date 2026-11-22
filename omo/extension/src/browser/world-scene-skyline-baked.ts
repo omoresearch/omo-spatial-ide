@@ -186,6 +186,10 @@ export class SkylineKitLoader {
             o.traverse(n => { n.raycast = () => undefined; });
             baked.add(o);
         }
+        // world-ui (3): one clipping plane on every baked material. Walking: far above the roof (no effect). Overview:
+        // at 2.3 m, so the ceiling, roof, beams and pendants are cut away and the furnished floor is seen from above.
+        const cut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4); root.userData.cutPlane = cut;
+        baked.traverse(n => { const m = (n as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined; if (m) for (const mt of Array.isArray(m) ? m : [m]) mt.clippingPlanes = [cut]; });
         return { root, env, backdrop, triangles: Math.round(triangles), ms: Math.round(performance.now() - t0) };
     }
 }
