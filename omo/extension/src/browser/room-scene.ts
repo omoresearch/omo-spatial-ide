@@ -23,7 +23,7 @@ import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
 import { openSky } from './world-scene-open'; // w3:render
-import { cameraClip, overviewFrame, shadowFrame, terminalFar, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render; w3:look overviewFrame
+import { cameraClip, kitOverviewFrame, overviewFrame, shadowFrame, terminalFar, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render; w3:look overviewFrame
 import { refreeze as refreezeNode } from './world-scene-kit'; // w3:render
 import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
 import { buildPaths, pathsKey } from './world-scene-paths'; // w3:look (7)
@@ -144,6 +144,8 @@ function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: 
  * The station theme's back-wall orb (globe + ring), v1 room coordinates. Data-driven so a lane that moves
  * it changes only this constant (the shell builder applies it to any shell size).
  */
+/** world-ui r4/5 — the kit overview: cut-away height (m) and the tilt factor on the user's overview elevation. */
+const KIT_CUT = 2.3, KIT_OVERVIEW_TILT = 0.8;
 const ORB: OrbSpot = { x: -2.9, y: 2.2, z: -4.2, ringZ: -4.1, scale: 0.62 }; // w2:polish — clear of the web wall
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
 const MAX_PIXEL_RATIO = 1.5;
@@ -564,7 +566,8 @@ export class RoomScene {
         const kit = activeKit(this.world), shell = kit ? this.kitShells.get(kit.id) : undefined, overview = this.navigation !== 'walk';
         this.renderer.localClippingEnabled = !!shell;
         const cut = shell?.root.userData.cutPlane as THREE.Plane | undefined;
-        if (cut) { const c = overview ? 2.3 : 1e4; if (cut.constant !== c) { cut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
+        if (cut) { const c = overview ? KIT_CUT : 1e4; if (cut.constant !== c) { cut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
+        shell?.root.userData.setOverview?.(overview); // world-ui r4/5: city backdrop below the floor only, highlights compressed
         if (this.skyFx) {
             this.skyFx.setBloom(kit ? (overview ? kit.render.overviewBloom : kit.render.bloom) : { strength: 0.3, radius: 0.4, threshold: 1.8 });
             this.renderer.toneMappingExposure = kit && shell ? kit.render.exposure : 1.0;
@@ -1132,6 +1135,19 @@ export class RoomScene {
         if (this.navigation === 'walk') { this.walker?.step(0); return; }
         const {azimuth:a,elevation:e,distance:d}=this.state;
         // w3:look — open worlds: frame the rooms and entities (zoom scales the fitted distance; 24 = default zoom).
+        // world-ui r4/5 — a baked kit floor: a lower camera (elevation x KIT_OVERVIEW_TILT) that fits the floor plate to the view.
+        const kit = this.world ? activeKit(this.world) : undefined, kitOn = !!kit && this.kitShells.has(kit.id);
+        if (kitOn) {
+            const el = Math.max(0.15, e * KIT_OVERVIEW_TILT), frame = kitOverviewFrame(kit!.shell, KIT_CUT, { azimuth: a, elevation: el, aspect: this.camera.aspect, fov: this.camera.fov });
+            const k = frame.distance * d / 24, t = frame.target;
+            this.camera.position.set(t.x+Math.sin(a)*Math.cos(el)*k,t.y+Math.sin(el)*k,t.z+Math.cos(a)*Math.cos(el)*k);
+            this.camera.lookAt(t.x,t.y,t.z);
+            // The city backdrop fades above the floor plate: the highest view ray to a floor corner is its horizon.
+            const c = this.camera.position, hw = kit!.shell.width/2, hd = kit!.shell.depth/2; let horizon = -1;
+            for (const x of [-hw, hw]) for (const z of [-hd, hd]) { const dx = x-c.x, dy = -c.y, dz = z-c.z; horizon = Math.max(horizon, dy/Math.hypot(dx,dy,dz)); }
+            this.kitShells.get(kit!.id)?.root.userData.setHorizon?.(horizon);
+            return;
+        }
         const content = this.world ? overviewFrame(this.world, { azimuth: a, elevation: e, aspect: this.camera.aspect, fov: this.camera.fov }) : undefined;
         if (content) {
             const k = content.distance * d / 24, t = content.target;
