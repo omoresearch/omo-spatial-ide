@@ -44,33 +44,51 @@ function shell(title: string, body: string, css = '', script = ''): string {
 }
 
 const STATUS_CLASS: Record<string, string> = { working: 'is-working', waiting: 'is-waiting', idle: 'is-idle', shell: 'is-shell', off: 'is-off' };
-const STATUS_TEXT: Record<string, string> = { working: 'Working', waiting: 'Waiting for you', idle: 'Finished', shell: 'Shell open', off: 'Not connected' };
+/** What a wall display says for each desk status: green working, amber waiting for you, mint finished, grey idle / not connected. */
+const STATUS_TEXT: Record<string, string> = { working: 'Working', waiting: 'Waiting for you', idle: 'Finished', shell: 'Idle', off: 'Not connected' };
+export const DASHBOARD_COLOURS: Record<string, string> = { working: '#3ddc84', waiting: '#ffb020', idle: '#7ff5d0', shell: '#8b98a5', off: '#8b98a5' };
 
+/** One desk card: the status is the biggest, coloured line; then the desk name; then what runs there. */
+function deskCard(d: DashboardDesk): string {
+    return `<article class="desk ${STATUS_CLASS[d.status] ?? 'is-off'}" data-desk="${escapeHtml(d.id)}"><p class="status"><i></i>${escapeHtml(STATUS_TEXT[d.status] ?? d.status)}</p><h2>${escapeHtml(d.name)}</h2><p class="tabs">${escapeHtml(d.tabs.join(' · ') || 'no tabs')}</p></article>`;
+}
 /** The desk cards, server-side (first paint) — the page script draws the same markup on every refresh. */
 function deskCards(desks: DashboardDesk[]): string {
     if (!desks.length) return '<p class="empty">No desks in this room yet.</p>';
-    return desks.map(d => `<article class="desk ${STATUS_CLASS[d.status] ?? 'is-off'}" data-desk="${escapeHtml(d.id)}"><header><h2>${escapeHtml(d.name)}</h2><span class="pill">${escapeHtml(STATUS_TEXT[d.status] ?? d.status)}</span></header><p class="tabs">${escapeHtml(d.tabs.join(' · ') || 'no tabs')}</p><p class="where">${escapeHtml(d.where)}</p></article>`).join('');
+    return desks.map(deskCard).join('');
 }
 
+/**
+ * The desk dashboard is a WALL DISPLAY, not a web page: it is read from across the room on a 960 x 600 web
+ * surface, so it fills the whole page with one big card per desk (up to 3 across), type sized in vw/vh
+ * (status ~5.4vw, desk name ~3.8vw: 3-4x a web page), the status as the most prominent element, in colour.
+ */
 export function dashboardPage(req: Pick<PageRequest, 'title'>, state: PageState): string {
+    const c = DASHBOARD_COLOURS;
     const css = `
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
-.desk{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--grey);border-radius:14px;padding:16px 18px}
-.desk header{display:flex;justify-content:space-between;align-items:center;gap:8px}.desk h2{font-size:20px;margin:0}
-.pill{font-size:12px;padding:3px 9px;border-radius:999px;background:#1d2a36;color:var(--soft);white-space:nowrap}
-.tabs{margin:10px 0 2px;color:var(--ink)}.where{margin:0;color:var(--soft);font-size:13px}
-.is-working{border-left-color:var(--cyan)}.is-working .pill{color:var(--cyan)}
-.is-waiting{border-left-color:var(--amber)}.is-waiting .pill{color:var(--amber)}
-.is-idle{border-left-color:var(--green)}.is-idle .pill{color:var(--green)}
-.is-shell{border-left-color:#7b8ea0}.empty{color:var(--soft)}
-.counts{display:flex;gap:22px;margin:0 0 22px;color:var(--soft)}.counts b{color:var(--ink);font-size:22px;margin-right:6px}
-.live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px;vertical-align:middle}
-.stale .live{background:var(--amber)}`;
+html,body{height:100%;overflow:hidden}body{font-size:2.4vw}
+.wall{height:100vh;display:flex;flex-direction:column;padding:3.2vh 2.6vw 3vh;gap:2.6vh}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:2vw}
+.top h1{font-size:4.2vw;line-height:1;margin:0;font-weight:800;letter-spacing:-.01em}
+.counts{display:flex;gap:2.2vw;color:var(--soft);font-size:2.5vw;font-weight:600;white-space:nowrap}.counts b{color:var(--ink);margin-right:.35em}
+.grid{flex:1;display:grid;grid-template-columns:repeat(var(--cols,3),1fr);grid-auto-rows:1fr;gap:2vw;min-height:0}
+.desk{background:var(--card);border:.3vw solid var(--line);border-top:1.4vh solid var(--grey);border-radius:1.6vw;padding:2.6vh 1.8vw;display:flex;flex-direction:column;gap:1.6vh;min-width:0;overflow:hidden}
+.status{margin:0;font-size:5.4vw;line-height:1.02;font-weight:800;letter-spacing:-.015em;color:var(--grey)}
+.status i{display:inline-block;width:.62em;height:.62em;border-radius:50%;background:currentColor;margin-right:.28em;vertical-align:.04em}
+.desk h2{margin:auto 0 0;font-size:3.8vw;line-height:1.08;font-weight:700;overflow-wrap:anywhere}
+.tabs{margin:0;font-size:2.5vw;line-height:1.2;color:var(--soft);overflow-wrap:anywhere}
+.is-working{border-top-color:${c.working}}.is-working .status{color:${c.working}}
+.is-waiting{border-top-color:${c.waiting}}.is-waiting .status{color:${c.waiting}}
+.is-idle{border-top-color:${c.idle}}.is-idle .status{color:${c.idle}}
+.is-shell,.is-off{border-top-color:${c.off}}.is-shell .status,.is-off .status{color:${c.off}}
+.empty{color:var(--soft);font-size:4vw;margin:auto}
+footer{margin:0;font-size:1.9vw;color:var(--grey)}.stale footer{color:var(--amber)}`;
     const script = `
 (function(){var S=${scriptJson(STATUS_TEXT)},C=${scriptJson(STATUS_CLASS)};
 function e(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function draw(st){var g=document.getElementById('desks'),d=st.desks||[];
-g.innerHTML=d.length?d.map(function(x){return '<article class="desk '+(C[x.status]||'is-off')+'" data-desk="'+e(x.id)+'"><header><h2>'+e(x.name)+'</h2><span class="pill">'+e(S[x.status]||x.status)+'</span></header><p class="tabs">'+e((x.tabs||[]).join(' · ')||'no tabs')+'</p><p class="where">'+e(x.where||'')+'</p></article>'}).join(''):'<p class="empty">No desks in this room yet.</p>';
+g.innerHTML=d.length?d.map(function(x){return '<article class="desk '+(C[x.status]||'is-off')+'" data-desk="'+e(x.id)+'"><p class="status"><i></i>'+e(S[x.status]||x.status)+'</p><h2>'+e(x.name)+'</h2><p class="tabs">'+e((x.tabs||[]).join(' · ')||'no tabs')+'</p></article>'}).join(''):'<p class="empty">No desks in this room yet.</p>';
+if(g.style&&g.style.setProperty)g.style.setProperty('--cols',String(Math.max(1,Math.min(3,d.length))));
 var n=function(s){return d.filter(function(x){return x.status===s}).length};
 document.getElementById('n-desks').textContent=d.length;document.getElementById('n-working').textContent=n('working');document.getElementById('n-waiting').textContent=n('waiting');document.getElementById('n-idle').textContent=n('idle');
 var age=Math.max(0,Math.round((Date.now()-st.at)/1000));document.body.classList.toggle('stale',age>30);
@@ -79,9 +97,9 @@ var refreshes=0;window.__omoDraw=draw;
 function tick(){fetch('state.json',{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(st){if(st&&st.desks)draw(st)}).catch(function(){})}
 setInterval(tick,${PAGE_REFRESH_MS});tick();})();`;
     const count = (s: string): number => state.desks.filter(d => d.status === s).length;
-    const body = `<main><h1>${escapeHtml(req.title)}</h1><p class="sub"><span class="live"></span>Live from your Omo room “${escapeHtml(state.world)}” · refreshes every ${PAGE_REFRESH_MS / 1000} s</p>
-<div class="counts"><span><b id="n-desks">${state.desks.length}</b>desks</span><span><b id="n-working">${count('working')}</b>working</span><span><b id="n-waiting">${count('waiting')}</b>waiting for you</span><span><b id="n-idle">${count('idle')}</b>finished</span></div>
-<section class="grid" id="desks">${deskCards(state.desks)}</section>
+    const cols = Math.max(1, Math.min(3, state.desks.length));
+    const body = `<main class="wall"><div class="top"><h1>${escapeHtml(req.title)}</h1><div class="counts"><span><b id="n-desks">${state.desks.length}</b>desks</span><span><b id="n-working">${count('working')}</b>working</span><span><b id="n-waiting">${count('waiting')}</b>waiting for you</span><span><b id="n-idle">${count('idle')}</b>finished</span></div></div>
+<section class="grid" id="desks" style="--cols:${cols}">${deskCards(state.desks)}</section>
 <footer id="updated">Updated ${escapeHtml(new Date(state.at).toISOString())}</footer></main>`;
     return shell(req.title, body, css, script);
 }

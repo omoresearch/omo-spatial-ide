@@ -149,6 +149,34 @@ test('the dashboard script redraws from fresh state (run in a tiny DOM stand-in)
   assert.equal(body.dataset.refreshes, '1');
 });
 
+test('the desk dashboard is a wall display: 3 big cards fill the page, status first and in colour, no small subtitle', () => {
+  const state = { at: Date.now(), world: 'Lounge', desks: [
+    { id: 'a', name: 'Plan · Hermes', status: 'working', tabs: ['Hermes'], where: 'w' },
+    { id: 'b', name: 'Code · Claude', status: 'waiting', tabs: ['Claude'], where: 'w' },
+    { id: 'c', name: 'Review · Codex', status: 'idle', tabs: ['Codex'], where: 'w' }] };
+  const html = pages.dashboardPage({ title: 'Desk dashboard' }, state);
+  assert.doesNotMatch(html, /class="sub"/, 'no tiny subtitle');
+  assert.doesNotMatch(html, /class="where"/, 'no small place line on the wall');
+  assert.match(html, /style="--cols:3"/);
+  assert.match(html, /grid-template-columns:repeat\(var\(--cols,3\),1fr\)/);
+  assert.match(html, /\.wall\{height:100vh/, 'the cards fill the page height');
+  const px = sel => Number(new RegExp(`${sel.replace('.', '\\.')}\\{[^}]*font-size:([\\d.]+)vw`).exec(html)[1]);
+  assert.ok(px('.status') > px('.desk h2') && px('.desk h2') > px('.tabs'), 'status is the most prominent line');
+  // 960 px surface: status 5.4vw = 52 px, name 3.8vw = 36 px — 3-4x the old 12 px pill / 20 px name.
+  assert.ok(px('.status') * 9.6 >= 48 && px('.desk h2') * 9.6 >= 34);
+  assert.ok(html.indexOf('class="status"') < html.indexOf('<h2>Plan'), 'status comes before the name in each card');
+  assert.equal(pages.DASHBOARD_COLOURS.working, '#3ddc84');
+  assert.equal(pages.DASHBOARD_COLOURS.waiting, '#ffb020');
+  assert.equal(pages.DASHBOARD_COLOURS.idle, '#7ff5d0');
+  assert.equal(pages.DASHBOARD_COLOURS.off, pages.DASHBOARD_COLOURS.shell);
+  assert.match(html, /\.is-working \.status\{color:#3ddc84\}/);
+  assert.match(html, /\.is-waiting \.status\{color:#ffb020\}/);
+  assert.match(html, /\.is-idle \.status\{color:#7ff5d0\}/);
+  assert.match(html, />Working<\/p><h2>Plan · Hermes/);
+  assert.match(html, />Waiting for you<\/p><h2>Code · Claude/);
+  assert.match(html, />Finished<\/p><h2>Review · Codex/);
+});
+
 test('page store: saved under <workspace>/.omo/pages, served read-only, survives a new store (reload), refuses bad names', async () => {
   const ws = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'omo-pages-'));
   try {
