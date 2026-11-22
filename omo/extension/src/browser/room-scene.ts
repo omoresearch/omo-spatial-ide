@@ -117,7 +117,7 @@ interface ScreenSurface {
     /** w2:render — empty-screen hint (linked walls) and the last painted linked input. */
     hint?: string;
     /** world-ui (g) — a desk monitor's idle card: the desk name and its tabs, in type readable from ~2 m. */
-    card?: { name: string; tabs: string };
+    card?: { name: string; tabs: string; start?: string };
     linkSource?: unknown;
     /** w3:render — far from the player: keeps its last painted frame until the player comes nearer. */
     parked?: boolean;
@@ -125,9 +125,9 @@ interface ScreenSurface {
 const SURFACE_W = 1024, SURFACE_H = 576;
 /**
  * world-ui (g) — the idle desk monitor: a calm card with the desk name in large type (legible from the spawn,
- * ~2 m away) and its tabs, instead of 20 px terminal text. The crosshair hint is the one 'click to use' message.
+ * ~2 m away), its tabs and one call to action (Click to start <first tab>); the crosshair hint hides on a monitor.
  */
-function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: string }, status?: string): void {
+function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: string; start?: string }, status?: string): void {
     const g = c.createLinearGradient(0, 0, 0, SURFACE_H); g.addColorStop(0, '#13212b'); g.addColorStop(1, '#0a1218');
     c.fillStyle = g; c.fillRect(0, 0, SURFACE_W, SURFACE_H);
     const font = (w: number, px: number): string => `${w} ${px}px Inter, "Segoe UI", system-ui, sans-serif`;
@@ -136,9 +136,11 @@ function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: 
     c.fillStyle = '#9fb4b2'; c.font = font(600, 30); c.fillText('READY', 98, 107);
     c.fillStyle = '#f2f6f5'; c.font = font(700, 92); c.fillText(card.name, 56, 268, SURFACE_W - 112);
     c.fillStyle = '#a9bcba'; c.font = font(500, 44); c.fillText(card.tabs, 58, 344, SURFACE_W - 116);
-    const note = status && !/click to use/i.test(status) ? status : 'Nothing running yet';
-    c.fillStyle = '#6f8584'; c.font = font(500, 36); c.fillText(note.slice(0, 40), 58, 494, SURFACE_W - 116);
     c.fillStyle = 'rgba(127,209,180,.35)'; c.fillRect(56, 404, 120, 4);
+    // world-ui r4/6: one call to action (the crosshair hint hides on a monitor); a real status sits small above it.
+    const note = status && !/click to use/i.test(status) ? status : '';
+    if (note) { c.fillStyle = '#6f8584'; c.font = font(500, 30); c.fillText(note.slice(0, 48), 58, 456, SURFACE_W - 116); }
+    c.fillStyle = '#7fd1b4'; c.font = font(600, 40); c.fillText(`Click to start ${card.start || 'Shell'}  →`.slice(0, 44), 58, 512, SURFACE_W - 116);
 }
 /**
  * The station theme's back-wall orb (globe + ring), v1 room coordinates. Data-driven so a lane that moves
@@ -604,8 +606,8 @@ export class RoomScene {
             case 'station': {
                 let surface = this.terminalSurfaces.get(entity.id);
                 if (!surface) { surface = this.terminalSurface(); this.terminalSurfaces.set(entity.id, surface); }
-                const card = { name: (entity.label ?? entity.station.name).slice(0, 26), tabs: entity.station.tabs.map(t => t.name).join(' · ').slice(0, 40) }; /* world-ui (g) */ const renamed = !!surface.card && (surface.card.name !== card.name || surface.card.tabs !== card.tabs);
-                if (surface.card?.name !== card.name || surface.card?.tabs !== card.tabs) { surface.card = card; surface.layout = undefined; }
+                const card = { name: (entity.label ?? entity.station.name).slice(0, 26), tabs: entity.station.tabs.map(t => t.name).join(' · ').slice(0, 40), start: (entity.station.tabs[0]?.name ?? 'Shell').slice(0, 24) }; /* world-ui (g) */ const renamed = !!surface.card && (surface.card.name !== card.name || surface.card.tabs !== card.tabs || surface.card.start !== card.start);
+                if (surface.card?.name !== card.name || surface.card?.tabs !== card.tabs || surface.card?.start !== card.start) { surface.card = card; surface.layout = undefined; }
                 const built = deskKit ? buildKitStation(entity, deskKit, surface.texture) : buildStation(entity, jungle, surface.texture); // sky:merge M1
                 // world-ui r4/3: a renamed desk (the starter world replacing the default one) repaints its card at once: one name, from the world model.
                 if (renamed) surface.frame = undefined;
