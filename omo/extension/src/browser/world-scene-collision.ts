@@ -85,11 +85,18 @@ export function worldHome(shell: WorldShell, entities: readonly WorldEntity[] = 
 export function openPlazaHome(shell: WorldShell, entities: readonly WorldEntity[]): PlayerPose | undefined {
     const doors = openDoorways(entities);
     if (!doors.length) return undefined;
-    const d = doors.reduce((a, b) => (Math.hypot(a.x, a.z) <= Math.hypot(b.x, b.z) ? a : b));
+    // promise:onboarding — a world with a Home room (the first minute) starts at the Home room's door.
+    const homeDoor = doors.find(x => x.room === 'home');
+    const d = homeDoor ?? doors.reduce((a, b) => (Math.hypot(a.x, a.z) <= Math.hypot(b.x, b.z) ? a : b));
     const lim = (v: number, h: number): number => Math.max(-h + 0.6, Math.min(h - 0.6, v));
     // 9 m out and 3 m to the side: the doorway, the room's corner and open ground beyond are all in view.
-    const sx = -d.nz * 5, sz = d.nx * 5;
-    const x = lim(d.x + d.nx * 13 + sx, shell.width / 2), z = lim(d.z + d.nz * 13 + sz, shell.depth / 2);
+    // promise:onboarding — never inside another room (two rows facing a narrow street): step closer until the spot is free.
+    const inRoom = (px: number, pz: number): boolean => rooms({ entities } as WorldSpec).some(r => { const b = roomRect(r); return px > b.minX - 2.5 && px < b.maxX + 2.5 && pz > b.minZ - 2.5 && pz < b.maxZ + 2.5; });
+    let x = 0, z = 0;
+    search: for (const out of [13, 11, 9, 7, 5.5, 4]) for (const side of [5, 3, 0]) {
+        x = lim(d.x + d.nx * out - d.nz * side, shell.width / 2); z = lim(d.z + d.nz * out + d.nx * side, shell.depth / 2);
+        if (!inRoom(x, z)) break search;
+    }
     // yaw 0 faces -z; forward = (-sin yaw, -cos yaw). Face the doorway itself.
     return { x, z, yaw: Math.atan2(x - d.x, z - d.z), pitch: 0 };
 }

@@ -1,0 +1,172 @@
+{
+ "failed": 0,
+ "checks": [
+  {
+   "name": "Chrome renders on the GPU (not SwiftShader)",
+   "pass": true,
+   "detail": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 5060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+  },
+  {
+   "name": "First run shows the welcome: \"Your mind, given a place.\"",
+   "pass": true,
+   "detail": "Your mind, given a place."
+  },
+  {
+   "name": "The welcome promises \"In about a minute you will have a world of your own\"",
+   "pass": true
+  },
+  {
+   "name": "Calm black with one mint primary button and a serif headline (mock-up style)",
+   "pass": true,
+   "detail": {
+    "bg": "rgb(0, 0, 0)",
+    "btn": "rgb(124, 242, 208)",
+    "h1": "\"Instrument Serif\", \"Iowan Old Style\", \"Palatino Linotype\", Georgia, \"Times New Roman\", serif"
+   }
+  },
+  {
+   "name": "Stage 1 asks \"If your mind had a home, what would it look like?\" with ONE input, focused (1 / 2)",
+   "pass": true,
+   "detail": {
+    "h2": "If your mind had a home, what would it look like?",
+    "inputs": 1,
+    "focused": "first-minute-seed",
+    "ph": "A lighthouse library at the edge of the sea…",
+    "step": "1 / 2"
+   }
+  },
+  {
+   "name": "Stage 2: \"Bring your mind with you.\" Hermes + Claude Code chats (both on), Read on this device / Skip for now (2 / 2)",
+   "pass": true,
+   "detail": {
+    "head": "Bring your mind with you.",
+    "sub": "Your chats become rooms. Read here, never uploaded.",
+    "srcs": [
+     "Hermes chats|true",
+     "Claude Code chats|true"
+    ],
+    "skip": "Skip for now",
+    "read": "Read on this device ↵",
+    "echo": "A lighthouse library at the edge of the sea",
+    "step": "2 / 2"
+   }
+  },
+  {
+   "name": "The world behind is planned from the sentence (named \"Lighthouse library\", penthouse + bookshelf and window)",
+   "pass": true,
+   "detail": {
+    "entities": [
+     "terminal",
+     "terminal-2",
+     "desk-3",
+     "web",
+     "plant-1",
+     "plant-2",
+     "window",
+     "bookshelf"
+    ],
+    "rooms": [],
+    "name": "Lighthouse library",
+    "nav": "overview"
+   }
+  },
+  {
+   "name": "Reading made no request off this machine (every page request during the read is 127.0.0.1)",
+   "pass": true,
+   "detail": {
+    "during": 0,
+    "off": []
+   }
+  },
+  {
+   "name": "\"Your mind has rooms now\": the fixture topics are rooms, \"0 bytes left this device\"",
+   "pass": true,
+   "detail": {
+    "head": "Your mind has rooms now.",
+    "chats": "10",
+    "rooms": "5",
+    "bytes": "0 bytes left this device",
+    "list": [
+     "Moonbase",
+     "Garden",
+     "Lighthouse",
+     "Recipe App",
+     "Other chats"
+    ]
+   }
+  },
+  {
+   "name": "No fixture secret, email or home path is on screen",
+   "pass": true
+  },
+  {
+   "name": "The world behind grows a room per topic, each with a sign and note boards",
+   "pass": true,
+   "detail": {
+    "mindRooms": [
+     "mind-moonbase",
+     "mind-garden",
+     "mind-lighthouse",
+     "mind-recipe-app",
+     "mind-other-chats"
+    ],
+    "notes": 10
+   }
+  },
+  {
+   "name": "Ready: \"Your world is ready.\" with the sentence and \"Enter your world\"",
+   "pass": true,
+   "detail": {
+    "h2": "Your world is ready.",
+    "q": "“A lighthouse library at the edge of the sea”",
+    "btn": "Enter your world ↵",
+    "sum": "Seaside + library: lighthouse, library, sea · 5 rooms from your chats, 10 notes"
+   }
+  },
+  {
+   "name": "Enter your world: the overlay is gone and you walk in the world",
+   "pass": true
+  },
+  {
+   "name": "The saved world holds the home and the topic rooms with their note boards",
+   "pass": true,
+   "detail": {
+    "name": "Lighthouse library",
+    "n": 29
+   }
+  },
+  {
+   "name": "The saved world holds no fixture secret, email or home path",
+   "pass": true
+  },
+  {
+   "name": "From the sentence to the world shown in under 60 s (wall clock of this run)",
+   "pass": true,
+   "detail": {
+    "ms": 14601
+   }
+  },
+  {
+   "name": "The app measured the same first minute itself (data-omo-first-minute-ms < 60000)",
+   "pass": true,
+   "detail": {
+    "appMs": 14535
+   }
+  },
+  {
+   "name": "Skip for now: the world is the home only (observatory = station theme, no topic rooms) and it opens in < 60 s",
+   "pass": true,
+   "detail": {
+    "theme": "station",
+    "ms": 776
+   }
+  },
+  {
+   "name": "no page errors",
+   "pass": true,
+   "detail": []
+  }
+ ],
+ "errors": [],
+ "fixture": "extension/test/fixtures/mind"
+}
