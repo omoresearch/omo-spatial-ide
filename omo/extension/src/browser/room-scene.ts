@@ -938,7 +938,7 @@ export class RoomScene {
         }
         c.font = '20px monospace'; c.textBaseline = 'alphabetic';
         if (!lines.length) {
-            if (full) { c.fillStyle='#c7ded4';c.fillText((surface.hint ?? 'Walk up and click this screen.').slice(0,MONITOR_COLS),24,104); c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140); }
+            if (full) { c.fillStyle='#c7ded4';c.fillText((surface.hint ?? 'Click to use this desk.').slice(0,MONITOR_COLS),24,104); c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140); }
             this.markDirty(surface, full, 0, headerDirty ? 49 : 0);
             return true;
         }

@@ -80,7 +80,7 @@ async function openApp(app, tone) {
     app.errors = [];
     page.on('pageerror', e => app.errors.push(String(e.message || e).slice(0, 300)));
     await page.evaluateOnNewDocument(() => {
-        try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); } catch {}
+        try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0') /* world-ui: legacy checks use the IDE chrome */; } catch {}
         // Theia's workspace-trust dialog can open late and steal focus: accept it whenever it appears.
         const trust = () => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click();
         new MutationObserver(trust).observe(document, { childList: true, subtree: true });

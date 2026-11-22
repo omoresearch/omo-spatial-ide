@@ -269,7 +269,7 @@ export class RuntimeConsoleController {
     constructor(options: RuntimeConsoleOptions) { this.options = options; this.service = options.service; }
 
     static initial(): RuntimeConsoleState {
-        return { phase: 'idle', statusText: 'Walk up and click this screen.', notice: '', error: '', profile: '', lines: [], sequence: 0, acting: false, unreadBells: 0 };
+        return { phase: 'idle', statusText: 'Click to use this desk.' /* world-ui */, notice: '', error: '', profile: '', lines: [], sequence: 0, acting: false, unreadBells: 0 };
     }
     get state(): RuntimeConsoleState { return this.current; }
     get launchers(): LauncherOption[] { return launcherOptions(this.current.host); }

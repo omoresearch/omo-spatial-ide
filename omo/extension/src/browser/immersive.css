@@ -32,8 +32,6 @@ body.omo-immersive-world .omo-world-widget {
 .omo-root[data-immersive="true"] .omo-stage-heading,
 .omo-root[data-immersive="true"] .omo-console-dock,
 .omo-root[data-immersive="true"] .omo-tool-dock,
-.omo-root[data-immersive="true"] .omo-git-review,
-.omo-root[data-immersive="true"] .omo-task-overview-view,
 .omo-root[data-immersive="true"] .omo-scene-controls,
 .omo-root[data-immersive="true"] .omo-navigation-switch,
 .omo-root[data-immersive="true"] .omo-hud-notices > .omo-hud-bell,

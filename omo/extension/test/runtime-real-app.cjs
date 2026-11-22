@@ -60,7 +60,7 @@ async function trustAuthoredProject(page) {
     try {
         page = await browser.newPage();
         // Classic dock flows; focus mode is covered by its own check.
-        await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); } catch {} });
+        await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0') /* world-ui: legacy checks use the IDE chrome */; } catch {} });
         const errors = []; page.on('pageerror', error => errors.push(error.message));
         await page.goto(process.env.OMO_URL || 'http://127.0.0.1:3190', { waitUntil: 'domcontentloaded' });
         await trustAuthoredProject(page);

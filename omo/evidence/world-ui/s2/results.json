@@ -1,0 +1,152 @@
+{
+ "failed": 0,
+ "checks": [
+  {
+   "name": "A saved room opens immersive by default",
+   "pass": true,
+   "detail": {
+    "immersive": "true",
+    "body": true
+   }
+  },
+  {
+   "name": "One floating top bar, 44 px high",
+   "pass": true,
+   "detail": {
+    "h": 44,
+    "top": 8,
+    "w": 1424
+   }
+  },
+  {
+   "name": "No IDE menu/status bar, omo header, form rows, voice rows, station strip or footer",
+   "pass": true,
+   "detail": {
+    "#theia-top-panel": false,
+    "#theia-statusBar": false,
+    ".omo-header": false,
+    ".omo-footer": false,
+    ".omo-console-dock": false,
+    ".omo-stage-heading": false,
+    ".omo-station-switch": false,
+    "[data-testid=\"presence-bar\"]": false,
+    "[data-testid=\"voice-panel\"]": false,
+    "[data-testid=\"runtime-console\"]": false
+   }
+  },
+  {
+   "name": "Top bar: room + people left, World/Tasks/Code centre, voice/share/⌘K right",
+   "pass": true,
+   "detail": {
+    "left": [
+     "topbar-room",
+     "topbar-people"
+    ],
+    "centre": [
+     "World",
+     "Tasks",
+     "Code"
+    ],
+    "right": [
+     "topbar-voice",
+     "topbar-bell",
+     "topbar-settings",
+     "topbar-share",
+     "topbar-palette"
+    ]
+   }
+  },
+  {
+   "name": "No \"Walk up and click this screen\" banner in the DOM chrome",
+   "pass": true,
+   "detail": 0
+  },
+  {
+   "name": "No raw project path visible",
+   "pass": true
+  },
+  {
+   "name": "⌘K opens the command palette",
+   "pass": true,
+   "detail": 24
+  },
+  {
+   "name": "Palette holds name/room code (share), recipes, agents, voice, speech, settings, customise",
+   "pass": true
+  },
+  {
+   "name": "Typing filters the palette",
+   "pass": true,
+   "detail": [
+    "station-recipes"
+   ]
+  },
+  {
+   "name": "Enter runs the command: Station recipes opens in the settings sheet",
+   "pass": true,
+   "detail": "desks"
+  },
+  {
+   "name": "Settings → Share holds name + room code + Join",
+   "pass": true
+  },
+  {
+   "name": "Settings → Voice holds the voice panel and Voice check",
+   "pass": true
+  },
+  {
+   "name": "Settings → Agents holds the agents panel",
+   "pass": true
+  },
+  {
+   "name": "Settings → Room holds Customise",
+   "pass": true
+  },
+  {
+   "name": "Esc closes the sheet",
+   "pass": true
+  },
+  {
+   "name": "Ctrl+K opens the palette while walking; Esc closes it",
+   "pass": true
+  },
+  {
+   "name": "Tasks view shows under the bar",
+   "pass": true
+  },
+  {
+   "name": "World returns to the room",
+   "pass": true
+  },
+  {
+   "name": "Build mode: the World Builder opens below the top bar",
+   "pass": true,
+   "detail": {
+    "builderTop": 68,
+    "barBottom": 52
+   }
+  },
+  {
+   "name": "Esc does not leave immersive",
+   "pass": true
+  },
+  {
+   "name": "G leaves immersive and the choice is saved",
+   "pass": true,
+   "detail": {
+    "off": "false",
+    "ls": "0"
+   }
+  },
+  {
+   "name": "G enters immersive again",
+   "pass": true
+  },
+  {
+   "name": "no page errors",
+   "pass": true,
+   "detail": []
+  }
+ ],
+ "errors": []
+}

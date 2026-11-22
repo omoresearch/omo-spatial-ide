@@ -27,7 +27,7 @@ async function openApp(url, tag, tone) {
     defaultViewport: { width: 1440, height: 960 } });
   const page = await browser.newPage();
   page.on('pageerror', e => console.error(`[${tag}] pageerror`, e.message));
-  await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); } catch {} });
+  await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0') /* world-ui: legacy checks use the IDE chrome */; } catch {} });
   const trust = () => page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click());
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   for (let i = 0; i < 100 && !await page.$('[data-testid="omo-onboarding"]'); i++) { await trust(); await pause(150); }

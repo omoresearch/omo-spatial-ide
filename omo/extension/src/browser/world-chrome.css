@@ -1,0 +1,135 @@
+/*
+ * world-ui — chrome for the immersive world: the slim top bar, the ⌘K palette and the settings sheet.
+ * Uses only design tokens (see world-tokens.css for the world-ui scale).
+ */
+
+/* ---------- Top bar: 44 px floating glass ---------- */
+.omo-topbar {
+    position: fixed; z-index: 1001; top: var(--omo-w-gap, 8px); left: var(--omo-w-gap, 8px); right: var(--omo-w-gap, 8px);
+    height: var(--omo-w-bar-h, 44px); display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center;
+    padding: 0 var(--omo-w-sp-1, 4px) 0 var(--omo-w-sp-2, 12px); color: var(--omo-w-text-2, var(--omo-text-2));
+    background: var(--omo-w-glass, var(--omo-glass)); backdrop-filter: var(--omo-w-blur, var(--omo-glass-blur));
+    border: 1px solid var(--omo-w-line, var(--omo-line-2)); border-radius: var(--omo-w-r, 10px); box-shadow: var(--omo-w-shadow, var(--omo-shadow-2));
+    font: 500 var(--omo-w-fs-2, 13px)/1 var(--omo-font); pointer-events: auto;
+    animation: omo-topbar-in var(--omo-w-dur, 160ms) var(--omo-ease);
+}
+@keyframes omo-topbar-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.omo-topbar .omo-icon { flex: 0 0 auto; display: block; }
+.omo-topbar-side { display: flex; align-items: center; gap: var(--omo-w-sp-1, 4px); min-width: 0; }
+.omo-topbar-side.is-right { justify-content: flex-end; }
+.omo-topbar-room { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--omo-w-text, var(--omo-text)); font-weight: 600; font-size: var(--omo-w-fs-3, 15px); margin-right: 8px; }
+.omo-topbar-room i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--omo-w-accent, var(--omo-accent)); }
+.omo-topbar button {
+    position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: var(--omo-w-control-h, 36px); padding: 0 12px; border: 1px solid transparent; border-radius: calc(var(--omo-w-r, 10px) - 2px);
+    background: transparent; color: var(--omo-w-text-2, var(--omo-text-2)); font: inherit; cursor: pointer;
+    transition: background var(--omo-w-dur, 160ms) var(--omo-ease), color var(--omo-w-dur, 160ms) var(--omo-ease);
+}
+.omo-topbar button:hover { background: var(--omo-w-hover, rgba(255, 255, 255, .06)); color: var(--omo-w-text, var(--omo-text)); }
+.omo-topbar button:focus-visible { outline: none; box-shadow: var(--omo-w-focus, var(--omo-focus)); }
+.omo-topbar-icon { width: var(--omo-w-control-h, 36px); padding: 0 !important; }
+.omo-topbar-icon[aria-pressed="true"] { color: var(--omo-w-accent, var(--omo-accent)); }
+.omo-topbar-icon.has-unread { color: var(--omo-warn); }
+.omo-topbar-count { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+    background: var(--omo-warn); color: #1a1205; font: 600 var(--omo-w-fs-1, 12px)/16px var(--omo-font); text-align: center; font-variant-numeric: tabular-nums; }
+.omo-topbar-people { padding: 0 8px !important; }
+.omo-topbar-avatar { width: 24px; height: 24px; margin-left: -6px; border-radius: 50%; display: grid; place-items: center;
+    color: #0b0f14; font: 600 var(--omo-w-fs-1, 12px)/1 var(--omo-font); box-shadow: 0 0 0 2px var(--omo-w-surface, #11161d); }
+.omo-topbar-avatar:first-child { margin-left: 0; }
+.omo-topbar-more, .omo-topbar-people-label { font-size: var(--omo-w-fs-1, 12px); color: var(--omo-w-text-3, var(--omo-text-3)); }
+.omo-topbar-views { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--omo-w-r, 10px); background: var(--omo-w-well, rgba(0, 0, 0, .28)); }
+.omo-topbar-views button { height: 32px; padding: 0 16px; }
+.omo-topbar-views button[aria-selected="true"] { background: var(--omo-w-raised, rgba(255, 255, 255, .1)); color: var(--omo-w-text, var(--omo-text)); }
+.omo-topbar-share { color: var(--omo-w-accent-ink, #0b0f14) !important; background: var(--omo-w-accent, var(--omo-accent)) !important; font-weight: 600 !important; margin: 0 4px; }
+.omo-topbar-share:hover { filter: brightness(1.08); }
+.omo-topbar-k { gap: 2px !important; padding: 0 8px !important; }
+.omo-topbar kbd, .omo-palette kbd, .omo-sheet kbd {
+    display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 4px;
+    border: 1px solid var(--omo-w-line, var(--omo-line-2)); color: var(--omo-w-text-2, var(--omo-text-2));
+    font: 500 var(--omo-w-fs-1, 12px)/1 var(--omo-font);
+}
+.omo-topbar-alert { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); max-width: min(560px, 90vw);
+    padding: 8px 12px; border-radius: var(--omo-w-r, 10px); background: var(--omo-w-glass, var(--omo-glass)); border: 1px solid var(--omo-danger);
+    color: var(--omo-w-text, var(--omo-text)); font-size: var(--omo-w-fs-2, 13px); line-height: 1.4; box-shadow: var(--omo-w-shadow, var(--omo-shadow-2)); }
+@media (max-width: 860px) { .omo-topbar-people-label, .omo-topbar-share { display: none !important; } .omo-topbar-views button { padding: 0 10px; } }
+
+/* While immersive, the HUD sits below the bar. */
+.omo-root[data-immersive="true"] .omo-scene-wrap { --omo-wb-top: calc(var(--omo-w-bar-h, 44px) + 2 * var(--omo-w-gap, 8px) + 8px); }
+/* A screen in use has its own bar: the top bar steps aside. G, ⌘K and Alt+Shift+G still work. */
+.omo-root[data-focus="attaching"] .omo-topbar,
+.omo-root[data-focus="attached"] .omo-topbar { display: none; }
+/* Workspace views (Tasks / Code) fill the window under the bar while immersive. */
+.omo-root[data-immersive="true"] > .omo-git-review,
+.omo-root[data-immersive="true"] > .omo-task-overview-view {
+    display: flex !important; position: fixed; z-index: 1000; inset: calc(var(--omo-w-bar-h, 44px) + 2 * var(--omo-w-gap, 8px)) 0 0 0;
+}
+.omo-root[data-immersive="true"] > .omo-task-overview-view { display: block !important; }
+
+/* ---------- Command palette ---------- */
+.omo-palette-scrim { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: center; align-items: flex-start;
+    padding-top: 14vh; background: rgba(4, 7, 10, .42); }
+.omo-palette {
+    width: min(600px, calc(100vw - 32px)); max-height: 62vh; display: flex; flex-direction: column; overflow: hidden;
+    color: var(--omo-w-text, var(--omo-text)); background: var(--omo-w-glass-strong, var(--omo-glass-strong)); backdrop-filter: var(--omo-w-blur, var(--omo-glass-blur));
+    border: 1px solid var(--omo-w-line, var(--omo-line-2)); border-radius: calc(var(--omo-w-r, 10px) + 4px); box-shadow: var(--omo-w-shadow, var(--omo-shadow-3));
+    font: 400 var(--omo-w-fs-2, 13px)/1.4 var(--omo-font); animation: omo-palette-in var(--omo-w-dur, 160ms) var(--omo-ease);
+}
+@keyframes omo-palette-in { from { opacity: 0; transform: translateY(-6px) scale(.99); } to { opacity: 1; transform: none; } }
+.omo-palette-search { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 16px; border-bottom: 1px solid var(--omo-w-line, var(--omo-line)); color: var(--omo-w-text-3, var(--omo-text-3)); }
+.omo-palette-search input { flex: 1; min-width: 0; height: 36px; border: 0; outline: none; background: transparent; color: var(--omo-w-text, var(--omo-text)); font: 400 var(--omo-w-fs-3, 15px) var(--omo-font); }
+.omo-palette-search input::placeholder { color: var(--omo-w-text-3, var(--omo-text-3)); }
+.omo-palette-list { list-style: none; margin: 0; padding: 8px; overflow-y: auto; }
+.omo-palette-group { padding: 8px 8px 4px; color: var(--omo-w-text-3, var(--omo-text-3)); font-size: var(--omo-w-fs-1, 12px); font-weight: 500; }
+.omo-palette-item { display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 0 8px; border-radius: 8px; cursor: pointer; color: var(--omo-w-text-2, var(--omo-text-2)); }
+.omo-palette-item[aria-selected="true"] { background: var(--omo-w-raised, rgba(255, 255, 255, .08)); color: var(--omo-w-text, var(--omo-text)); }
+.omo-palette-item[aria-disabled="true"] { opacity: .42; cursor: not-allowed; }
+.omo-palette-icon { flex: 0 0 16px; display: grid; place-items: center; color: var(--omo-w-text-3, var(--omo-text-3)); }
+.omo-palette-item[aria-selected="true"] .omo-palette-icon { color: var(--omo-w-accent, var(--omo-accent)); }
+.omo-palette-label { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.omo-palette-label small { color: var(--omo-w-text-3, var(--omo-text-3)); font-size: var(--omo-w-fs-1, 12px); overflow: hidden; text-overflow: ellipsis; }
+.omo-palette-empty { padding: 16px 8px; color: var(--omo-w-text-3, var(--omo-text-3)); }
+
+/* ---------- Settings sheet ---------- */
+.omo-sheet {
+    position: fixed; z-index: 1100; top: calc(var(--omo-w-bar-h, 44px) + 2 * var(--omo-w-gap, 8px)); right: var(--omo-w-gap, 8px); bottom: var(--omo-w-gap, 8px);
+    width: min(440px, calc(100vw - 16px)); display: flex; flex-direction: column; overflow: hidden; outline: none;
+    color: var(--omo-w-text, var(--omo-text)); background: var(--omo-w-glass-strong, var(--omo-glass-strong)); backdrop-filter: var(--omo-w-blur, var(--omo-glass-blur));
+    border: 1px solid var(--omo-w-line, var(--omo-line-2)); border-radius: var(--omo-w-r, 10px); box-shadow: var(--omo-w-shadow, var(--omo-shadow-3));
+    font: 400 var(--omo-w-fs-2, 13px)/1.45 var(--omo-font); animation: omo-sheet-in var(--omo-w-dur, 160ms) var(--omo-ease);
+}
+@keyframes omo-sheet-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+.omo-sheet-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 8px 0 16px; font-size: var(--omo-w-fs-3, 15px); }
+.omo-sheet-close { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--omo-w-text-2, var(--omo-text-2)); cursor: pointer; }
+.omo-sheet-close:hover { background: var(--omo-w-hover, rgba(255, 255, 255, .06)); color: var(--omo-w-text, var(--omo-text)); }
+.omo-sheet-tabs { flex: 0 0 auto; display: flex; gap: 2px; margin: 0 16px 8px; padding: 2px; border-radius: var(--omo-w-r, 10px); background: var(--omo-w-well, rgba(0, 0, 0, .28)); }
+.omo-sheet-tabs button { flex: 1; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--omo-w-text-2, var(--omo-text-2)); font: 500 var(--omo-w-fs-2, 13px) var(--omo-font); cursor: pointer; }
+.omo-sheet-tabs button[aria-selected="true"] { background: var(--omo-w-raised, rgba(255, 255, 255, .1)); color: var(--omo-w-text, var(--omo-text)); }
+.omo-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 16px 16px; }
+.omo-sheet-section { display: flex; flex-direction: column; gap: 16px; }
+.omo-sheet-row-button { display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border-radius: 8px;
+    border: 1px solid var(--omo-w-line, var(--omo-line-2)); background: var(--omo-w-raised, rgba(255, 255, 255, .04)); color: var(--omo-w-text, var(--omo-text)); font: 500 var(--omo-w-fs-2, 13px) var(--omo-font); cursor: pointer; text-align: left; }
+.omo-sheet-row-button:hover { border-color: var(--omo-w-accent-line, var(--omo-accent-line)); }
+.omo-sheet-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+.omo-sheet-facts dt { color: var(--omo-w-text-3, var(--omo-text-3)); }
+.omo-sheet-facts dd { margin: 0; overflow-wrap: anywhere; }
+.omo-sheet-note, .omo-sheet-empty { margin: 0; color: var(--omo-w-text-3, var(--omo-text-3)); font-size: var(--omo-w-fs-1, 12px); }
+/* The dock components re-flow as stacked cards inside the sheet. */
+.omo-sheet .omo-presence-bar, .omo-sheet .omo-voice-panel, .omo-sheet .omo-station-switch, .omo-sheet .omo-console-strip,
+.omo-sheet .omo-recipe-panel, .omo-sheet .omo-agents-panel, .omo-sheet .omo-web-strip {
+    position: static !important; display: flex !important; flex-wrap: wrap; gap: 8px; width: auto !important; max-width: none !important; margin: 0 !important;
+    padding: 0 !important; background: transparent !important; border: 0 !important; box-shadow: none !important; font-size: var(--omo-w-fs-2, 13px) !important;
+}
+.omo-sheet .omo-presence-bar label { display: flex; flex-direction: column; gap: 4px; flex: 1 1 160px; color: var(--omo-w-text-3, var(--omo-text-3)); font-size: var(--omo-w-fs-1, 12px); }
+.omo-sheet .omo-presence-bar small { font-size: var(--omo-w-fs-1, 12px) !important; width: auto !important; height: auto !important; border: 0 !important; display: block !important; color: var(--omo-w-text-3, var(--omo-text-3)); }
+.omo-sheet .omo-presence-bar small::before { content: none !important; }
+.omo-sheet input:not([type="checkbox"]):not([type="range"]) { height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--omo-w-line, var(--omo-line-2)); background: rgba(0, 0, 0, .25); color: var(--omo-w-text, var(--omo-text)); font: 400 var(--omo-w-fs-2, 13px) var(--omo-font); }
+.omo-sheet button:not(.omo-sheet-close):not(.omo-sheet-tabs button):not(.omo-sheet-row-button) { min-height: 32px; }
+.omo-sheet .omo-station-switch { flex-direction: row; }
+.omo-sheet .omo-voice-panel { flex-direction: column; }
+
+/* Crosshair hint (replaces the full-width 'Walk up and click this screen' banner). */
+.omo-crosshair-hint { position: absolute; top: calc(50% + 20px); left: 50%; transform: translateX(-50%); pointer-events: none; white-space: nowrap;
+    padding: 4px 8px; border-radius: 6px; background: rgba(8, 12, 16, .5); color: var(--omo-w-text-2, var(--omo-text-2)); font: 500 var(--omo-w-fs-1, 12px)/1.3 var(--omo-font); }
+.omo-scene-wrap:not(.omo-walking) .omo-crosshair-hint, .omo-walking:has(canvas[data-typing="true"]) .omo-crosshair-hint,
+.omo-root[data-focus="attaching"] .omo-crosshair-hint, .omo-root[data-focus="attached"] .omo-crosshair-hint { display: none; }
