@@ -139,7 +139,7 @@ export function buildReviewScreen(entity: ReviewScreenEntity, texture: THREE.Tex
 
 export function buildDecorEntity(entity: DecorEntity, jungle: boolean): BuiltEntity {
     const group = rootFor(entity);
-    group.add(buildDecor(entity.decor, entity.id, jungle));
+    group.add(buildDecor(entity.decor, entity.id, jungle, entity.decor === 'whiteboard' ? entity.label : undefined)); // promise:share: data boards show their note
     return { root: group };
 }
 

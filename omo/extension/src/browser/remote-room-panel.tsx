@@ -3,6 +3,19 @@ import { createPortal } from 'react-dom';
 import type { RemoteRoomController, RemoteRoomView } from './remote-room-controller';
 import type { SavedRemoteRoom } from '../common/remote-room-protocol';
 import type { RoomInviteRole } from '../common/room-wire-protocol'; // t3:mp2
+import '../../src/browser/world-share.css'; // promise:share
+
+/** promise:share (L7) — the world actions under the room panel. `canEdit` = false for a viewer or member in a shared room. */
+export interface WorldShareActions { onShareWorld(): void; onOpenWorld(): void; onBuildFromData(): void; canEdit: boolean }
+function WorldShareRow(props: { actions?: WorldShareActions }): React.ReactElement | null {
+    const a = props.actions; if (!a) return null;
+    const why = a.canEdit ? undefined : 'Your role in this room cannot change the world. Ask the host for builder.';
+    return <div className="omo-world-share-row" data-testid="world-share-row">
+        <button type="button" data-testid="world-share" title="Download this world as a .omo-world.json file (layout only: no terminals, tokens or paths)" onClick={a.onShareWorld}>Share this world</button>
+        <button type="button" data-testid="world-open" disabled={!a.canEdit} title={why ?? 'Open a .omo-world.json file as a new world (you see it first; Apply keeps it)'} onClick={a.onOpenWorld}>Open a world file</button>
+        <button type="button" data-testid="world-from-data" disabled={!a.canEdit} title={why ?? 'A CSV file or a repo folder becomes rooms with note boards'} onClick={a.onBuildFromData}>Build a world from data</button>
+    </div>;
+}
 
 /**
  * Remote room panel (w2 mp-client lane): connection chip, "Join a remote room" (paste invite link),
@@ -37,7 +50,7 @@ export function RemoteRoomPopover(props: { anchor: HTMLElement | null; children:
     return createPortal(<div className="omo-world-widget omo-remote-layer" style={{ top: pos.top, left: pos.left }}>{props.children}</div>, document.body);
 }
 
-export function RemoteRoomPanel(props: { controller: RemoteRoomController; view: RemoteRoomView; onClose(): void }): React.ReactElement {
+export function RemoteRoomPanel(props: { controller: RemoteRoomController; view: RemoteRoomView; onClose(): void; world?: WorldShareActions }): React.ReactElement {
     const { controller, view } = props;
     const s = view.status;
     const [tab, setTab] = React.useState<'join' | 'host'>('join');
@@ -113,6 +126,7 @@ export function RemoteRoomPanel(props: { controller: RemoteRoomController; view:
                 </div>)}
             </div>}
         </>}
+        <WorldShareRow actions={props.world} />{/* promise:share */}
         {(view.error || (s.phase === 'failed' && s.error)) && <p role="alert" className="omo-error" data-testid="remote-room-error">{view.error || s.error}</p>}
     </section>;
 }

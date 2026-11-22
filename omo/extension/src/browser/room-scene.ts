@@ -1449,6 +1449,12 @@ export class RoomScene {
         this.setData('terminalQuads',JSON.stringify(Object.fromEntries(of('station').map(item=>[item.entity.id,quad(item.built.screen!,...half(item.built.screen!))]))));
         const code=this.screens.get('code')??of('review-screen')[0]?.built.screen;if(code)this.setData('codeReviewQuad',JSON.stringify(quad(code,...half(code))));
         const web=this.screens.get('web')??of('web-wall')[0]?.built.screen;if(web)this.setData('webQuad',JSON.stringify(quad(web,...half(web))));
+        // promise:share (L7) — data boards: the note each board prints and where it is on screen (inspection for the real-browser check).
+        const boards:Array<{id:string;note:string;box:number[];visible:boolean}>=[];
+        for(const item of this.entities.values()){if(item.entity.kind!=='decor')continue;let board:THREE.Mesh|undefined;item.built.root.traverse(n=>{if(!board&&(n as THREE.Mesh).isMesh&&typeof n.userData.note==='string')board=n as THREE.Mesh;});if(!board)continue;
+            const front=board.getWorldPosition(a).project(this.camera).z;const pts=quad(board,...half(board));const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);const box=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)].map(Math.round);
+            boards.push({id:item.entity.id,note:board.userData.note as string,box,visible:front>=-1&&front<=1&&box[2]>0&&box[0]<w&&box[3]>0&&box[1]<h});}
+        this.setData('boardNotes',JSON.stringify(boards));
     }
     resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();this.invalidate();return;}cancelAnimationFrame(this.focusFrame);this.focus=undefined;this.focusWeight=0;this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
     dispose():void{

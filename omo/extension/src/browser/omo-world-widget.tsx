@@ -92,6 +92,11 @@ import { v1RoomFor } from './onboarding-planner';
 import { classifyDesks, setDeskPriority } from './desk-activity'; // w3:perf
 import { SharedPointerController, PointerScene } from './shared-pointer-controller'; // promise:share
 import { PRESENCE_COLOUR_HEX } from '../common/presence-protocol'; // promise:share
+import { shareWorld, openWorldFile, WORLD_FILE_EXT, WORLD_FILE_MAX_BYTES } from '../common/world-share'; // promise:share (L7)
+import { planDataWorld } from '../common/world-admin-rules'; // promise:share (L7)
+import type { FolderReader } from '../common/world-data'; // promise:share (L7)
+import { DataWorldDialog } from './data-world-dialog'; // promise:share (L7)
+import type { WorldShareActions } from './remote-room-panel'; // promise:share (L7)
 // --- end w2:onboard ---
 
 export const TERMINAL_STATION_ID = 'terminal-1';
@@ -435,6 +440,73 @@ export class OmoWorldWidget extends ReactWidget {
         window.addEventListener('keydown', key, true); window.addEventListener(PALETTE_TOGGLE_EVENT, toggle);
         this.toDispose.push({ dispose: () => { window.removeEventListener('keydown', key, true); window.removeEventListener(PALETTE_TOGGLE_EVENT, toggle); } });
     }
+    // --- promise:share (L7): Share this world / Open a world file / Build a world from data. ---
+    private dataDialogOpen = false;
+    /** Shared room: only an owner or builder may change the world. Local: always. */
+    private canEditWorld(): boolean { const s = this.remoteRoom?.state.status; return !s || s.phase === 'idle' || s.phase === 'failed' || s.role === 'owner' || s.role === 'builder'; }
+    private worldShareActions(): WorldShareActions {
+        return { canEdit: this.canEditWorld(), onShareWorld: this.shareThisWorld, onOpenWorld: this.openWorldFilePicker, onBuildFromData: this.openDataDialog };
+    }
+    private shareThisWorld = (): void => {
+        const store = this.currentWorldStore(); const world = store?.world ?? this.savedWorld();
+        if (!world) { this.error = 'Create your room first, then share it.'; this.update(); return; }
+        try {
+            const out = shareWorld(world);
+            const url = URL.createObjectURL(new Blob([out.text], { type: 'application/json' }));
+            const link = document.createElement('a'); link.href = url; link.download = out.filename; link.dataset.testid = 'world-share-download';
+            document.body.appendChild(link);
+            try { link.click(); } finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 60000); }
+            (window as unknown as { __omoLastWorldFile?: { name: string; text: string } }).__omoLastWorldFile = { name: out.filename, text: out.text }; // inspection for the real-browser check
+            this.error = ''; this.feedback = `Saved “${out.filename}”. Layout only: no terminals, tokens, paths or room codes${out.redacted ? ` (${out.redacted} private-looking text${out.redacted === 1 ? '' : 's'} replaced)` : ''}.`;
+        } catch (error) { this.error = error instanceof Error ? error.message : 'This world could not be shared.'; }
+        this.update();
+    };
+    private openWorldFilePicker = (): void => {
+        if (!this.canEditWorld()) { this.error = 'Your role in this room cannot change the world.'; this.update(); return; }
+        const input = document.createElement('input'); input.type = 'file'; input.accept = `${WORLD_FILE_EXT},.json,application/json`; input.dataset.testid = 'world-open-input'; input.style.display = 'none';
+        input.onchange = () => { const file = input.files?.[0]; input.remove(); if (file) void this.importWorldFile(file); };
+        document.body.appendChild(input); input.click();
+        window.setTimeout(() => { if (input.isConnected && !input.files?.length) input.remove(); }, 120000);
+    };
+    private importWorldFile = async (file: File): Promise<void> => {
+        if (file.size > WORLD_FILE_MAX_BYTES) { this.error = `World files must be at most ${Math.round(WORLD_FILE_MAX_BYTES / 1024)} KiB.`; this.update(); return; }
+        try { const opened = openWorldFile(await file.text()); this.proposeNewWorld(opened.world, `the world file ${file.name}`, opened.summary); }
+        catch (error) { this.error = error instanceof Error ? error.message : 'That world file could not be opened.'; this.update(); }
+    };
+    private openDataDialog = (): void => {
+        if (!this.canEditWorld()) { this.error = 'Your role in this room cannot change the world.'; this.update(); return; }
+        this.worldScene?.releaseTyping(); this.paletteOpen = false; this.sheet = undefined; this.dataDialogOpen = true; this.update();
+    };
+    private closeDataDialog = (): void => { this.dataDialogOpen = false; this.update(); this.refocusWorld(); };
+    /** Read-only folder access through the file service. The absolute path stays here; only names and counts go into the world. */
+    private openDataFolder = async (folder: string): Promise<{ reader: FolderReader; name: string }> => {
+        if (!folder.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(folder)) throw new Error('Type the full path of a folder on this computer.');
+        const root = URI.fromFilePath(folder);
+        let stat; try { stat = await this.files.resolve(root); } catch { throw new Error('That folder was not found.'); }
+        if (!stat.isDirectory) throw new Error('That is a file, not a folder.');
+        const at = (parts: readonly string[]): URI => parts.reduce((u, p) => u.resolve(p), root);
+        const reader: FolderReader = {
+            list: async parts => { try { const s = await this.files.resolve(at(parts)); return (s.children ?? []).map(c => ({ name: c.name, dir: c.isDirectory })); } catch { return []; } },
+            read: async parts => { try { const u = at(parts); const s = await this.files.resolve(u, { resolveMetadata: true }); if (s.isDirectory || (s.size ?? 0) > 64 * 1024) return undefined; return (await this.files.read(u)).value; } catch { return undefined; } }
+        };
+        return { reader, name: root.path.base || 'repo' };
+    };
+    private buildFromData = (world: WorldSpec, source: string): void => { this.dataDialogOpen = false; this.proposeNewWorld(world, source); this.refocusWorld(); };
+    /** One planner proposal that replaces the world. Build mode shows it; Apply keeps it, Discard drops it, Undo takes it back. */
+    private proposeNewWorld(target: WorldSpec, source: string, summary?: string): void {
+        const store = this.currentWorldStore();
+        if (!store) { this.error = 'Create your room first.'; this.update(); return; }
+        if (store.proposal) { this.error = 'Apply or discard the pending change first.'; this.update(); return; }
+        const plan = planDataWorld(store.world, target, source, { source: 'template' });
+        if (!plan.proposal) { this.error = plan.explanation; this.update(); return; }
+        if (store.remoteActive && plan.ops.length > 64) { this.error = plan.notes[0] ?? 'This world is too big to send to a shared room at once.'; this.update(); return; }
+        const result = store.propose({ source: 'template', summary: plan.summary, ops: plan.ops });
+        if (!result.ok) { this.error = result.error; this.update(); return; }
+        if (!this.buildMode.active) this.buildMode.enter();
+        this.error = ''; this.feedback = `${summary ? `${summary}. ` : ''}${plan.summary}. You see it first: Apply keeps it, Discard drops it, Ctrl+Z undoes it.`;
+        this.update();
+    }
+    // --- end promise:share ---
     private paletteCommands(): PaletteCommand[] {
         const out: PaletteCommand[] = [];
         const joined = this.presenceState.phase === 'joined';
@@ -455,6 +527,10 @@ export class OmoWorldWidget extends ReactWidget {
             { id: 'notifications', group: 'Agents', label: 'Agent notifications', icon: 'bell', run: () => window.dispatchEvent(new CustomEvent('omo:notices-toggle')) },
             { id: 'share', group: 'People', label: joined ? 'Shared room' : 'Share or join a room', hint: 'Your name and room code', icon: 'users', run: () => this.openSheet('share') });
         if (joined) out.push({ id: 'leave-room', group: 'People', label: 'Leave shared room', icon: 'x', run: () => this.leavePresence() });
+        { const edit = this.canEditWorld(), why = edit ? undefined : 'Your role cannot change this world'; // promise:share (L7)
+            out.push({ id: 'world-share', group: 'World', label: 'Share this world', hint: 'Download a .omo-world.json file', icon: 'users', run: this.shareThisWorld },
+                { id: 'world-open', group: 'World', label: 'Open a world file', hint: why ?? 'Import as a new world (Apply keeps it)', icon: 'window', disabled: !edit, run: this.openWorldFilePicker },
+                { id: 'world-from-data', group: 'World', label: 'Build a world from data', hint: why ?? 'CSV file or repo folder', icon: 'plus', disabled: !edit, run: this.openDataDialog }); }
         out.push(
             { id: 'chat', group: 'People', label: 'Room chat', keys: 'Enter', icon: 'chat', disabled: !this.hudHub, run: () => { this.hudHub?.chat.setOpen(true); this.hudHub?.focusChat?.(); } },
             { id: 'voice', group: 'Voice', label: voiceOn ? (v?.voice.muted ? 'Unmute' : 'Mute') : 'Turn on voice', keys: voiceOn ? 'M' : undefined, icon: 'mic',
@@ -1029,7 +1105,7 @@ export class OmoWorldWidget extends ReactWidget {
         return <>
                         {(all||only==='share')&&<PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>}
                         {/* w2:mp-client (mount hook) */}{(all||only==='share')&&this.remoteRoom&&<div className="omo-remote-anchor" ref={el=>{this.remoteAnchor=el;}}><RemoteRoomChip view={this.remoteRoom.state} open={this.remotePanelOpen} onToggle={()=>{this.remotePanelOpen=!this.remotePanelOpen;this.update();}}/>
-                            {this.remotePanelOpen&&<RemoteRoomPopover anchor={this.remoteAnchor}><RemoteRoomPanel controller={this.remoteRoom} view={this.remoteRoom.state} onClose={()=>{this.remotePanelOpen=false;this.update();}}/></RemoteRoomPopover>}</div>}
+                            {this.remotePanelOpen&&<RemoteRoomPopover anchor={this.remoteAnchor}><RemoteRoomPanel controller={this.remoteRoom} view={this.remoteRoom.state} world={this.worldShareActions()/* promise:share */} onClose={()=>{this.remotePanelOpen=false;this.update();}}/></RemoteRoomPopover>}</div>}
                         {/* omo voice lane (mount hook) */}{(all||only==='voice')&&this.voiceHub&&<VoicePanel hub={this.voiceHub} view={this.voiceHub.state}/>}
                         {/* w2:runtime — desk switcher lists every station in the world (Ctrl+1..9 while attached). Legacy test ids kept for desks one and two. */}
                         {(all||only==='desks')&&<nav className="omo-station-switch" aria-label="Physical workstations" data-many={this.stationList.length > 2 ? 'true' : undefined}>{/* t3:polish2: 3+ desks -> own wrapping row */}{this.stationList.map(info => { const bells = this.deskState(info.id).unreadBells; const legacy = info.id === 'terminal' ? 'one' : info.id === 'terminal-2' ? 'two' : undefined; return <button key={info.id} data-testid={legacy ? `station-${legacy}-controls` : `station-controls-${info.id}`} data-station={info.id} aria-pressed={this.activeMode === info.id} title={info.slot <= 9 ? `${info.name} (Ctrl+${info.slot} while attached)` : info.name} onClick={()=>this.chooseStation(info.id)}>{this.stations.locked(info.id) ? '🔒 ' : ''}{info.name}{bells > 0 && <strong className="omo-bell-alert" data-testid={legacy ? `station-${legacy}-bell` : `station-bell-${info.id}`} role="status"> · Bell {bells}</strong>}</button>; })}{ROOM_KITS[this.room?.kit ?? 'hermes-desk'].webWall && <button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button>}<button data-testid="station-mirror-controls" onClick={()=>this.selectStation('mirror')}>Mirror · {this.stationName(this.mirrorTarget)}</button>{this.stationList.length > 1 && <select data-testid="station-mirror-link" aria-label="Mirror follows" value={this.mirrorTarget} onChange={event => this.linkMirror(event.target.value)}>{this.stationList.map(info => <option key={info.id} value={info.id}>{info.name}</option>)}</select>}<button data-testid="station-recipe-toggle" aria-expanded={this.recipeOpen} onClick={()=>{this.recipeOpen=!this.recipeOpen;this.update();}}>Station recipes</button>{/* w2:agents */}<button data-testid="agents-toggle" aria-expanded={this.agentsOpen} onClick={()=>{this.agentsOpen=!this.agentsOpen;this.update();}}>Agents</button></nav>}
@@ -1049,6 +1125,7 @@ export class OmoWorldWidget extends ReactWidget {
             {this.room && !this.configuring && this.immersive.mode.active && <WorldTopBar roomName={this.room.projectName} view={this.worldView} presence={this.presenceState} hud={this.hudHub} voice={this.voiceHub}
                 error={this.error} onView={this.chooseView} onShare={() => this.openSheet('share')} onPalette={this.openPalette} onSettings={() => this.openSheet('room')}/>}
             {this.room && !this.configuring && <CommandPalette open={this.paletteOpen} commands={this.paletteOpen ? this.paletteCommands() : []} onClose={this.closePalette}/>}
+            {this.room && !this.configuring && this.dataDialogOpen && <DataWorldDialog folderHint={this.project?.path.fsPath()} theme={this.currentWorldStore()?.world.shell.theme} openFolder={this.openDataFolder} onBuild={this.buildFromData} onClose={this.closeDataDialog}/>}{/* promise:share (L7) */}
             {this.room && !this.configuring && this.immersive.mode.active && this.sheet && <SettingsSheet section={this.sheet} onSection={section => { this.sheet = section; this.update(); }} onClose={this.closeSheet}>{this.sheetSections(taskSourceUri)}</SettingsSheet>}
             {/* design lane (omo/build-design): header markup + classNames only */}
             <header className="omo-header">
