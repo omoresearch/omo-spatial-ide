@@ -601,8 +601,11 @@ export class RoomScene {
             case 'station': {
                 let surface = this.terminalSurfaces.get(entity.id);
                 if (!surface) { surface = this.terminalSurface(); this.terminalSurfaces.set(entity.id, surface); }
-                const card = { name: (entity.label ?? entity.station.name).slice(0, 26), tabs: entity.station.tabs.map(t => t.name).join(' · ').slice(0, 40) }; /* world-ui (g) */ if (surface.card?.name !== card.name || surface.card?.tabs !== card.tabs) { surface.card = card; surface.layout = undefined; }
+                const card = { name: (entity.label ?? entity.station.name).slice(0, 26), tabs: entity.station.tabs.map(t => t.name).join(' · ').slice(0, 40) }; /* world-ui (g) */ const renamed = !!surface.card && (surface.card.name !== card.name || surface.card.tabs !== card.tabs);
+                if (surface.card?.name !== card.name || surface.card?.tabs !== card.tabs) { surface.card = card; surface.layout = undefined; }
                 const built = deskKit ? buildKitStation(entity, deskKit, surface.texture) : buildStation(entity, jungle, surface.texture); // sky:merge M1
+                // world-ui r4/3: a renamed desk (the starter world replacing the default one) repaints its card at once: one name, from the world model.
+                if (renamed) surface.frame = undefined;
                 if (!surface.frame) { this.terminalFrames[entity.id] ??= { lines: [] }; queueMicrotask(() => { if (!this.disposed && this.terminalSurfaces.get(entity.id) === surface) this.setTerminalFrame(this.terminalFrames[entity.id] ?? { lines: [] }, entity.id as TerminalWorkstation); }); }
                 return built;
             }
@@ -1287,8 +1290,14 @@ export class RoomScene {
             const root = this.rootFor(action);
             if (!root) continue;
             const kind = this.entities.get(action)?.entity.kind;
+            // world-ui r4/3: walking, a desk's name is on its own monitor. While the idle card shows it the floating label hides;
+            // otherwise the label sits just above the monitor bezel (not in the sky).
+            const walkDesk = this.navigation==='walk' && kind==='station' && !chips;
+            if (walkDesk && !(this.terminalFrames[action]?.lines.length)) { if(this.labelPos.get(label)!==-1){this.labelPos.set(label,-1);label.style.visibility='hidden';} continue; }
+            const bezel = walkDesk ? this.screens.get(action) : undefined;
             const lift = chips ? (kind==='station' ? 2.25 : (root.userData.labelHeight ?? 2.9) * 0.9) : root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9);
-            const p=a.copy(root.position).add(b.set(0,lift,chips&&kind==='station'?-.36:-.3).applyAxisAngle(THREE.Object3D.DEFAULT_UP,root.rotation.y)).project(this.camera);
+            const p=bezel ? bezel.localToWorld(a.set(0,(bezel.geometry as THREE.PlaneGeometry).parameters.height/2+0.07,0)).project(this.camera)
+                : a.copy(root.position).add(b.set(0,lift,chips&&kind==='station'?-.36:-.3).applyAxisAngle(THREE.Object3D.DEFAULT_UP,root.rotation.y)).project(this.camera);
             const mesh = this.screens.get(action);
             const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(b)) : undefined;
             const x=Math.round((p.x*0.5+0.5)*w*2)/2,y=Math.round((-p.y*0.5+0.5)*h*2)/2;
