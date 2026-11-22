@@ -18,7 +18,7 @@ import type { RoomEntity, WorldEntity, WorldSpec } from '../common/world-model';
 import { roomRect, validateWorld } from '../common/world-model';
 import { buildShell, nearWall, shellColors } from './world-scene-shell';
 import type { OrbSpot } from './world-scene-shell';
-import { BuiltEntity, placeRoot, buildDecorEntity, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
+import { BuiltEntity, placeRoot, buildDecorEntity, topicBoardLines, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
 import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
@@ -322,6 +322,7 @@ export class RoomScene {
         const canvas = this.renderer.domElement;
         canvas.dataset.testid = 'omo-world-canvas';
         (canvas as HTMLCanvasElement & { omoThinMeshes?: () => ThinMesh[] }).omoThinMeshes = () => this.thinMeshes(); // promise:onboarding test hook
+        Object.assign(canvas, { omoBoardText: () => this.boardText(), omoStandAt: (p: PlayerPose) => this.standAt(p) }); // promise:onboarding (4) test hooks
         canvas.setAttribute('aria-label', 'Interactive 3D room. Drag or use arrow keys to orbit. Scroll to zoom. Select a workstation to work.');
         canvas.tabIndex = 0;
         this.host.appendChild(canvas);
@@ -499,7 +500,8 @@ export class RoomScene {
         for (const entity of world.entities) {
             const standing = entity.kind !== 'station' && entity.kind !== 'decor' && !nearWall(world.shell, entity.transform.x, entity.transform.z, 0.8);
             const onKit = !!kitShell && this.onKitAnchor(kit!, entity); // sky:merge M1 — kit desks draw only the live screen
-            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing, onKit, kitShell && entity.kind === 'decor' ? kit!.id : '']);
+            const lines = entity.kind === 'decor' && entity.id.startsWith('sign-') ? topicBoardLines(world, entity.id) : undefined; // promise:onboarding (4)
+            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing, onKit, kitShell && entity.kind === 'decor' ? kit!.id : '', lines]);
             const item = this.entities.get(entity.id);
             if (item && item.key === key) {
                 if (JSON.stringify(item.entity.transform) !== JSON.stringify(entity.transform)) { placeRoot(item.built.root, entity); refreeze(item.built.root); }
@@ -507,7 +509,7 @@ export class RoomScene {
                 continue;
             }
             if (item) { this.worldRoot.remove(item.built.root); disposeTree(item.built.root); this.screens.delete(entity.id); this.lamps.delete(entity.id); }
-            const built = this.buildEntity(entity, jungle, standing, onKit ? kit : undefined, kitShell ? kit : undefined);
+            const built = this.buildEntity(entity, jungle, standing, onKit ? kit : undefined, kitShell ? kit : undefined, lines);
             if (world.shell.theme === 'skyline' && !onKit) restyleForSkyline(built.root); // sky:render
             this.worldRoot.add(built.root); freezeTree(built.root);
             this.entities.set(entity.id, { entity, key, built, label: item?.label });
@@ -608,6 +610,42 @@ export class RoomScene {
         });
         return out;
     }
+    /** Screen rect (canvas CSS px) of a world-space box's corners; undefined when any corner is behind the camera. */
+    private screenRect(obj: THREE.Object3D, hx: number, hy: number, hz: number): { left: number; top: number; right: number; bottom: number } | undefined {
+        const w = this.host.clientWidth, h = this.host.clientHeight, v = new THREE.Vector3();
+        let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+        obj.updateWorldMatrix(true, false);
+        for (const x of [-hx, hx]) for (const y of [-hy, hy]) for (const z of [-hz, hz]) {
+            v.set(x, y, z).applyMatrix4(obj.matrixWorld).project(this.camera);
+            if (v.z > 1 || v.z < -1) return undefined;
+            const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h;
+            left = Math.min(left, sx); right = Math.max(right, sx); top = Math.min(top, sy); bottom = Math.max(bottom, sy);
+        }
+        return { left: +left.toFixed(1), top: +top.toFixed(1), right: +right.toFixed(1), bottom: +bottom.toFixed(1) };
+    }
+    /** promise:onboarding (4) — test hook: every topic board's text rows on screen now (glyph box height in CSS px). */
+    boardText(): Array<{ id: string; distance: number; rows: Array<{ text: string; title: boolean; px: number }>; rect?: { left: number; top: number; right: number; bottom: number } }> {
+        const out: Array<{ id: string; distance: number; rows: Array<{ text: string; title: boolean; px: number }>; rect?: { left: number; top: number; right: number; bottom: number } }> = [];
+        const h = this.host.clientHeight, a = new THREE.Vector3(), b = new THREE.Vector3();
+        for (const [id, item] of this.entities) {
+            let plate: THREE.Mesh | undefined; item.built.root.traverse(n => { if (n.userData.part === 'topic-board') plate = n as THREE.Mesh; });
+            if (!plate) continue;
+            const p = plate as THREE.Mesh; p.updateWorldMatrix(true, false);
+            const rows = (p.userData.rows as Array<{ text: string; title: boolean; top: number; bottom: number }>).map(r => {
+                a.set(0, r.top, 0.011).applyMatrix4(p.matrixWorld).project(this.camera); b.set(0, r.bottom, 0.011).applyMatrix4(p.matrixWorld).project(this.camera);
+                return { text: r.text, title: r.title, px: +(Math.abs(a.y - b.y) * 0.5 * h).toFixed(1) };
+            });
+            out.push({ id, distance: +this.camera.position.distanceTo(p.getWorldPosition(a)).toFixed(2), rows, rect: this.screenRect(p, 0.88, 0.5, 0.01) });
+        }
+        return out;
+    }
+    /** Test hook: stand the walker at a pose (walk mode) and draw it at once. */
+    standAt(pose: PlayerPose): void {
+        if (!this.walker) return;
+        this.walker.pose = { ...pose }; this.smoother.snap(this.walker.pose);
+        this.camera.position.set(pose.x, this.walker.eye ?? 1.75, pose.z); this.camera.rotation.set(pose.pitch, pose.yaw, 0, 'YXZ');
+        this.invalidate();
+    }
     /** sky:render — skyline theme on/off: dusk lights, far haze, bloom + environment. */
     private applySkyline(on: boolean): void {
         if (on && !this.skyFx && this.renderer) {
@@ -670,7 +708,7 @@ export class RoomScene {
     private onKitAnchor(kit: StyleKit, entity: WorldEntity): boolean {
         return entity.kind === 'station' && kitDeskIndex(kit, entity.transform) >= 0;
     }
-    private buildEntity(entity: WorldEntity, jungle: boolean, standing: boolean, deskKit?: StyleKit, worldKit?: StyleKit): BuiltEntity {
+    private buildEntity(entity: WorldEntity, jungle: boolean, standing: boolean, deskKit?: StyleKit, worldKit?: StyleKit, boardLines?: readonly string[]): BuiltEntity {
         switch (entity.kind) {
             case 'station': {
                 let surface = this.terminalSurfaces.get(entity.id);
@@ -688,9 +726,9 @@ export class RoomScene {
             case 'mirror': return buildMirror(entity, entity.id === 'mirror' ? this.mirrorTexture! : this.linkedSurface(entity.id).texture, standing);
             case 'monitor-wall': return buildMonitorWall(entity, this.linkedSurface(entity.id).texture, standing);
             case 'decor': {
-                const built = buildDecorEntity(entity, jungle);
+                const built = buildDecorEntity(entity, jungle, boardLines);
                 // sky:merge M1 — in a kit world a decor entity is drawn with its CC0 catalogue model once it loads.
-                const prop = worldKit ? decorPropFor(worldKit, entity) : undefined, loader = worldKit && this.kitLoaders.get(worldKit.id);
+                const prop = worldKit && !/^(note|sign)-/.test(entity.id) ? decorPropFor(worldKit, entity) : undefined, loader = worldKit && this.kitLoaders.get(worldKit.id);
                 if (prop && loader) loader.prop(prop.id).then(model => {
                     if (this.disposed || this.entities.get(entity.id)?.built !== built) return;
                     for (const child of [...built.root.children]) { built.root.remove(child); disposeTree(child); }

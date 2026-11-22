@@ -11,7 +11,8 @@
  *   4. Ready: "Your world is ready." -> Enter your world -> the world is shown (walk mode), saved with the rooms.
  *   5. Timer: sentence (Enter) -> world shown < 60 s (wall clock here AND the app's own data-omo-first-minute-ms).
  *   6. A second run (Skip for now) also lands in the world; no page errors.
- * Screenshots: 1-welcome, 2-seed, 3-mind, 4-read, 5-ready, 6-world, 7-world-overview.
+ * Screenshots: 1-welcome, 2-seed, 3-mind, 4-read, 5-ready, 6-world, 7-world-overview, 8-topic-room-board (3 m), 9-topic-room.
+ * Also: topic board glyphs > 14 px at 3 m (board-text.json).
  * Usage: node scripts/onboarding-real.cjs [outDir] [port 3750-3759]   (default omo/evidence/onboarding, 3754)
  */
 'use strict';
@@ -166,6 +167,28 @@ const SECRETS = ['sk-FAKEfixtureKEY', 'sk-proj-FAKEfixture', 'ghp_FAKEfixture', 
         fs.writeFileSync(path.join(OUT, 'thin-meshes.json'), JSON.stringify(thin, null, 1));
         const thinInRooms = (thin ?? []).filter(t => t.room?.startsWith('mind-') || /^(mind-|sign-|note-|board-)/.test(t.owner));
         check('Overview: no stray thin lines in the planned rooms (meshes with a side < 1 cm and > 0.5 m long = 0)', Array.isArray(thin) && thinInRooms.length === 0, { inRooms: thinInRooms.length, all: (thin ?? []).length, sample: thinInRooms.slice(0, 4) });
+
+        // promise:onboarding (4): a topic room close up — stand 3 m in front of its board (walk mode) and read it.
+        const board = saved.entities.find(e => e.id === 'sign-moonbase') || saved.entities.find(e => e.id.startsWith('sign-'));
+        const boards = saved.entities.filter(e => e.id.startsWith('sign-'));
+        const bRoom = saved.entities.find(e => e.id === `mind-${board.id.slice(5)}`);
+        const aside = (bRoom.transform.z - board.transform.z) * Math.cos(bRoom.transform.rotation) < 0; // the board is on the street side of its room
+        await click('[data-testid="walk-mode"]').catch(() => page.evaluate(() => [...document.querySelectorAll('button')].find(b => /^(Walk|Explore)$/.test(b.textContent.trim()))?.click()));
+        await page.waitForSelector(`${CANVAS}[data-navigation="walk"]`, { timeout: 15000 });
+        const r = board.transform.rotation, D = 3;
+        await page.$eval(CANVAS, (c, pose) => c.omoStandAt(pose), { x: board.transform.x + Math.sin(r) * D, z: board.transform.z + Math.cos(r) * D, yaw: r, pitch: -0.03 });
+        await pause(1500);
+        await shot('8-topic-room-board');
+        const read = await page.$eval(CANVAS, c => c.omoBoardText());
+        fs.writeFileSync(path.join(OUT, 'board-text.json'), JSON.stringify(read, null, 1));
+        const mine = read.find(b => b.id === board.id), notes = (mine?.rows ?? []).filter(x => !x.title);
+        check('Topic boards: one per topic room, by the doorway on the path side, title + 2-4 note lines; at 3 m every glyph row is > 14 px tall on screen',
+            boards.length === mindRooms.length && aside && !!mine && Math.abs(mine.distance - D) < 0.4 && notes.length >= 2 && notes.length <= 4 && mine.rows.every(x => x.px > 14) && !!mine.rect,
+            { board: board.id, aside, distance: mine?.distance, rows: mine?.rows, n: boards.length });
+        // A wider look at the whole room from the path (board + doorway + sign).
+        await page.$eval(CANVAS, (c, pose) => c.omoStandAt(pose), { x: bRoom.transform.x + Math.sin(bRoom.transform.rotation) * 9.5, z: bRoom.transform.z + Math.cos(bRoom.transform.rotation) * 9.5, yaw: bRoom.transform.rotation + 0.12, pitch: -0.08 });
+        await pause(1200);
+        await shot('9-topic-room');
 
         // 6. A fresh run that skips the import still lands in the world.
         const page2 = await browser.newPage();

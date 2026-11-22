@@ -17,6 +17,12 @@ const kits = require('../src/common/world-style-kits.ts');
 Module._extensions['.ts'] = originalTsLoader;
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'mind');
+function loadEntities() {
+  const resolve = Module._resolveFilename, loader = Module._extensions['.ts'];
+  Module._extensions['.ts'] = (module, filename) => module._compile(typescript.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2020 }, fileName: filename }).outputText, filename);
+  Module._resolveFilename = function (request, parent, ...rest) { try { return resolve.call(this, request, parent, ...rest); } catch (error) { if (request.startsWith('.')) return resolve.call(this, request + '.ts', parent, ...rest); throw error; } };
+  try { return require('../src/browser/world-scene-entities.ts'); } finally { Module._extensions['.ts'] = loader; Module._resolveFilename = resolve; }
+}
 
 test('style words map to an existing theme/kit and decor set', () => {
   const cases = [
@@ -78,12 +84,39 @@ test('imported topics become small rooms, each with a sign and up to 4 note boar
   const moon = w.entities.find(e => e.id === 'mind-moonbase');
   assert.equal(moon.kind, 'room'); assert.equal(moon.label, 'Moonbase');
   const inside = (e, room) => { const b = model.roomRect(room); return e.transform.x > b.minX && e.transform.x < b.maxX && e.transform.z > b.minZ && e.transform.z < b.maxZ; };
-  for (const e of w.entities.filter(x => /^(sign|note)-moonbase/.test(x.id))) assert.ok(inside(e, moon), `${e.id} is inside its room`);
+  for (const e of w.entities.filter(x => /^note-moonbase/.test(x.id))) assert.ok(inside(e, moon), `${e.id} is inside its room`);
+  // promise:onboarding (4): ONE topic board per topic room, just outside its front doorway, beside the path, facing the street.
+  for (const room of w.entities.filter(e => e.kind === 'room' && e.id.startsWith('mind-'))) {
+    const boards = w.entities.filter(e => e.id === `sign-${room.id.slice(5)}`);
+    assert.equal(boards.length, 1, `${room.id} has one board`);
+    const b = boards[0], c = Math.cos(room.transform.rotation), sn = Math.sin(room.transform.rotation);
+    const dx = b.transform.x - room.transform.x, dz = b.transform.z - room.transform.z, lx = c * dx - sn * dz, lz = sn * dx + c * dz;
+    assert.ok(lz > room.depth / 2 && lz < room.depth / 2 + 1.2, `${b.id} stands just outside the front wall (local z ${lz})`);
+    assert.ok(Math.abs(lx) > 0.8 + 1.1 && Math.abs(lx) < room.width / 2, `${b.id} is beside the doorway, not in it (local x ${lx})`);
+    assert.ok(Math.abs(Math.cos(b.transform.rotation - room.transform.rotation) - 1) < 1e-6, `${b.id} faces out of the door, towards the path`);
+    assert.ok(b.scale >= 1.2, 'big enough to read');
+  }
   assert.ok(w.entities.filter(x => x.id.startsWith('note-')).every(x => x.kind === 'decor' && x.decor === 'whiteboard' && x.label.length <= 60));
   const homeRoom = w.entities.find(e => e.id === 'home');
   for (const s of w.entities.filter(e => e.kind === 'station')) assert.ok(inside(s, homeRoom), `${s.id} stays home`);
   assert.equal(w.entities.filter(e => e.kind === 'station').length, 3);
   assert.equal(mw.mindWorld(home, []), home, 'no topics: the home world, unchanged');
+});
+
+test('a topic board lists 2-4 note lines from its room, using existing fields only (labels of the room\'s note-* entities)', async () => {
+  const ents = loadEntities();
+  const r = await mind.importMind({}, { home: FIXTURE });
+  const w = mw.mindWorld(mw.homeWorld('A lighthouse library at the edge of the sea').world, r.rooms);
+  const moonNotes = w.entities.filter(e => e.id.startsWith('note-moonbase')).map(e => e.label);
+  assert.deepEqual(ents.topicBoardLines(w, 'sign-moonbase'), moonNotes.slice(0, 4));
+  assert.ok(moonNotes.length >= 2);
+  for (const s of w.entities.filter(e => e.id.startsWith('sign-'))) {
+    const lines = ents.topicBoardLines(w, s.id);
+    assert.ok(lines.length >= 1 && lines.length <= 4, `${s.id}: ${lines.length} lines`);
+    const room = w.entities.find(e => e.id === `mind-${s.id.slice(5)}`);
+    for (const l of lines) assert.ok(w.entities.some(e => e.id.startsWith('note-') && e.label === l && model.roomRect(room).minX < e.transform.x && e.transform.x < model.roomRect(room).maxX), `${l} is a note of ${room.id}`);
+  }
+  assert.ok(model.validateWorld(w).ok, 'the shared world format is unchanged');
 });
 
 test('caps: at most 6 topic rooms and 4 notes each, even with more given', () => {

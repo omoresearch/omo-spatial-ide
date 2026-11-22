@@ -114,8 +114,8 @@ function slug(text: string): string {
 const label60 = (s: string): string => (s.replace(/[\u0000-\u001f]/g, ' ').trim() || 'Note').slice(0, 60);
 
 /**
- * Stage 2: the home world plus one small room per imported topic (<= 6): a sign (`sign-*`, the topic title) and up to
- * 4 note boards (`note-*`, one per chat screen). The home things stay together in a Home room. Pure.
+ * Stage 2: the home world plus one small room per imported topic (<= 6): a topic board (`sign-*`, the topic title; it
+ * stands by the doorway and also lists the notes) and up to 4 notes (`note-*`, one per chat screen, drawn as reading stands). The home things stay together in a Home room. Pure.
  */
 export function mindWorld(home: WorldSpec, rooms: readonly MindRoom[]): WorldSpec {
     const topics = rooms.slice(0, MIND_MAX_ROOMS).filter(r => r.screens.length);
@@ -132,7 +132,7 @@ export function mindWorld(home: WorldSpec, rooms: readonly MindRoom[]): WorldSpe
         const roomId = nextId(taken, `mind-${slug(topic.title)}`); taken.add(roomId);
         add.push({ id: roomId, kind: 'room', label: label60(topic.title), transform: origin, width: 8, depth: 7, doors: ['front'] });
         const signId = nextId(taken, `sign-${slug(topic.title)}`); taken.add(signId);
-        add.push({ id: signId, kind: 'decor', decor: 'whiteboard', label: label60(topic.title), transform: origin, scale: 0.8 });
+        add.push({ id: signId, kind: 'decor', decor: 'whiteboard', label: label60(topic.title), transform: origin, scale: 1.25 }); // promise:onboarding (4): the topic board, 2.2 x 1.25 m, by the door
         assign.set(signId, roomId);
         topic.screens.slice(0, MIND_MAX_SCREENS).forEach(screen => {
             const id = nextId(taken, `note-${slug(topic.title)}`); taken.add(id);
