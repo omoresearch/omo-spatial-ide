@@ -77,6 +77,11 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         });
         check('Nothing covers the screen centre or the bottom-centre monitor point', cover.hits.every(h => /^CANVAS/.test(h)), cover);
 
+        // world-ui: popovers open inside the panel flow: every tab is hit-testable at its centre (nothing paints over the tab row).
+        const tabsClear = await page.evaluate(() => [...document.querySelectorAll('[data-testid^="builder-tab-"]')].map(t => { const r = t.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!e && t.contains(e); }));
+        check('World Builder tabs are not covered by any popover', tabsClear.length >= 3 && tabsClear.every(Boolean), tabsClear);
+        check('No native <select> inside the World Builder', await page.$$eval('[data-testid="world-builder"] select', l => l.length) === 0);
+
         // 1. Talk.
         await click('[data-testid="builder-tab-talk"]'); await pause(400);
         // count BEFORE asking: the proposal's ghost preview already shows its desks in the dataset
@@ -95,7 +100,10 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         // 2. Add tab: monitor wall linked to Desk one + web wall with URL.
         await click('[data-testid="builder-tab-add"]'); await pause(400);
         const deskOne = await page.evaluate(() => { const w = Object.keys(localStorage).find(k => k.startsWith('omo.world.v2:')); const world = JSON.parse(localStorage.getItem(w)); const s = world.entities.find(e => e.kind === 'station' && /desk one/i.test(e.label || e.station.name)) || world.entities.find(e => e.kind === 'station'); return s.id; });
-        await page.select('[data-testid="builder-monitor-link"]', deskOne);
+        // world-ui: the follows picker is a custom select (no native <select>): open it, then pick the option.
+        await click('[data-testid="builder-monitor-link"]'); await pause(200);
+        await page.$eval(`[data-testid="builder-monitor-link-option"][data-value="${deskOne}"]`, e => e.click()); await pause(200);
+        check('Add: the custom follows select shows the picked desk', await page.$eval('[data-testid="builder-monitor-link"]', e => e.dataset.value) === deskOne);
         await page.click('[data-testid="builder-web-url"]', { clickCount: 3 }); await page.keyboard.type(webUrl); await page.keyboard.press('Enter');
         const wrap = await page.$eval('.omo-scene-wrap', e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
         const placeAt = async (item, spots) => {

@@ -1,0 +1,26 @@
+
+/* world-ui — custom select (omo-select.tsx). The list opens in flow, under its trigger, inside the panel. */
+.omo-select { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.omo-select-trigger {
+    height: var(--omo-control-h, 32px); padding: 0 10px; display: flex; align-items: center; gap: 8px; min-width: 0; text-align: left;
+    border-radius: var(--omo-r-sm); border: 1px solid var(--omo-line-2); background: var(--omo-surface-1); color: var(--omo-text);
+    font: 400 var(--omo-fs-sm) var(--omo-font); cursor: pointer; transition: border-color var(--omo-dur-1) var(--omo-ease);
+}
+.omo-select-trigger:hover:not(:disabled) { border-color: var(--omo-line-3); }
+.omo-select.is-open .omo-select-trigger { border-color: var(--omo-accent-line); }
+.omo-select-trigger:disabled { opacity: .45; cursor: not-allowed; }
+.omo-select-value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omo-select-trigger .omo-icon { flex: 0 0 auto; color: var(--omo-text-3); }
+.omo-select-list {
+    list-style: none; margin: 0; padding: 4px; max-height: 220px; overflow-y: auto; scrollbar-width: thin;
+    border-radius: var(--omo-r-md); border: 1px solid var(--omo-line-2); background: var(--omo-surface-2); box-shadow: var(--omo-shadow-2);
+    animation: omo-select-in var(--omo-dur-1) var(--omo-ease);
+}
+@keyframes omo-select-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+.omo-select-list li { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 8px; border-radius: var(--omo-r-sm); cursor: pointer; color: var(--omo-text-2); font-size: var(--omo-fs-sm); }
+.omo-select-list li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.omo-select-list li small { color: var(--omo-text-3); font-size: var(--omo-fs-xs); }
+.omo-select-list li.is-active { background: var(--omo-surface-hover); color: var(--omo-text); }
+.omo-select-list li.is-current { color: var(--omo-text); }
+.omo-select-list li .omo-icon { color: var(--omo-accent); }
+@media (prefers-reduced-motion: reduce) { .omo-select-list { animation: none; } }

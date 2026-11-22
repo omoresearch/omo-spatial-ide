@@ -1,8 +1,10 @@
 /* builder-ui — World Builder panel. Right column only: clear of the screen centre and the bottom-centre monitor area. */
 .omo-wb {
-    /* Ends above the Build / Immersive buttons (bottom-right stack); the Admin button hides while the builder shows Talk. */
-    position: absolute; z-index: 7; top: 64px; right: var(--omo-sp-3); bottom: calc(98px + 3 * var(--omo-control-h) + 3 * var(--omo-sp-2));
-    width: min(380px, calc(33vw - var(--omo-sp-3))); min-width: 300px;
+    /* world-ui: a fixed right column from under the top bar to the bottom edge. The bottom-right button stack
+       hides while building (build-mode.css), so the panel gets the full height. Its own stacking context:
+       nothing inside can paint over the header or tabs, and the body is the only part that scrolls. */
+    position: absolute; z-index: 7; top: var(--omo-wb-top, 64px); right: var(--omo-sp-3); bottom: var(--omo-sp-3);
+    width: var(--omo-wb-w); min-width: 300px; isolation: isolate;
     display: flex; flex-direction: column; overflow: hidden;
     background: var(--omo-glass-strong); backdrop-filter: var(--omo-glass-blur);
     border: 1px solid var(--omo-line-2); border-radius: var(--omo-r-lg); box-shadow: var(--omo-shadow-3);
@@ -14,6 +16,7 @@
 .omo-wb kbd { font: 500 var(--omo-fs-2xs)/1 var(--omo-mono); padding: 2px 5px; border-radius: var(--omo-r-xs); border: 1px solid var(--omo-line-2); color: var(--omo-text-2); }
 
 /* Header + tabs */
+.omo-wb-head, .omo-wb-tabs, .omo-wb-tray { flex: 0 0 auto; position: relative; z-index: 1; }
 .omo-wb-head { display: flex; align-items: center; gap: var(--omo-sp-2); padding: var(--omo-sp-3) var(--omo-sp-3) var(--omo-sp-2); }
 .omo-wb-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--omo-r-md); background: var(--omo-accent-soft); color: var(--omo-accent); border: 1px solid var(--omo-accent-line); }
 .omo-wb-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -22,7 +25,7 @@
 .omo-wb-iconbtn { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--omo-r-md); background: transparent; border: 1px solid var(--omo-line); }
 .omo-wb-iconbtn:hover:not(:disabled) { background: var(--omo-surface-hover); }
 .omo-wb-tabs { display: flex; align-items: center; gap: 2px; margin: 0 var(--omo-sp-3); padding: 3px; border-radius: var(--omo-r-md); background: var(--omo-surface-1); border: 1px solid var(--omo-line); }
-.omo-wb-tab { flex: 1 1 0; min-width: 0; height: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: var(--omo-r-sm); background: transparent; color: var(--omo-text-2); white-space: nowrap; }
+.omo-wb-tab { flex: 1 1 0; min-width: 0; height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: var(--omo-r-sm); background: transparent; color: var(--omo-text-2); white-space: nowrap; }
 .omo-wb-tab span { overflow: hidden; text-overflow: ellipsis; }
 .omo-wb-tab:hover { color: var(--omo-text); }
 .omo-wb-tab.is-on { background: var(--omo-surface-3); color: var(--omo-text); box-shadow: var(--omo-shadow-1); }
@@ -30,7 +33,7 @@
 .omo-wb-tabkey { padding: 0 4px; }
 
 /* Body */
-.omo-wb-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--omo-sp-3); display: flex; flex-direction: column; gap: var(--omo-sp-3); }
+.omo-wb-body { position: relative; z-index: 0; flex: 1 1 auto; min-height: 96px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: var(--omo-sp-3); display: flex; flex-direction: column; gap: var(--omo-sp-3); }
 .omo-wb-empty, .omo-wb-hello p { color: var(--omo-text-2); margin: 0; }
 .omo-wb-muted { color: var(--omo-text-3); margin: 0; font-size: var(--omo-fs-xs); }
 .omo-wb-error { color: var(--omo-danger); margin: 0; font-size: var(--omo-fs-xs); }
@@ -45,7 +48,7 @@
 .omo-wb-secondary:hover:not(:disabled) { background: var(--omo-surface-hover); }
 .omo-wb-field { display: flex; flex-direction: column; gap: 4px; }
 .omo-wb-field > span { font-size: var(--omo-fs-xs); color: var(--omo-text-3); }
-.omo-wb-field input, .omo-wb-field select {
+.omo-wb-field input {
     height: 30px; padding: 0 8px; border-radius: var(--omo-r-sm); border: 1px solid var(--omo-line-2); background: var(--omo-surface-1); color: var(--omo-text); font: inherit;
 }
 .omo-wb-field input[aria-invalid="true"] { border-color: var(--omo-danger); }
@@ -99,6 +102,7 @@
 .omo-wb-group h3 { margin: 0 0 6px; font-size: var(--omo-fs-2xs); letter-spacing: var(--omo-tracking-caps); text-transform: uppercase; color: var(--omo-text-3); font-weight: 600; }
 .omo-wb-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .omo-wb-cards.is-small { grid-template-columns: repeat(4, 1fr); }
+.omo-wb-cards.is-small .omo-wb-card-text strong { font-size: var(--omo-fs-xs); }
 .omo-wb-card {
     display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px; text-align: left;
     border-radius: var(--omo-r-md); border: 1px solid var(--omo-line); background: var(--omo-surface-1);
@@ -109,8 +113,8 @@
 .omo-wb-card-art { position: relative; flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--omo-r-sm); background: var(--omo-surface-2); color: var(--omo-accent); }
 .omo-wb-card-art b { position: absolute; right: -4px; bottom: -4px; font-size: 9px; line-height: 1; padding: 2px 3px; border-radius: 4px; background: var(--omo-accent); color: var(--omo-accent-ink); }
 .omo-wb-card-text { min-width: 0; display: flex; flex-direction: column; }
-.omo-wb-card-text strong { font-weight: 500; font-size: var(--omo-fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.omo-wb-card-text small { font-size: var(--omo-fs-2xs); color: var(--omo-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.omo-wb-card-text strong { font-weight: 500; font-size: var(--omo-fs-sm); line-height: 1.3; overflow-wrap: anywhere; }
+.omo-wb-card-text small { font-size: var(--omo-fs-xs); line-height: 1.3; color: var(--omo-text-3); overflow-wrap: anywhere; }
 .omo-wb-cards.is-small .omo-wb-card { flex-direction: column; gap: 4px; padding: 6px 4px; text-align: center; }
 .omo-wb-cards.is-small .omo-wb-card-art { width: 28px; height: 28px; }
 .omo-wb-cards.is-small .omo-wb-card-text small { display: none; }
@@ -120,6 +124,10 @@
 .omo-wb-placing > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .omo-wb-placing small { color: var(--omo-text-2); font-size: var(--omo-fs-2xs); }
 .omo-wb .omo-build-world { position: static; }
+/* world-ui — the Add tab keeps the legacy .omo-build-palette class (tests use [data-testid=build-palette]); that class
+   is an absolutely placed 232 px floating column in build-mode.css, which put the Add content over the tab row.
+   Inside the panel it is plain flow content. */
+.omo-wb .omo-build-palette { position: static; inset: auto; width: auto; overflow: visible; padding: 0; background: none; backdrop-filter: none; border: 0; border-radius: 0; box-shadow: none; animation: none; }
 
 /* Rooms */
 .omo-wb-rooms ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -142,12 +150,16 @@
 .omo-wb-confirmrow > span { flex: 1 1 100%; font-size: var(--omo-fs-xs); }
 
 /* Shared proposal tray */
-.omo-wb-tray { flex: 0 0 auto; border-top: 1px solid var(--omo-line-2); padding: var(--omo-sp-2) var(--omo-sp-3) var(--omo-sp-3); display: flex; flex-direction: column; gap: 6px; background: rgba(243, 189, 98, .05); max-height: 46%; overflow-y: auto; }
+.omo-wb-tray { margin-top: auto; border-top: 1px solid var(--omo-line-2); padding: var(--omo-sp-2) var(--omo-sp-3) var(--omo-sp-3); display: flex; flex-direction: column; gap: 6px; background: rgba(243, 189, 98, .05); max-height: 45%; overflow: hidden; }
 .omo-wb-summary { margin: 0; display: flex; align-items: center; gap: 8px; font: 500 var(--omo-fs-xs)/1.4 var(--omo-mono); color: #f3bd62; }
 .omo-wb-ghostdot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #f3bd62; box-shadow: 0 0 0 3px rgba(243, 189, 98, .2); }
-.omo-wb .omo-build-proposal { position: static; width: auto; padding: 0; background: none; backdrop-filter: none; border: 0; box-shadow: none; }
+.omo-wb .omo-build-proposal { position: static; width: auto; padding: 0; background: none; backdrop-filter: none; border: 0; box-shadow: none; display: flex; flex-direction: column; gap: 6px; min-height: 0; flex: 1 1 auto; }
+/* world-ui — Apply / Discard are always in view: only the change list scrolls. */
+.omo-wb-tray > .omo-build-proposal ul { flex: 1 1 auto; min-height: 0; max-height: 96px; overflow-y: auto; scrollbar-width: thin; margin: 0; }
+.omo-wb-tray > .omo-build-proposal footer { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: var(--omo-sp-2); }
 
 /* While the builder is open, the old floating palette column and the build hint shift left of the panel. */
 .omo-build .omo-build-notice { max-width: min(520px, calc(100% - 820px)); }
-@media (max-width: 1100px) { .omo-wb { width: 300px; } }
+.omo-scene-wrap { --omo-wb-w: min(360px, calc(33vw - var(--omo-sp-3))); }
+@media (max-width: 1100px) { .omo-scene-wrap { --omo-wb-w: 300px; } }
 @media (prefers-reduced-motion: reduce) { .omo-wb * { transition: none !important; } }

@@ -16,6 +16,7 @@ import { RoomInspector } from './build-room-inspector'; // w3:build
 import { WorldBuilder } from './world-builder-panel'; // builder-ui
 import { InspectorExtras } from './builder-inspector'; // builder-ui
 import type { AdminController, AdminState } from './admin-controller'; // builder-ui
+import { OmoSelect } from './omo-select'; // world-ui
 import '../../src/browser/build-mode.css';
 
 function useBuild(build: BuildMode): void {
@@ -132,11 +133,10 @@ function Inspector(props: { build: BuildMode; entity: WorldEntity }): React.Reac
         </div>}
         {e.kind === 'room' && <RoomInspector build={build} room={e} />}{/* w3:build */}
         <InspectorExtras build={build} entity={e} />{/* builder-ui: page address, tab layout, duplicate, delete with confirmation */}
-        {(e.kind === 'monitor-wall' || e.kind === 'mirror') && <label className="omo-build-field"><span>Follows</span>
-            <select data-testid="build-link-select" value={linkTarget ?? ''} onChange={ev => ev.target.value ? build.link(e.id, ev.target.value) : build.unlink(e.id)}>
-                {e.kind === 'monitor-wall' && <option value="">Nothing (its own view)</option>}
-                {deskList.map(d => <option key={d.id} value={d.id}>{entityTitle(d)}</option>)}
-            </select></label>}
+        {(e.kind === 'monitor-wall' || e.kind === 'mirror') && <div className="omo-build-field"><span>Follows</span>
+            <OmoSelect testid="build-link-select" ariaLabel="Follows" value={linkTarget ?? ''}
+                options={[...(e.kind === 'monitor-wall' ? [{ value: '', label: 'Nothing (its own view)' }] : []), ...deskList.map(d => ({ value: d.id, label: entityTitle(d) }))]}
+                onChange={v => v ? build.link(e.id, v) : build.unlink(e.id)} /></div>}
         {e.kind === 'station' && <>
             <div className="omo-build-station-sum">
                 <span className={`omo-build-chip is-${e.station.kind}`}>{e.station.kind === 'hermes' ? 'Agent desk' : 'Shell desk'}</span>
@@ -215,18 +215,16 @@ function StationSetup(props: { build: BuildMode; entity: StationEntity }): React
                         <button type="button" role="radio" aria-checked={draft.kind === 'hermes'} data-testid="setup-kind-hermes" onClick={() => patch({ kind: 'hermes' })}><BuildGlyph name="desk-agent" size={14} /> Agent (Hermes)</button>
                         <button type="button" role="radio" aria-checked={draft.kind === 'shell'} data-testid="setup-kind-shell" onClick={() => patch({ kind: 'shell' })}><BuildGlyph name="desk-shell" size={14} /> Shell</button>
                     </div></div>
-                <label className="omo-build-field"><span>Hermes profile</span>
-                    <select data-testid="setup-profile" value={draft.profile ?? ''} onChange={ev => patch({ profile: ev.target.value || undefined })}>
-                        <option value="">Workspace default</option>
-                        {profiles.map(p => <option key={p} value={p}>{p}</option>)}
-                        {!knownProfile && draft.profile && <option value={draft.profile}>{draft.profile} (not on this computer)</option>}
-                    </select>
-                    <small>{profiles.length ? `${profiles.length} profile${profiles.length === 1 ? '' : 's'} on this computer. Only the name is saved.` : 'No Hermes profiles found yet. Open a desk once to read them.'}</small></label>
+                <div className="omo-build-field"><span>Hermes profile</span>
+                    <OmoSelect testid="setup-profile" ariaLabel="Hermes profile" value={draft.profile ?? ''} disabled={locked}
+                        options={[{ value: '', label: 'Workspace default' }, ...profiles.map(p => ({ value: p, label: p })), ...(!knownProfile && draft.profile ? [{ value: draft.profile, label: `${draft.profile} (not on this computer)` }] : [])]}
+                        onChange={v => patch({ profile: v || undefined })} />
+                    <small>{profiles.length ? `${profiles.length} profile${profiles.length === 1 ? '' : 's'} on this computer. Only the name is saved.` : 'No Hermes profiles found yet. Open a desk once to read them.'}</small></div>
                 <div className="omo-build-field"><span>Starting tabs</span>
                     <ol className="omo-build-tabs" data-testid="setup-tabs">{draft.tabs.map((tab, i) => <li key={i}>
                         <span className="omo-build-tabnum">{i + 1}</span>
                         <input aria-label={`Tab ${i + 1} name`} maxLength={40} value={tab.name} onChange={ev => setTab(i, { name: ev.target.value })} />
-                        <select aria-label={`Tab ${i + 1} kind`} value={tab.kind} onChange={ev => setTab(i, { kind: ev.target.value as TabKind })}>{TAB_KINDS.map(k => <option key={k.kind} value={k.kind}>{k.label}</option>)}</select>
+                        <OmoSelect ariaLabel={`Tab ${i + 1} kind`} value={tab.kind} disabled={locked} options={TAB_KINDS.map(k => ({ value: k.kind, label: k.label }))} onChange={v => setTab(i, { kind: v as TabKind })} />
                         <button type="button" aria-label={`Remove tab ${i + 1}`} disabled={draft.tabs.length <= 1} onClick={() => setDraft(d => ({ ...d, tabs: d.tabs.filter((_, j) => j !== i) }))}><Icon name="x" size={12} /></button>
                     </li>)}</ol>
                     <button type="button" className="omo-build-addtab" data-testid="setup-add-tab" disabled={draft.tabs.length >= 8} onClick={() => setDraft(d => ({ ...d, tabs: [...d.tabs, { name: d.kind === 'hermes' && !d.tabs.some(t => t.kind === 'hermes') ? 'Hermes' : `Shell ${d.tabs.length + 1}`, kind: d.kind === 'hermes' && !d.tabs.some(t => t.kind === 'hermes') ? 'hermes' : 'shell' }] }))}><Icon name="plus" size={12} /> Add tab</button>

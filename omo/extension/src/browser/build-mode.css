@@ -291,3 +291,14 @@
 .omo-build-stepper output { text-align: center; font-family: var(--omo-mono); color: var(--omo-text); }
 .omo-build-openrow small, .omo-build-world-note { font-size: var(--omo-fs-2xs); color: var(--omo-text-3); }
 .omo-build-world-note { display: flex; align-items: center; gap: 6px; margin: 0; }
+
+/* world-ui — one mode indicator: while building, only the top-centre toolbar and the World Builder panel show.
+   The Build pill, the Immersive/Full-screen buttons and the Admin button step aside; the hint and toasts are
+   read by screen readers but not drawn over the room. */
+.omo-scene-wrap[data-building="true"] .omo-build-toggle,
+.omo-scene-wrap[data-building="true"] .omo-immersive-launch,
+.omo-scene-wrap[data-building="true"] .omo-focus-launch,
+.omo-scene-wrap[data-building="true"] .omo-admin-toggle { display: none !important; }
+.omo-build-hint { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; padding: 0 !important; border: 0 !important; }
+.omo-scene-wrap[data-building="true"] .omo-navigation-switch { right: calc(var(--omo-wb-w) + 2 * var(--omo-sp-3)); }
+.omo-scene-wrap[data-building="true"] .omo-scene-controls { right: calc(var(--omo-wb-w) + 2 * var(--omo-sp-3)); }

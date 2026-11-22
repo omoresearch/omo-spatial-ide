@@ -29,6 +29,7 @@ import { diffSummary, ghostIds, jumpPose, nextTab, roomRows, talkChips } from '.
 import type { BuilderTab, RoomRow } from './builder-helpers';
 import { sceneControls } from './focus-screen';
 import { threeOf } from './build-scene';
+import { OmoSelect } from './omo-select'; // world-ui
 import '../../src/browser/world-builder.css';
 
 export type BuilderView = BuilderTab | 'rooms' | 'inspect';
@@ -275,12 +276,10 @@ function AddTab(props: { build: BuildMode; world: WorldSpec }): React.ReactEleme
                             onMouseDown={e => e.preventDefault()}
                             onClick={() => { const next = on ? deskTabs.filter(k => k !== c.kind) : TAB_CHOICES.map(x => x.kind).filter(k => k === c.kind || deskTabs.includes(k)); if (next.length) { setDeskTabs(next); setPlacementPrefs({ deskTabs: next }); refresh('agent-desk'); } }}>{c.label}</button>;
                     })}</div></div>
-                <label className="omo-wb-field"><span>Monitor wall follows</span>
-                    <select data-testid="builder-monitor-link" value={desks.some(d => d.id === monitorLink) ? monitorLink : ''}
-                        onChange={e => { setMonitorLink(e.target.value); setPlacementPrefs({ monitorLink: e.target.value }); refresh('monitor-wall'); }}>
-                        <option value="">No desk (its own view)</option>
-                        {desks.map(d => <option key={d.id} value={d.id}>{entityTitle(d)}</option>)}
-                    </select></label>
+                <div className="omo-wb-field"><span>Monitor wall follows</span>
+                    <OmoSelect testid="builder-monitor-link" ariaLabel="Monitor wall follows" value={desks.some(d => d.id === monitorLink) ? monitorLink : ''}
+                        options={[{ value: '', label: 'No desk (its own view)' }, ...desks.map(d => ({ value: d.id, label: entityTitle(d) }))]}
+                        onChange={v => { setMonitorLink(v); setPlacementPrefs({ monitorLink: v }); refresh('monitor-wall'); }} /></div>
                 <label className="omo-wb-field"><span>Web wall page</span>
                     <input data-testid="builder-web-url" type="url" spellCheck={false} placeholder="https://example.com" value={webUrl} aria-invalid={urlBad}
                         onChange={e => { setWebUrl(e.target.value); setPlacementPrefs({ webHome: e.target.value }); }}
