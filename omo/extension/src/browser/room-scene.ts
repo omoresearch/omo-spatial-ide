@@ -1250,6 +1250,7 @@ export class RoomScene {
      * data (dataset JSON) is throttled while moving and written once more when the view settles.
      */
     private updateOverlays(w:number,h:number,now:number,moving:boolean):void{
+        this.updateAim(); // world-ui r4: a few screen planes per drawn frame (screens can appear while the view is still)
         const e=this.camera.matrixWorld.elements,v=this.lastView;
         let same=v[16]===w&&v[17]===h&&v[18]===this.peerVersion;
         for(let i=0;i<16&&same;i++)if(v[i]!==e[i])same=false;
@@ -1261,6 +1262,18 @@ export class RoomScene {
         if(moving&&now-this.lastData<DATA_INTERVAL_MS){this.dataPending=true;return;}
         this.dataPending=false;this.lastData=now;
         this.publishView(w,h);
+    }
+    /** world-ui (r4/1): is the crosshair (view centre) on a screen? The crosshair hint hides then (the monitor card says what to do). */
+    private aimRay = new THREE.Raycaster(); private aimCentre = new THREE.Vector2(0, 0);
+    private updateAim():void{
+        let aim='';
+        if(this.navigation==='walk'&&this.screens.size){
+            this.aimRay.setFromCamera(this.aimCentre,this.camera);
+            const hit=this.aimRay.intersectObjects([...this.screens.values()],false)[0];
+            if(hit&&hit.distance<8)aim=String(hit.object.userData.screenOf??'screen');
+        }
+        const d=this.renderer.domElement.dataset;
+        if((d.aimScreen??'')!==aim){if(aim)d.aimScreen=aim;else delete d.aimScreen;}
     }
     private placeLabels(w:number,h:number):void{
         const {a,b}=this.tmp;
