@@ -65,7 +65,7 @@ import { FocusOverlay } from './focus-overlay';
 import { ShortcutsLane } from './shortcuts-lane'; // omo keys6 lane
 import { OmoImmersiveService } from './immersive-service'; // omo immersive lane
 import { WorldTopBar, WorldView } from './world-topbar'; // world-ui: the one slim top bar
-import { ShapeMode } from './shape-mode'; // shape
+import { ShapeMode } from './shape-mode'; // shape (its import also registers Space before any room exists)
 import { CommandPalette, PaletteCommand, isPaletteKey, PALETTE_TOGGLE_EVENT } from './command-palette'; // world-ui
 import { SettingsSheet, SheetSection } from './settings-sheet'; // world-ui
 import { Icon } from './icons'; // omo immersive lane
