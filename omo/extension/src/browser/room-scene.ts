@@ -515,6 +515,7 @@ export class RoomScene {
         if (this.walker) {
             const firstOpen = world.shell.open && (!previous || !previous.shell.open || this.homeKey !== world.name); // w3:look (6): a newly loaded open world starts in its plaza
             this.walker.mover = worldMover(world, kitShell ? kit!.blocks.map((b, i) => ({ id: `kit-${i}`, x: b.x, z: b.z, rotation: 0, rect: { left: -b.hx, right: b.hx, front: -b.hz, back: b.hz } })) : []); // sky:merge M1 — baked furniture collides
+            this.walker.eye = kitShell ? kit!.render.eye : undefined; // world-ui r4/2: the kit's eye height
             this.walker.home = kitShell ? { x: kit!.spawn.x, z: kit!.spawn.z, yaw: kit!.spawn.yaw, pitch: kit!.spawn.pitch ?? 0 } : worldHome(world.shell, world.entities);
             const firstKit = !!kitShell && this.homeKey !== `kit:${world.name}`; // world-ui (2): a kit world starts at the kit's desk view once
             if (firstOpen || firstKit) { this.homeKey = firstKit ? `kit:${world.name}` : world.name; this.walker.pose = { ...this.walker.home }; this.walker.reset(); }
@@ -1206,7 +1207,7 @@ export class RoomScene {
             }else{
                 if(this.focusDrawn){this.focusDrawn=false;moving=true;}
                 const view=this.smoother.step(pose,delta);
-                this.camera.position.set(view.x,1.75,view.z);this.camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
+                this.camera.position.set(view.x,this.walker.eye??1.75,view.z);this.camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
             }
             if(!this.smoother.settled(pose))moving=true;
             this.emitPose(pose,now,moving);
