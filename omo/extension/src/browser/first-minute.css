@@ -12,9 +12,16 @@
     transition: background-color 600ms ease;
 }
 .omo-fm-mind, .omo-fm-ready {
-    background: linear-gradient(90deg, rgba(0, 0, 0, .96) 0, rgba(0, 0, 0, .9) 38%, rgba(0, 0, 0, .25) 62%, transparent 78%);
+    /* The copy column (6vw + 520px, <= 50vw) sits on solid black; the world only shows to its right. */
+    background: linear-gradient(90deg, #000 0, #000 max(50%, calc(6vw + 560px)), rgba(0, 0, 0, .72) calc(max(50%, calc(6vw + 560px)) + 9%), rgba(0, 0, 0, .2) 82%, transparent 94%);
     pointer-events: none;
 }
+/* While the first minute is open, none of the world's own chrome shows: no header (view pill, Local workspace,
+   presence), no footer, no theme heading ("Manhattan skyline"), no LIVE badge, no camera hints, no desk labels. */
+.omo-root[data-first-minute="true"] > .omo-header, .omo-root[data-first-minute="true"] > .omo-footer,
+.omo-root[data-first-minute="true"] .omo-stage-heading, .omo-root[data-first-minute="true"] .omo-preview-badge,
+.omo-root[data-first-minute="true"] .omo-scene-controls, .omo-root[data-first-minute="true"] .omo-navigation-switch,
+.omo-root[data-first-minute="true"] .omo-scene-label, .omo-root[data-first-minute="true"] .omo-tool-dock { display: none !important; }
 .omo-fm-mind > *, .omo-fm-ready > * { pointer-events: auto; }
 .omo-fm-mind .omo-fm-sky, .omo-fm-ready .omo-fm-sky, .omo-fm-mind .omo-fm-hz, .omo-fm-ready .omo-fm-hz { display: none; }
 .omo-fm-sky {

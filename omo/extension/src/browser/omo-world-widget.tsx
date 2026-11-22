@@ -1045,7 +1045,7 @@ export class OmoWorldWidget extends ReactWidget {
         const theme = this.configuring ? this.draftTheme : this.room!.theme;
         const layout = this.configuring ? this.draftLayout : this.room?.layout ?? 'classic';
         const taskSourceUri=this.project?.toString();
-        return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-project-uri={this.project?.toString()||''} data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode} data-immersive={String(this.immersive.mode.active)}>
+        return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-project-uri={this.project?.toString()||''} data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode} data-immersive={String(this.immersive.mode.active)} data-first-minute={this.firstMinuteShown() ? 'true' : undefined}>
             {/* world-ui (mount hook): immersive = the ONE slim floating top bar, ⌘K palette and settings sheet. */}
             {this.room && !this.configuring && this.immersive.mode.active && <WorldTopBar roomName={this.room.projectName} view={this.worldView} presence={this.presenceState} hud={this.hudHub} voice={this.voiceHub}
                 error={this.error} onView={this.chooseView} onShare={() => this.openSheet('share')} onPalette={this.openPalette} onSettings={() => this.openSheet('room')}/>}

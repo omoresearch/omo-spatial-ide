@@ -60,6 +60,8 @@ const SECRETS = ['sk-FAKEfixtureKEY', 'sk-proj-FAKEfixture', 'ghp_FAKEfixture', 
         const text = sel => page.$eval(sel, e => e.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
         const visible = sel => page.evaluate(s => { const e = document.querySelector(s); if (!e) return false; const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden'; }, sel);
         const savedWorld = () => page.evaluate(() => { const k = Object.keys(localStorage).find(k => k.startsWith('omo.world.v2:')); return k ? JSON.parse(localStorage.getItem(k)) : null; });
+        const region = async (clip) => { const b64 = await page.screenshot({ clip, encoding: 'base64' }); return page.evaluate(async src => { const img = new Image(); img.src = `data:image/png;base64,${src}`; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const x = c.getContext('2d'); x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let max = 0, sum = 0; for (let i = 0; i < d.length; i += 4) { const v = Math.max(d[i], d[i + 1], d[i + 2]); max = Math.max(max, v); sum += v; } return { max, mean: +(sum / (d.length / 4)).toFixed(2) }; }, b64); };
+        const chromeShown = () => page.evaluate(() => ['.omo-header', '.omo-footer', '.omo-stage-heading', '.omo-preview-badge', '.omo-scene-controls', '.omo-navigation-switch', '.omo-tool-dock'].filter(s => [...document.querySelectorAll(s)].some(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).display !== 'none'; })));
         const canvasWorld = () => page.$eval(CANVAS, c => ({ entities: JSON.parse(c.dataset.worldEntities || '[]'), rooms: JSON.parse(c.dataset.worldRooms || '[]'), name: c.dataset.worldName, nav: c.dataset.navigation })).catch(() => null);
 
         await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded' });
@@ -110,6 +112,9 @@ const SECRETS = ['sk-FAKEfixtureKEY', 'sk-proj-FAKEfixture', 'ghp_FAKEfixture', 
         const w2 = await canvasWorld();
         const mindRooms = (w2?.rooms ?? []).filter(id => id.startsWith('mind-'));
         check('The world behind grows a room per topic, each with a sign and note boards', mindRooms.length === Number(s3.rooms) && w2.entities.filter(id => id.startsWith('sign-')).length === mindRooms.length && w2.entities.filter(id => id.startsWith('note-')).length >= mindRooms.length, { mindRooms, notes: w2?.entities.filter(id => id.startsWith('note-')).length });
+        const chrome = await chromeShown(), gap = await page.evaluate(() => { const r = document.querySelector('.omo-fm-side').getBoundingClientRect(); return { x: Math.round(r.right + 8), w: Math.max(8, Math.round(innerWidth / 2 - r.right - 16)) }; });
+        const scrim = await region({ x: gap.x, y: 140, width: gap.w, height: 620 });
+        check('Onboarding hides the world chrome (header pill, Local workspace, theme title, LIVE badge, camera hints) and the copy column is solid black', chrome.length === 0 && scrim.max <= 6, { chrome, scrim, gap });
         await shot('4-read');
 
         // 4. Ready -> Enter your world.
