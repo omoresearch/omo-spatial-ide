@@ -140,3 +140,10 @@ body.omo-shaping.omo-shape-browse .omo-shape-dock { left: calc((100% - var(--omo
 .omo-shape-enter { flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 24px; border-radius: 6px; background: rgba(255, 255, 255, .08); color: var(--sh-text-2); font-weight: 500; font-size: 13px; line-height: 1; font-family: inherit; animation: omo-shape-pop 160ms var(--sh-ease) both; }
 /* While a change is pending, the room's own labels step further back so the ghost and its card lead. */
 body.omo-shape-proposed .omo-scene-label { opacity: .12 !important; }
+
+/* Rounded focus ring on the pill itself (the IDE's default 1 px square outline is off for the input). */
+.omo-shape .omo-shape-prompt input, .omo-shape .omo-shape-prompt input:focus, .omo-shape .omo-shape-prompt input:focus-visible, .omo-shape .omo-shape-prompt input:focus:not(iframe) { outline: 0 none transparent !important; outline-width: 0 !important; outline-offset: 0 !important; box-shadow: none !important; border: 0 !important; }
+.omo-shape .omo-shape-prompt:focus:not(iframe), .omo-shape .omo-shape-prompt:focus-within:not(iframe) { outline: 0 none transparent !important; }
+.omo-shape-prompt:focus-within { box-shadow: 0 0 0 2px rgba(143, 227, 196, .45), 0 12px 40px rgba(0, 0, 0, .45); }
+/* Zone labels step back while shaping (the change and its caption carry the meaning). */
+body.omo-shape-open .omo-scene-label { opacity: 0 !important; pointer-events: none !important; transition: opacity .18s ease; }

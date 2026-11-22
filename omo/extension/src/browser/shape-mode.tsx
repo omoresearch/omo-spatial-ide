@@ -119,7 +119,19 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     }, [open, build]);
     React.useEffect(() => () => { if (openRef.current) shapeStore.set(false); document.body.classList.remove('omo-shape-browse'); }, []);
     React.useEffect(() => { document.body.classList.toggle('omo-shape-browse', open && browse); }, [open, browse]);
+    React.useEffect(() => { document.body.classList.toggle('omo-shape-open', open); return () => document.body.classList.remove('omo-shape-open'); }, [open]);
     React.useEffect(() => { document.body.classList.toggle('omo-shape-proposed', open && proposed); return () => document.body.classList.remove('omo-shape-proposed'); }, [open, proposed]);
+    // Calm the world while shaping: the city backdrop dims and hazes so the room and the change are the hero.
+    React.useEffect(() => {
+        const three = threeOf(build.scene).scene;
+        const bd = three?.getObjectByName('omo-kit-backdrop') as THREE.Mesh | undefined;
+        const u = (bd?.material as THREE.ShaderMaterial | undefined)?.uniforms;
+        if (!open || !u?.gain || !u?.haze) return undefined;
+        const g0 = u.gain.value as number, h0 = u.haze.value as number;
+        u.gain.value = g0 * 0.38; u.haze.value = Math.min(1, h0 + 0.4);
+        if (three) ambientHost(three)?.invalidate();
+        return () => { u.gain.value = g0; u.haze.value = h0; if (three) ambientHost(three)?.invalidate(); };
+    }, [open, build.scene]);
     // The room closed or was rebuilt (no store): leave Shape.
     React.useEffect(() => { if (open && !build.store) show(false); });
 
@@ -316,3 +328,4 @@ function breathe(three: THREE.Scene | undefined, ids: string[]): void {
     });
     if (touched && three) ambientHost(three)?.invalidate();
 }
+
