@@ -1485,7 +1485,7 @@ export function planWithRules(world: WorldSpec, prompt: string, options: RulePla
 }
 
 export function summarize(steps: string[]): string {
-    const short = steps.map(s => s.replace(/\s+at x [-\d.]+ m, z [-\d.]+ m(?:, turned -?\d+°)?/, '').replace(/\s+\(.*?\)/, ''));
+    const short = steps.map(s => s.replace(/\s+at x [-\d.]+ m, z [-\d.]+ m(?:, turned -?\d+°)?/, '').replace(/\s+\((?!size ×).*?\)/, '')); // shape: the size stays for every thing ("big" in the caption)
     const text = short.slice(0, 4).join('; ') + (short.length > 4 ? `; and ${short.length - 4} more` : '');
     return text.length > 240 ? `${text.slice(0, 237)}…` : text;
 }
