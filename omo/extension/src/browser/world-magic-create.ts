@@ -29,11 +29,15 @@ export interface CreationHost {
     /** Request one more frame (and optionally a shadow refresh). */
     invalidate(shadows?: boolean): void;
     chime?(kind: 'create' | 'remove'): void;
+    /** The live camera (for distance-scaled effects). */
+    camera?(): THREE.Camera | undefined;
 }
 
-const SEQ = { seam: 0.42, partsStart: 0.1, spread: 0.36, part: 0.5, motesStart: 0.18, motes: 1.25 } as const;
+const SEQ = { seam: 0.7, partsStart: 0.35, spread: 0.5, part: 0.7, motesStart: 0.2, motes: 1.8 } as const;
+/** Kind stagger: rooms first, then screens/desks, then decor (seconds added to every part delay). */
+const KIND_DELAY: Record<string, number> = { room: 0, station: 0.5, monitors: 0.6, web: 0.6, mirror: 0.65, review: 0.65, decor: 0.75 };
 /** Whole sequence length in seconds (the progress hook runs 0 -> 1 over this). */
-export const CREATE_SECONDS = Math.max(SEQ.partsStart + SEQ.spread + SEQ.part, SEQ.motesStart + SEQ.motes);
+export const CREATE_SECONDS = Math.max(SEQ.partsStart + 0.75 + SEQ.spread + SEQ.part, SEQ.motesStart + SEQ.motes);
 const DISSOLVE_SECONDS = 0.9;
 
 // ------------------------------------------------------------------ shared resources
@@ -140,6 +144,7 @@ export class WorldCreation {
     private ghosts = new Map<string, Ghost>();
     private dissolves: Dissolve[] = [];
     private lastWorld?: WorldSpec;
+    private prevWorld?: WorldSpec;
     private shown = new Map<string, WorldEntity>();
     /** Ids in the applied (saved) world, from the last store event. */
     private applied?: Set<string>;
@@ -180,7 +185,7 @@ export class WorldCreation {
     // -------------------------------------------------------------- world diff
 
     private diff(world: WorldSpec, now: number): void {
-        const first = !this.lastWorld; this.lastWorld = world;
+        const first = !this.lastWorld; this.prevWorld = this.lastWorld; this.lastWorld = world;
         const next = new Map(world.entities.map(e => [e.id, e]));
         const animate = !first && this.armed;
         const applied = this.applied;
@@ -189,18 +194,38 @@ export class WorldCreation {
             for (const [id, e] of this.shown) if (!next.has(id)) { this.dropGhostRecord(id); this.cancelCreation(id); this.dissolve(e, now); }
             for (const [id, e] of next) {
                 const was = this.shown.get(id), wasGhost = this.ghosts.has(id);
-                if (isPending(id)) { if (!wasGhost) this.ghost(id); continue; }
+                if (isPending(id)) { if (!wasGhost && !this.sameAsBefore(e)) this.ghost(id); continue; }
                 if (wasGhost) { this.unghost(this.ghosts.get(id)!); this.ghosts.delete(id); this.materialise(e, now); }
-                else if (!was) this.materialise(e, now);
+                else if (!was && !this.sameAsBefore(e)) this.materialise(e, now);
             }
         } else {
             // First world or a non-store redraw (mount, kit load): no animation, but keep pending ghosts right.
-            for (const [id] of next) if (isPending(id) && !this.ghosts.has(id)) this.ghost(id);
+            for (const [id, e] of next) if (isPending(id) && !this.ghosts.has(id) && !this.sameAsBefore(e)) this.ghost(id);
         }
         for (const id of [...this.ghosts.keys()]) if (!next.has(id) || !isPending(id)) { const g = this.ghosts.get(id)!; this.unghost(g); this.ghosts.delete(id); }
         this.shown = next;
         this.armed = false;
         this.publish();
+    }
+
+    /** True when an entity with a new id occupies the same footprint as one already shown (a re-id, e.g. the planner
+     *  turning the old outer walls into the 'Main room'): it is not new, so it neither ghosts nor materialises. */
+    private sameAsBefore(e: WorldEntity): boolean {
+        if (this.shown.has(e.id)) return false;
+        const a = footprint(e);
+        for (const o of this.shown.values()) {
+            if (o.kind !== e.kind && !(e.kind === 'room')) continue;
+            const b = footprint(o);
+            const near = Math.abs(o.transform.x - e.transform.x) < 0.6 && Math.abs(o.transform.z - e.transform.z) < 0.6;
+            const sized = Math.abs(a.width - b.width) < 0.6 && Math.abs(a.depth - b.depth) < 0.6;
+            if (near && sized) return true;
+        }
+        if (e.kind === 'room' && this.prevWorld) {
+            const sh = this.prevWorld.shell as unknown as { width?: number; depth?: number };
+            const sw = sh?.width, sd = sh?.depth;
+            if (sw && sd && Math.abs(a.width - sw) < 0.6 && Math.abs(a.depth - sd) < 0.6 && Math.abs(e.transform.x) < 0.6 && Math.abs(e.transform.z) < 0.6) return true;
+        }
+        return false;
     }
 
     // -------------------------------------------------------------- ghost (pending entities breathe)
@@ -275,7 +300,7 @@ export class WorldCreation {
         const measured = parts.map(node => { box.setFromObject(node); box.getSize(size); return { node, minY: Number.isFinite(box.min.y) ? box.min.y : 0, h: Number.isFinite(size.y) ? size.y : 0.5 }; });
         measured.sort((a, b) => a.minY - b.minY || b.h - a.h);
         const n = measured.length;
-        c.parts = measured.map((m, i) => ({ node: m.node, pos: m.node.position.clone(), scale: m.node.scale.clone(), delay: SEQ.partsStart + (n > 1 ? i / (n - 1) : 0) * SEQ.spread, rise: 0.18 + Math.min(0.6, m.h * 0.35) }));
+        c.parts = measured.map((m, i) => ({ node: m.node, pos: m.node.position.clone(), scale: m.node.scale.clone(), delay: SEQ.partsStart + (KIND_DELAY[c.entity.kind] ?? 0.5) + (n > 1 ? i / (n - 1) : 0) * SEQ.spread, rise: 0.18 + Math.min(0.6, m.h * 0.35) }));
         root.traverse(node => {
             const mesh = node as THREE.Mesh;
             if (!mesh.isMesh || node.userData.magicOverlay) return;
@@ -287,7 +312,7 @@ export class WorldCreation {
     private buildSeam(c: Creation): void {
         const fp = footprint(c.entity);
         const seamMat = seamMaterial(), padMat = padMaterial();
-        const strip = new THREE.Mesh(seamGeometry(fp.width / 2, fp.offsetZ - fp.depth / 2, fp.offsetZ + fp.depth / 2, c.entity.kind === 'room' ? 0.05 : 0.035), seamMat);
+        const strip = new THREE.Mesh(seamGeometry(fp.width / 2, fp.offsetZ - fp.depth / 2, fp.offsetZ + fp.depth / 2, (c.entity.kind === 'room' ? 0.05 : 0.035) * this.distanceScale(c.entity)), seamMat);
         strip.renderOrder = 8;
         const pad = new THREE.Mesh(new THREE.PlaneGeometry(fp.width, fp.depth), padMat);
         pad.rotation.x = -Math.PI / 2; pad.position.set(0, 0.01, fp.offsetZ); pad.renderOrder = 7;
@@ -309,9 +334,16 @@ export class WorldCreation {
             from.set([wx(sx, sz), sy, wz(sx, sz)], i * 3); to.set([wx(lx, lz), ty, wz(lx, lz)], i * 3); phase[i] = Math.random();
         }
         const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(from.slice(), 3));
-        const mat = new THREE.PointsMaterial({ color: MAGIC_WARM_SOFT, size: 0.07, map: dot, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+        const mat = new THREE.PointsMaterial({ color: MAGIC_WARM_SOFT, size: 0.07 * this.distanceScale(c.entity), map: dot, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
         const points = new THREE.Points(geo, mat); points.frustumCulled = false; points.renderOrder = 12;
         c.fx.add(points); c.motes = { points, from, to, phase };
+    }
+
+    /** World-units scale so the seam and motes keep a readable screen size from the overview camera. */
+    private distanceScale(entity: WorldEntity): number {
+        const cam = this.host.camera?.(); if (!cam) return 3;
+        const d = cam.position.distanceTo(new THREE.Vector3(entity.transform.x, 0, entity.transform.z));
+        return Math.max(1, Math.min(6, d / 4));
     }
 
     private stepCreations(now: number): void {

@@ -316,7 +316,7 @@ export class RoomScene {
             add: (tick: (seconds: number) => boolean): (() => void) => { this.ambientTicks.add(tick); this.invalidate(); return () => { this.ambientTicks.delete(tick); this.invalidate(); }; },
             invalidate: (shadows = false): void => { if (shadows && this.renderer) this.renderer.shadowMap.needsUpdate = true; this.invalidate(); }
         };
-        attachWorldMagic(this.scene, canvas, id => this.entities.get(id)?.built.root, () => this.world, () => (this.renderer?.capabilities.isWebGL2 ? 'high' : 'low')); // world-magic
+        attachWorldMagic(this.scene, canvas, id => this.entities.get(id)?.built.root, () => this.world, () => (this.renderer?.capabilities.isWebGL2 ? 'high' : 'low'), () => this.camera); // world-magic
         canvas.dataset.roomLayout = this.options.layout ?? 'classic';
         this.bindControls(canvas);
         this.bindWake(canvas);

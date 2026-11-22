@@ -12,7 +12,8 @@ interface Ambient { add(tick: (seconds: number) => boolean): () => void; invalid
 
 export function attachWorldMagic(
     scene: THREE.Scene, canvas: HTMLCanvasElement,
-    root: (id: string) => THREE.Object3D | undefined, world: () => WorldSpec | undefined, quality: () => 'high' | 'low'
+    root: (id: string) => THREE.Object3D | undefined, world: () => WorldSpec | undefined, quality: () => 'high' | 'low',
+    camera?: () => THREE.Camera | undefined
 ): () => void {
     const ambient = scene.userData.omoAmbient as Ambient | undefined;
     if (!ambient) return () => undefined;
@@ -22,6 +23,7 @@ export function attachWorldMagic(
         scene, canvas, root, world, quality,
         invalidate: (shadows?: boolean) => ambient.invalidate(shadows),
         chime: kind => sound?.chime(kind),
+        camera,
     });
     const off = ambient.add(seconds => creation.tick(seconds * 1000));
     (canvas as HTMLCanvasElement & { omoMagic?: unknown }).omoMagic = { storeChanged: (c: Parameters<WorldCreation['storeChanged']>[0]) => creation.storeChanged(c) };
