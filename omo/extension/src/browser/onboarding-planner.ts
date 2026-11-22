@@ -284,6 +284,12 @@ export interface Arrangement {
 // ------------------------------------------------------------------------------------------------ w3:admin zoned worlds
 /** Rooms stand in up to two rows facing a shared street (z from STREET_BACK to STREET_FRONT); spawn is in the street. */
 const STREET_BACK = -3, STREET_FRONT = 7, ROOM_GAP = 4, OPEN_MARGIN = 10;
+/**
+ * promise:onboarding (4) — an imported topic room's board (`sign-*` decor): just outside the front doorway, beside the
+ * path (the doorway lamp stands on the other side), facing the street. Room-local; rotation 0 faces out of the door.
+ */
+const isTopicBoard = (e: WorldEntity): boolean => e.kind === 'decor' && e.decor === 'whiteboard' && e.id.startsWith('sign-');
+export const TOPIC_BOARD_SPOT = (width: number, depth: number): Transform => ({ x: r3(-Math.min(2.6, width / 2 - 1.2)), z: r3(depth / 2 + 0.75), rotation: 0 });
 const isLoungeRoom = (r: RoomEntity): boolean => /\b(lounge|break|chill|relax|cafe|kitchen|garden)\b/i.test(r.label ?? r.id);
 const evenUp = (n: number): number => Math.ceil(n / 2) * 2;
 const halfUp = (n: number): number => Math.ceil(n * 2) / 2;
@@ -311,6 +317,10 @@ export function zonedArrangement(world: WorldSpec, assign?: ReadonlyMap<string, 
         if (given) return given;
         const here = containing(e.transform);
         if (here) return here;
+        if (isTopicBoard(e)) { // promise:onboarding (4): a topic board stands outside its room, by the doorway
+            const own = groups.get(`mind-${e.id.slice(5)}`)?.room ?? list.find(r => { const b = roomRect(r); return e.transform.x > b.minX - 2 && e.transform.x < b.maxX + 2 && e.transform.z > b.minZ - 2 && e.transform.z < b.maxZ + 2; });
+            if (own) return own;
+        }
         if (e.kind === 'station') return pick(work, g => g.desks.length);
         if (e.kind === 'monitor-wall' || e.kind === 'web-wall') return pick(work, g => g.walls.length);
         if (e.kind === 'review-screen') return pick(work, g => g.reviews.length);
@@ -365,6 +375,7 @@ export function zonedArrangement(world: WorldSpec, assign?: ReadonlyMap<string, 
             [-width / 2 + 0.8, 0], [width / 2 - 0.8, 0], [-width / 4, depth / 2 - 0.8], [width / 4, depth / 2 - 0.8]];
         let free = 0, middle = 0;
         g.decor.forEach(d => {
+            if (isTopicBoard(d)) { local.set(d.id, { ...TOPIC_BOARD_SPOT(width, depth) }); return; }
             const soft = d.kind === 'decor' && (d.decor === 'sofa' || d.decor === 'rug');
             let xz: [number, number];
             if (soft && middle < centre.length) xz = centre[middle++] as [number, number];

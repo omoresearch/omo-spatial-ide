@@ -1,0 +1,102 @@
+{
+ "signs": [
+  {
+   "room": "home",
+   "name": "Lighthouse library",
+   "rect": {
+    "left": 544.5,
+    "top": 300.3,
+    "right": 629.7,
+    "bottom": 347.7
+   }
+  },
+  {
+   "room": "mind-moonbase",
+   "name": "Moonbase",
+   "rect": {
+    "left": 755.2,
+    "top": 372.5,
+    "right": 834.9,
+    "bottom": 415.3
+   }
+  },
+  {
+   "room": "mind-garden",
+   "name": "Garden",
+   "rect": {
+    "left": 964.1,
+    "top": 438.6,
+    "right": 1071.8,
+    "bottom": 492.7
+   }
+  },
+  {
+   "room": "mind-lighthouse",
+   "name": "Lighthouse",
+   "rect": {
+    "left": 443.2,
+    "top": 386.7,
+    "right": 516.2,
+    "bottom": 430.5
+   }
+  },
+  {
+   "room": "mind-recipe-app",
+   "name": "Recipe App",
+   "rect": {
+    "left": 628.6,
+    "top": 456.2,
+    "right": 712.1,
+    "bottom": 505.4
+   }
+  },
+  {
+   "room": "mind-other-chats",
+   "name": "Other chats",
+   "rect": {
+    "left": 845.8,
+    "top": 538.1,
+    "right": 946.1,
+    "bottom": 594
+   }
+  }
+ ],
+ "labels": [
+  {
+   "text": "01",
+   "left": 618.9765625,
+   "top": 247,
+   "right": 647.0234375,
+   "bottom": 266
+  },
+  {
+   "text": "02",
+   "left": 677.9765625,
+   "top": 264.5,
+   "right": 706.0234375,
+   "bottom": 283.5
+  },
+  {
+   "text": "Docs wall",
+   "left": 650.40625,
+   "top": 227.5,
+   "right": 720.59375,
+   "bottom": 246.5
+  },
+  {
+   "text": "03",
+   "left": 617.9765625,
+   "top": 275.29998779296875,
+   "right": 646.0234375,
+   "bottom": 294.29998779296875
+  }
+ ],
+ "rooms": [
+  "home",
+  "mind-moonbase",
+  "mind-garden",
+  "mind-lighthouse",
+  "mind-recipe-app",
+  "mind-other-chats"
+ ]
+}

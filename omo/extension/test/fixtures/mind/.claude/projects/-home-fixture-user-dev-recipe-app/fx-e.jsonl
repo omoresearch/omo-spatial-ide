@@ -1,0 +1,3 @@
+{"type": "permission-mode", "permissionMode": "default", "sessionId": "fx-e"}
+{"type": "user", "cwd": "/home/fixture-user/dev/recipe-app", "isSidechain": false, "message": {"role": "user", "content": "Add a shopping list page that groups items by aisle"}, "sessionId": "fx-e"}
+{"type": "assistant", "cwd": "/home/fixture-user/dev/recipe-app", "message": {"role": "assistant", "content": [{"type": "text", "text": "Done."}]}, "sessionId": "fx-e"}

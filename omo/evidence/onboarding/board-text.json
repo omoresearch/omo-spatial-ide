@@ -1,0 +1,119 @@
+[
+ {
+  "id": "sign-moonbase",
+  "distance": 2.94,
+  "rows": [
+   {
+    "text": "Moonbase",
+    "title": true,
+    "px": 32.4
+   },
+   {
+    "text": "Write tests for the crater map",
+    "title": false,
+    "px": 20.8
+   },
+   {
+    "text": "Fix the oxygen meter so it drains slower",
+    "title": false,
+    "px": 20.7
+   },
+   {
+    "text": "Add a docking bay to the moonbase…",
+    "title": false,
+    "px": 20.6
+   }
+  ],
+  "rect": {
+   "left": 453.1,
+   "top": 307.4,
+   "right": 986.9,
+   "bottom": 608.5
+  }
+ },
+ {
+  "id": "sign-garden",
+  "distance": 12.84,
+  "rows": [
+   {
+    "text": "Garden",
+    "title": true,
+    "px": 32.4
+   },
+   {
+    "text": "Which tomatoes grow best in a small…",
+    "title": false,
+    "px": 20.8
+   },
+   {
+    "text": "Plan my vegetable garden beds for…",
+    "title": false,
+    "px": 20.7
+   }
+  ],
+  "rect": {
+   "left": 3427.9,
+   "top": 307.4,
+   "right": 4019.9,
+   "bottom": 608.5
+  }
+ },
+ {
+  "id": "sign-lighthouse",
+  "distance": 9.72,
+  "rows": [
+   {
+    "text": "Lighthouse",
+    "title": true,
+    "px": 17.3
+   },
+   {
+    "text": "Rewrite the novel opening so the…",
+    "title": false,
+    "px": 11.2
+   },
+   {
+    "text": "Outline chapter three of my novel…",
+    "title": false,
+    "px": 11.2
+   }
+  ]
+ },
+ {
+  "id": "sign-recipe-app",
+  "distance": 6.72,
+  "rows": [
+   {
+    "text": "Recipe App",
+    "title": true,
+    "px": 17.3
+   },
+   {
+    "text": "Add a shopping list page that groups…",
+    "title": false,
+    "px": 11.2
+   },
+   {
+    "text": "Recipe search by ingredient",
+    "title": false,
+    "px": 11.2
+   }
+  ]
+ },
+ {
+  "id": "sign-other-chats",
+  "distance": 16.85,
+  "rows": [
+   {
+    "text": "Other chats",
+    "title": true,
+    "px": 17.3
+   },
+   {
+    "text": "Help me sort my receipts for the tax",
+    "title": false,
+    "px": 11.2
+   }
+  ]
+ }
+]

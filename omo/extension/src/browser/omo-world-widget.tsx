@@ -89,6 +89,8 @@ import { OnboardingFlow } from './onboarding-flow';
 import { OnboardingPlanBackend } from './onboarding-admin';
 import { OnboardingWorldSink, saveOnboardingWorld, readLocalWorld } from './onboarding-store';
 import { v1RoomFor } from './onboarding-planner';
+import { FirstMinute, firstMinuteEnabled } from './first-minute'; // promise:onboarding
+import { MindImportService } from '../common/mind-import-protocol'; // promise:onboarding
 import { classifyDesks, setDeskPriority } from './desk-activity'; // w3:perf
 // --- end w2:onboard ---
 
@@ -178,6 +180,10 @@ export class OmoWorldWidget extends ReactWidget {
     @inject(OnboardingPlanBackend) @optional() protected readonly onboardingPlanner?: OnboardingPlanBackend;
     @inject(OnboardingWorldSink) @optional() protected readonly onboardingSink?: OnboardingWorldSink;
     private onboardingClassic = false;
+    // promise:onboarding — the first minute (welcome -> your mind's home -> bring your mind -> ready) on a true first run.
+    @inject(MindImportService) @optional() protected readonly mindImport?: MindImportService;
+    private firstMinuteDone = false;
+    private firstMinuteShown(): boolean { return this.configuring && !this.room && !this.firstMinuteDone && !this.onboardingClassic && !this.savedOnboardingWorld() && firstMinuteEnabled(safeStorage()); }
     private onboardingSaved?: { key: string; world?: WorldSpec };
     private savedOnboardingWorld(): WorldSpec | undefined {
         if (!this.project) return undefined;
@@ -1037,9 +1043,10 @@ export class OmoWorldWidget extends ReactWidget {
     protected render(): React.ReactNode {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;
         const theme = this.configuring ? this.draftTheme : this.room!.theme;
+        this.worldScene?.setBackdrop(this.firstMinuteShown() ? 'neutral' : 'world'); // promise:onboarding — no city behind the first minute (idempotent)
         const layout = this.configuring ? this.draftLayout : this.room?.layout ?? 'classic';
         const taskSourceUri=this.project?.toString();
-        return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-project-uri={this.project?.toString()||''} data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode} data-immersive={String(this.immersive.mode.active)}>
+        return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-project-uri={this.project?.toString()||''} data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode} data-immersive={String(this.immersive.mode.active)} data-first-minute={this.firstMinuteShown() ? 'true' : undefined}>
             {/* world-ui (mount hook): immersive = the ONE slim floating top bar, ⌘K palette and settings sheet. */}
             {this.room && !this.configuring && this.immersive.mode.active && <WorldTopBar roomName={this.room.projectName} view={this.worldView} presence={this.presenceState} hud={this.hudHub} voice={this.voiceHub}
                 error={this.error} onView={this.chooseView} onShare={() => this.openSheet('share')} onPalette={this.openPalette} onSettings={() => this.openSheet('room')}/>}
@@ -1057,7 +1064,9 @@ export class OmoWorldWidget extends ReactWidget {
             <div className={`omo-body ${this.configuring ? 'is-onboarding' : ''}`} style={this.reviewOpen||this.taskOverviewOpen||this.taskWorkspacesOpen?{display:'none'}:undefined}>
                 {/* design lane (omo/build-design): setup markup + classNames only — scroll body + pinned action footer */}
                 {/* w2:onboard (mount hook): new 3-step flow; the classic form below stays reachable via "Room settings" */}
-                {this.configuring && !this.onboardingClassic && <OnboardingFlow key={`${this.project?.toString() ?? ''}:${this.onboardingEpoch}`} initialName={this.draftName} initialTheme={this.draftTheme}
+                {this.firstMinuteShown() && <FirstMinute initialName={this.draftName} projectPath={this.project?.path.toString()} busy={this.busy || this.presetLoading} mind={this.mindImport}
+                    onPreview={this.onboardingPreview} onCreate={this.onboardingCreate} onChooseProject={this.chooseProject} onManual={() => { this.firstMinuteDone = true; this.update(); }}/>}{/* promise:onboarding */}
+                {this.configuring && !this.onboardingClassic && !this.firstMinuteShown() && <OnboardingFlow key={`${this.project?.toString() ?? ''}:${this.onboardingEpoch}`} initialName={this.draftName} initialTheme={this.draftTheme}
                     savedWorld={this.savedOnboardingWorld()} projectPath={this.project?.path.toString()} hasRoom={!!this.room} busy={this.busy || this.presetLoading}
                     hermes={this.onboardingPlanner} fullPreview={typeof (this.worldScene as unknown as { setWorld?: unknown } | undefined)?.setWorld === 'function'}
                     onPreview={this.onboardingPreview} onCreate={this.onboardingCreate} onChooseProject={this.chooseProject} onCancel={this.cancelConfiguration}
@@ -1100,7 +1109,7 @@ export class OmoWorldWidget extends ReactWidget {
                     {this.room && !this.configuring && !this.immersive.mode.active && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
                         {this.dockPieces(taskSourceUri)}
                     </div>}
-                    <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;this.drawStoredWorld(scene);/* w2:render */this.pushLinkedFrames();/* w2:runtime */scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);if(this.configuring&&!this.onboardingClassic&&this.onboardingWorld)scene?.setWorld(this.onboardingWorld);/* w2:onboard; t2:regress: not under the classic form */if(this.configuring&&this.onboardingClassic&&this.draftWorld)scene?.setWorld({...this.draftWorld,shell:{...this.draftWorld.shell,theme:this.draftTheme}});/* t3:polish2: Customise preview draws the template/imported world */}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
+                    <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;scene?.setBackdrop(this.firstMinuteShown()?'neutral':'world');/* promise:onboarding */this.drawStoredWorld(scene);/* w2:render */this.pushLinkedFrames();/* w2:runtime */scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);if(this.configuring&&!this.onboardingClassic&&this.onboardingWorld)scene?.setWorld(this.onboardingWorld);/* w2:onboard; t2:regress: not under the classic form */if(this.configuring&&this.onboardingClassic&&this.draftWorld)scene?.setWorld({...this.draftWorld,shell:{...this.draftWorld.shell,theme:this.draftTheme}});/* t3:polish2: Customise preview draws the template/imported world */}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
                         {/* omo immersive lane (mount hook); world-ui: immersive shows the top bar (main level), not the launch buttons */}{this.room && !this.configuring && !this.immersive.mode.active
                             && <><BuildToggle build={this.buildMode}/>{/* w2:build */}<button type="button" className="omo-immersive-launch" data-testid="immersive-launch" title="Immersive world (G)" onMouseDown={event => event.preventDefault()} onClick={this.toggleImmersiveButton}>
                                 <Icon name="expand" size={14} />Immersive world <kbd>G</kbd></button></>}

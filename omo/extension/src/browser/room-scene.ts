@@ -12,14 +12,14 @@ import type { RoomLayoutId, RoomKitId } from '../common/player-state';
 import type { RuntimeColorMetadata } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
 import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-preview';
-import { workstationLabelVisible, layoutLabels, declutterLabels, chipText } from './workstation-label-visibility'; // t3:polish2 layoutLabels; w3:look declutter + chips
+import { workstationLabelVisible, layoutLabels, declutterLabels, chipText, avoidRects } from './workstation-label-visibility'; // t3:polish2 layoutLabels; w3:look declutter + chips
 import { PoseSmoother } from './movement-smoothing';
 // w2:render — the room is built from a WorldSpec (shared contract) by the world scene builders.
-import type { WorldEntity, WorldSpec } from '../common/world-model';
-import { validateWorld } from '../common/world-model';
+import type { RoomEntity, WorldEntity, WorldSpec } from '../common/world-model';
+import { roomRect, validateWorld } from '../common/world-model';
 import { buildShell, nearWall, shellColors } from './world-scene-shell';
 import type { OrbSpot } from './world-scene-shell';
-import { BuiltEntity, placeRoot, buildDecorEntity, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
+import { BuiltEntity, placeRoot, buildDecorEntity, topicBoardLines, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
 import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
@@ -148,6 +148,8 @@ function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: 
  * it changes only this constant (the shell builder applies it to any shell size).
  */
 /** world-ui r4/5 — the kit overview: cut-away height (m) and the tilt factor on the user's overview elevation. */
+/** promise:onboarding — one stray-line candidate (see RoomScene.thinMeshes). */
+export interface ThinMesh { owner: string; room?: string; name: string; part?: string; line: boolean; size: number[]; at: number[] }
 const KIT_CUT = 2.3, KIT_WALL_CUT = 0.9, KIT_OVERVIEW_TILT = 0.8;
 const ORB: OrbSpot = { x: -2.9, y: 2.2, z: -4.2, ringZ: -4.1, scale: 0.62 }; // w2:polish — clear of the web wall
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
@@ -258,6 +260,9 @@ export class RoomScene {
     private stationNumbers = new Map<string, number>();
     private lights?: { hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight; accent: THREE.PointLight };
     private skyFx?: SkylineFx; // sky:render — bloom + environment, skyline theme only
+    /** promise:onboarding — 'neutral' while the first minute is open: no city, sky or tower behind the sentence, a dim gradient instead. */
+    private backdrop: 'world' | 'neutral' = 'world';
+    private neutralSky?: THREE.CanvasTexture;
     /** sky:merge M1 — the baked style-kit shell: loader per kit, its loaded shell, and kits whose assets are missing. */
     private kitLoaders = new Map<string, SkylineKitLoader>();
     private kitShells = new Map<string, { root: THREE.Group; env: THREE.Texture }>();
@@ -319,6 +324,8 @@ export class RoomScene {
         this.renderer.toneMappingExposure = 1.25;
         const canvas = this.renderer.domElement;
         canvas.dataset.testid = 'omo-world-canvas';
+        (canvas as HTMLCanvasElement & { omoThinMeshes?: () => ThinMesh[] }).omoThinMeshes = () => this.thinMeshes(); // promise:onboarding test hook
+        Object.assign(canvas, { omoSignRects: () => this.signRects(), omoBoardText: () => this.boardText(), omoStandAt: (p: PlayerPose) => this.standAt(p) }); // promise:onboarding (4)(6) test hooks
         canvas.setAttribute('aria-label', 'Interactive 3D room. Drag or use arrow keys to orbit. Scroll to zoom. Select a workstation to work.');
         canvas.tabIndex = 0;
         this.host.appendChild(canvas);
@@ -484,6 +491,7 @@ export class RoomScene {
         }
         if (this.skyFx) this.skyFx.useEnvironment(kitShell?.env); // sky:merge M1 — the kit's baked reflection probe replaces the generic room environment
         this.applyKitView(); // world-ui (1, 3)
+        this.applyBackdrop(); // promise:onboarding
         const pk = pathsKey(world.shell, world.entities); // w3:look (7) — plaza, paths, lamps (open worlds)
         if (pk !== this.pathsKey) {
             if (this.pathsRoot) { this.worldRoot.remove(this.pathsRoot); disposeTree(this.pathsRoot); this.pathsRoot = undefined; }
@@ -496,7 +504,8 @@ export class RoomScene {
         for (const entity of world.entities) {
             const standing = entity.kind !== 'station' && entity.kind !== 'decor' && !nearWall(world.shell, entity.transform.x, entity.transform.z, 0.8);
             const onKit = !!kitShell && this.onKitAnchor(kit!, entity); // sky:merge M1 — kit desks draw only the live screen
-            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing, onKit, kitShell && entity.kind === 'decor' ? kit!.id : '']);
+            const lines = entity.kind === 'decor' && entity.id.startsWith('sign-') ? topicBoardLines(world, entity.id) : undefined; // promise:onboarding (4)
+            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing, onKit, kitShell && entity.kind === 'decor' ? kit!.id : '', lines]);
             const item = this.entities.get(entity.id);
             if (item && item.key === key) {
                 if (JSON.stringify(item.entity.transform) !== JSON.stringify(entity.transform)) { placeRoot(item.built.root, entity); refreeze(item.built.root); }
@@ -504,7 +513,7 @@ export class RoomScene {
                 continue;
             }
             if (item) { this.worldRoot.remove(item.built.root); disposeTree(item.built.root); this.screens.delete(entity.id); this.lamps.delete(entity.id); }
-            const built = this.buildEntity(entity, jungle, standing, onKit ? kit : undefined, kitShell ? kit : undefined);
+            const built = this.buildEntity(entity, jungle, standing, onKit ? kit : undefined, kitShell ? kit : undefined, lines);
             if (world.shell.theme === 'skyline' && !onKit) restyleForSkyline(built.root); // sky:render
             this.worldRoot.add(built.root); freezeTree(built.root);
             this.entities.set(entity.id, { entity, key, built, label: item?.label });
@@ -547,7 +556,109 @@ export class RoomScene {
     /** w3:render — background + fog colour: the classic room backdrop, or the open world's sky. */
     private applySky(world: WorldSpec): void {
         const jungle = world.shell.theme === 'jungle', color = world.shell.theme === 'skyline' ? SKYLINE_COLORS.background : world.shell.open ? openSky(jungle) : shellColors(jungle).background; // sky:render
+        if (this.backdrop === 'neutral') { this.scene.background = this.neutralGradient(); (this.scene.fog as THREE.Fog).color.set('#0e1015'); return; } // promise:onboarding
+        if (!(this.scene.background instanceof THREE.Color)) this.scene.background = new THREE.Color(color);
         (this.scene.background as THREE.Color).set(color); (this.scene.fog as THREE.Fog).color.set(color);
+    }
+    /**
+     * promise:onboarding — the backdrop behind the first minute. 'neutral' hides the planned city, the dusk sky dome, our
+     * tower's facade and a style kit's city panorama, and paints a dim neutral gradient (with matching fog), so the
+     * sentence ("a lighthouse library at the edge of the sea") never sits in front of Manhattan. 'world' = as planned.
+     */
+    setBackdrop(mode: 'world' | 'neutral'): void {
+        if (this.disposed || mode === this.backdrop) return;
+        this.backdrop = mode;
+        if (this.world) { this.applySky(this.world); this.applyBackdrop(); }
+    }
+    private applyBackdrop(): void {
+        if (!this.renderer) return;
+        const neutral = this.backdrop === 'neutral';
+        let shown = 0;
+        this.shellRoot?.traverse(node => {
+            if (!/^omo-(skyline-(city|sky|tower)|kit-backdrop)$/.test(node.name)) return;
+            node.visible = !neutral; if (node.visible) shown++;
+        });
+        const canvas = this.renderer.domElement;
+        canvas.dataset.backdrop = this.backdrop; canvas.dataset.backdropCity = String(shown); // test hooks
+        this.invalidate();
+    }
+    private neutralGradient(): THREE.CanvasTexture {
+        if (this.neutralSky) return this.neutralSky;
+        const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+        const g = c.getContext('2d')!, grad = g.createLinearGradient(0, 0, 0, 256);
+        grad.addColorStop(0, '#07080b'); grad.addColorStop(0.55, '#0e1015'); grad.addColorStop(1, '#16181d');
+        g.fillStyle = grad; g.fillRect(0, 0, 4, 256);
+        const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; this.neutralSky = t;
+        return t;
+    }
+    /**
+     * promise:onboarding — test hook: every visible mesh or line in the world that reads as a stray thin line from the
+     * overview: its world bounding box has a side under 1 cm and a side over 0.5 m. `owner` = the entity id (or the
+     * shell / paths group) it belongs to; `room` = the room entity it stands in, when any.
+     */
+    thinMeshes(): ThinMesh[] {
+        const out: ThinMesh[] = [], box = new THREE.Box3(), size = new THREE.Vector3();
+        const rooms = (this.world?.entities ?? []).filter(e => e.kind === 'room').map(e => ({ id: e.id, r: roomRect(e as RoomEntity) }));
+        this.worldRoot.traverseVisible(node => {
+            const mesh = node as THREE.Mesh & { isLine?: boolean };
+            if (!mesh.isMesh && !mesh.isLine) return;
+            box.setFromObject(mesh); if (box.isEmpty()) return;
+            box.getSize(size);
+            const dims = [size.x, size.y, size.z].sort((a, b) => a - b);
+            if (!(dims[0] < 0.01 && dims[2] > 0.5)) return;
+            let owner = '', o: THREE.Object3D | null = mesh;
+            while (o && !owner) { owner = typeof o.userData.entity === 'string' ? o.userData.entity : /^(omo-|w3-)/.test(o.name) && o !== this.worldRoot ? o.name : ''; o = o.parent; }
+            const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
+            const room = rooms.find(({ r }) => cx >= r.minX && cx <= r.maxX && cz >= r.minZ && cz <= r.maxZ)?.id;
+            out.push({ owner, room, name: mesh.name, part: mesh.userData.part, line: !!mesh.isLine, size: [size.x, size.y, size.z].map(v => +v.toFixed(3)), at: [+cx.toFixed(2), +((box.min.y + box.max.y) / 2).toFixed(2), +cz.toFixed(2)] });
+        });
+        return out;
+    }
+    /** Screen rect (canvas CSS px) of a world-space box's corners; undefined when any corner is behind the camera. */
+    private screenRect(obj: THREE.Object3D, hx: number, hy: number, hz: number): { left: number; top: number; right: number; bottom: number } | undefined {
+        const w = this.host.clientWidth, h = this.host.clientHeight, v = new THREE.Vector3();
+        let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+        obj.updateWorldMatrix(true, false);
+        for (const x of [-hx, hx]) for (const y of [-hy, hy]) for (const z of [-hz, hz]) {
+            v.set(x, y, z).applyMatrix4(obj.matrixWorld).project(this.camera);
+            if (v.z > 1 || v.z < -1) return undefined;
+            const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h;
+            left = Math.min(left, sx); right = Math.max(right, sx); top = Math.min(top, sy); bottom = Math.max(bottom, sy);
+        }
+        return { left: +left.toFixed(1), top: +top.toFixed(1), right: +right.toFixed(1), bottom: +bottom.toFixed(1) };
+    }
+    /** promise:onboarding (6) — test hook: every room's doorway sign, as drawn now (screen rect in canvas CSS px). */
+    signRects(): Array<{ room: string; name: string; rect?: { left: number; top: number; right: number; bottom: number } }> {
+        const out: Array<{ room: string; name: string; rect?: { left: number; top: number; right: number; bottom: number } }> = [];
+        for (const [id, item] of this.entities) {
+            if (item.entity.kind !== 'room') continue;
+            const signs: THREE.Mesh[] = []; item.built.root.traverse(n => { if (n.userData.part === 'room-sign') signs.push(n as THREE.Mesh); });
+            for (const sign of signs) { const [sw, sh] = sign.userData.size as [number, number]; out.push({ room: id, name: String(sign.userData.roomName), rect: sign.visible ? this.screenRect(sign, sw / 2, sh / 2, 0.02) : undefined }); }
+        }
+        return out;
+    }
+    /** promise:onboarding (4) — test hook: every topic board's text rows on screen now (glyph box height in CSS px). */
+    boardText(): Array<{ id: string; distance: number; rows: Array<{ text: string; title: boolean; px: number }>; rect?: { left: number; top: number; right: number; bottom: number } }> {
+        const out: Array<{ id: string; distance: number; rows: Array<{ text: string; title: boolean; px: number }>; rect?: { left: number; top: number; right: number; bottom: number } }> = [];
+        const h = this.host.clientHeight, a = new THREE.Vector3(), b = new THREE.Vector3();
+        for (const [id, item] of this.entities) {
+            let plate: THREE.Mesh | undefined; item.built.root.traverse(n => { if (n.userData.part === 'topic-board') plate = n as THREE.Mesh; });
+            if (!plate) continue;
+            const p = plate as THREE.Mesh; p.updateWorldMatrix(true, false);
+            const rows = (p.userData.rows as Array<{ text: string; title: boolean; top: number; bottom: number }>).map(r => {
+                a.set(0, r.top, 0.011).applyMatrix4(p.matrixWorld).project(this.camera); b.set(0, r.bottom, 0.011).applyMatrix4(p.matrixWorld).project(this.camera);
+                return { text: r.text, title: r.title, px: +(Math.abs(a.y - b.y) * 0.5 * h).toFixed(1) };
+            });
+            out.push({ id, distance: +this.camera.position.distanceTo(p.getWorldPosition(a)).toFixed(2), rows, rect: this.screenRect(p, 0.88, 0.5, 0.01) });
+        }
+        return out;
+    }
+    /** Test hook: stand the walker at a pose (walk mode) and draw it at once. */
+    standAt(pose: PlayerPose): void {
+        if (!this.walker) return;
+        this.walker.pose = { ...pose }; this.smoother.snap(this.walker.pose);
+        this.camera.position.set(pose.x, this.walker.eye ?? 1.75, pose.z); this.camera.rotation.set(pose.pitch, pose.yaw, 0, 'YXZ');
+        this.invalidate();
     }
     /** sky:render — skyline theme on/off: dusk lights, far haze, bloom + environment. */
     private applySkyline(on: boolean): void {
@@ -563,6 +674,7 @@ export class RoomScene {
     }
     private applyTheme(jungle: boolean): void {
         const colors = shellColors(jungle);
+        if (!(this.scene.background instanceof THREE.Color)) this.scene.background = new THREE.Color(colors.background); // promise:onboarding (neutral gradient)
         (this.scene.background as THREE.Color).set(colors.background); (this.scene.fog as THREE.Fog).color.set(colors.background);
         if (this.lights) { this.lights.hemi.color.setHex(colors.hemiSky); this.lights.sun.color.setHex(colors.sun); this.lights.accent.color.setHex(colors.accent); }
     }
@@ -577,6 +689,7 @@ export class RoomScene {
         const pendantCut = shell?.root.userData.pendantCutPlane as THREE.Plane | undefined; // world-ui r4 fix 1: no floating pendant shades
         if (pendantCut) pendantCut.constant = overview ? -1 : 1e4;
         if (wallCut) { const c = overview ? KIT_WALL_CUT : 1e4; if (wallCut.constant !== c) { wallCut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
+        this.shellRoot?.getObjectByName('omo-skyline-upper')?.traverse(n => { n.visible = !overview; }); // promise:onboarding (5): no floating pendant bars (black lines) from above
         shell?.root.userData.setOverview?.(overview); // world-ui r4/5: city backdrop below the floor only, highlights compressed
         if (this.skyFx) {
             this.skyFx.setBloom(kit ? (overview ? kit.render.overviewBloom : kit.render.bloom) : { strength: 0.3, radius: 0.4, threshold: 1.8 });
@@ -609,7 +722,7 @@ export class RoomScene {
     private onKitAnchor(kit: StyleKit, entity: WorldEntity): boolean {
         return entity.kind === 'station' && kitDeskIndex(kit, entity.transform) >= 0;
     }
-    private buildEntity(entity: WorldEntity, jungle: boolean, standing: boolean, deskKit?: StyleKit, worldKit?: StyleKit): BuiltEntity {
+    private buildEntity(entity: WorldEntity, jungle: boolean, standing: boolean, deskKit?: StyleKit, worldKit?: StyleKit, boardLines?: readonly string[]): BuiltEntity {
         switch (entity.kind) {
             case 'station': {
                 let surface = this.terminalSurfaces.get(entity.id);
@@ -627,9 +740,9 @@ export class RoomScene {
             case 'mirror': return buildMirror(entity, entity.id === 'mirror' ? this.mirrorTexture! : this.linkedSurface(entity.id).texture, standing);
             case 'monitor-wall': return buildMonitorWall(entity, this.linkedSurface(entity.id).texture, standing);
             case 'decor': {
-                const built = buildDecorEntity(entity, jungle);
+                const built = buildDecorEntity(entity, jungle, boardLines);
                 // sky:merge M1 — in a kit world a decor entity is drawn with its CC0 catalogue model once it loads.
-                const prop = worldKit ? decorPropFor(worldKit, entity) : undefined, loader = worldKit && this.kitLoaders.get(worldKit.id);
+                const prop = worldKit && !/^(note|sign)-/.test(entity.id) ? decorPropFor(worldKit, entity) : undefined, loader = worldKit && this.kitLoaders.get(worldKit.id);
                 if (prop && loader) loader.prop(prop.id).then(model => {
                     if (this.disposed || this.entities.get(entity.id)?.built !== built) return;
                     for (const child of [...built.root.children]) { built.root.remove(child); disposeTree(child); }
@@ -1376,6 +1489,9 @@ export class RoomScene {
             items.push({label,x,y,w:size.w,h:size.h,priority:kind==='station'?1:2});
         }
         if(chips){
+            // promise:onboarding (6) — a desk marker never sits on a room's doorway sign: it moves up just clear of it.
+            const signs=this.signRects().map(s=>s.rect).filter((r):r is NonNullable<typeof r>=>!!r);
+            if(signs.length)for(const item of items)avoidRects(item,signs,6);
             for(const item of declutterLabels(items)){
                 if(!item.hidden){this.applyLabel(item.label,item.x,item.y);continue;}
                 if(this.labelPos.get(item.label)!==-1){this.labelPos.set(item.label,-1);item.label.style.visibility='hidden';}
@@ -1425,6 +1541,7 @@ export class RoomScene {
         this.disposed=true;cancelAnimationFrame(this.focusFrame);for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         this.skyFx?.dispose();this.skyFx=undefined; // sky:render
+        this.neutralSky?.dispose();this.neutralSky=undefined; // promise:onboarding
         for(const k of this.kitShells.values()){if(k.root.parent!==this.worldRoot)disposeTree(k.root);k.env.dispose();}this.kitShells.clear(); // sky:merge M1
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
     }
