@@ -217,14 +217,23 @@
    "name": "From the sentence to the world shown in under 60 s (wall clock of this run)",
    "pass": true,
    "detail": {
-    "ms": 11004
+    "ms": 10704
    }
   },
   {
    "name": "The app measured the same first minute itself (data-omo-first-minute-ms < 60000)",
    "pass": true,
    "detail": {
-    "appMs": 10968
+    "appMs": 10668
+   }
+  },
+  {
+   "name": "Overview: no stray thin lines in the planned rooms (meshes with a side < 1 cm and > 0.5 m long = 0)",
+   "pass": true,
+   "detail": {
+    "inRooms": 0,
+    "all": 28,
+    "sample": []
    }
   },
   {
@@ -232,7 +241,7 @@
    "pass": true,
    "detail": {
     "theme": "station",
-    "ms": 243
+    "ms": 267
    }
   },
   {

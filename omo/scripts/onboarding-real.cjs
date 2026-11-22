@@ -162,6 +162,10 @@ const SECRETS = ['sk-FAKEfixtureKEY', 'sk-proj-FAKEfixture', 'ghp_FAKEfixture', 
         await click('[data-testid="overview-mode"]').catch(() => page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Overview')?.click()));
         await pause(1800);
         await shot('7-world-overview');
+        const thin = await page.$eval(CANVAS, c => c.omoThinMeshes ? c.omoThinMeshes() : null);
+        fs.writeFileSync(path.join(OUT, 'thin-meshes.json'), JSON.stringify(thin, null, 1));
+        const thinInRooms = (thin ?? []).filter(t => t.room?.startsWith('mind-') || /^(mind-|sign-|note-|board-)/.test(t.owner));
+        check('Overview: no stray thin lines in the planned rooms (meshes with a side < 1 cm and > 0.5 m long = 0)', Array.isArray(thin) && thinInRooms.length === 0, { inRooms: thinInRooms.length, all: (thin ?? []).length, sample: thinInRooms.slice(0, 4) });
 
         // 6. A fresh run that skips the import still lands in the world.
         const page2 = await browser.newPage();

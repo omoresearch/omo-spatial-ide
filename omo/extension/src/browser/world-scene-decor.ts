@@ -119,11 +119,12 @@ function whiteboard(g: THREE.Group, p: Palette, rnd: () => number): void {
         mesh(g, new THREE.BoxGeometry(0.08, 0.04, 0.6), metal, [x, 0.03, 0]);
     }
     mesh(g, new THREE.BoxGeometry(1.86, 1.1, 0.05), facet(0xc9d1d6, 0.4, 0.3), [0, 1.3, 0]);
-    const board = mesh(g, new THREE.PlaneGeometry(1.76, 1.0), new THREE.MeshStandardMaterial({ color: 0xf4f6f4, roughness: 0.35 }), [0, 1.3, 0.027], false);
+    // promise:onboarding (5): the writing surface has a real 2 cm thickness (a zero-thickness plane reads as a black line edge-on).
+    const board = mesh(g, new THREE.BoxGeometry(1.76, 1.0, 0.02), new THREE.MeshStandardMaterial({ color: 0xf4f6f4, roughness: 0.35 }), [0, 1.3, 0.035], false);
     board.receiveShadow = true;
     // A few marker strokes: a box diagram and two lines of "writing".
     const ink = [0x2f6db5, 0xc0463e, 0x2e8a5a];
-    const stroke = (w: number, h: number, x: number, y: number, c: number): void => { mesh(g, new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c }), [x, y, 0.029], false); };
+    const stroke = (w: number, h: number, x: number, y: number, c: number): void => { mesh(g, new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c }), [x, y, 0.046], false); };
     stroke(0.42, 0.012, -0.45, 1.6, ink[0]); stroke(0.42, 0.012, -0.45, 1.36, ink[0]); stroke(0.012, 0.24, -0.66, 1.48, ink[0]); stroke(0.012, 0.24, -0.24, 1.48, ink[0]);
     stroke(0.28, 0.012, 0.0, 1.48, ink[1]);
     stroke(0.42, 0.012, 0.38, 1.6, ink[0]); stroke(0.42, 0.012, 0.38, 1.36, ink[0]); stroke(0.012, 0.24, 0.17, 1.48, ink[0]); stroke(0.012, 0.24, 0.59, 1.48, ink[0]);

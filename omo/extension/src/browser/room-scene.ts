@@ -14,8 +14,8 @@ import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-previe
 import { workstationLabelVisible, layoutLabels, declutterLabels, chipText } from './workstation-label-visibility'; // t3:polish2 layoutLabels; w3:look declutter + chips
 import { PoseSmoother } from './movement-smoothing';
 // w2:render — the room is built from a WorldSpec (shared contract) by the world scene builders.
-import type { WorldEntity, WorldSpec } from '../common/world-model';
-import { validateWorld } from '../common/world-model';
+import type { RoomEntity, WorldEntity, WorldSpec } from '../common/world-model';
+import { roomRect, validateWorld } from '../common/world-model';
 import { buildShell, nearWall, shellColors } from './world-scene-shell';
 import type { OrbSpot } from './world-scene-shell';
 import { BuiltEntity, placeRoot, buildDecorEntity, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
@@ -147,6 +147,8 @@ function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: 
  * it changes only this constant (the shell builder applies it to any shell size).
  */
 /** world-ui r4/5 — the kit overview: cut-away height (m) and the tilt factor on the user's overview elevation. */
+/** promise:onboarding — one stray-line candidate (see RoomScene.thinMeshes). */
+export interface ThinMesh { owner: string; room?: string; name: string; part?: string; line: boolean; size: number[]; at: number[] }
 const KIT_CUT = 2.3, KIT_WALL_CUT = 0.9, KIT_OVERVIEW_TILT = 0.8;
 const ORB: OrbSpot = { x: -2.9, y: 2.2, z: -4.2, ringZ: -4.1, scale: 0.62 }; // w2:polish — clear of the web wall
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
@@ -319,6 +321,7 @@ export class RoomScene {
         this.renderer.toneMappingExposure = 1.25;
         const canvas = this.renderer.domElement;
         canvas.dataset.testid = 'omo-world-canvas';
+        (canvas as HTMLCanvasElement & { omoThinMeshes?: () => ThinMesh[] }).omoThinMeshes = () => this.thinMeshes(); // promise:onboarding test hook
         canvas.setAttribute('aria-label', 'Interactive 3D room. Drag or use arrow keys to orbit. Scroll to zoom. Select a workstation to work.');
         canvas.tabIndex = 0;
         this.host.appendChild(canvas);
@@ -582,6 +585,29 @@ export class RoomScene {
         const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; this.neutralSky = t;
         return t;
     }
+    /**
+     * promise:onboarding — test hook: every visible mesh or line in the world that reads as a stray thin line from the
+     * overview: its world bounding box has a side under 1 cm and a side over 0.5 m. `owner` = the entity id (or the
+     * shell / paths group) it belongs to; `room` = the room entity it stands in, when any.
+     */
+    thinMeshes(): ThinMesh[] {
+        const out: ThinMesh[] = [], box = new THREE.Box3(), size = new THREE.Vector3();
+        const rooms = (this.world?.entities ?? []).filter(e => e.kind === 'room').map(e => ({ id: e.id, r: roomRect(e as RoomEntity) }));
+        this.worldRoot.traverseVisible(node => {
+            const mesh = node as THREE.Mesh & { isLine?: boolean };
+            if (!mesh.isMesh && !mesh.isLine) return;
+            box.setFromObject(mesh); if (box.isEmpty()) return;
+            box.getSize(size);
+            const dims = [size.x, size.y, size.z].sort((a, b) => a - b);
+            if (!(dims[0] < 0.01 && dims[2] > 0.5)) return;
+            let owner = '', o: THREE.Object3D | null = mesh;
+            while (o && !owner) { owner = typeof o.userData.entity === 'string' ? o.userData.entity : /^(omo-|w3-)/.test(o.name) && o !== this.worldRoot ? o.name : ''; o = o.parent; }
+            const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
+            const room = rooms.find(({ r }) => cx >= r.minX && cx <= r.maxX && cz >= r.minZ && cz <= r.maxZ)?.id;
+            out.push({ owner, room, name: mesh.name, part: mesh.userData.part, line: !!mesh.isLine, size: [size.x, size.y, size.z].map(v => +v.toFixed(3)), at: [+cx.toFixed(2), +((box.min.y + box.max.y) / 2).toFixed(2), +cz.toFixed(2)] });
+        });
+        return out;
+    }
     /** sky:render — skyline theme on/off: dusk lights, far haze, bloom + environment. */
     private applySkyline(on: boolean): void {
         if (on && !this.skyFx && this.renderer) {
@@ -611,6 +637,7 @@ export class RoomScene {
         const pendantCut = shell?.root.userData.pendantCutPlane as THREE.Plane | undefined; // world-ui r4 fix 1: no floating pendant shades
         if (pendantCut) pendantCut.constant = overview ? -1 : 1e4;
         if (wallCut) { const c = overview ? KIT_WALL_CUT : 1e4; if (wallCut.constant !== c) { wallCut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
+        this.shellRoot?.getObjectByName('omo-skyline-upper')?.traverse(n => { n.visible = !overview; }); // promise:onboarding (5): no floating pendant bars (black lines) from above
         shell?.root.userData.setOverview?.(overview); // world-ui r4/5: city backdrop below the floor only, highlights compressed
         if (this.skyFx) {
             this.skyFx.setBloom(kit ? (overview ? kit.render.overviewBloom : kit.render.bloom) : { strength: 0.3, radius: 0.4, threshold: 1.8 });

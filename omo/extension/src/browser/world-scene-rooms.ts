@@ -173,9 +173,10 @@ export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity
         const name = (entity.label ?? 'Room').slice(0, 40), d = doorAt[main];
         const out = 0.85, nx = main === 'left' ? -out : main === 'right' ? out : 0, nz = main === 'back' ? -out : main === 'front' ? out : 0;
         const map = nameTexture(name, look);
-        const plate = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.44), new THREE.MeshBasicMaterial({ color: map ? 0xffffff : look.cap, map, transparent: true, depthWrite: false }));
+        // promise:onboarding (5): a 1.2 cm thick tile, not a zero-thickness plane (edge-on those read as stray black lines).
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.44, 0.012), new THREE.MeshBasicMaterial({ color: map ? 0xffffff : look.cap, map, transparent: true, depthWrite: false }));
         plate.rotation.set(-Math.PI / 2, -entity.transform.rotation, 0, 'YXZ'); // flat on the floor, text upright for a +z viewer
-        plate.position.set(d.x + nx, 0.06, d.z + nz); plate.renderOrder = 1; (plate.material as THREE.MeshBasicMaterial).polygonOffset = true; (plate.material as THREE.MeshBasicMaterial).polygonOffsetFactor = -2;
+        plate.position.set(d.x + nx, 0.066, d.z + nz); plate.renderOrder = 1; (plate.material as THREE.MeshBasicMaterial).polygonOffset = true; (plate.material as THREE.MeshBasicMaterial).polygonOffsetFactor = -2;
         plate.userData.part = 'name-plate'; plate.userData.roomName = name; plate.userData.ownsMap = true; plate.raycast = () => undefined;
         root.add(plate);
         // w3:look (7) — a floating, camera-facing room title above the room: readable in overview and from afar.

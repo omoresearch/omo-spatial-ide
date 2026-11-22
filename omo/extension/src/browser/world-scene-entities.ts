@@ -158,8 +158,8 @@ export function buildDecorEntity(entity: DecorEntity, jungle: boolean): BuiltEnt
             lines.slice(0, sign ? 3 : 5).forEach((l, i) => c.fillText(l, 40, (sign ? 92 : 76) + i * (sign ? 84 : 62), 624));
             texture.needsUpdate = true;
         }
-        const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.76, 1.0), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
-        plate.position.set(0, 1.3, 0.03); plate.userData.ownsMap = true; plate.userData.part = sign ? 'mind-sign' : 'mind-note';
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(1.76, 1.0, 0.02), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false })); // promise:onboarding (5): no zero-thickness plane (2 cm: still > 1 cm on a 0.8-scaled sign)
+        plate.position.set(0, 1.3, 0.048); plate.userData.ownsMap = true; plate.userData.part = sign ? 'mind-sign' : 'mind-note';
         look.add(plate);
     }
     group.add(look);

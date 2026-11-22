@@ -1,7 +1,7 @@
 {
- "sentenceToWorldMs": 11004,
- "appMeasuredMs": 10968,
+ "sentenceToWorldMs": 10704,
+ "appMeasuredMs": 10668,
  "machine": "harry",
  "gpu": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 5060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
- "at": "2026-11-22T16:01:06.510Z"
+ "at": "2026-11-22T16:13:50.266Z"
 }
