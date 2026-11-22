@@ -47,8 +47,8 @@ export interface StyleKit {
     desks: readonly Transform[];
     /** Web wall anchor and size. */
     webWall: { transform: Transform; width: number; height: number; elevation: number };
-    /** Spawn point (world space). */
-    spawn: { x: number; z: number; yaw: number };
+    /** Spawn point (world space). `pitch` (radians, negative = down) tilts the first view. */
+    spawn: { x: number; z: number; yaw: number; pitch?: number };
     /** A low lounge dais (real step-up surface for walking physics). */
     dais: { x: number; z: number; width: number; depth: number; height: number };
     /** The baked desk monitor in desk-local space (the IDE's live station screen covers it exactly). */
@@ -107,7 +107,9 @@ export const STYLE_KITS: readonly StyleKit[] = [{
     // The baked file's `webwall_anchor` empty: glTF node (9.2, 1.55, -0.03), extras width 4 / height 2.4 on the free
     // south wall (baked x 7.2..11.2, z 0.35..2.75 Blender) -> world x 0.2, centre y 1.55, facing into the room (-z).
     webWall: { transform: { x: 0.2, z: 5.88, rotation: Math.PI }, width: 4, height: 2.4, elevation: 0.35 },
-    spawn: { x: -6, z: 4.4, yaw: -0.5 },
+    // world-ui (2): the first view faces ONE desk monitor (the middle desk) from 1.5 m, just behind its chair: the
+    // 0.69 m screen fills ~30% of the frame width (crosshair on it), the city shows above and beside it, no chair back, little ceiling.
+    spawn: { x: -1.4, z: 2.3, yaw: 0, pitch: -0.3 },
     dais: { x: 6.3, z: 3.6, width: 3.2, depth: 2.4, height: 0.18 },
     // Baked EmitScreen0..2: 0.69 x 0.40 m planes at y 1.01..1.41, baked z -5.10 (world 0.9) -> desk-local z -0.1.
     deskScreen: { y: 1.21, z: -0.094, width: 0.69, height: 0.4 },

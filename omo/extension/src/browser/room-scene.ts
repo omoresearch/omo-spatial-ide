@@ -514,8 +514,9 @@ export class RoomScene {
         if (this.walker) {
             const firstOpen = world.shell.open && (!previous || !previous.shell.open || this.homeKey !== world.name); // w3:look (6): a newly loaded open world starts in its plaza
             this.walker.mover = worldMover(world, kitShell ? kit!.blocks.map((b, i) => ({ id: `kit-${i}`, x: b.x, z: b.z, rotation: 0, rect: { left: -b.hx, right: b.hx, front: -b.hz, back: b.hz } })) : []); // sky:merge M1 — baked furniture collides
-            this.walker.home = kitShell ? { x: kit!.spawn.x, z: kit!.spawn.z, yaw: kit!.spawn.yaw, pitch: 0 } : worldHome(world.shell, world.entities);
-            if (firstOpen) { this.homeKey = world.name; this.walker.pose = { ...this.walker.home }; }
+            this.walker.home = kitShell ? { x: kit!.spawn.x, z: kit!.spawn.z, yaw: kit!.spawn.yaw, pitch: kit!.spawn.pitch ?? 0 } : worldHome(world.shell, world.entities);
+            const firstKit = !!kitShell && this.homeKey !== `kit:${world.name}`; // world-ui (2): a kit world starts at the kit's desk view once
+            if (firstOpen || firstKit) { this.homeKey = firstKit ? `kit:${world.name}` : world.name; this.walker.pose = { ...this.walker.home }; this.walker.reset(); }
         }
         this.roomScale = worldScale(world.shell);
         this.shadowKey = ''; this.applyScaleView(); // w3:render — fog, clip planes and the sun's shadow box for this world size
