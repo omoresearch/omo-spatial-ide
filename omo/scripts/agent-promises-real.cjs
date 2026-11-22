@@ -87,7 +87,16 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const claude = desks.find(d => /claude/i.test(d.station?.name ?? d.label ?? ''));
         check('The room has desks, one of them the Claude desk', desks.length >= 2 && !!claude, desks.map(d => `${d.id}:${d.station?.name}`));
 
-        // 1. A question -> the answer card + the beam.
+        // 1. A question -> the answer card + the beam. (Fix 4: the region round the desk is measured before the ask.)
+        const lum = (b64, box) => page.evaluate(async (b64, box) => {
+            const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+            const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+            const x0 = Math.max(0, Math.round(box.x - box.w / 2)), y0 = Math.max(0, Math.round(box.y - box.h)), w = Math.min(img.width - x0, box.w), h = Math.min(img.height - y0, box.h + 40);
+            const d = g.getImageData(x0, y0, w, h).data; let sum = 0; for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+            return +(sum / (d.length / 4)).toFixed(1); }, b64, box);
+        await openShape(); await pause(1500);
+        const deskAt = await page.evaluate(() => { const r = document.querySelector('canvas[data-testid="omo-world-canvas"]').getBoundingClientRect(); return { canvas: [r.left, r.top, r.width, r.height] }; });
+        const beforeShot = await page.screenshot({ encoding: 'base64' });
         await ask('where is the Claude desk');
         await page.waitForSelector('[data-testid="omo-answer"]', { timeout: 10000 }).catch(() => {});
         await pause(900);
@@ -95,6 +104,14 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check('"where is the Claude desk" -> an answer card that names the desk and its place', /claude/i.test(a1.answer) && /\b(wall|corner|middle|north|south|east|west)\b/i.test(a1.answer) && a1.target === claude?.id, a1);
         check('The soft beam stands on the Claude desk', a1.beam === claude?.id, { beam: a1.beam });
         check('The answer did not change the world (no ghost, nothing saved)', !(await ghost()).ids && JSON.stringify((await savedWorld()).entities) === JSON.stringify(world0.entities));
+        // Fix 4: the desk's centre is not hidden (raycast from the camera: the first large hit is the desk), and the beam is bright there.
+        await page.waitForFunction(() => { const s = document.querySelector('canvas[data-testid="omo-world-canvas"]')?.dataset.answerSight; return s && JSON.parse(s).id; }, { timeout: 8000 }).catch(() => {});
+        await pause(1200);
+        const sight = await page.evaluate(() => { const c = document.querySelector('canvas[data-testid="omo-world-canvas"]'); return { sight: JSON.parse(c?.dataset.answerSight || '{}'), view: c?.dataset.beamView ?? '' }; });
+        const [cx, cy] = sight.sight.screen ?? [0, 0], box = { x: deskAt.canvas[0] + cx, y: deskAt.canvas[1] + cy, w: 70, h: 170 };
+        const after = await lum(await page.screenshot({ encoding: 'base64' }), box), before = await lum(beforeShot, box);
+        check('Fix 4: the Claude desk is not hidden — the raycast from the camera to its centre meets the desk first (no wall > 0.6 m in front)', sight.sight.id === claude?.id && sight.sight.occluded === false && cx > 0 && cy > 0 && cx < deskAt.canvas[2] && cy < deskAt.canvas[3], sight);
+        check('Fix 4: the beam is visible — the pixels round the desk are brighter than before the ask (2 s pulse, ring at the base)', after > before + 10 && sight.sight.pulse === 2 && sight.sight.ring > 0.5, { before, after, box, pulse: sight.sight.pulse, ring: sight.sight.ring });
         await shot('1-answer-beam');
 
         // 2. A page on demand -> ghost -> Keep -> live on the wall.
