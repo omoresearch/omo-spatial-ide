@@ -111,7 +111,7 @@
 .omo-wb-card:hover:not(:disabled) { border-color: var(--omo-line-3); background: var(--omo-surface-hover); }
 .omo-wb-card.is-chosen { border-color: var(--omo-accent); background: var(--omo-accent-soft); }
 .omo-wb-card-art { position: relative; flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--omo-r-sm); background: var(--omo-surface-2); color: var(--omo-accent); }
-.omo-wb-card-art b { position: absolute; right: -4px; bottom: -4px; font-size: 9px; line-height: 1; padding: 2px 3px; border-radius: 4px; background: var(--omo-accent); color: var(--omo-accent-ink); }
+.omo-wb-card-art b { display: none; position: absolute; right: -4px; bottom: -4px; font-size: 12px; line-height: 1; padding: 2px 3px; border-radius: 4px; background: var(--omo-accent); color: var(--omo-accent-ink); }
 .omo-wb-card-text { min-width: 0; display: flex; flex-direction: column; }
 .omo-wb-card-text strong { font-weight: 500; font-size: var(--omo-fs-sm); line-height: 1.3; overflow-wrap: anywhere; }
 .omo-wb-card-text small { font-size: var(--omo-fs-xs); line-height: 1.3; color: var(--omo-text-3); overflow-wrap: anywhere; }
@@ -181,3 +181,39 @@
 .omo-wb-placing-head { display: flex; align-items: center; gap: 8px; }
 .omo-wb-placing-head > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .omo-wb-placing small { font-size: 12px; }
+
+/* world-ui step 3e — overlay scale (world-tokens.css): 12/13/15/20 px, 36 px controls, radius 10, 8 px grid.
+   Mint is ONLY the primary action (Apply, Send) and the selection (chosen card, active tab, on toggles). */
+.omo-wb { border-radius: 10px; box-shadow: var(--omo-w-shadow); font-size: 13px; }
+.omo-wb-head { padding: 16px 16px 8px; }
+.omo-wb-mark { background: var(--omo-w-raised); color: var(--omo-w-text-2); border-color: var(--omo-w-line); border-radius: 8px; width: 32px; height: 32px; }
+.omo-wb-title strong { font-size: 15px; }
+.omo-wb-title small, .omo-wb-muted, .omo-wb-error, .omo-wb-foot, .omo-wb-field > span, .omo-wb-who, .omo-wb-steps, .omo-wb-notes, .omo-wb-outcome, .omo-wb-stepper, .omo-wb-placing small,
+.omo-wb-room-name small, .omo-wb-you time, .omo-wb-status, .omo-wb-plannerstate, .omo-wb-actions small, .omo-wb-tab em, .omo-wb kbd, .omo-wb-diffline, .omo-wb-summary { font-size: 12px; }
+.omo-wb-iconbtn { width: 36px; height: 36px; border-radius: 8px; }
+.omo-wb-tabs { margin: 0 16px; padding: 2px; border-radius: 10px; }
+.omo-wb-tab { height: 32px; border-radius: 8px; }
+.omo-wb-body { padding: 16px; gap: 16px; }
+.omo-wb-primary, .omo-wb-secondary { height: 36px; padding: 0 16px; border-radius: 8px; }
+.omo-wb-field input { height: 36px; padding: 0 12px; border-radius: 8px; }
+.omo-wb-toggles { gap: 8px; }
+.omo-wb-toggles button { height: 28px; padding: 0 12px; border-radius: 8px; }
+.omo-wb-planner { border-radius: 10px; }
+.omo-wb-planner button { height: 28px; border-radius: 8px; }
+.omo-wb-link { color: var(--omo-w-text-2) !important; font-size: 12px !important; text-decoration: underline; text-underline-offset: 2px; }
+.omo-wb-you span { background: var(--omo-w-raised); border-color: var(--omo-w-line); border-radius: 10px 10px 4px 10px; padding: 8px 12px; }
+.omo-wb-reply { border-radius: 4px 10px 10px 10px; padding: 8px 12px; }
+.omo-wb-chips { gap: 8px; }
+.omo-wb-chips button { height: 28px; padding: 0 12px; border-radius: 8px; font-size: 12px !important; }
+.omo-wb-ask textarea { border-radius: 10px; padding: 8px 48px 8px 12px; }
+.omo-wb-send { width: 36px; height: 36px; border-radius: 8px; right: 6px; bottom: 6px; }
+.omo-wb-room { border-radius: 10px; }
+.omo-wb-room-row { padding: 8px; }
+.omo-wb-room-art { color: var(--omo-w-text-2); border-radius: 8px; width: 32px; height: 32px; }
+.omo-wb-stepper button { width: 28px; height: 28px; border-radius: 8px; }
+.omo-wb-tray { padding: 8px 16px 16px; gap: 8px; }
+.omo-wb-tray .omo-build-apply, .omo-wb-tray .omo-build-discard { height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; }
+.omo-wb .omo-build-field > span, .omo-wb .omo-build-field small, .omo-wb .omo-build-readout, .omo-wb .omo-build-chip { font-size: 12px; }
+.omo-wb .omo-build-actions button { height: 36px; border-radius: 8px; font-size: 13px; }
+.omo-wb .omo-build-field input { height: 36px; border-radius: 8px; }
+.omo-wb .omo-build-proposal li.is-grow, .omo-wb .omo-build-proposal li.is-grow::before, .omo-wb .omo-build-more { color: var(--omo-w-text-2); }

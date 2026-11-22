@@ -30,6 +30,7 @@ import type { BuilderTab, RoomRow } from './builder-helpers';
 import { sceneControls } from './focus-screen';
 import { threeOf } from './build-scene';
 import { OmoSelect } from './omo-select'; // world-ui
+import '../../src/browser/world-tokens.css'; // world-ui: the one overlay token file
 import '../../src/browser/world-builder.css';
 
 export type BuilderView = BuilderTab | 'rooms' | 'inspect';

@@ -10,6 +10,7 @@
  */
 import * as React from 'react';
 import { Icon } from './icons';
+import '../../src/browser/world-tokens.css'; // world-ui: the one overlay token file
 import '../../src/browser/world-chrome.css';
 
 export { filterCommands, isPaletteKey, PALETTE_TOGGLE_EVENT } from './command-palette-core';

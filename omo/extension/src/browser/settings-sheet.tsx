@@ -8,6 +8,7 @@
  */
 import * as React from 'react';
 import { Icon } from './icons';
+import '../../src/browser/world-tokens.css'; // world-ui: the one overlay token file
 import '../../src/browser/world-chrome.css';
 
 export type SheetSection = 'share' | 'voice' | 'desks' | 'agents' | 'room';

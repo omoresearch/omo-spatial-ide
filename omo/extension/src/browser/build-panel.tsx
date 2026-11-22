@@ -17,6 +17,7 @@ import { WorldBuilder } from './world-builder-panel'; // builder-ui
 import { InspectorExtras } from './builder-inspector'; // builder-ui
 import type { AdminController, AdminState } from './admin-controller'; // builder-ui
 import { OmoSelect } from './omo-select'; // world-ui
+import '../../src/browser/world-tokens.css'; // world-ui: the one overlay token file
 import '../../src/browser/build-mode.css';
 
 function useBuild(build: BuildMode): void {

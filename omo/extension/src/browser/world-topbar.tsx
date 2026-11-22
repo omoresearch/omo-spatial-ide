@@ -5,6 +5,7 @@ import type { PresenceState } from './presence-controller';
 import { colourHex } from './hud-peers';
 import { Icon } from './icons';
 import { NOTICES_TOGGLE_EVENT } from './immersive-mode';
+import '../../src/browser/world-tokens.css'; // world-ui: the one overlay token file
 import '../../src/browser/immersive.css';
 import '../../src/browser/world-chrome.css';
 

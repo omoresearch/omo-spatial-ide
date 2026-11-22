@@ -7,6 +7,7 @@ import { colourHex } from './hud-peers';
 import { DESK_NAME } from './chat-mentions';
 import { Icon, IconName } from './icons';
 import { NOTICES_TOGGLE_EVENT } from './immersive-mode';
+import '../../src/browser/world-tokens.css'; // world-ui: the one overlay token file
 import '../../src/browser/hud.css';
 
 const NOTICE_ICON: Record<'finished' | 'approval' | 'bell' | 'interrupted' | 'ended', IconName> = { finished: 'check', approval: 'alert', bell: 'bell', interrupted: 'x', ended: 'stop' };

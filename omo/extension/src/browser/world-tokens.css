@@ -1,0 +1,66 @@
+/*
+ * world-ui — THE token file for every overlay drawn over the world (top bar, ⌘K palette, settings sheet,
+ * build toolbar, World Builder, custom selects, HUD chat/notices/toasts, voice panels, crosshair hint).
+ * Imported by every overlay stylesheet. design-tokens.css stays the base palette for the classic IDE page;
+ * inside an overlay these values win, so an overlay can only use this scale:
+ *   type     12 / 13 / 15 / 20 px (nothing smaller)       grid     8 px (4 px only inside a control)
+ *   controls 36 px high (28 px for compact chips)          radius   10 px (8 px for a control nested in a 10)
+ *   shadow   one                                            motion   160 ms
+ *   accent   mint, ONLY for the primary action and the current selection (never a border on the window).
+ */
+.omo-root {
+    /* Surfaces */
+    --omo-w-glass: rgba(14, 19, 26, .82);
+    --omo-w-glass-strong: rgba(13, 18, 25, .94);
+    --omo-w-blur: blur(16px) saturate(140%);
+    --omo-w-surface: #121821;
+    --omo-w-raised: rgba(255, 255, 255, .08);
+    --omo-w-hover: rgba(255, 255, 255, .06);
+    --omo-w-well: rgba(0, 0, 0, .28);
+    --omo-w-line: rgba(255, 255, 255, .10);
+    /* Text (contrast on the glass: 13.9 / 8.1 / 5.4 : 1) */
+    --omo-w-text: #ecf1f4;
+    --omo-w-text-2: #b5c1c9;
+    --omo-w-text-3: #8d9aa3;
+    /* Accent: primary action + selection only */
+    --omo-w-accent: #8fe3c4;
+    --omo-w-accent-ink: #06231a;
+    --omo-w-accent-soft: rgba(143, 227, 196, .12);
+    --omo-w-accent-line: rgba(143, 227, 196, .45);
+    /* Type: four sizes */
+    --omo-w-fs-1: 12px;
+    --omo-w-fs-2: 13px;
+    --omo-w-fs-3: 15px;
+    --omo-w-fs-4: 20px;
+    /* Grid, sizes, shape, depth, motion */
+    --omo-w-sp-1: 8px;
+    --omo-w-sp-2: 16px;
+    --omo-w-gap: 8px;
+    --omo-w-bar-h: 44px;
+    --omo-w-control-h: 36px;
+    --omo-w-r: 10px;
+    --omo-w-shadow: 0 12px 32px rgba(0, 0, 0, .38), 0 1px 0 rgba(255, 255, 255, .04) inset;
+    --omo-w-focus: 0 0 0 2px rgba(143, 227, 196, .55);
+    --omo-w-dur: 160ms;
+}
+
+/* Every overlay maps the shared design tokens onto the scale above, so older overlay rules that use
+   --omo-fs-2xs / --omo-r-pill / --omo-shadow-3 / --omo-control-h also land on 12/13/15/20, radius 10, one shadow. */
+.omo-topbar, .omo-palette, .omo-sheet, .omo-build, .omo-wb, .omo-select, .omo-hud-layer, .omo-voice-panel,
+.omo-voice-settings, .omo-voice-check-panel, .omo-crosshair-hint, .omo-immersive-pill, .omo-immersive-launch, .omo-build-toggle,
+.omo-navigation-switch, .omo-admin-toggle {
+    --omo-fs-2xs: 12px; --omo-fs-xs: 12px; --omo-fs-sm: 13px; --omo-fs-md: 13px; --omo-fs-lg: 15px; --omo-fs-xl: 20px; --omo-fs-2xl: 20px; --omo-fs-3xl: 20px;
+    --omo-tracking-caps: 0;
+    --omo-r-xs: 6px; --omo-r-sm: 8px; --omo-r-md: 10px; --omo-r-lg: 10px; --omo-r-pill: 10px;
+    --omo-control-h: 36px; --omo-control-h-sm: 28px;
+    --omo-sp-1: 4px; --omo-sp-2: 8px; --omo-sp-3: 16px; --omo-sp-4: 16px; --omo-sp-5: 24px; --omo-sp-6: 24px;
+    --omo-shadow-1: none; --omo-shadow-2: var(--omo-w-shadow); --omo-shadow-3: var(--omo-w-shadow);
+    --omo-glass: var(--omo-w-glass); --omo-glass-strong: var(--omo-w-glass-strong); --omo-glass-blur: var(--omo-w-blur);
+    --omo-dur-1: var(--omo-w-dur); --omo-dur-2: var(--omo-w-dur); --omo-dur-3: var(--omo-w-dur);
+    --omo-focus: var(--omo-w-focus);
+}
+
+/* No mint frame around the window: the full-window canvas shows focus by the crosshair, not an outline. */
+.omo-root[data-immersive="true"] canvas:focus-visible, .omo-root[data-immersive="true"] canvas:focus { outline: none; }
+
+@media (prefers-reduced-motion: reduce) { .omo-root { --omo-w-dur: 0ms; } }

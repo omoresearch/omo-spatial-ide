@@ -19,6 +19,23 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
 const checks = []; let failed = 0;
 const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail }); if (!pass) failed++; console.log(`${pass ? 'PASS' : 'FAIL'} ${name}${detail !== undefined ? ' — ' + JSON.stringify(detail).slice(0, 300) : ''}`); };
 
+const tokenAudit = page => page.evaluate(() => {
+    // world-ui step 3e — every visible overlay text uses 12/13/15/20 px; mint fills only the primary action / selection.
+    const roots = ['.omo-topbar', '.omo-palette', '.omo-sheet', '.omo-build', '.omo-wb', '.omo-hud-layer', '.omo-crosshair-hint'];
+    const bad = [], sizes = new Set();
+    for (const r of roots) for (const root of document.querySelectorAll(r)) for (const e of [root, ...root.querySelectorAll('*')]) {
+        const b = e.getBoundingClientRect(), cs = getComputedStyle(e);
+        if (b.width === 0 || cs.visibility === 'hidden' || cs.display === 'none') continue;
+        const own = [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim());
+        if (!own) continue;
+        const fs = parseFloat(cs.fontSize); sizes.add(fs);
+        if (![12, 13, 15, 20].includes(fs)) bad.push(`${e.className || e.tagName}:${fs}:${e.textContent.trim().slice(0, 20)}`);
+    }
+    const share = getComputedStyle(document.querySelector('[data-testid="topbar-share"]')).backgroundColor;
+    const canvas = document.querySelector('canvas[data-testid="omo-world-canvas"]'); const oc = getComputedStyle(canvas);
+    return { bad: bad.slice(0, 12), sizes: [...sizes].sort((a, b) => a - b), share, canvasOutline: oc.outlineStyle !== 'none' && parseFloat(oc.outlineWidth) > 0 ? oc.outlineColor : '' };
+});
+
 (async () => {
     fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
     const S = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'omo-wui-'));
@@ -66,6 +83,8 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const pathShown = await page.evaluate(p => [...document.querySelectorAll('body *')].some(e => e.children.length === 0 && e.textContent.includes(p) && e.getBoundingClientRect().width > 0), project);
         check('No raw project path visible', !pathShown);
         await page.focus(CANVAS); await shot('1-walking');
+        const t1 = await tokenAudit(page);
+        check('Tokens (walking): overlay text only 12/13/15/20 px; Share is not mint; no mint window border', t1.bad.length === 0 && !/143, 227, 196/.test(t1.share) && !t1.canvasOutline, t1);
 
         // 2. ⌘K palette.
         await page.keyboard.down('Meta'); await page.keyboard.press('k'); await page.keyboard.up('Meta');
@@ -153,6 +172,8 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         });
         check('Add: one card grammar (same height, 2 columns, one-line title + subtitle, no size badges), Draw a room is a button, no settings box', cards.n >= 10 && cards.heights.length === 1 && cards.cols === 1 && cards.oneLine && cards.badges === 0 && !cards.options && cards.drawIsButton, cards);
         await shot('7-build-add');
+        const t2 = await tokenAudit(page);
+        check('Tokens (build): overlay text only 12/13/15/20 px', t2.bad.length === 0, t2);
         await click('[data-testid="builder-tab-talk"]').catch(() => {}); await pause(300);
         if (await page.$('[data-testid="admin-prompt"]')) {
             await page.click('[data-testid="admin-prompt"]'); await page.keyboard.type('add a room for research with 2 desks'); await page.keyboard.press('Enter');

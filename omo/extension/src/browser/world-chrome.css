@@ -1,6 +1,6 @@
 /*
  * world-ui — chrome for the immersive world: the slim top bar, the ⌘K palette and the settings sheet.
- * Uses only design tokens (see world-tokens.css for the world-ui scale).
+ * Uses only the overlay tokens in world-tokens.css (12/13/15/20 px, 36 px controls, radius 10, one shadow).
  */
 
 /* ---------- Top bar: 44 px floating glass ---------- */
@@ -19,7 +19,7 @@
 .omo-topbar-side.is-right { justify-content: flex-end; }
 .omo-topbar-room { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--omo-w-text, var(--omo-text)); font-weight: 600; font-size: var(--omo-w-fs-3, 15px); margin-right: 8px; }
-.omo-topbar-room i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--omo-w-accent, var(--omo-accent)); }
+.omo-topbar-room i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--omo-w-text-3); }
 .omo-topbar button {
     position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     height: var(--omo-w-control-h, 36px); padding: 0 12px; border: 1px solid transparent; border-radius: calc(var(--omo-w-r, 10px) - 2px);
@@ -41,8 +41,8 @@
 .omo-topbar-views { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--omo-w-r, 10px); background: var(--omo-w-well, rgba(0, 0, 0, .28)); }
 .omo-topbar-views button { height: 32px; padding: 0 16px; }
 .omo-topbar-views button[aria-selected="true"] { background: var(--omo-w-raised, rgba(255, 255, 255, .1)); color: var(--omo-w-text, var(--omo-text)); }
-.omo-topbar-share { color: var(--omo-w-accent-ink, #0b0f14) !important; background: var(--omo-w-accent, var(--omo-accent)) !important; font-weight: 600 !important; margin: 0 4px; }
-.omo-topbar-share:hover { filter: brightness(1.08); }
+.omo-topbar-share { color: var(--omo-w-text) !important; background: var(--omo-w-raised) !important; border-color: var(--omo-w-line) !important; font-weight: 500 !important; margin: 0 4px; } /* world-ui 3e: secondary, not mint */
+.omo-topbar-share:hover { background: rgba(255, 255, 255, .12) !important; }
 .omo-topbar-k { gap: 2px !important; padding: 0 8px !important; }
 .omo-topbar kbd, .omo-palette kbd, .omo-sheet kbd {
     display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 4px;

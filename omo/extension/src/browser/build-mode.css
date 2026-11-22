@@ -251,7 +251,7 @@
 /* ---------- Room cursor while building ---------- */
 .omo-scene-wrap[data-building="true"] .omo-scene canvas { cursor: crosshair; }
 .omo-scene-wrap[data-building="true"] .omo-scene-label { opacity: .35; pointer-events: none; }
-.omo-scene-wrap[data-building="true"] .omo-crosshair { color: var(--omo-accent); }
+.omo-scene-wrap[data-building="true"] .omo-crosshair { color: var(--omo-text); }
 
 /* Narrow rooms: palette becomes a strip, inspector stacks above the proposal. */
 @media (max-width: 900px) {
