@@ -113,6 +113,9 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check('The nook armchair is the kit lounge armchair (mid_century_lounge_chair), named in the caption', /\barmchair:mid_century_lounge_chair\b/.test(props1) && /\barmchair\b/i.test(c1) && !/lounge chair/i.test(c1), { props1, c1 });
         const tags1 = await page.$$eval('[data-testid="shape-ghost-tag"]', ts => ts.map(t => { const r = t.getBoundingClientRect(); return { id: t.dataset.id, text: t.textContent, on: t.dataset.on, font: getComputedStyle(t).fontSize, box: [r.left, r.top, r.right, r.bottom].map(Math.round) }; }));
         const tagsApart = tags1.every((a, i) => tags1.every((b, j) => j <= i || a.box[2] <= b.box[0] || b.box[2] <= a.box[0] || a.box[3] <= b.box[1] || b.box[3] <= a.box[1]));
+        const anc = cap1b?.anchor?.split(',').map(Number), gr1 = cap1b?.ghost?.split(',').map(Number);
+        const onFloor = !!anc && !!gr1 && anc[1] >= gr1[1] + 0.6 * (gr1[3] - gr1[1]) && tags1.every(t => !(anc[0] >= t.box[0] && anc[0] <= t.box[2] && anc[1] >= t.box[1] && anc[1] <= t.box[3]));
+        check('The reticle sits on the floor at the group (low in the ghost bounds, off every tag), not on a thing', onFloor, { anchor: cap1b?.anchor, ghost: cap1b?.ghost });
         check('The ghost tags never overlap each other', tags1.length === 3 && tagsApart, tags1.map(t => t.box));
         check('Every ghosted thing has a 12 px name tag matching the caption (Armchair, Floor lamp, Shelves)', tags1.length === 3 && tags1.every(t => t.on === 'true' && t.font === '12px' && c1.toLowerCase().includes(t.text.toLowerCase()))
             && JSON.stringify(tags1.map(t => t.text).sort()) === JSON.stringify(['Armchair', 'Floor lamp', 'Shelves']), { tags1, c1 });

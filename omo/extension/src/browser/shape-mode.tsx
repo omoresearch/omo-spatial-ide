@@ -187,7 +187,8 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
                 tag.dataset.at = `${Math.round(x + host.left)},${Math.round(y + host.top)}`;
                 tag.dataset.box = [x - tw / 2 + host.left, y - th + host.top, x + tw / 2 + host.left, y + host.top].map(Math.round).join(',');
             }
-            const at = ghostAnchor(t.scene, main) ?? anchorOf(build.store?.preview, main); if (!at) return;
+            // The reticle sits on the floor at the group's front edge (on its contact shadow), never on a thing.
+            const at = ghostFloor(t.scene, pendingIds, t.camera.position) ?? ghostAnchor(t.scene, main) ?? anchorOf(build.store?.preview, main); if (!at) return;
             const a = toHost(new THREE.Vector3(at.x, at.y, at.z));
             let g = { l: a.x - 30, t: a.y - 30, r: a.x + 30, b: a.y + 30 };
             if (all) {
@@ -363,6 +364,17 @@ function ghostBounds(three: THREE.Scene | undefined, ids: string[]): THREE.Box3 
         layer?.traverse(node => { if (node.userData?.buildEntityId === id) box.expandByObject(node); });
     }
     return box.isEmpty() ? undefined : box;
+}
+/**
+ * The floor point of the whole pending group nearest the camera (world space): its footprint centre moved
+ * toward the camera to just inside the footprint's edge, at floor height — where the contact shadow is.
+ */
+function ghostFloor(three: THREE.Scene | undefined, ids: string[], eye: THREE.Vector3): { x: number; y: number; z: number } | undefined {
+    const box = ghostBounds(three, ids); if (!box) return undefined;
+    const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2, hw = (box.max.x - box.min.x) / 2, hd = (box.max.z - box.min.z) / 2;
+    const dx = eye.x - cx, dz = eye.z - cz, len = Math.hypot(dx, dz) || 1, ux = dx / len, uz = dz / len;
+    const reach = Math.min(Math.abs(ux) > 1e-3 ? hw / Math.abs(ux) : Infinity, Math.abs(uz) > 1e-3 ? hd / Math.abs(uz) : Infinity) + 0.25;
+    return { x: cx + ux * reach, y: Math.max(0.02, box.min.y + 0.02), z: cz + uz * reach };
 }
 /** Top centre of the pending things (world space): the caption points here. */
 function ghostAnchor(three: THREE.Scene | undefined, ids: string[]): { x: number; y: number; z: number } | undefined {
