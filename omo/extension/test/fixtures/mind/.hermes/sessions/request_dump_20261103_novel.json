@@ -1,0 +1,1 @@
+{"session_id": "fx3", "request": {"method": "POST", "url": "https://api.example.invalid/v1/x", "headers": {"Authorization": "Bearer FAKE"}, "body": {"input": [{"role": "user", "content": [{"type": "input_text", "text": "Outline chapter three of my novel about a lighthouse keeper. Notes are in /home/fixture-user/writing/novel.md"}]}]}}}

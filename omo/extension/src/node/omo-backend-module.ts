@@ -19,6 +19,8 @@ import { StandaloneSecurityContribution } from './standalone-security';
 import { WsRequestValidatorContribution } from '@theia/core/lib/node/ws-request-validators';
 import { OMO_WORLD_ADMIN_PATH } from '../common/world-admin-protocol'; // w2:admin
 import { WorldAdminBackend, worldAdminConnection } from './world-admin-service'; // w2:admin
+import { OMO_MIND_IMPORT_PATH } from '../common/mind-import-protocol'; // promise:onboarding
+import { MindImportBackend, mindImportConnection } from './mind-import'; // promise:onboarding
 import { EnvVariablesServer } from '@theia/core/lib/common/env-variables'; // w2:mp-client
 import { FileUri } from '@theia/core/lib/common/file-uri'; // w2:mp-client
 import * as nodePath from 'path'; // w2:mp-client
@@ -82,6 +84,8 @@ export default new ContainerModule(bind => {
         return new RpcConnectionHandler<object>(OMO_WORLD_ADMIN_PATH, () => worldAdminConnection(admin));
     }).inSingletonScope();
     // end w2:admin
+    // promise:onboarding — "Bring your mind with you": reads local chats only, no network (node/mind-import.ts).
+    bind(ConnectionHandler).toDynamicValue(() => new RpcConnectionHandler<object>(OMO_MIND_IMPORT_PATH, () => mindImportConnection(new MindImportBackend()))).inSingletonScope();
     // --- w2:mp-client: remote rooms. Backend connects out over WSS; member tokens in <config dir>/omo/remote-rooms.json (0600). ---
     bind(OmoRemoteRoomTokens).toDynamicValue(ctx => {
         // Resolved lazily: only a real remote-room action needs the config dir.

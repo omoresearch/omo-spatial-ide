@@ -14,6 +14,7 @@ import { OmoWorldWidget } from './omo-world-widget';
 import { OmoWorldContribution } from './omo-world-contribution';
 import { OmoImmersiveService } from './immersive-service';
 import { WorldAdminService, OMO_WORLD_ADMIN_PATH } from '../common/world-admin-protocol'; // w2:admin
+import { MindImportService, OMO_MIND_IMPORT_PATH } from '../common/mind-import-protocol'; // promise:onboarding
 import '../../src/browser/omo-world.css';
 import '../../src/browser/git-review.css';
 import { OmoRemoteRoomService, OMO_REMOTE_ROOM_PATH } from '../common/remote-room-protocol'; // w2:mp-client
@@ -35,6 +36,7 @@ export default new ContainerModule(bind => {
     bind(AgentSignalsService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<AgentSignalsService>(ctx.container, OMO_AGENT_SIGNALS_PATH)).inSingletonScope(); // w2:agents
     bind(OmoImmersiveService).toSelf().inSingletonScope(); // omo immersive lane
     bind(WorldAdminService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<WorldAdminService>(ctx.container, OMO_WORLD_ADMIN_PATH)).inSingletonScope(); // w2:admin
+    bind(MindImportService).toDynamicValue(ctx => ServiceConnectionProvider.createProxy<MindImportService>(ctx.container, OMO_MIND_IMPORT_PATH)).inSingletonScope(); // promise:onboarding
     bind(OmoWorldWidget).toSelf();
     bind(WidgetFactory).toDynamicValue(context => ({ id: OmoWorldWidget.ID,
         createWidget: () => context.container.get(OmoWorldWidget) })).inSingletonScope();
