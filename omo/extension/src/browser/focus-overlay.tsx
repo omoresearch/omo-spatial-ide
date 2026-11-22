@@ -279,8 +279,7 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
     const host = controls?.element.closest<HTMLElement>('.omo-scene-wrap');
     if (!host || !controls?.enabled) return null;
     if (!shown || !station) {
-        return createPortal(<button type="button" className="omo-focus-launch" data-testid="focus-full-launch" title="Full-screen terminal (F)"
-            onClick={() => focus.fullScreenActive()}><Icon name="maximize" size={14} />Full-screen terminal <kbd>F</kbd></button>, host);
+        return null; // world-ui r4/4: no 'Full-screen terminal F' chip; it is in the ⌘K palette and F still works
     }
 
     const refocus = (): void => {

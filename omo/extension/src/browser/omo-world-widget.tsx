@@ -72,7 +72,7 @@ import { Icon } from './icons'; // omo immersive lane
 // w2:admin (mount hook) — in-world World admin console
 import { AdminController, AdminState, LocalAdminWorldStore, ADMIN_TOGGLE_EVENT, bindAdminKeys } from './admin-controller';
 import type { AdminWorldStore } from './admin-controller';
-import { AdminPanel, AdminButton } from './admin-panel';
+import { AdminPanel } from './admin-panel';
 import { WorldAdminService } from '../common/world-admin-protocol';
 import { sceneControls as adminSceneControls } from './focus-screen';
 // end w2:admin
@@ -458,6 +458,7 @@ export class OmoWorldWidget extends ReactWidget {
             { id: 'voice-settings', group: 'Voice', label: 'Voice and speech settings', hint: 'Speech download, voice check, read aloud', icon: 'volume', run: () => this.openSheet('voice') },
             { id: 'build', group: 'Room', label: this.buildMode.active ? 'Leave build mode' : 'Build mode', keys: 'B', icon: 'plus', run: () => { this.closeWorkspacePanels(); this.buildMode.toggle(); } },
             { id: 'admin', group: 'Room', label: 'World admin', keys: 'H', icon: 'pencil', disabled: !this.admin, run: () => this.admin?.toggle() },
+            { id: 'full-screen-terminal', group: 'Desks', label: 'Full-screen terminal', keys: 'F', hint: 'The nearest desk, full window', icon: 'maximize', disabled: !this.room || this.configuring, run: () => this.focusMode.fullScreenActive() }, // world-ui r4/4: was a chip in the view
             { id: 'customise', group: 'Room', label: 'Customise room', hint: 'Theme, layout, kit, name, presets', icon: 'pencil', run: () => this.configure() },
             { id: 'overview', group: 'Camera', label: 'Overview', icon: 'maximize', run: () => this.sceneButton('overview-mode') },
             { id: 'first-person', group: 'Camera', label: 'First person', icon: 'walk', run: () => this.sceneButton('walk-mode') },
@@ -1106,7 +1107,7 @@ export class OmoWorldWidget extends ReactWidget {
                         {/* world-ui: the old 'Walk up and click this screen' banner is now a quiet crosshair hint. */}{this.room && !this.configuring && this.immersive.mode.active && this.consoleState.phase === 'idle' && !this.buildMode.active
                             && <div className="omo-crosshair-hint" data-testid="crosshair-hint" aria-hidden="true">Click a screen to use it</div>}
                         {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* builder-ui */}{this.room && !this.configuring && <ShapeMode build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* shape */}
-                        {/* t3:polish2 — the Admin button lives inside the 3D view (it was over the voice panel). */}{this.room && !this.configuring && this.admin && this.adminState && !this.adminState.open && <AdminButton open={false} onClick={() => { this.worldScene?.releaseTyping(); this.admin?.toggle(true); }}/>}
+                        {/* world-ui r4/4: no Admin chip in the view: World admin is in the ⌘K palette, H still opens it. */}
                     </SceneView>
                     {/* w2:admin (mount hook) */}{this.room && !this.configuring && this.admin && this.adminState && <>
                         <AdminPanel controller={this.admin} state={this.adminState} worldName={this.room.projectName} previewSupported={!!this.adminStore()?.preview}/></>}

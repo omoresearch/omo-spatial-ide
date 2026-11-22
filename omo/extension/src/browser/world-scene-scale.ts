@@ -31,8 +31,24 @@ export function overviewFrame(world: Pick<WorldSpec, 'shell' | 'entities'>, view
     if (!Number.isFinite(minX)) { minX = -4; maxX = 4; minZ = -3; maxZ = 5; }
     minX -= 1; maxX += 1; minZ -= 1; maxZ += world.entities.some(e => e.kind === 'room') ? 7 : 2.5; // the street + plaza in front of the doorways
     const target = { x: (minX + maxX) / 2, y: 0.7, z: (minZ + maxZ) / 2 };
+    return { target, distance: Math.max(10, fitDistance({ minX, maxX, minZ, maxZ, top: CONTENT_TOP }, target, view, FIT_MARGIN)) };
+}
+/**
+ * world-ui r4/5 — the overview of a baked style-kit floor: the floor plate (plus its cut-away walls) fills the view.
+ * `shell` is the kit floor (centred on the world origin), `top` the cut-away height.
+ */
+export function kitOverviewFrame(shell: { width: number; depth: number }, top: number, view: OverviewView): OverviewFrame {
+    const target = { x: 0, y: 0, z: 0 };
+    const box = { minX: -shell.width / 2, maxX: shell.width / 2, minZ: -shell.depth / 2, maxZ: shell.depth / 2, top };
+    return { target, distance: fitDistance(box, target, view, KIT_FIT_MARGIN) };
+}
+/** A kit floor may reach this fraction of half the screen (the top bar and labels keep a little air). */
+const KIT_FIT_MARGIN = 0.9;
+/** The nearest camera distance at which every corner of `box` is within `margin` of half the screen. */
+function fitDistance(box: { minX: number; maxX: number; minZ: number; maxZ: number; top: number }, target: { x: number; y: number; z: number }, view: OverviewView, margin: number): number {
+    const { minX, maxX, minZ, maxZ } = box;
     const corners: Array<[number, number, number]> = [];
-    for (const x of [minX, maxX]) for (const z of [minZ, maxZ]) for (const y of [0, CONTENT_TOP]) corners.push([x, y, z]);
+    for (const x of [minX, maxX]) for (const z of [minZ, maxZ]) for (const y of [0, box.top]) corners.push([x, y, z]);
     // Camera basis for this azimuth / elevation (same as RoomScene: position = target + dir * d, lookAt target).
     const { azimuth: a, elevation: el } = view;
     const dir = [Math.sin(a) * Math.cos(el), Math.sin(el), Math.cos(a) * Math.cos(el)];
@@ -44,11 +60,11 @@ export function overviewFrame(world: Pick<WorldSpec, 'shell' | 'entities'>, view
         const v = [x - (target.x + dir[0] * d), y - (target.y + dir[1] * d), z - (target.z + dir[2] * d)];
         const depth = v[0] * f[0] + v[1] * f[1] + v[2] * f[2]; if (depth <= 0.5) return false;
         const sx = (v[0] * r[0] + v[1] * r[1] + v[2] * r[2]) / (depth * t * aspect), sy = (v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / (depth * t);
-        return Math.abs(sx) <= FIT_MARGIN && Math.abs(sy) <= FIT_MARGIN;
+        return Math.abs(sx) <= margin && Math.abs(sy) <= margin;
     });
     let lo = 4, hi = 4000;
     for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
-    return { target, distance: Math.max(10, hi) };
+    return hi;
 }
 
 /** Overview distance scale: 1 for the v1 12 x 10 room, larger for bigger shells. */

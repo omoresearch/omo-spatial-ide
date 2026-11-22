@@ -23,7 +23,7 @@ import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
 import { openSky } from './world-scene-open'; // w3:render
-import { cameraClip, overviewFrame, shadowFrame, terminalFar, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render; w3:look overviewFrame
+import { cameraClip, kitOverviewFrame, overviewFrame, shadowFrame, terminalFar, worldFog, worldScale, V1_SUN } from './world-scene-scale'; // w3:render; w3:look overviewFrame
 import { refreeze as refreezeNode } from './world-scene-kit'; // w3:render
 import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
 import { buildPaths, pathsKey } from './world-scene-paths'; // w3:look (7)
@@ -117,7 +117,7 @@ interface ScreenSurface {
     /** w2:render — empty-screen hint (linked walls) and the last painted linked input. */
     hint?: string;
     /** world-ui (g) — a desk monitor's idle card: the desk name and its tabs, in type readable from ~2 m. */
-    card?: { name: string; tabs: string };
+    card?: { name: string; tabs: string; start?: string };
     linkSource?: unknown;
     /** w3:render — far from the player: keeps its last painted frame until the player comes nearer. */
     parked?: boolean;
@@ -125,9 +125,9 @@ interface ScreenSurface {
 const SURFACE_W = 1024, SURFACE_H = 576;
 /**
  * world-ui (g) — the idle desk monitor: a calm card with the desk name in large type (legible from the spawn,
- * ~2 m away) and its tabs, instead of 20 px terminal text. The crosshair hint is the one 'click to use' message.
+ * ~2 m away), its tabs and one call to action (Click to start <first tab>); the crosshair hint hides on a monitor.
  */
-function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: string }, status?: string): void {
+function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: string; start?: string }, status?: string): void {
     const g = c.createLinearGradient(0, 0, 0, SURFACE_H); g.addColorStop(0, '#13212b'); g.addColorStop(1, '#0a1218');
     c.fillStyle = g; c.fillRect(0, 0, SURFACE_W, SURFACE_H);
     const font = (w: number, px: number): string => `${w} ${px}px Inter, "Segoe UI", system-ui, sans-serif`;
@@ -136,14 +136,18 @@ function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: 
     c.fillStyle = '#9fb4b2'; c.font = font(600, 30); c.fillText('READY', 98, 107);
     c.fillStyle = '#f2f6f5'; c.font = font(700, 92); c.fillText(card.name, 56, 268, SURFACE_W - 112);
     c.fillStyle = '#a9bcba'; c.font = font(500, 44); c.fillText(card.tabs, 58, 344, SURFACE_W - 116);
-    const note = status && !/click to use/i.test(status) ? status : 'Nothing running yet';
-    c.fillStyle = '#6f8584'; c.font = font(500, 36); c.fillText(note.slice(0, 40), 58, 494, SURFACE_W - 116);
     c.fillStyle = 'rgba(127,209,180,.35)'; c.fillRect(56, 404, 120, 4);
+    // world-ui r4/6: one call to action (the crosshair hint hides on a monitor); a real status sits small above it.
+    const note = status && !/click to use/i.test(status) ? status : '';
+    if (note) { c.fillStyle = '#6f8584'; c.font = font(500, 30); c.fillText(note.slice(0, 48), 58, 456, SURFACE_W - 116); }
+    c.fillStyle = '#7fd1b4'; c.font = font(600, 40); c.fillText(`Click to start ${card.start || 'Shell'}  →`.slice(0, 44), 58, 512, SURFACE_W - 116);
 }
 /**
  * The station theme's back-wall orb (globe + ring), v1 room coordinates. Data-driven so a lane that moves
  * it changes only this constant (the shell builder applies it to any shell size).
  */
+/** world-ui r4/5 — the kit overview: cut-away height (m) and the tilt factor on the user's overview elevation. */
+const KIT_CUT = 2.3, KIT_WALL_CUT = 0.9, KIT_OVERVIEW_TILT = 0.8;
 const ORB: OrbSpot = { x: -2.9, y: 2.2, z: -4.2, ringZ: -4.1, scale: 0.62 }; // w2:polish — clear of the web wall
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
 const MAX_PIXEL_RATIO = 1.5;
@@ -475,6 +479,7 @@ export class RoomScene {
             this.shellRoot = kitShell ? kitShell.root : world.shell.theme === 'skyline' ? buildSkylineShell(world.shell, blocks, this.camera) : buildShell(world.shell, blocks, ORB); /* sky:render */ this.worldRoot.add(this.shellRoot); freezeTree(this.shellRoot); this.shellKey = shellKey;
         }
         if (this.skyFx) this.skyFx.useEnvironment(kitShell?.env); // sky:merge M1 — the kit's baked reflection probe replaces the generic room environment
+        this.applyKitView(); // world-ui (1, 3)
         const pk = pathsKey(world.shell, world.entities); // w3:look (7) — plaza, paths, lamps (open worlds)
         if (pk !== this.pathsKey) {
             if (this.pathsRoot) { this.worldRoot.remove(this.pathsRoot); disposeTree(this.pathsRoot); this.pathsRoot = undefined; }
@@ -514,8 +519,10 @@ export class RoomScene {
         if (this.walker) {
             const firstOpen = world.shell.open && (!previous || !previous.shell.open || this.homeKey !== world.name); // w3:look (6): a newly loaded open world starts in its plaza
             this.walker.mover = worldMover(world, kitShell ? kit!.blocks.map((b, i) => ({ id: `kit-${i}`, x: b.x, z: b.z, rotation: 0, rect: { left: -b.hx, right: b.hx, front: -b.hz, back: b.hz } })) : []); // sky:merge M1 — baked furniture collides
-            this.walker.home = kitShell ? { x: kit!.spawn.x, z: kit!.spawn.z, yaw: kit!.spawn.yaw, pitch: 0 } : worldHome(world.shell, world.entities);
-            if (firstOpen) { this.homeKey = world.name; this.walker.pose = { ...this.walker.home }; }
+            this.walker.eye = kitShell ? kit!.render.eye : undefined; // world-ui r4/2: the kit's eye height
+            this.walker.home = kitShell ? { x: kit!.spawn.x, z: kit!.spawn.z, yaw: kit!.spawn.yaw, pitch: kit!.spawn.pitch ?? 0 } : worldHome(world.shell, world.entities);
+            const firstKit = !!kitShell && this.homeKey !== `kit:${world.name}`; // world-ui (2): a kit world starts at the kit's desk view once
+            if (firstOpen || firstKit) { this.homeKey = firstKit ? `kit:${world.name}` : world.name; this.walker.pose = { ...this.walker.home }; this.walker.reset(); }
         }
         this.roomScale = worldScale(world.shell);
         this.shadowKey = ''; this.applyScaleView(); // w3:render — fog, clip planes and the sun's shadow box for this world size
@@ -555,6 +562,24 @@ export class RoomScene {
         (this.scene.background as THREE.Color).set(colors.background); (this.scene.fog as THREE.Fog).color.set(colors.background);
         if (this.lights) { this.lights.hemi.color.setHex(colors.hemiSky); this.lights.sun.color.setHex(colors.sun); this.lights.accent.color.setHex(colors.accent); }
     }
+    /** world-ui (1, 3) — kit view: the kit's clamped bloom + exposure; in the overview the baked ceiling/roof is cut away (dollhouse). */
+    private applyKitView(): void {
+        if (!this.renderer || !this.world) return;
+        const kit = activeKit(this.world), shell = kit ? this.kitShells.get(kit.id) : undefined, overview = this.navigation !== 'walk';
+        this.renderer.localClippingEnabled = !!shell;
+        const cut = shell?.root.userData.cutPlane as THREE.Plane | undefined;
+        if (cut) { const c = overview ? KIT_CUT : 1e4; if (cut.constant !== c) { cut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
+        const wallCut = shell?.root.userData.wallCutPlane as THREE.Plane | undefined; // world-ui r4 fix 1: dollhouse walls
+        const pendantCut = shell?.root.userData.pendantCutPlane as THREE.Plane | undefined; // world-ui r4 fix 1: no floating pendant shades
+        if (pendantCut) pendantCut.constant = overview ? -1 : 1e4;
+        if (wallCut) { const c = overview ? KIT_WALL_CUT : 1e4; if (wallCut.constant !== c) { wallCut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
+        shell?.root.userData.setOverview?.(overview); // world-ui r4/5: city backdrop below the floor only, highlights compressed
+        if (this.skyFx) {
+            this.skyFx.setBloom(kit ? (overview ? kit.render.overviewBloom : kit.render.bloom) : { strength: 0.3, radius: 0.4, threshold: 1.8 });
+            this.renderer.toneMappingExposure = kit && shell ? kit.render.exposure : 1.0;
+        }
+        this.invalidate();
+    }
     /** sky:merge M1 — the loaded baked shell of `kit`, or undefined while it loads / when its assets are missing (starts the load once). */
     private kitShell(kit: StyleKit): { root: THREE.Group; env: THREE.Texture } | undefined {
         const ready = this.kitShells.get(kit.id);
@@ -585,8 +610,11 @@ export class RoomScene {
             case 'station': {
                 let surface = this.terminalSurfaces.get(entity.id);
                 if (!surface) { surface = this.terminalSurface(); this.terminalSurfaces.set(entity.id, surface); }
-                const card = { name: (entity.label ?? entity.station.name).slice(0, 26), tabs: entity.station.tabs.map(t => t.name).join(' · ').slice(0, 40) }; /* world-ui (g) */ if (surface.card?.name !== card.name || surface.card?.tabs !== card.tabs) { surface.card = card; surface.layout = undefined; }
+                const card = { name: (entity.label ?? entity.station.name).slice(0, 26), tabs: entity.station.tabs.map(t => t.name).join(' · ').slice(0, 40), start: (entity.station.tabs[0]?.name ?? 'Shell').slice(0, 24) }; /* world-ui (g) */ const renamed = !!surface.card && (surface.card.name !== card.name || surface.card.tabs !== card.tabs || surface.card.start !== card.start);
+                if (surface.card?.name !== card.name || surface.card?.tabs !== card.tabs || surface.card?.start !== card.start) { surface.card = card; surface.layout = undefined; }
                 const built = deskKit ? buildKitStation(entity, deskKit, surface.texture) : buildStation(entity, jungle, surface.texture); // sky:merge M1
+                // world-ui r4/3: a renamed desk (the starter world replacing the default one) repaints its card at once: one name, from the world model.
+                if (renamed) surface.frame = undefined;
                 if (!surface.frame) { this.terminalFrames[entity.id] ??= { lines: [] }; queueMicrotask(() => { if (!this.disposed && this.terminalSurfaces.get(entity.id) === surface) this.setTerminalFrame(this.terminalFrames[entity.id] ?? { lines: [] }, entity.id as TerminalWorkstation); }); }
                 return built;
             }
@@ -863,7 +891,7 @@ export class RoomScene {
     setNavigation(mode: 'walk' | 'overview'): void {
         this.navigation = mode; this.camera.fov = mode === 'walk' ? 65 : 38; this.camera.updateProjectionMatrix();
         this.walker?.setEnabled(mode === 'walk');
-        this.cutRooms(); // w3:render — rooms: full walls when walking, low cutaway walls in the overview
+        this.cutRooms(); this.applyKitView(); // w3:render — rooms: full walls when walking, low cutaway walls in the overview; world-ui (3) kit cut-away + bloom
         if (this.world) { this.applyScaleView(); this.parkCheck.x = NaN; this.walked(this.walker?.pose ?? PLAYER_HOME); } // w3:render — overview: parked screens resume
         if (this.walker) this.smoother.snap(this.walker.pose);
         if (this.renderer) { this.renderer.domElement.dataset.navigation = mode; }
@@ -1113,6 +1141,19 @@ export class RoomScene {
         if (this.navigation === 'walk') { this.walker?.step(0); return; }
         const {azimuth:a,elevation:e,distance:d}=this.state;
         // w3:look — open worlds: frame the rooms and entities (zoom scales the fitted distance; 24 = default zoom).
+        // world-ui r4/5 — a baked kit floor: a lower camera (elevation x KIT_OVERVIEW_TILT) that fits the floor plate to the view.
+        const kit = this.world ? activeKit(this.world) : undefined, kitOn = !!kit && this.kitShells.has(kit.id);
+        if (kitOn) {
+            const el = Math.max(0.15, e * KIT_OVERVIEW_TILT), frame = kitOverviewFrame(kit!.shell, 1.6, { azimuth: a, elevation: el, aspect: this.camera.aspect, fov: this.camera.fov });
+            const k = frame.distance * d / 24, t = frame.target;
+            this.camera.position.set(t.x+Math.sin(a)*Math.cos(el)*k,t.y+Math.sin(el)*k,t.z+Math.cos(a)*Math.cos(el)*k);
+            this.camera.lookAt(t.x,t.y,t.z);
+            // The city backdrop fades above the floor plate: the highest view ray to a floor corner is its horizon.
+            const c = this.camera.position, hw = kit!.shell.width/2, hd = kit!.shell.depth/2; let horizon = -1;
+            for (const x of [-hw, hw]) for (const z of [-hd, hd]) { const dx = x-c.x, dy = -c.y, dz = z-c.z; horizon = Math.max(horizon, dy/Math.hypot(dx,dy,dz)); }
+            this.kitShells.get(kit!.id)?.root.userData.setHorizon?.(horizon);
+            return;
+        }
         const content = this.world ? overviewFrame(this.world, { azimuth: a, elevation: e, aspect: this.camera.aspect, fov: this.camera.fov }) : undefined;
         if (content) {
             const k = content.distance * d / 24, t = content.target;
@@ -1191,7 +1232,7 @@ export class RoomScene {
             }else{
                 if(this.focusDrawn){this.focusDrawn=false;moving=true;}
                 const view=this.smoother.step(pose,delta);
-                this.camera.position.set(view.x,1.75,view.z);this.camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
+                this.camera.position.set(view.x,this.walker.eye??1.75,view.z);this.camera.rotation.set(view.pitch,view.yaw,0,'YXZ');
             }
             if(!this.smoother.settled(pose))moving=true;
             this.emitPose(pose,now,moving);
@@ -1235,6 +1276,7 @@ export class RoomScene {
      * data (dataset JSON) is throttled while moving and written once more when the view settles.
      */
     private updateOverlays(w:number,h:number,now:number,moving:boolean):void{
+        this.updateAim(); // world-ui r4: a few screen planes per drawn frame (screens can appear while the view is still)
         const e=this.camera.matrixWorld.elements,v=this.lastView;
         let same=v[16]===w&&v[17]===h&&v[18]===this.peerVersion;
         for(let i=0;i<16&&same;i++)if(v[i]!==e[i])same=false;
@@ -1247,6 +1289,18 @@ export class RoomScene {
         this.dataPending=false;this.lastData=now;
         this.publishView(w,h);
     }
+    /** world-ui (r4/1): is the crosshair (view centre) on a screen? The crosshair hint hides then (the monitor card says what to do). */
+    private aimRay = new THREE.Raycaster(); private aimCentre = new THREE.Vector2(0, 0);
+    private updateAim():void{
+        let aim='';
+        if(this.navigation==='walk'&&this.screens.size){
+            this.aimRay.setFromCamera(this.aimCentre,this.camera);
+            const hit=this.aimRay.intersectObjects([...this.screens.values()],false)[0];
+            if(hit&&hit.distance<8)aim=String(hit.object.userData.screenOf??'screen');
+        }
+        const d=this.renderer.domElement.dataset;
+        if((d.aimScreen??'')!==aim){if(aim)d.aimScreen=aim;else delete d.aimScreen;}
+    }
     private placeLabels(w:number,h:number):void{
         const {a,b}=this.tmp;
         // t3:polish2 — project every label, then lay the visible ones out in screen space so they never pile up.
@@ -1258,8 +1312,14 @@ export class RoomScene {
             const root = this.rootFor(action);
             if (!root) continue;
             const kind = this.entities.get(action)?.entity.kind;
+            // world-ui r4/3: walking, a desk's name is on its own monitor. While the idle card shows it the floating label hides;
+            // otherwise the label sits just above the monitor bezel (not in the sky).
+            const walkDesk = this.navigation==='walk' && kind==='station' && !chips;
+            if (walkDesk && !(this.terminalFrames[action]?.lines.length)) { if(this.labelPos.get(label)!==-1){this.labelPos.set(label,-1);label.style.visibility='hidden';} continue; }
+            const bezel = walkDesk ? this.screens.get(action) : undefined;
             const lift = chips ? (kind==='station' ? 2.25 : (root.userData.labelHeight ?? 2.9) * 0.9) : root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9);
-            const p=a.copy(root.position).add(b.set(0,lift,chips&&kind==='station'?-.36:-.3).applyAxisAngle(THREE.Object3D.DEFAULT_UP,root.rotation.y)).project(this.camera);
+            const p=bezel ? bezel.localToWorld(a.set(0,(bezel.geometry as THREE.PlaneGeometry).parameters.height/2+0.07,0)).project(this.camera)
+                : a.copy(root.position).add(b.set(0,lift,chips&&kind==='station'?-.36:-.3).applyAxisAngle(THREE.Object3D.DEFAULT_UP,root.rotation.y)).project(this.camera);
             const mesh = this.screens.get(action);
             const distance = mesh ? this.camera.position.distanceTo(mesh.getWorldPosition(b)) : undefined;
             const x=Math.round((p.x*0.5+0.5)*w*2)/2,y=Math.round((-p.y*0.5+0.5)*h*2)/2;

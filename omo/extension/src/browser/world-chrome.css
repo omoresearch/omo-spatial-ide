@@ -129,7 +129,8 @@
 .omo-sheet .omo-voice-panel { flex-direction: column; }
 
 /* Crosshair hint (replaces the full-width 'Walk up and click this screen' banner). */
-.omo-crosshair-hint { position: absolute; top: calc(50% + 20px); left: 50%; transform: translateX(-50%); pointer-events: none; white-space: nowrap;
+.omo-crosshair-hint { position: absolute; top: calc(50% + 34px); left: 50%; transform: translateX(-50%); pointer-events: none; white-space: nowrap;
     padding: 4px 8px; border-radius: 6px; background: rgba(8, 12, 16, .5); color: var(--omo-w-text-2, var(--omo-text-2)); font: 500 var(--omo-w-fs-1, 12px)/1.3 var(--omo-font); }
 .omo-scene-wrap:not(.omo-walking) .omo-crosshair-hint, .omo-walking:has(canvas[data-typing="true"]) .omo-crosshair-hint,
-.omo-root[data-focus="attaching"] .omo-crosshair-hint, .omo-root[data-focus="attached"] .omo-crosshair-hint { display: none; }
+.omo-root[data-focus="attaching"] .omo-crosshair-hint, .omo-root[data-focus="attached"] .omo-crosshair-hint,
+.omo-walking:has(canvas[data-aim-screen]) .omo-crosshair-hint { display: none; } /* world-ui r4: on a monitor its card says what to do */

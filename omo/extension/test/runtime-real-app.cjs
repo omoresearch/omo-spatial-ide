@@ -77,7 +77,7 @@ async function trustAuthoredProject(page) {
         }
         await page.waitForSelector('[data-testid="runtime-console"]', { timeout: 20000 });
         check('Real rendered route includes persistent-runtime console, not just an unmounted component', true);
-        check('Room still starts in first person at eye height', await page.$eval(CANVAS, e => e.dataset.navigation === 'walk' && e.dataset.eyeY === '1.75'));
+        check('Room still starts in first person at eye height', await page.$eval(CANVAS, e => e.dataset.navigation === 'walk' && (e.dataset.eyeY === '1.75' || (e.dataset.styleKit && e.dataset.eyeY === '1.5')))); // world-ui r4/2: a style kit sets its own eye height
         check('Session controls have their own layout row and never cover the 3D viewport', await page.evaluate(() => {
             const controls = document.querySelector('[data-testid="runtime-console"]').getBoundingClientRect();
             const canvas = document.querySelector('canvas[data-testid="omo-world-canvas"]').getBoundingClientRect();

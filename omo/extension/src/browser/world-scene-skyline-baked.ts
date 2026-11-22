@@ -41,10 +41,10 @@ function patchBaked(mat: THREE.MeshStandardMaterial): void {
 /** City backdrop: the baked panorama re-projected through its depth panorama, so the city keeps parallax while walking. */
 function makeBackdrop(colorTex: THREE.Texture, depthTex: THREE.Texture, centre: THREE.Vector3): THREE.Mesh {
     const mat = new THREE.ShaderMaterial({
-        uniforms: { cmap: { value: colorTex }, dmap: { value: depthTex }, C: { value: centre }, gain: { value: 0.9 }, haze: { value: 0.45 } },
+        uniforms: { cmap: { value: colorTex }, dmap: { value: depthTex }, C: { value: centre }, gain: { value: 0.9 }, haze: { value: 0.45 }, horizon: { value: 2 }, knee: { value: 0 } },
         vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
         fragmentShader: `
-            uniform sampler2D cmap, dmap; uniform vec3 C; uniform float gain, haze; varying vec3 vW;
+            uniform sampler2D cmap, dmap; uniform vec3 C; uniform float gain, haze, horizon, knee; varying vec3 vW;
             const float PI = 3.14159265359;
             vec2 puv(vec3 d){ return vec2(fract(atan(d.z, d.x) / (2.0 * PI) + 0.75), asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5); }
             float depthAt(vec3 d){ vec3 e = texture2D(dmap, puv(d)).rgb * 255.0; return exp((e.r * 256.0 + e.g) / 65535.0 * log(6000.0)); }
@@ -54,6 +54,12 @@ function makeBackdrop(colorTex: THREE.Texture, depthTex: THREE.Texture, centre: 
                 for (int i = 0; i < 6; i++) { q = m + r * t; dist = depthAt(normalize(q)); t = -b + sqrt(max(b * b - c0 + dist * dist, 0.0)); }
                 q = m + r * t; vec3 col = pow(texture2D(cmap, puv(normalize(q))).rgb, vec3(2.2)) * gain;
                 col = mix(col, vec3(0.055, 0.045, 0.06), haze * (1.0 - exp(-max(dist - 250.0, 0.0) / 2200.0)));
+                // world-ui r4/5 (overview): soft-knee the bright roofs (no white caps) and fade every view ray that passes
+                // above the floor plate's highest corner (horizon = its ray's y) into a calm dusk haze: no tower rises past the floor.
+                col = col * (1.0 + knee * 0.1) / (1.0 + knee * col);
+                float above = smoothstep(horizon - 0.05, horizon + 0.01, r.y);
+                vec3 sky = mix(vec3(0.085, 0.06, 0.075), vec3(0.035, 0.04, 0.07), smoothstep(horizon, horizon + 0.35, r.y));
+                col = mix(col, sky, above);
                 gl_FragColor = vec4(col, 1.0);
                 #include <tonemapping_fragment>
                 #include <colorspace_fragment>
@@ -65,6 +71,49 @@ function makeBackdrop(colorTex: THREE.Texture, depthTex: THREE.Texture, centre: 
     // Follows the camera (like the open world's sky dome), so it never clips.
     m.onBeforeRender = (_r, _s, camera) => { m.position.copy(camera.position); m.updateMatrix(); m.updateMatrixWorld(true); }; // works on a frozen tree too
     return m;
+}
+
+/**
+ * world-ui r4/5 — the baked furniture holds one stray `modern_wooden_cabinet` copy at the floor's corner (baked origin),
+ * half outside the west and south walls (seen poking through the wall in the overview). The real cabinets stand on
+ * the west wall at baked z < -4.9. Collapse the stray copy's vertices (zero-area triangles draw nothing).
+ */
+function dropStrayCabinet(mesh: THREE.Mesh, room: THREE.Object3D): void {
+    const m = new THREE.Matrix4(); for (let n: THREE.Object3D | null = mesh; n && n !== room; n = n.parent) { n.updateMatrix(); m.premultiply(n.matrix); }
+    const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute, v = new THREE.Vector3();
+    let dropped = 0;
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(m); if (v.z > -0.6) { pos.setXYZ(i, 0, 0, 0); dropped++; } }
+    if (dropped) { pos.needsUpdate = true; mesh.geometry.computeBoundingSphere(); mesh.geometry.computeBoundingBox(); }
+    mesh.userData.strayDropped = dropped;
+}
+
+/**
+ * world-ui r4 fix 1 — ceiling pendants (baked space): over the dining table and over the bar. The overview cut-away
+ * removes their cords, so their shades seemed to float; their triangles move to a child mesh the overview hides.
+ */
+const PENDANT_ZONES = [{ x0: 3.3, x1: 5.7, z0: -9.9, z1: -8.8 }, { x0: 14.6, x1: 17.4, z0: -2.1, z1: -1.1 }];
+function splitPendants(mesh: THREE.Mesh, room: THREE.Object3D): THREE.Mesh | undefined {
+    const g = mesh.geometry, idx = g.index; if (!idx || g.groups.length) return undefined;
+    const m = new THREE.Matrix4(); for (let n: THREE.Object3D | null = mesh; n && n !== room; n = n.parent) { n.updateMatrix(); m.premultiply(n.matrix); }
+    const pos = g.getAttribute('position') as THREE.BufferAttribute, v = new THREE.Vector3(), c = new THREE.Vector3();
+    const keep: number[] = [], move: number[] = [];
+    for (let t = 0; t < idx.count; t += 3) {
+        c.set(0, 0, 0); for (let k = 0; k < 3; k++) c.add(v.fromBufferAttribute(pos, idx.getX(t + k)).applyMatrix4(m)); c.multiplyScalar(1 / 3);
+        const hang = c.y > 1.45 && PENDANT_ZONES.some(z => c.x > z.x0 && c.x < z.x1 && c.z > z.z0 && c.z < z.z1);
+        (hang ? move : keep).push(idx.getX(t), idx.getX(t + 1), idx.getX(t + 2));
+    }
+    if (!move.length) return undefined;
+    const g2 = g.clone(); g2.setIndex(move); g.setIndex(keep);
+    const p = new THREE.Mesh(g2, mesh.material); p.name = `${mesh.name}-pendant`; p.userData.pendant = true; p.raycast = () => undefined;
+    mesh.add(p); return p;
+}
+
+/** world-ui r4/5 — shift a live prop (baked space: x 0..W, z -D..0) so its whole bounding box stays 5 cm inside the walls. */
+function keepInside(o: THREE.Object3D, W: number, D: number, pad = 0.05): void {
+    o.updateMatrixWorld(true); const b = new THREE.Box3().setFromObject(o);
+    const dx = b.min.x < pad ? pad - b.min.x : b.max.x > W - pad ? W - pad - b.max.x : 0;
+    const dz = b.min.z < -D + pad ? -D + pad - b.min.z : b.max.z > -pad ? -pad - b.max.z : 0;
+    if (dx || dz) { o.position.x += dx; o.position.z += dz; o.userData.keptInside = [dx, dz]; }
 }
 
 /**
@@ -133,6 +182,9 @@ export class SkylineKitLoader {
         const room = glb.scene; baked.add(room);
         const backdrop = makeBackdrop(city, cityD, PANO_C.clone().add(new THREE.Vector3(this.kit.offset.x, 0, this.kit.offset.z)));
         root.add(backdrop);
+        const bu = (backdrop.material as THREE.ShaderMaterial).uniforms;
+        root.userData.setOverview = (on: boolean): void => { bu.knee.value = on ? 2.6 : 0; if (!on) bu.horizon.value = 2; }; // world-ui r4/5
+        root.userData.setHorizon = (y: number): void => { bu.horizon.value = y; };
         const off = new THREE.MeshBasicMaterial({ color: 0x07090c });
         const cache = new Map<string, THREE.Material>();
         let triangles = 0;
@@ -146,6 +198,7 @@ export class SkylineKitLoader {
             // Big furniture/emitter meshes are not hit-tested (471k triangles); the IDE entities own all interaction.
             if (grp === 'LM_FURN' || grp === 'LM_EMIT') mesh.raycast = () => undefined;
             if (/^EmitScreen/.test(m0.name)) { mesh.material = off; return; } // the IDE station screen draws the live terminal
+            if (m0.name === 'modern_wooden_cabinet') dropStrayCabinet(mesh, room); // world-ui r4/5: one cabinet copy sits at the corner, half outside the shell
             const key = `${grp}/${m0.name}`;
             if (!cache.has(key)) {
                 const m = m0.clone();
@@ -153,16 +206,22 @@ export class SkylineKitLoader {
                 if (m.map) m.map.anisotropy = 8;
                 m.envMapIntensity = /Parquet/.test(m.name) ? 0.32 : 1;
                 if (/Parquet/.test(m.name)) { m.roughnessMap = null; m.roughness = 0.55; if (m.normalScale) m.normalScale.set(0.22, 0.22); }
-                if (/desk_lamp_arm_01_light/.test(m.name)) m.emissiveIntensity = 1.6;
-                if (/EmitStrip/.test(m.name)) m.emissiveIntensity = 4;
-                if (/EmitDown/.test(m.name)) m.emissiveIntensity = 12;
-                if (/EmitShade/.test(m.name)) m.emissiveIntensity = 2.2;
+                // world-ui (1): emitters lowered so nothing clips to white under the clamped bloom (were 1.6 / 4 / 12 / 2.2).
+                if (/desk_lamp_arm_01_light/.test(m.name)) m.emissiveIntensity = 0.9;
+                if (/EmitStrip/.test(m.name)) m.emissiveIntensity = 2.2;
+                if (/EmitDown/.test(m.name)) m.emissiveIntensity = 4.5;
+                if (/EmitShade/.test(m.name)) m.emissiveIntensity = 1.3;
+                if (/modern_ceiling_globe/.test(m.name)) m.emissiveIntensity = 0.6;
+                // The pale desk tops (and the ceramic) took the full lightmap plus a strong probe reflection: dimmer, rougher.
+                if (/metal_office_desk|Ceramic/.test(m.name)) { m.lightMapIntensity = Math.PI * 0.62; m.envMapIntensity = 0.35; m.roughness = Math.max(m.roughness, 0.6); m.color.multiplyScalar(0.82); }
                 cache.set(key, m);
             }
             mesh.material = cache.get(key)!;
         });
+        const hanging: THREE.Mesh[] = []; room.traverse(n => { const mesh = n as THREE.Mesh; if (mesh.isMesh && !mesh.userData.pendant) hanging.push(mesh); });
+        for (const mesh of hanging) splitPendants(mesh, room); // world-ui r4 fix 1
         for (const L of lamps) {
-            const pl = new THREE.PointLight(new THREE.Color(...L.color), L.intensity, L.distance, 2);
+            const pl = new THREE.PointLight(new THREE.Color(...L.color), L.intensity * (/^DeskLamp/.test((L as { name?: string }).name ?? '') ? 0.45 : 0.8), L.distance, 2); // world-ui (1): desk lamps no longer burn the desk tops
             pl.position.set(...L.pos); baked.add(pl);
         }
         // Glass: a faint dark tint plus an additive reflection layer (north and east glass of the baked floor).
@@ -180,8 +239,27 @@ export class SkylineKitLoader {
             const src = scenes.get(p.id); if (!src) continue;
             const o = src.clone(true); o.position.set(...p.pos); o.rotation.y = p.rotY; o.scale.setScalar(p.scale);
             o.traverse(n => { n.raycast = () => undefined; });
+            keepInside(o, this.kit.shell.width, this.kit.shell.depth); // world-ui r4/5: no leaves through the walls
             baked.add(o);
         }
+        // world-ui (3): one clipping plane on every baked material. Walking: far above the roof (no effect). Overview:
+        // at 2.3 m, so the ceiling, roof, beams and pendants are cut away and the furnished floor is seen from above.
+        const cut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4); root.userData.cutPlane = cut;
+        // world-ui r4 fix 1: walls, glass and mullions (LM_ARCH + the glass panes) are cut lower than the furniture
+        // (a dollhouse cut-away), so the front parapet no longer hides the floor in the overview.
+        const wallCut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4); root.userData.wallCutPlane = wallCut;
+        const arch = new Set<THREE.Material>([tint, refl]);
+        room.traverse(n => { let g: THREE.Object3D | null = n; while (g && !/^LM_/.test(g.name)) g = g.parent; const m = (n as THREE.Mesh).material as THREE.Material | undefined; if (g?.name === 'LM_ARCH' && m && !Array.isArray(m)) arch.add(m); });
+        const pendantCut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4); root.userData.pendantCutPlane = pendantCut;
+        const pendantMats = new Map<THREE.Material, THREE.Material>();
+        baked.traverse(n => {
+            const mesh = n as THREE.Mesh; if (!mesh.userData.pendant) return;
+            const src = mesh.material as THREE.Material; let mt = pendantMats.get(src);
+            if (!mt) { mt = src.clone(); if ((mt as THREE.MeshStandardMaterial).lightMap) patchBaked(mt as THREE.MeshStandardMaterial); pendantMats.set(src, mt); }
+            mesh.material = mt;
+        });
+        const pend = new Set(pendantMats.values());
+        baked.traverse(n => { const m = (n as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined; if (m) for (const mt of Array.isArray(m) ? m : [m]) mt.clippingPlanes = pend.has(mt) ? [pendantCut] : arch.has(mt) ? [wallCut] : [cut]; });
         return { root, env, backdrop, triangles: Math.round(triangles), ms: Math.round(performance.now() - t0) };
     }
 }
@@ -198,7 +276,8 @@ export function buildKitStation(entity: StationEntity, kit: StyleKit, texture: T
     screen.position.set(0, ds.y, ds.z + 0.008); group.add(screen);
     // Invisible hit box over the desk top so a click on the desk (not only the small screen) selects the station.
     const hit = box(group, [1.9, 0.05, 0.9], [0, 0.8, 0], 0x000000); (hit.material as THREE.Material).visible = false; hit.castShadow = false; hit.receiveShadow = false;
-    const lamp = glow(group, [0.18, 0.012, 0.012], [0, ds.y - ds.height / 2 - 0.025, ds.z + 0.012], 0x6d7c86);
+    // world-ui r4 fix 1: a thin status strip on the bezel's lower edge (was an 18 cm pale bar floating under the screen).
+    const lamp = glow(group, [0.08, 0.004, 0.004], [0, ds.y - ds.height / 2 - 0.006, ds.z + 0.01], 0x6d7c86, 0.6);
     lamp.castShadow = false;
     namePlate(group, entity, { y: 0.66, z: 0.49, scale: 0.62 });
     return { root: group, screen, lamp };
