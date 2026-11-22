@@ -20,7 +20,7 @@ export class SkylineFx {
         const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
         this.composer = new EffectComposer(renderer, target);
         this.composer.addPass(new RenderPass(scene, camera));
-        this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.55, 0.45, 1.0);
+        this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.3, 0.4, 1.8) // world-ui (1): was 0.55 / 0.45 / 1.0 (desks and lamps clipped to white);
         this.composer.addPass(this.bloom);
         this.composer.addPass(new OutputPass());
         const pmrem = new THREE.PMREMGenerator(renderer);
@@ -37,6 +37,11 @@ export class SkylineFx {
         this.composer.setSize(el.clientWidth || el.width, el.clientHeight || el.height);
     }
     render(): void { this.composer.render(); }
+    /** world-ui (1) — clamp the bloom: only true light sources above `threshold` (HDR luminance) glow, softly. */
+    setBloom(b: { strength: number; radius: number; threshold: number }): void {
+        if (this.bloom.strength === b.strength && this.bloom.radius === b.radius && this.bloom.threshold === b.threshold) return;
+        this.bloom.strength = b.strength; this.bloom.radius = b.radius; this.bloom.threshold = b.threshold;
+    }
     /** sky:merge M1 — use a style kit's baked reflection probe (full strength) instead of the generic room environment. */
     useEnvironment(env: THREE.Texture | undefined): void {
         const s = this.scene as THREE.Scene & { environmentIntensity?: number };

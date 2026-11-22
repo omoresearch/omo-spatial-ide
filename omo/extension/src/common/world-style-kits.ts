@@ -60,7 +60,7 @@ export interface StyleKit {
     /** The catalogue model a plain decor kind is drawn with in this kit (no entry: the procedural decor). */
     decorProps: Partial<Record<DecorKind, string>>;
     props: readonly StyleKitProp[];
-    render: { exposure: number; bloom: { strength: number; radius: number; threshold: number }; eye: number };
+    render: { exposure: number; bloom: { strength: number; radius: number; threshold: number }; overviewBloom: { strength: number; radius: number; threshold: number }; eye: number };
 }
 
 const P = (id: string, label: string, category: PropCategory, words: string[], hx: number, hz: number, fallback: DecorKind, scale?: number): StyleKitProp =>
@@ -130,7 +130,7 @@ export const STYLE_KITS: readonly StyleKit[] = [{
     decorSlots: [{ x: 0.2, z: -4.4 }, { x: -3.6, z: 3.9 }, { x: 3.6, z: 3.9 }, { x: -7.2, z: -2.4 }],
     decorProps: { plant: 'potted_plant_01', sofa: 'sofa_02', bookshelf: 'steel_frame_shelves_03' },
     props: KIT_PROPS,
-    render: { exposure: 1, bloom: { strength: 0.28, radius: 0.55, threshold: 1.6 }, eye: 1.65 }
+    render: { exposure: 0.9, bloom: { strength: 0.22, radius: 0.35, threshold: 2.2 }, overviewBloom: { strength: 0.12, radius: 0.3, threshold: 3 }, eye: 1.65 } // world-ui (1): clamped (nothing clips to white)
 }];
 
 export const PROP_ID_RE = /^[A-Za-z0-9_]{1,48}$/;

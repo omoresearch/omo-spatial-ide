@@ -153,16 +153,20 @@ export class SkylineKitLoader {
                 if (m.map) m.map.anisotropy = 8;
                 m.envMapIntensity = /Parquet/.test(m.name) ? 0.32 : 1;
                 if (/Parquet/.test(m.name)) { m.roughnessMap = null; m.roughness = 0.55; if (m.normalScale) m.normalScale.set(0.22, 0.22); }
-                if (/desk_lamp_arm_01_light/.test(m.name)) m.emissiveIntensity = 1.6;
-                if (/EmitStrip/.test(m.name)) m.emissiveIntensity = 4;
-                if (/EmitDown/.test(m.name)) m.emissiveIntensity = 12;
-                if (/EmitShade/.test(m.name)) m.emissiveIntensity = 2.2;
+                // world-ui (1): emitters lowered so nothing clips to white under the clamped bloom (were 1.6 / 4 / 12 / 2.2).
+                if (/desk_lamp_arm_01_light/.test(m.name)) m.emissiveIntensity = 0.9;
+                if (/EmitStrip/.test(m.name)) m.emissiveIntensity = 2.2;
+                if (/EmitDown/.test(m.name)) m.emissiveIntensity = 4.5;
+                if (/EmitShade/.test(m.name)) m.emissiveIntensity = 1.3;
+                if (/modern_ceiling_globe/.test(m.name)) m.emissiveIntensity = 0.6;
+                // The pale desk tops (and the ceramic) took the full lightmap plus a strong probe reflection: dimmer, rougher.
+                if (/metal_office_desk|Ceramic/.test(m.name)) { m.lightMapIntensity = Math.PI * 0.62; m.envMapIntensity = 0.35; m.roughness = Math.max(m.roughness, 0.6); m.color.multiplyScalar(0.82); }
                 cache.set(key, m);
             }
             mesh.material = cache.get(key)!;
         });
         for (const L of lamps) {
-            const pl = new THREE.PointLight(new THREE.Color(...L.color), L.intensity, L.distance, 2);
+            const pl = new THREE.PointLight(new THREE.Color(...L.color), L.intensity * (/^DeskLamp/.test((L as { name?: string }).name ?? '') ? 0.45 : 0.8), L.distance, 2); // world-ui (1): desk lamps no longer burn the desk tops
             pl.position.set(...L.pos); baked.add(pl);
         }
         // Glass: a faint dark tint plus an additive reflection layer (north and east glass of the baked floor).
