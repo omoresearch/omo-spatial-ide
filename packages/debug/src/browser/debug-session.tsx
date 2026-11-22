@@ -35,28 +35,28 @@ import { inject, injectable, named, postConstruct, interfaces, LazyServiceIdenti
 import { TerminalService } from '@theia/terminal/lib/browser/base/terminal-service';
 import { EditorManager } from '@theia/editor/lib/browser';
 import { CompositeTreeElement } from '@theia/core/lib/browser/source-tree';
-import { DebugSessionConnection, DebugRequestTypes, DebugEventTypes } from './debug-session-connection';
-import { DebugThread, StoppedDetails, DebugThreadData } from './model/debug-thread';
-import { DebugScope, DebugVariable } from './console/debug-console-items';
-import { DebugStackFrame } from './model/debug-stack-frame';
-import { DebugSource } from './model/debug-source';
-import { DebugBreakpoint } from './model/debug-breakpoint';
-import debounce = require('p-debounce');
+import { DebugSessionConnection, DebugRequestTypes, DebugEventTypes } from './debug-session-connection.js';
+import { DebugThread, StoppedDetails, DebugThreadData } from './model/debug-thread.js';
+import { DebugScope, DebugVariable } from './console/debug-console-items.js';
+import { DebugStackFrame } from './model/debug-stack-frame.js';
+import { DebugSource } from './model/debug-source.js';
+import { DebugBreakpoint } from './model/debug-breakpoint.js';
+import debounce from 'p-debounce';
 import URI from '@theia/core/lib/common/uri';
-import { BreakpointManager } from './breakpoint/breakpoint-manager';
-import { DebugConfigurationSessionOptions, InternalDebugSessionOptions } from './debug-session-options';
-import { DebugConfiguration, DebugConsoleMode } from '../common/debug-common';
-import { SourceBreakpoint } from './breakpoint/breakpoint-marker';
+import { BreakpointManager } from './breakpoint/breakpoint-manager.js';
+import { DebugConfigurationSessionOptions, InternalDebugSessionOptions } from './debug-session-options.js';
+import { DebugConfiguration, DebugConsoleMode } from '../common/debug-common.js';
+import { SourceBreakpoint } from './breakpoint/breakpoint-marker.js';
 import { TerminalWidgetOptions, TerminalWidget } from '@theia/terminal/lib/browser/base/terminal-widget';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
-import { DebugContribution } from './debug-contribution';
+import { DebugContribution } from './debug-contribution.js';
 import { Deferred, waitForEvent } from '@theia/core/lib/common/promise-util';
 import { WorkspaceService } from '@theia/workspace/lib/browser';
 import { nls, ILogger } from '@theia/core';
 import { TestService, TestServices } from '@theia/test/lib/browser/test-service';
-import { DebugSessionManager } from './debug-session-manager';
+import { DebugSessionManager } from './debug-session-manager.js';
 
-import { DebugPreferences } from '../common/debug-preferences';
+import { DebugPreferences } from '../common/debug-preferences.js';
 
 export const DebugSessionData = Symbol('DebugSessionData');
 export const DebugSessionStopTimeout = Symbol('DebugSessionStopTimeout');
@@ -485,9 +485,15 @@ export class DebugSession implements CompositeTreeElement {
         return !!this.capabilities.supportsRestartRequest;
     }
 
-    async restart(): Promise<void> {
+    /**
+     * Restarts the debuggee with the given options, or the session's current ones, as the restart request's arguments.
+     */
+    async restart(options?: DebugConfigurationSessionOptions): Promise<void> {
         if (this.canRestart()) {
-            await this.sendRequest('restart', {});
+            if (options) {
+                this.data.options = options;
+            }
+            await this.sendRequest('restart', { arguments: this.configuration });
         }
     }
 
@@ -572,7 +578,8 @@ export class DebugSession implements CompositeTreeElement {
         const terminal = await this.doCreateTerminal({ title, cwd, env, useServerTitle: false });
         const { processId } = terminal;
         await terminal.executeCommand({ cwd, args, env });
-        return { processId: await processId };
+        // This is the PID of the shell, not of the debuggee: report it as such so that the adapter does not kill the shell when the session ends.
+        return { shellProcessId: await processId };
     }
 
     protected async doCreateTerminal(options: TerminalWidgetOptions): Promise<TerminalWidget> {

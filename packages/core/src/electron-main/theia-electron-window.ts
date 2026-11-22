@@ -15,16 +15,16 @@
 // *****************************************************************************
 
 import { FrontendApplicationConfig } from '@theia/application-package';
-import { FrontendApplicationState, StopReason } from '../common/frontend-application-state';
-import { BrowserWindow, BrowserWindowConstructorOptions } from '../../electron-shared/electron';
-import { inject, injectable, postConstruct } from '../../shared/inversify';
-import { ElectronMainApplicationGlobals } from './electron-main-constants';
-import { DisposableCollection, Emitter, Event } from '../common';
-import { createDisposableListener } from './event-utils';
-import { URI } from '../common/uri';
-import { FileUri } from '../common/file-uri';
-import { TheiaRendererAPI } from './electron-api-main';
-import { LaunchArgsStore } from './launch-args-store';
+import { FrontendApplicationState, StopReason } from '../common/frontend-application-state.js';
+import { BrowserWindow, BrowserWindowConstructorOptions, screen } from '../../electron-shared/electron/index.cjs';
+import { inject, injectable, postConstruct } from '../../shared/inversify/index.js';
+import { ElectronMainApplicationGlobals } from './electron-main-constants.js';
+import { DisposableCollection, Emitter, Event } from '../common/index.js';
+import { createDisposableListener } from './event-utils.js';
+import { URI } from '../common/uri.js';
+import { FileUri } from '../common/file-uri.js';
+import { TheiaRendererAPI } from './electron-api-main.js';
+import { LaunchArgsStore } from './launch-args-store.js';
 
 /**
  * Theia tracks the maximized state of Electron Browser Windows.
@@ -83,7 +83,7 @@ export class TheiaElectronWindow {
 
     @postConstruct()
     protected init(): void {
-        this._window = new BrowserWindow(this.options);
+        this._window = new BrowserWindow(this.withMaximizedBounds(this.options));
         this._window.setMenuBarVisibility(false);
         if (!this.options.preventAutomaticShow) {
             this.attachReadyToShow();
@@ -195,6 +195,22 @@ export class TheiaElectronWindow {
 
     protected checkSafeToStop(reason: StopReason): Promise<boolean> {
         return TheiaRendererAPI.requestClose(this.window.webContents, reason);
+    }
+
+    /**
+     * A window that is restored maximized is created with the bounds of the work area it is going to fill, so that
+     * maximizing it once it is shown (see {@link restoreMaximizedState}; a hidden window cannot be maximized without
+     * showing it) does not resize it visibly.
+     */
+    protected withMaximizedBounds(options: TheiaBrowserWindowOptions): TheiaBrowserWindowOptions {
+        if (!options.isMaximized) {
+            return options;
+        }
+        const { x, y, width, height } = options;
+        const display = x !== undefined && y !== undefined && width && height
+            ? screen.getDisplayMatching({ x, y, width, height })
+            : screen.getPrimaryDisplay();
+        return { ...options, ...display.workArea };
     }
 
     protected restoreMaximizedState(): void {

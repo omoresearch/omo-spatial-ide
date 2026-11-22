@@ -21,7 +21,7 @@ import {
     getTextOfResponse, LanguageModel, LanguageModelMessage, LanguageModelRegistry, LanguageModelRequirement, LanguageModelResponse,
     LanguageModelSelector, LanguageModelService, LanguageModelStreamResponsePart, ServerToolDescriptor, UserRequest
 } from '@theia/ai-core';
-import { AbstractChatAgent, AbstractStreamParsingChatAgent, ChatAgentLocation } from './chat-agents';
+import { AbstractChatAgent, AbstractStreamParsingChatAgent, ChatAgentLocation } from './chat-agents.js';
 import {
     ChatResponseContent,
     ErrorChatResponseContent,
@@ -32,10 +32,10 @@ import {
     ChatRequest,
     TextChatResponseContentImpl,
     ThinkingChatResponseContentImpl,
-} from './chat-model';
-import { ParsedChatRequest, ParsedChatRequestTextPart } from './parsed-chat-request';
-import { FileReadTracker } from './file-read-tracker';
-import { ChatToolRequestService } from './chat-tool-request-service';
+} from './chat-model.js';
+import { ParsedChatRequest, ParsedChatRequestTextPart } from './parsed-chat-request.js';
+import { FileReadTracker } from './file-read-tracker.js';
+import { ChatToolRequestService } from './chat-tool-request-service.js';
 import { ILogger } from '@theia/core';
 import { MockLogger } from '@theia/core/lib/common/test/mock-logger';
 
@@ -221,6 +221,32 @@ describe('AbstractChatAgent.invoke reasoning error recovery', () => {
             model.dispose();
         }
     });
+});
+
+describe('AbstractChatAgent.sendLlmRequest session metadata', () => {
+    for (const parentSessionId of [undefined, 'parent-session']) {
+        it(`forwards session metadata for ${parentSessionId ? 'a delegated' : 'a standalone'} chat`, async () => {
+            let capturedRequest: UserRequest | undefined;
+            const agent = new class extends TestChatAgent {
+                protected override languageModelService = {
+                    async sendRequest(_model: LanguageModel, request: UserRequest): Promise<LanguageModelResponse> {
+                        capturedRequest = request;
+                        return { text: '' };
+                    }
+                } as unknown as LanguageModelService;
+            }();
+            const model = new MutableChatModel(ChatAgentLocation.Panel);
+            model.parentSessionId = parentSessionId;
+            try {
+                const request = model.addRequest(createParsedRequest('Hello'));
+                await agent.exposeSendLlmRequest(request, { id: 'test-model' } as LanguageModel);
+                expect(capturedRequest).to.include({ sessionId: model.id, requestId: request.id });
+                expect(capturedRequest!.parentSessionId).to.equal(parentSessionId);
+            } finally {
+                model.dispose();
+            }
+        });
+    }
 });
 
 describe('AbstractChatAgent.sendLlmRequest server tools', () => {

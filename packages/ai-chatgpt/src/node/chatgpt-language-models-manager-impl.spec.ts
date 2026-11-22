@@ -20,12 +20,13 @@ import { MockLogger } from '@theia/core/lib/common/test/mock-logger';
 import { Container } from '@theia/core/shared/inversify';
 import { LanguageModel, LanguageModelRegistry, LanguageModelSelector, ToolCallExecutor, ToolCallExecutorImpl } from '@theia/ai-core';
 import { OpenAiModelUtils } from '@theia/ai-openai/lib/node/openai-model-utils';
-import { ChatGptAuthState } from '../common';
-import { ChatGptBackendAuthService } from './chatgpt-auth-service';
-import { ChatGptModel } from './chatgpt-language-model';
-import { ChatGptLanguageModelsManagerImpl } from './chatgpt-language-models-manager-impl';
-import { ChatGptModelCatalog } from './chatgpt-model-catalog';
-import { ChatGptResponseApiUtils } from './chatgpt-response-api-utils';
+import { OpenAiStreamingRetry } from '@theia/ai-openai/lib/node/openai-streaming-retry';
+import { ChatGptAuthState } from '../common/index.js';
+import { ChatGptBackendAuthService } from './chatgpt-auth-service.js';
+import { ChatGptModel } from './chatgpt-language-model.js';
+import { ChatGptLanguageModelsManagerImpl } from './chatgpt-language-models-manager-impl.js';
+import { ChatGptModelCatalog } from './chatgpt-model-catalog.js';
+import { ChatGptCodexResponseApiUtils, ChatGptResponseApiUtils } from './chatgpt-response-api-utils.js';
 
 class FakeLanguageModelRegistry implements LanguageModelRegistry {
     readonly models = new Map<string, LanguageModel>();
@@ -76,10 +77,12 @@ describe('ChatGptLanguageModelsManagerImpl', () => {
         container.bind(LanguageModelRegistry).toConstantValue(registry);
         container.bind(ChatGptBackendAuthService).toConstantValue({
             getAuthState: async () => authState,
-            getCredentials: async () => ({ accessToken: 'token', accountId: 'account-id' })
+            getCredentials: async () => ({ accessToken: 'token', clientId: 'dynamic_agent_client_test' })
         } as unknown as ChatGptBackendAuthService);
         container.bind(ToolCallExecutor).to(ToolCallExecutorImpl).inSingletonScope();
+        container.bind(OpenAiStreamingRetry).toSelf().inSingletonScope();
         container.bind(ChatGptResponseApiUtils).toSelf().inSingletonScope();
+        container.bind(ChatGptCodexResponseApiUtils).toSelf().inSingletonScope();
         container.bind(OpenAiModelUtils).toSelf().inSingletonScope();
         container.bind(ChatGptModelCatalog).toConstantValue({
             getAvailableModels: async () => ['gpt-5.6-sol']
@@ -98,6 +101,9 @@ describe('ChatGptLanguageModelsManagerImpl', () => {
         expect(model.vendor).to.equal('chatgpt');
         expect(model.model).to.equal('gpt-5.5');
         expect(model.maxRetries).to.equal(3);
+        expect(model.responseApiUtils.oss).to.be.instanceOf(ChatGptResponseApiUtils);
+        expect(model.responseApiUtils.codex).to.be.instanceOf(ChatGptCodexResponseApiUtils);
+        expect(model.responseApiUtils.codex).not.to.equal(model.responseApiUtils.oss);
     });
 
     it('reports the models as ready once the user is signed in', async () => {
@@ -105,6 +111,14 @@ describe('ChatGptLanguageModelsManagerImpl', () => {
         await manager.createOrUpdateLanguageModels({ id: 'chatgpt/gpt-5.5', model: 'gpt-5.5', maxRetries: 3 });
 
         expect((registry.models.get('chatgpt/gpt-5.5') as ChatGptModel).status).to.deep.equal({ status: 'ready' });
+    });
+
+    it('does not mark an identity-only session ready', async () => {
+        authState = { isAuthenticated: true, canUseChatGptPlan: false };
+        await manager.createOrUpdateLanguageModels({ id: 'chatgpt/gpt-5.5', model: 'gpt-5.5', maxRetries: 3 });
+        expect((registry.models.get('chatgpt/gpt-5.5') as ChatGptModel).status).to.deep.equal({
+            status: 'unavailable', message: 'ChatGPT token sharing is not enabled'
+        });
     });
 
     it('flips the status of the already registered models on sign out instead of removing them', async () => {
