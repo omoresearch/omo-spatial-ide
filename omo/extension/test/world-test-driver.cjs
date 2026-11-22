@@ -16,7 +16,7 @@ async function openWorld(tag, viewport = { width: 1440, height: 960 }) {
         args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], defaultViewport: viewport });
     const page = await browser.newPage();
     // Classic dock flows; focus mode is covered by its own check.
-    await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0'); localStorage.setItem('omo.starter', 'classic') /* world-ui: legacy checks use the IDE chrome */; } catch {} });
+    await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0'); localStorage.setItem('omo.starter', 'classic') /* world-ui: legacy checks use the IDE chrome */; localStorage.setItem('omo.deskLabel.idleHide', '0') /* migrating: legacy label checks expect the floating desk label */; } catch {} });
     const trust = () => page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click());
     try {
         await page.goto(process.env.OMO_URL || 'http://127.0.0.1:3192', { waitUntil: 'domcontentloaded' });

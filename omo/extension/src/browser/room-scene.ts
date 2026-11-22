@@ -221,6 +221,8 @@ export class RoomScene {
     private sharpStep = 0;
     private sharpTimer?: number;
     private lastRenderAt = 0;
+    /** migrating: walking, an idle desk's floating label hides while its monitor card shows the name (world-ui r4/3). Opt out with localStorage 'omo.deskLabel.idleHide' = '0' (legacy real-app drivers). */
+    private readonly idleDeskLabelHides = (() => { try { return localStorage.getItem('omo.deskLabel.idleHide') !== '0'; } catch { return true; } })();
     /** Opt out with localStorage 'omo.dynamicResolution' = '0'. */
     private readonly dynamicResolution = (() => { try { return localStorage.getItem('omo.dynamicResolution') !== '0'; } catch { return true; } })();
     private peerVersion = 0;
@@ -1359,7 +1361,7 @@ export class RoomScene {
             const kind = this.entities.get(action)?.entity.kind;
             // world-ui r4/3: walking, a desk's name is on its own monitor. While the idle card shows it the floating label hides;
             // otherwise the label sits just above the monitor bezel (not in the sky).
-            const walkDesk = this.navigation==='walk' && kind==='station' && !chips;
+            const walkDesk = this.navigation==='walk' && kind==='station' && !chips && this.idleDeskLabelHides;
             if (walkDesk && !(this.terminalFrames[action]?.lines.length)) { if(this.labelPos.get(label)!==-1){this.labelPos.set(label,-1);label.style.visibility='hidden';} continue; }
             const bezel = walkDesk ? this.screens.get(action) : undefined;
             const lift = chips ? (kind==='station' ? 2.25 : (root.userData.labelHeight ?? 2.9) * 0.9) : root.userData.labelHeight ?? (this.navigation==='walk'?2.55:2.9);
