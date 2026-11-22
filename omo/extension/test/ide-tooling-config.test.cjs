@@ -58,7 +58,7 @@ test('normal startup uses only this bundle and keeps explicit controls, not arbi
 test('the application includes a matched-version extension host, language tools and debugger', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'browser-app/package.json'), 'utf8'));
     for (const name of ['plugin-ext', 'plugin-ext-vscode', 'vsx-registry', 'debug', 'console', 'bulk-edit', 'callhierarchy', 'keymaps', 'outline-view', 'typehierarchy', 'userstorage', 'variable-resolver']) {
-        assert.equal(pkg.dependencies['@theia/' + name], '1.74.3', 'Missing maintained IDE capability: ' + name);
+        assert.equal(pkg.dependencies['@theia/' + name], '1.77.0', 'Missing maintained IDE capability: ' + name);
     }
     assert.equal(pkg.dependencies['@theia/git'], undefined, 'Git must use the maintained builtin extension, not a nonexistent package version');
     assert.equal(pkg.theia.frontend.config.preferences['security.workspace.trust.enabled'], true);
