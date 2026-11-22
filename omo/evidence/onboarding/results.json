@@ -217,14 +217,14 @@
    "name": "From the sentence to the world shown in under 60 s (wall clock of this run)",
    "pass": true,
    "detail": {
-    "ms": 10704
+    "ms": 10652
    }
   },
   {
    "name": "The app measured the same first minute itself (data-omo-first-minute-ms < 60000)",
    "pass": true,
    "detail": {
-    "appMs": 10668
+    "appMs": 10618
    }
   },
   {
@@ -237,11 +237,63 @@
    }
   },
   {
+   "name": "Signs: exactly one sign per room, and no sign rect intersects a desk marker (01/02/03), any label or another sign on screen",
+   "pass": true,
+   "detail": {
+    "perRoom": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "markers": [
+     "01",
+     "02",
+     "03"
+    ],
+    "overlaps": []
+   }
+  },
+  {
+   "name": "Topic boards: one per topic room, by the doorway on the path side, title + 2-4 note lines; at 3 m every glyph row is > 14 px tall on screen",
+   "pass": true,
+   "detail": {
+    "board": "sign-moonbase",
+    "aside": true,
+    "distance": 2.94,
+    "rows": [
+     {
+      "text": "Moonbase",
+      "title": true,
+      "px": 32.4
+     },
+     {
+      "text": "Write tests for the crater map",
+      "title": false,
+      "px": 20.8
+     },
+     {
+      "text": "Fix the oxygen meter so it drains slower",
+      "title": false,
+      "px": 20.7
+     },
+     {
+      "text": "Add a docking bay to the moonbase…",
+      "title": false,
+      "px": 20.6
+     }
+    ],
+    "n": 5
+   }
+  },
+  {
    "name": "Skip for now: the world is the home only (observatory = station theme, no topic rooms) and it opens in < 60 s",
    "pass": true,
    "detail": {
     "theme": "station",
-    "ms": 267
+    "ms": 225
    }
   },
   {

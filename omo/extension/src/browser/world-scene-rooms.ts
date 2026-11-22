@@ -166,27 +166,23 @@ export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity
         // w3:look (5) — the threshold stays within the jamb depth (it used to stick 0.25 m out of both wall faces: a light wedge on the ground).
         add(root, d.alongX ? [ROOM_DOOR_WIDTH - 2 * J, 0.02, t + 0.06] : [t + 0.06, 0.02, ROOM_DOOR_WIDTH - 2 * J], [d.x, 0.07, d.z], accentMat, false, 'threshold');
     }
-    // w3:look — the room's name on a floor plate just outside its main doorway; it always reads from the +z side
-    // (the overview camera), whatever the room's quarter turn.
+    // promise:onboarding (6) — ONE name sign per room: a plaque standing on the wall right above the main doorway, facing
+    // the path. Both big faces carry the name (BoxGeometry face UVs read un-mirrored from either side), so the street
+    // side and the overview camera (which sees turned rooms from behind) both read it. It replaces the floor plate and
+    // the floating camera-facing title (three names per room overlapped the desk chips in the overview).
     const main = doors.has('front') ? 'front' : WALL_ORDER.find(s => doors.has(s));
     if (main) {
         const name = (entity.label ?? 'Room').slice(0, 40), d = doorAt[main];
-        const out = 0.85, nx = main === 'left' ? -out : main === 'right' ? out : 0, nz = main === 'back' ? -out : main === 'front' ? out : 0;
         const map = nameTexture(name, look);
-        // promise:onboarding (5): a 1.2 cm thick tile, not a zero-thickness plane (edge-on those read as stray black lines).
-        const plate = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.44, 0.012), new THREE.MeshBasicMaterial({ color: map ? 0xffffff : look.cap, map, transparent: true, depthWrite: false }));
-        plate.rotation.set(-Math.PI / 2, -entity.transform.rotation, 0, 'YXZ'); // flat on the floor, text upright for a +z viewer
-        plate.position.set(d.x + nx, 0.066, d.z + nz); plate.renderOrder = 1; (plate.material as THREE.MeshBasicMaterial).polygonOffset = true; (plate.material as THREE.MeshBasicMaterial).polygonOffsetFactor = -2;
-        plate.userData.part = 'name-plate'; plate.userData.roomName = name; plate.userData.ownsMap = true; plate.raycast = () => undefined;
-        root.add(plate);
-        // w3:look (7) — a floating, camera-facing room title above the room: readable in overview and from afar.
-        const title = nameTexture(name, look);
-        if (title) {
-            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: title, transparent: true, depthWrite: false, fog: false }));
-            const w = Math.min(9, Math.max(4.4, entity.width * 0.7)); sprite.scale.set(w, w * 224 / 1024, 1);
-            sprite.position.set(0, H + 0.75, entity.depth / 2 + 0.1); // over the front (door) wall: wall/desk tags sit at the back and inside sprite.renderOrder = 2; sprite.userData.part = 'room-title'; sprite.userData.ownsMap = true; sprite.raycast = () => undefined;
-            root.add(sprite);
-        }
+        const w = Math.min(entity.width - 1.2, 6, Math.max(4, entity.width * 0.6)), h = w * 224 / 1024;
+        const face = new THREE.MeshBasicMaterial({ color: map ? 0xffffff : look.cap, ...(map ? { map } : {}), transparent: true, toneMapped: false, fog: false });
+        const rim = new THREE.MeshBasicMaterial({ color: look.cap });
+        const sign = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.04), [rim, rim, rim, rim, face, face]);
+        sign.rotation.y = main === 'left' ? -Math.PI / 2 : main === 'right' ? Math.PI / 2 : main === 'back' ? Math.PI : 0;
+        sign.position.set(d.x, 0, d.z); sign.userData.signHeight = h; placeRoomSign(sign, false); // on the doorway's wall top
+        sign.renderOrder = 2; sign.userData.part = 'room-sign'; sign.userData.roomName = name; sign.userData.ownsMap = true; sign.userData.size = [w, h];
+        sign.raycast = () => undefined;
+        root.add(sign); root.userData.roomSign = sign;
     }
     root.userData.roomWalls = walls; root.userData.roomLintels = lintels;
     return { root };
@@ -205,5 +201,15 @@ export function setRoomCutaway(root: THREE.Object3D, cut: boolean, frozen = true
     if (walls.scale.y === scale && (!lintels || lintels.visible === !cut)) return false;
     walls.scale.y = scale; if (frozen) refreeze(walls);
     if (lintels) lintels.visible = !cut;
+    const sign = root.userData.roomSign as THREE.Object3D | undefined;
+    if (sign) { placeRoomSign(sign, cut); if (frozen) refreeze(sign); }
     return true;
+}
+/**
+ * promise:onboarding (6) — the doorway sign stands on the wall top: full height while walking, on the lowered wall in the
+ * overview cutaway (it moves down with the wall, so from above it stays in front of the desks and never covers their
+ * 01/02/03 markers).
+ */
+function placeRoomSign(sign: THREE.Object3D, cut: boolean): void {
+    sign.position.y = ROOM_WALL_HEIGHT * (cut ? ROOM_CUTAWAY_SCALE : 1) + 0.06 + (sign.userData.signHeight as number) / 2;
 }

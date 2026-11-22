@@ -12,7 +12,7 @@
  *   5. Timer: sentence (Enter) -> world shown < 60 s (wall clock here AND the app's own data-omo-first-minute-ms).
  *   6. A second run (Skip for now) also lands in the world; no page errors.
  * Screenshots: 1-welcome, 2-seed, 3-mind, 4-read, 5-ready, 6-world, 7-world-overview, 8-topic-room-board (3 m), 9-topic-room.
- * Also: topic board glyphs > 14 px at 3 m (board-text.json).
+ * Also: one sign per room never covers a desk marker (sign-rects.json); topic board glyphs > 14 px at 3 m (board-text.json).
  * Usage: node scripts/onboarding-real.cjs [outDir] [port 3750-3759]   (default omo/evidence/onboarding, 3754)
  */
 'use strict';
@@ -167,6 +167,23 @@ const SECRETS = ['sk-FAKEfixtureKEY', 'sk-proj-FAKEfixture', 'ghp_FAKEfixture', 
         fs.writeFileSync(path.join(OUT, 'thin-meshes.json'), JSON.stringify(thin, null, 1));
         const thinInRooms = (thin ?? []).filter(t => t.room?.startsWith('mind-') || /^(mind-|sign-|note-|board-)/.test(t.owner));
         check('Overview: no stray thin lines in the planned rooms (meshes with a side < 1 cm and > 0.5 m long = 0)', Array.isArray(thin) && thinInRooms.length === 0, { inRooms: thinInRooms.length, all: (thin ?? []).length, sample: thinInRooms.slice(0, 4) });
+
+        // promise:onboarding (6): ONE sign per room, above its doorway, and no sign covers a desk marker (01/02/03 chips) or any label.
+        const signs = await page.evaluate(() => {
+            const c = document.querySelector('canvas[data-testid="omo-world-canvas"]'), o = c.getBoundingClientRect();
+            const signs = c.omoSignRects().map(s => ({ ...s, rect: s.rect && { left: s.rect.left + o.left, top: s.rect.top + o.top, right: s.rect.right + o.left, bottom: s.rect.bottom + o.top } }));
+            const labels = [...document.querySelectorAll('.omo-scene-label')].filter(e => { const cs = getComputedStyle(e), r = e.getBoundingClientRect(); return r.width > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity > 0.05; })
+                .map(e => { const r = e.getBoundingClientRect(); return { text: e.textContent.trim(), left: r.left, top: r.top, right: r.right, bottom: r.bottom }; });
+            return { signs, labels, rooms: JSON.parse(c.dataset.worldRooms || '[]') };
+        });
+        fs.writeFileSync(path.join(OUT, 'sign-rects.json'), JSON.stringify(signs, null, 1));
+        const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        const perRoom = signs.rooms.map(id => signs.signs.filter(s => s.room === id).length);
+        const overlaps = [];
+        for (const s of signs.signs) if (s.rect) for (const l of signs.labels) if (hit(s.rect, l)) overlaps.push(`${s.name} x ${l.text}`);
+        for (let i = 0; i < signs.signs.length; i++) for (let j = i + 1; j < signs.signs.length; j++) if (signs.signs[i].rect && signs.signs[j].rect && hit(signs.signs[i].rect, signs.signs[j].rect)) overlaps.push(`${signs.signs[i].name} x ${signs.signs[j].name}`);
+        const markers = signs.labels.filter(l => /^\d\d$/.test(l.text)).map(l => l.text);
+        check('Signs: exactly one sign per room, and no sign rect intersects a desk marker (01/02/03), any label or another sign on screen', perRoom.length >= 5 && perRoom.every(n => n === 1) && signs.signs.every(s => s.rect) && markers.length >= 3 && overlaps.length === 0, { perRoom, markers, overlaps: overlaps.slice(0, 6) });
 
         // promise:onboarding (4): a topic room close up — stand 3 m in front of its board (walk mode) and read it.
         const board = saved.entities.find(e => e.id === 'sign-moonbase') || saved.entities.find(e => e.id.startsWith('sign-'));

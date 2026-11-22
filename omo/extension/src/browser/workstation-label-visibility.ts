@@ -44,6 +44,18 @@ export function declutterLabels<T extends { x: number; y: number; w: number; h: 
     }
     return items.map(item => ({ ...item, hidden: hidden.has(item) }));
 }
+/**
+ * promise:onboarding (6) — move a centred label (x, y, w, h) straight up until it clears every rect by `gap` px
+ * (room doorway signs in the overview). Labels that do not touch a rect keep their spot. Mutates and returns the item.
+ */
+export function avoidRects<T extends { x: number; y: number; w: number; h: number }>(item: T, rects: ReadonlyArray<{ left: number; top: number; right: number; bottom: number }>, gap = 4): T {
+    for (let pass = 0; pass < rects.length; pass++) {
+        const hit = rects.find(r => item.x - item.w / 2 < r.right + gap && item.x + item.w / 2 > r.left - gap && item.y - item.h / 2 < r.bottom + gap && item.y + item.h / 2 > r.top - gap);
+        if (!hit) break;
+        item.y = hit.top - gap - item.h / 2;
+    }
+    return item;
+}
 /** w3:look — the short overview chip of a label: the desk number ("03  Desk three ↗" -> "03"), else the title without the arrow. */
 export function chipText(text: string): string {
     const number = /^(\d+)\s/.exec(text);

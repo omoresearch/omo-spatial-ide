@@ -11,7 +11,7 @@ import type { RoomLayoutId, RoomKitId } from '../common/player-state';
 import type { RuntimeColorMetadata } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
 import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-preview';
-import { workstationLabelVisible, layoutLabels, declutterLabels, chipText } from './workstation-label-visibility'; // t3:polish2 layoutLabels; w3:look declutter + chips
+import { workstationLabelVisible, layoutLabels, declutterLabels, chipText, avoidRects } from './workstation-label-visibility'; // t3:polish2 layoutLabels; w3:look declutter + chips
 import { PoseSmoother } from './movement-smoothing';
 // w2:render — the room is built from a WorldSpec (shared contract) by the world scene builders.
 import type { RoomEntity, WorldEntity, WorldSpec } from '../common/world-model';
@@ -322,7 +322,7 @@ export class RoomScene {
         const canvas = this.renderer.domElement;
         canvas.dataset.testid = 'omo-world-canvas';
         (canvas as HTMLCanvasElement & { omoThinMeshes?: () => ThinMesh[] }).omoThinMeshes = () => this.thinMeshes(); // promise:onboarding test hook
-        Object.assign(canvas, { omoBoardText: () => this.boardText(), omoStandAt: (p: PlayerPose) => this.standAt(p) }); // promise:onboarding (4) test hooks
+        Object.assign(canvas, { omoSignRects: () => this.signRects(), omoBoardText: () => this.boardText(), omoStandAt: (p: PlayerPose) => this.standAt(p) }); // promise:onboarding (4)(6) test hooks
         canvas.setAttribute('aria-label', 'Interactive 3D room. Drag or use arrow keys to orbit. Scroll to zoom. Select a workstation to work.');
         canvas.tabIndex = 0;
         this.host.appendChild(canvas);
@@ -622,6 +622,16 @@ export class RoomScene {
             left = Math.min(left, sx); right = Math.max(right, sx); top = Math.min(top, sy); bottom = Math.max(bottom, sy);
         }
         return { left: +left.toFixed(1), top: +top.toFixed(1), right: +right.toFixed(1), bottom: +bottom.toFixed(1) };
+    }
+    /** promise:onboarding (6) — test hook: every room's doorway sign, as drawn now (screen rect in canvas CSS px). */
+    signRects(): Array<{ room: string; name: string; rect?: { left: number; top: number; right: number; bottom: number } }> {
+        const out: Array<{ room: string; name: string; rect?: { left: number; top: number; right: number; bottom: number } }> = [];
+        for (const [id, item] of this.entities) {
+            if (item.entity.kind !== 'room') continue;
+            const signs: THREE.Mesh[] = []; item.built.root.traverse(n => { if (n.userData.part === 'room-sign') signs.push(n as THREE.Mesh); });
+            for (const sign of signs) { const [sw, sh] = sign.userData.size as [number, number]; out.push({ room: id, name: String(sign.userData.roomName), rect: sign.visible ? this.screenRect(sign, sw / 2, sh / 2, 0.02) : undefined }); }
+        }
+        return out;
     }
     /** promise:onboarding (4) — test hook: every topic board's text rows on screen now (glyph box height in CSS px). */
     boardText(): Array<{ id: string; distance: number; rows: Array<{ text: string; title: boolean; px: number }>; rect?: { left: number; top: number; right: number; bottom: number } }> {
@@ -1475,6 +1485,9 @@ export class RoomScene {
             items.push({label,x,y,w:size.w,h:size.h,priority:kind==='station'?1:2});
         }
         if(chips){
+            // promise:onboarding (6) — a desk marker never sits on a room's doorway sign: it moves up just clear of it.
+            const signs=this.signRects().map(s=>s.rect).filter((r):r is NonNullable<typeof r>=>!!r);
+            if(signs.length)for(const item of items)avoidRects(item,signs,6);
             for(const item of declutterLabels(items)){
                 if(!item.hidden){this.applyLabel(item.label,item.x,item.y);continue;}
                 if(this.labelPos.get(item.label)!==-1){this.labelPos.set(item.label,-1);item.label.style.visibility='hidden';}
