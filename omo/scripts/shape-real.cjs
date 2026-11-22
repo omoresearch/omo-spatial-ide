@@ -129,8 +129,12 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             && JSON.stringify(tags1.map(t => t.text).sort()) === JSON.stringify(['Armchair', 'Floor lamp', 'Shelves']), { tags1, c1 });
         await shot('2-ghost-caption');
 
-        // 3. Refine, then keep.
-        await type('make it bigger'); await page.keyboard.press('Enter');
+        // 3. Refine, then keep. Typing while a change is pending: Enter refines, Ctrl+Enter keeps (the card says so).
+        const keys0 = await page.evaluate(() => ({ keep: document.querySelector('[data-testid="shape-keep-key"]')?.textContent, hint: document.querySelector('[data-testid="shape-enter-hint"]')?.textContent ?? '' }));
+        await type('make it bigger');
+        const keys1 = await page.evaluate(() => ({ keep: document.querySelector('[data-testid="shape-keep-key"]')?.textContent, hint: document.querySelector('[data-testid="shape-enter-hint"]')?.textContent ?? '' }));
+        check('Enter has one meaning: empty prompt Keep ↵; with text the hint says "Enter = refine" and Keep shows Ctrl ↵', keys0.keep === '↵' && !keys0.hint && keys1.hint === 'Enter = refine' && keys1.keep === 'Ctrl ↵', { keys0, keys1 });
+        await page.keyboard.press('Enter');
         await waitCaption(c1);
         const g2 = await ghost(), c2 = await captionText();
         check('Refining replaces the ghost (bigger things)', g2.ids.split(',').filter(Boolean).length === 3 && (g2.diff !== g1.diff || c2 !== c1) && /big/i.test(c2), { c1, c2, d1: g1.diff, d2: g2.diff });
@@ -172,7 +176,9 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
 
         // 5. A second kept change, then the strip.
         await type('add a plant'); await page.keyboard.press('Enter'); await waitCaption();
-        await page.focus('[data-testid="shape-input"]'); await page.keyboard.press('Enter'); await pause(1000);
+        await type('then'); await page.keyboard.down('Control'); await page.keyboard.press('Enter'); await page.keyboard.up('Control'); await pause(1000);
+        check('Ctrl+Enter keeps even with text in the prompt (the text stays)', !await page.$('[data-testid="shape-caption"]') && await page.$eval('[data-testid="shape-input"]', e => e.value) === 'then');
+        await page.$eval('[data-testid="shape-input"]', e => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(e, ''); e.dispatchEvent(new Event('input', { bubbles: true })); });
         const dots = await page.$$('[data-testid="shape-history-dot"]');
         check('The history strip has the kept steps (2 dots)', dots.length === 2, dots.length);
         if (dots.length) { const box = await dots[0].boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await pause(400); }

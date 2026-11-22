@@ -288,13 +288,16 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
         if (event.nativeEvent.isComposing) return;
         if (event.key === 'Enter') {
             event.preventDefault();
-            if (text.trim() || pills.length) send(text); else if (proposed) keep();
+            // One meaning per key: with text, Enter refines and Ctrl/Cmd+Enter keeps; an empty prompt's Enter keeps.
+            if (proposed && (event.ctrlKey || event.metaKey)) keep();
+            else if (text.trim() || pills.length) send(text); else if (proposed) keep();
         } else if (event.key === 'Escape') {
             event.preventDefault();
             if (proposed) undo(); else if (pills.length || text) { setPills([]); setText(''); } else show(false);
         } else if (event.key === 'Backspace' && !text && pills.length) { setPills(pills.slice(0, -1)); }
     };
 
+    const typing = !!text.trim() || pills.length > 0;
     const proposal = proposed ? entry!.plan!.proposal! : undefined;
     const sentence = proposal ? captionFor(proposal.summary, turn?.idea, turn?.where, spokenNames(proposal.ops)) : '';
     const failed = !busy && entry && (entry.status === 'failed' || entry.status === 'answered' || entry.status === 'stale') ? firstSentence(entry.plan?.notes[0] ?? entry.outcome ?? entry.plan?.explanation ?? '') : '';
@@ -308,7 +311,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             {proposal && <div className="omo-shape-caption" ref={caption} data-testid="shape-caption" role="dialog" aria-label="Proposed change">
                 <p data-testid="shape-caption-text">{sentence}</p>
                 <div className="omo-shape-caption-row">
-                    <button type="button" className="omo-shape-keep" data-testid="shape-keep" onMouseDown={e => e.preventDefault()} onClick={keep}>Keep <kbd>↵</kbd></button>
+                    <button type="button" className="omo-shape-keep" data-testid="shape-keep" onMouseDown={e => e.preventDefault()} onClick={keep}>Keep {typing ? <kbd data-testid="shape-keep-key">Ctrl ↵</kbd> : <kbd data-testid="shape-keep-key">↵</kbd>}</button>
                     <button type="button" className="omo-shape-undo" data-testid="shape-undo" onMouseDown={e => e.preventDefault()} onClick={undo}>Undo <kbd>esc</kbd></button>
                     <button type="button" className="omo-shape-details-toggle" data-testid="shape-details-toggle" aria-expanded={details} onMouseDown={e => e.preventDefault()} onClick={() => setDetails(!details)}>Details</button>
                 </div>
@@ -332,7 +335,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
                     <input ref={input} data-testid="shape-input" value={text} maxLength={400} spellCheck={false} autoComplete="off"
                         placeholder={proposed ? 'Refine it… or press Enter to keep' : pills.length ? 'Say what to do with it…' : 'Describe a change…'} aria-label="Describe a change"
                         onChange={e => setText(e.currentTarget.value)} onKeyDown={onKey} />
-                    {(text.trim() || pills.length > 0) && <kbd className="omo-shape-enter" aria-hidden="true">↵</kbd>}
+                    {typing && <kbd className="omo-shape-enter" data-testid="shape-enter-hint" aria-hidden="true">{proposed ? 'Enter = refine' : '↵'}</kbd>}
                     <button type="button" className="omo-shape-browse" data-testid="shape-browse" aria-pressed={browse} onMouseDown={e => e.preventDefault()} onClick={() => setBrowse(!browse)} title="Pick from the catalogue instead">Browse</button>
                 </form>
                 {!proposed && !busy && !pills.length && <div className="omo-shape-chips" data-testid="shape-chips">

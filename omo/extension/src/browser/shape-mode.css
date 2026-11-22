@@ -137,7 +137,7 @@ body.omo-shaping.omo-shape-browse .omo-shape-dock { left: calc((100% - var(--omo
 .omo-shape-leader circle { fill: #ffffff; stroke: rgba(4, 10, 16, .8); stroke-width: 1.5; }
 .omo-shape-leader circle.is-halo { fill: rgba(127, 224, 255, .22); stroke: #7fe0ff; stroke-width: 2; animation: omo-shape-halo 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 2px rgba(4, 10, 16, .8)); }
 @keyframes omo-shape-halo { 50% { transform: scale(1.35); opacity: .5; } }
-.omo-shape-enter { flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 24px; border-radius: 6px; background: rgba(255, 255, 255, .08); color: var(--sh-text-2); font-weight: 500; font-size: 13px; line-height: 1; font-family: inherit; animation: omo-shape-pop 160ms var(--sh-ease) both; }
+.omo-shape-enter { flex: 0 0 auto; display: grid; place-items: center; min-width: 26px; padding: 0 7px; box-sizing: border-box; white-space: nowrap; height: 24px; border-radius: 6px; background: rgba(255, 255, 255, .08); color: var(--sh-text-2); font-weight: 500; font-size: 13px; line-height: 1; font-family: inherit; animation: omo-shape-pop 160ms var(--sh-ease) both; }
 /* While a change is pending, the room's own labels step further back so the ghost and its card lead. */
 body.omo-shape-proposed .omo-scene-label { opacity: .12 !important; }
 
