@@ -716,7 +716,7 @@ export class RoomScene {
     /** world-ui (1, 3) — kit view: the kit's clamped bloom + exposure; in the overview the baked ceiling/roof is cut away (dollhouse). */
     private applyKitView(): void {
         if (!this.renderer || !this.world) return;
-        const kit = activeKit(this.world), shell = kit ? this.kitShells.get(kit.id) : undefined, overview = this.navigation !== 'walk';
+        const kit = activeKit(this.world), shell = kit ? this.kitShells.get(kit.id) : undefined, overview = this.navigation !== 'walk' && !this.solidView;
         this.renderer.localClippingEnabled = !!shell;
         const cut = shell?.root.userData.cutPlane as THREE.Plane | undefined;
         if (cut) { const c = overview ? KIT_CUT : 1e4; if (cut.constant !== c) { cut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
@@ -1320,9 +1320,21 @@ export class RoomScene {
      * shape — public camera API: ease the overview to centre and zoom on a world-space box (a proposed change) over
      * `ms`, keeping the orbit angle; `undefined` eases back to the plain overview. Drag/zoom still work on top.
      */
-    frameFocus(box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | undefined, ms = 500): void {
-        const from = this.focusWeight, to = box ? 1 : 0;
-        if (box) {
+    frameFocus(box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | undefined, ms = 500,
+        view?: { azimuth: number; elevation: number; distance: number; target?: { x: number; y: number; z: number }; solid?: boolean }): void {
+        const from = this.focusWeight, to = box || view ? 1 : 0;
+        // A solid view (a wall seen face on) draws the kit's walls and ceiling: no dollhouse cut while framed.
+        const solid = !!view?.solid; if (solid !== this.solidView) { this.solidView = solid; this.applyKitView(); this.setData('solidView', String(solid)); }
+        if (view) {
+            // promise-agent: a set view (a wall seen face on, a thing seen past what blocks it): the camera turns to it.
+            const t = view.target ?? (box ? { x: (box.min.x + box.max.x) / 2, y: (box.min.y + box.max.y) / 2, z: (box.min.z + box.max.z) / 2 } : { x: 0, y: 0.7, z: 0 });
+            const dir = new THREE.Vector3(Math.sin(view.azimuth) * Math.cos(view.elevation), Math.sin(view.elevation), Math.cos(view.azimuth) * Math.cos(view.elevation));
+            const next = { target: new THREE.Vector3(t.x, t.y, t.z), distance: view.distance, dir };
+            // From the current view direction (a framed change is already eased in): the turn glides too.
+            const prev = this.focus && from > 0 ? { target: this.focus.target.clone(), distance: this.focus.distance, dir: this.camera.position.clone().sub(this.focus.target).normalize() } : undefined;
+            this.focus = { target: (prev?.target ?? next.target).clone(), distance: prev?.distance ?? next.distance, dir: (prev?.dir ?? dir).clone() };
+            this.focusGlide = prev ? { from: prev, to: next } : undefined;
+        } else if (box) {
             const c = { x: (box.min.x + box.max.x) / 2, y: Math.max(0.3, (box.min.y + box.max.y) / 2 * 0.6), z: (box.min.z + box.max.z) / 2 };
             const radius = Math.max(1.2, Math.hypot(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) / 2);
             // Fit the change to ~45% of the view height (and width), never closer than 2.8 m or farther than the overview.
@@ -1339,7 +1351,7 @@ export class RoomScene {
             if (this.disposed) return;
             const u = Math.min(1, (performance.now() - start) / span), ease = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
             const g = this.focusGlide;
-            if (g && this.focus) { this.focus.target.lerpVectors(g.from.target, g.to.target, ease); this.focus.distance = THREE.MathUtils.lerp(g.from.distance, g.to.distance, ease); }
+            if (g && this.focus) { this.focus.target.lerpVectors(g.from.target, g.to.target, ease); this.focus.distance = THREE.MathUtils.lerp(g.from.distance, g.to.distance, ease); if (g.from.dir && g.to.dir) this.focus.dir = g.from.dir.clone().lerp(g.to.dir, ease).normalize(); }
             this.focusWeight = from + (to - from) * ease; this.positionCamera();
             if (u < 1) this.focusFrame = requestAnimationFrame(step); else if (!to) this.focus = undefined;
         };
@@ -1347,16 +1359,18 @@ export class RoomScene {
     }
     /** How far the overview has eased to the focus (0 = plain overview, 1 = framed on the change). */
     get focusAmount(): number { return this.focusWeight; }
-    private focus?: { target: THREE.Vector3; distance: number };
+    private focus?: { target: THREE.Vector3; distance: number; dir?: THREE.Vector3 };
+    private solidView = false;
     private focusWeight = 0;
     private focusFrame = 0;
-    private focusGlide?: { from: { target: THREE.Vector3; distance: number }; to: { target: THREE.Vector3; distance: number } };
+    private focusGlide?: { from: { target: THREE.Vector3; distance: number; dir?: THREE.Vector3 }; to: { target: THREE.Vector3; distance: number; dir?: THREE.Vector3 } };
     private applyFocus(t: { x: number; y: number; z: number }): void {
         const f = this.focus, w = this.focusWeight;
         if (!f || w <= 0 || this.navigation === 'walk') return;
         const base = new THREE.Vector3(t.x, t.y, t.z), off = this.camera.position.clone().sub(base), dist = off.length() || 1;
-        const target = base.lerp(f.target, w), d = THREE.MathUtils.lerp(dist, Math.min(dist, f.distance), w);
-        this.camera.position.copy(target).addScaledVector(off.normalize(), d);
+        const target = base.lerp(f.target, w), d = THREE.MathUtils.lerp(dist, f.dir ? f.distance : Math.min(dist, f.distance), w);
+        const dir = off.normalize(); if (f.dir) dir.lerp(f.dir, w).normalize();
+        this.camera.position.copy(target).addScaledVector(dir, d);
         this.camera.lookAt(target);
     }
     private viewInset = 0; /** Public camera API: keep the overview centred in the area left of a right-side panel (px; 0 = full view). */ setViewInset(px: number): void { const v = Math.max(0, Math.round(px)); if (v !== this.viewInset) { this.viewInset = v; this.positionCamera(); } } private applyViewInset(): void { const w = this.host.clientWidth, h = this.host.clientHeight; if (!w || !h) return; const vis = this.navigation === 'overview' && this.viewInset > 0 && this.viewInset < w * 0.7 ? w - this.viewInset : w; if (vis < w) this.camera.setViewOffset(vis, h, 0, 0, w, h); else this.camera.clearViewOffset(); this.camera.aspect = vis / h; this.camera.updateProjectionMatrix(); this.lastView[0] = NaN; } // world-ui
@@ -1464,7 +1478,7 @@ export class RoomScene {
     private emitPose(pose:PlayerPose,now:number,moving:boolean):void{
         const l=this.lastPose;
         if(pose.x!==l.x||pose.z!==l.z||pose.yaw!==l.yaw||pose.pitch!==l.pitch){l.x=pose.x;l.z=pose.z;l.yaw=pose.yaw;l.pitch=pose.pitch;l.pending=true;}
-        if(l.pending&&(!moving||now-l.at>=POSE_INTERVAL_MS)){l.pending=false;l.at=now;this.options.onPose?.(pose);}
+        if(l.pending&&(!moving||now-l.at>=POSE_INTERVAL_MS)){l.pending=false;l.at=now;this.setData('playerPose',`${pose.x.toFixed(2)},${pose.z.toFixed(2)},${pose.yaw.toFixed(2)}`);this.options.onPose?.(pose);}
     }
     /**
      * Screen-space labels follow the view every rendered frame (transform only: no layout). Test/inspection
@@ -1575,6 +1589,7 @@ export class RoomScene {
             const front=board.getWorldPosition(a).project(this.camera).z;const pts=quad(board,...half(board));const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);const box=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)].map(Math.round);
             boards.push({id:item.entity.id,note:board.userData.note as string,box,visible:front>=-1&&front<=1&&box[2]>0&&box[0]<w&&box[3]>0&&box[1]<h});}
         this.setData('boardNotes',JSON.stringify(boards));
+        this.setData('webQuads',JSON.stringify(Object.fromEntries(of('web-wall').map(item=>[item.entity.id,quad(item.built.screen!,...half(item.built.screen!))])))); // promise-agent: every web wall's screen on the page
     }
     resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();this.invalidate();return;}cancelAnimationFrame(this.focusFrame);this.focus=undefined;this.focusWeight=0;this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
     dispose():void{

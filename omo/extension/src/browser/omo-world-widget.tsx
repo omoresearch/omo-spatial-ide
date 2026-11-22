@@ -99,6 +99,11 @@ import { planDataWorld } from '../common/world-admin-rules'; // promise:share (L
 import type { FolderReader } from '../common/world-data'; // promise:share (L7)
 import { DataWorldDialog } from './data-world-dialog'; // promise:share (L7)
 import type { WorldShareActions } from './remote-room-panel'; // promise:share (L7)
+import { OmoAgent } from './omo-agent-ui'; // promise-agent
+import { OmoPagesService } from '../common/omo-pages-protocol'; // promise-agent
+import { pageStateFrom, PAGE_REFRESH_MS } from '../common/omo-pages'; // promise-agent
+import { RuntimeSnapshot, ReturnRecord, returnRecord, sinceYouLeft } from '../common/omo-agent'; // promise-agent
+import { mergeStatus } from '../common/agent-status-signals'; // promise-agent
 // --- end w2:onboard ---
 
 export const TERMINAL_STATION_ID = 'terminal-1';
@@ -228,8 +233,59 @@ export class OmoWorldWidget extends ReactWidget {
     private remoteAnchor: HTMLElement | null = null; // w2:mp-client
     @inject(OmoVoiceSettingsService) protected readonly voiceSettings!: OmoVoiceSettingsService; // w2:voice
     @inject(AgentSignalsService) protected readonly agentSignals!: AgentSignalsService; // w2:agents
+    @inject(OmoPagesService) @optional() protected readonly pagesService?: OmoPagesService; // promise-agent
     private agentsOpen = false; // w2:agents
     private agentSignalPoller?: AgentSignalPoller; // w2:agents
+    // --- promise-agent: the room-aware Omo (answers, pages, walkable memory) and the quiet return card ---
+    private omoAgent = new OmoAgent({
+        world: () => this.currentWorldStore()?.world,
+        runtime: () => this.omoRuntime(),
+        scene: () => this.worldScene,
+        savePage: async (slug, html) => { if (!this.pagesService) throw new Error('Pages are not available in this build.'); return this.pagesService.save({ slug, html }); },
+        openPage: url => { void this.web?.open(url); },
+        origin: () => window.location.origin,
+        storage: () => safeStorage(),
+        projectKey: () => this.project?.toString() ?? '',
+        message: text => { this.feedback = text; this.update(); }
+    });
+    private sinceLine = '';
+    private returnBase?: ReturnRecord;
+    private returnReady = false;
+    private omoRuntime(): RuntimeSnapshot {
+        const now = Date.now();
+        return { at: now, desks: this.stationList.map(info => { const st = this.deskState(info.id); return { id: info.id, name: info.name, phase: st.phase, activeTab: st.activeTabId,
+            tabs: (st.workspace?.tabs ?? []).map(t => ({ name: t.name, kind: t.kind, ...(t.kind === 'shell' ? {} : { status: mergeStatus(this.agentSignalPoller?.get(`${info.id}:${t.id}`) ?? [], now).status }) })) }; }),
+            ...(this.webState.surface ? { web: { url: this.webState.surface.url, title: this.webState.surface.title } } : {}) };
+    }
+    private returnKey(): string { return `omo.return.v1:${this.project?.toString() ?? ''}`; }
+    private saveReturnRecord(): void {
+        if (!this.project || !this.room || !this.returnReady) return;
+        try { safeStorage()?.setItem(this.returnKey(), JSON.stringify(returnRecord(this.omoRuntime(), id => this.stationName(id)))); } catch { /* memory only */ }
+    }
+    private readReturnBase(): void {
+        try { const v = JSON.parse(safeStorage()?.getItem(this.returnKey()) ?? 'null'); this.returnBase = v && typeof v.at === 'number' && Array.isArray(v.desks) ? v : undefined; } catch { this.returnBase = undefined; }
+    }
+    /** After a reload (or a long time away), once the desks have reconnected: one quiet line. */
+    private showSince(base: ReturnRecord | undefined): void {
+        const line = sinceYouLeft(base, returnRecord(this.omoRuntime(), id => this.stationName(id)));
+        this.returnReady = true; this.saveReturnRecord();
+        if (!line) return;
+        this.sinceLine = line; this.update();
+        window.setTimeout(() => { if (this.sinceLine === line) { this.sinceLine = ''; this.update(); } }, 20000);
+    }
+    private settleSince(tries = 0): void {
+        const settling = this.stationList.some(i => ['checking', 'opening', 'attaching', 'reconnecting'].includes(this.deskState(i.id).phase));
+        if (this.isDisposed) return;
+        if ((!this.agentSignalPoller?.ready || settling) && tries < 20) { window.setTimeout(() => this.settleSince(tries + 1), 500); return; }
+        this.showSince(this.returnBase);
+    }
+    /** promise-agent: a page Omo made is shown on the web wall again after a reload (local pages only; other sites still wait for a click). */
+    private reopenOwnPage(): void {
+        if (!this.room || this.webState.surface) return;
+        const homes = (this.currentWorldStore()?.world.entities ?? []).flatMap(e => e.kind === 'web-wall' && e.home ? [e.home] : []);
+        const url = this.omoAgent.isOwnPage(this.savedWebUrl) ? this.savedWebUrl : homes.find(h => this.omoAgent.isOwnPage(h));
+        if (url) void this.web?.open(url);
+    }
     private project?: URI;
     private room?: RoomState;
     private draftTheme: RoomTheme = starterTheme(); // world-ui (g): new rooms start in the skyline penthouse
@@ -373,6 +429,21 @@ export class OmoWorldWidget extends ReactWidget {
         this.agentSignalPoller=new AgentSignalPoller({service:this.agentSignals,desks:()=>this.stationList.map(info=>({desk:info.id as DeskId,workspace:this.deskState(info.id).workspace})),
             schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number)});
         this.toDispose.push({dispose:()=>{this.agentSignalPoller?.dispose();this.agentSignalPoller=undefined;}});
+        // promise-agent: dashboards read the live desk state (every 5 s); the return card remembers what the desks were doing.
+        const omoTick = window.setInterval(() => {
+            if (!this.room || this.configuring) return;
+            const snap = this.omoAgent.snapshot();
+            if (snap && this.pagesService) void this.pagesService.publishState(pageStateFrom(snap)).catch(() => undefined);
+            this.saveReturnRecord();
+        }, PAGE_REFRESH_MS);
+        let hiddenAt = 0;
+        const onVisible = (): void => {
+            if (document.visibilityState === 'hidden') { this.saveReturnRecord(); hiddenAt = Date.now(); this.readReturnBase(); return; }
+            if (hiddenAt && Date.now() - hiddenAt > 5 * 60_000) { const base = this.returnBase; this.returnReady = false; window.setTimeout(() => this.showSince(base), 3500); }
+            hiddenAt = 0;
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        this.toDispose.push({dispose:()=>{window.clearInterval(omoTick);document.removeEventListener('visibilitychange',onVisible);this.saveReturnRecord();}});
         this.hudHub=new HudHub({presenceService:this.presenceService,presence:()=>this.presenceState,scene:()=>this.worldScene,layout:()=>this.room?.layout??'classic',signals:key=>this.agentSignalPoller?.get(key)??[],signalsReady:()=>!!this.agentSignalPoller?.ready/* t2:agents */,
             desk:desk=>({state:this.deskState(desk),controller:this.stations?.peek(desk)}),activeDesk:()=>this.activeMode,agents:()=>this.voiceHub?.state.agents??[],
             voice:()=>this.voiceHub?.state.voice,goToDesk:desk=>{if(!this.stations.has(desk)){this.feedback='That desk is no longer in this world.';this.update();return;}this.chooseStation(desk);this.focusMode.sync();if(this.deskState(desk).phase==='live')this.focusMode.attachActive();else{this.feedback=`${this.stationName(desk)} is not connected. Click its monitor to reconnect. Nothing was started.`;this.update();}},onChange:()=>this.update()});
@@ -606,6 +677,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.initialized = true; this.update();
         // Reconnect a workspace this room already opened. Never starts anything new.
         if (this.room) this.stations.reconnectSaved(this.bindingContext());
+        if (this.room) { this.readReturnBase(); this.settleSince(); this.reopenOwnPage(); } // promise-agent
     }
     // --- w2:runtime: world-driven stations ---
     private bindingContext(): { projectUri: string; roomName: string; personal?: PresenceJoin } | undefined {
@@ -829,6 +901,7 @@ export class OmoWorldWidget extends ReactWidget {
     private chooseStation = (station: string): void => {
         if (station !== 'web' && !this.stations.has(station)) return; // w2:runtime: any world station id
         this.worldScene?.releaseTyping(); this.activeMode = station;
+        this.omoAgent.visit(station === 'web' ? (this.currentWorldStore()?.world.entities.find(e => e.kind === 'web-wall')?.id ?? 'web') : station); // promise-agent: memory you can walk
         if (station !== 'web') { this.activeStation = station; this.console = this.stations.controller(station); this.consoleState = this.deskState(station); }
         this.rankDesks(); // w3:perf
         this.update();
@@ -1127,7 +1200,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.worldScene?.setBackdrop(this.firstMinuteShown() ? 'neutral' : 'world'); // promise:onboarding — no city behind the first minute (idempotent)
         const layout = this.configuring ? this.draftLayout : this.room?.layout ?? 'classic';
         const taskSourceUri=this.project?.toString();
-        return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-project-uri={this.project?.toString()||''} data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode} data-immersive={String(this.immersive.mode.active)} data-first-minute={this.firstMinuteShown() ? 'true' : undefined}>
+        return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-web-url={this.webState.surface?.url ?? ''} data-project-uri={this.project?.toString()||''} data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode} data-immersive={String(this.immersive.mode.active)} data-first-minute={this.firstMinuteShown() ? 'true' : undefined}>
             {/* world-ui (mount hook): immersive = the ONE slim floating top bar, ⌘K palette and settings sheet. */}
             {this.room && !this.configuring && this.immersive.mode.active && <WorldTopBar roomName={this.room.projectName} view={this.worldView} presence={this.presenceState} hud={this.hudHub} voice={this.voiceHub}
                 error={this.error} onView={this.chooseView} onShare={() => this.openSheet('share')} onPalette={this.openPalette} onSettings={() => this.openSheet('room')}/>}
@@ -1197,7 +1270,7 @@ export class OmoWorldWidget extends ReactWidget {
                                 <Icon name="expand" size={14} />Immersive world <kbd>G</kbd></button></>}
                         {/* world-ui: the old 'Walk up and click this screen' banner is now a quiet crosshair hint. */}{this.room && !this.configuring && this.immersive.mode.active && this.consoleState.phase === 'idle' && !this.buildMode.active
                             && <div className="omo-crosshair-hint" data-testid="crosshair-hint" aria-hidden="true">Click a screen to use it</div>}
-                        {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* builder-ui */}{this.room && !this.configuring && <ShapeMode build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* shape */}
+                        {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* builder-ui */}{this.room && !this.configuring && <ShapeMode build={this.buildMode} admin={this.admin} adminState={this.adminState} agent={this.omoAgent} dictation={this.voiceHub?.dictation}/>}{/* shape */}{this.sinceLine&&<div className="omo-since" role="status" data-testid="omo-since"><span>{this.sinceLine}</span><button type="button" aria-label="Dismiss" onClick={()=>{this.sinceLine='';this.update();}}>×</button></div>}{/* promise-agent */}
                         {/* world-ui r4/4: no Admin chip in the view: World admin is in the ⌘K palette, H still opens it. */}
                     </SceneView>
                     {/* w2:admin (mount hook) */}{this.room && !this.configuring && this.admin && this.adminState && <>

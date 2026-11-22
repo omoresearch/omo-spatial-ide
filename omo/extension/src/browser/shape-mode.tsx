@@ -23,6 +23,11 @@ import { activeKit, decorPropFor, kitProp } from '../common/world-style-kits';
 import { shapeStore, SHAPE_TOGGLE_EVENT, setShapeKeyHandler } from './shape-store';
 import { ShapeTopButton, ShapeGlyph } from './shape-topbar';
 import { ShapePill, captionFor, composePrompt, expandIdea, refinePrompt, resolveScreens, spokenNames, suggestionsFor, whereOf } from './shape-logic';
+import type { OmoAgent } from './omo-agent-ui';
+import { clearBeam, showBeam } from './omo-agent-ui';
+import { routeOmo } from '../common/omo-agent';
+import type { DictationController } from './voice-dictation';
+import { intoPrompt, isTalkKey, isTalkRelease, ShapeVoice } from './shape-voice';
 import '../../src/browser/world-tokens.css';
 import '../../src/browser/shape-mode.css';
 
@@ -32,12 +37,14 @@ let keptLog: Kept[] = [];
 /** Kept changes a dot took back, newest last (Redo puts them back in order; a new Keep clears them). */
 let redoLog: Kept[] = [];
 /** The prompt of the pending proposal (a refinement builds on it) and the idea it came from. */
-interface Turn { prompt: string; idea?: string; where?: string; entryId?: string }
+interface Turn { prompt: string; idea?: string; where?: string; entryId?: string; /** promise-agent: a page made on request, shown on the new wall on Keep */ page?: { title: string; url: string } }
+/** promise-agent: Omo's one-line answer (a place answer beams to its thing). */
+interface Answer { text: string; target?: string; kind: 'answer' | 'note' }
 
 function useBump(): () => void { const [, bump] = React.useReducer((n: number) => n + 1, 0); return bump as () => void; }
 
-export function ShapeMode(props: { build: BuildMode; admin?: AdminController; adminState?: AdminState }): React.ReactElement | null {
-    const { build, admin, adminState } = props;
+export function ShapeMode(props: { build: BuildMode; admin?: AdminController; adminState?: AdminState; agent?: OmoAgent; dictation?: DictationController }): React.ReactElement | null {
+    const { build, admin, adminState, agent } = props;
     const bump = useBump();
     const [open, setOpen] = React.useState(shapeStore.open);
     const [text, setText] = React.useState('');
@@ -53,9 +60,27 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     const tags = React.useRef<HTMLDivElement>(null);
     /** The proposal the camera is framed on ('' = the plain overview). */
     const framed = React.useRef('');
+    /** promise-agent fix 2: the URL of a page just kept; its wall is framed next. */
+    const wallFrame = React.useRef('');
     const enteredBuild = React.useRef(false);
     const navBefore = React.useRef<'walk' | 'overview' | undefined>(undefined);
     const openRef = React.useRef(open); openRef.current = open;
+    // promise-agent: the answer card, page making, voice.
+    const [answer, setAnswer] = React.useState<Answer | undefined>();
+    const [making, setMaking] = React.useState('');
+    const sendRef = React.useRef<(text: string) => void>(() => undefined);
+    const voice = React.useMemo(() => props.dictation ? new ShapeVoice(props.dictation, intoPrompt(setText, text => sendRef.current(text))) : undefined, [props.dictation]);
+    const [listening, setListening] = React.useState(false);
+    React.useEffect(() => () => voice?.cancel(), [voice]);
+    // The beam follows the answer: on while a place answer shows, gone with it (or Shape) after 20 s at most.
+    React.useEffect(() => {
+        const three = threeOf(build.scene).scene, canvas = threeOf(build.scene).canvas;
+        const at = open && answer?.target ? build.store?.world.entities.find(e => e.id === answer.target)?.transform : undefined;
+        if (!three || !at) { clearBeam(three); if (canvas) delete canvas.dataset.answerBeam; return undefined; }
+        showBeam(three, at); if (canvas) canvas.dataset.answerBeam = answer!.target!;
+        const t = window.setTimeout(() => setAnswer(a => a === answer ? undefined : a), 20000);
+        return () => { window.clearTimeout(t); clearBeam(three); if (canvas) delete canvas.dataset.answerBeam; };
+    }, [open, answer, build.scene]);
     const browseRef = React.useRef(browse); browseRef.current = browse;
 
     // Follow build mode and its store (selection = a pointed thing; proposal = the ghost).
@@ -95,7 +120,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             if (enteredBuild.current && build.active) build.exit(true);
             enteredBuild.current = false;
             if (navBefore.current === 'walk') setNav('walk');
-            setOpen(false); shapeStore.set(false); setBrowse(false); setPills([]); setText(''); setTurn(undefined); setDetails(false);
+            setOpen(false); shapeStore.set(false); setBrowse(false); setPills([]); setText(''); setTurn(undefined); setDetails(false); setAnswer(undefined); setMaking('');
         }
     }, [build, admin]);
 
@@ -252,6 +277,13 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     // Keep / Undo / close: the camera eases back to the plain overview.
     // (A refinement keeps the frame while it thinks, then glides to the new change.)
     React.useEffect(() => { if ((!open || (!proposed && !busy)) && framed.current) { framed.current = ''; frameOn(build.scene, undefined); } }, [open, proposed, busy]);
+    // promise-agent fix 2: after Keep of a made page, the camera eases to face its wall (solid walls drawn, the page fills the view).
+    React.useEffect(() => {
+        const url = wallFrame.current; if (!open || proposed || busy || !url) return;
+        wallFrame.current = '';
+        const wall = build.store?.world.entities.find(e => e.kind === 'web-wall' && e.home === url);
+        if (wall && wall.kind === 'web-wall') { framed.current = `wall:${wall.id}`; frameWall(build.scene, wall); }
+    }, [open, proposed, busy, kept]);
 
     if (!admin || !adminState) return null;
     const store = build.store;
@@ -261,7 +293,31 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
 
     const send = (raw: string): void => {
         const typed = raw.trim();
-        if ((!typed && !pills.length) || busy) return;
+        if ((!typed && !pills.length) || busy || making) return;
+        setAnswer(undefined);
+        // promise-agent: Omo first — a question about the room, a page, a walk; anything else is a change for the planner.
+        const route = agent && !pills.length ? routeOmo(typed) : { kind: 'change' as const };
+        if (agent && route.kind === 'ask') {
+            const a = agent.answer(typed);
+            if (a) { setAnswer({ text: a.text, target: a.target, kind: 'answer' }); setText(''); focusPrompt(); return; }
+        }
+        if (agent && (route.kind === 'goto' || route.kind === 'back')) {
+            setText('');
+            show(false); // walking happens in the room, not in Shape's overview
+            const line = route.kind === 'goto' ? agent.takeMeTo(route.target) : agent.whereWasI();
+            agent.say(line);
+            return;
+        }
+        if (agent && route.kind === 'page') {
+            setText(''); setMaking(`Making “${route.page.title}”…`);
+            void agent.makePage(route.page).then(made => {
+                setMaking('');
+                setTurn({ prompt: made.prompt, idea: made.title, page: { title: made.title, url: made.url } });
+                void admin.ask(made.prompt, made.spot ? { wallSpot: { x: made.spot.x, z: made.spot.z, rotation: made.spot.rotation, elevation: made.spot.elevation } } : {});
+            }, error => { setMaking(''); setAnswer({ text: `The page was not made: ${error instanceof Error ? error.message : String(error)}`, kind: 'note' }); });
+            focusPrompt();
+            return;
+        }
         const near = pills.length ? store.preview.entities.find(e => e.id === pills[0].id)?.transform : undefined;
         const base = resolveScreens(composePrompt(typed, pills), store.preview, near);
         const fresh = expandIdea(base);
@@ -274,8 +330,9 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     };
     const keep = (): void => {
         if (!entry || !proposed) return;
-        const sentence = captionFor(entry.plan!.proposal!.summary, turn?.idea, turn?.where, spokenNames(entry.plan!.proposal!.ops));
+        const sentence = turn?.page ? pageSentence(turn.page.title) : captionFor(entry.plan!.proposal!.summary, turn?.idea, turn?.where, spokenNames(entry.plan!.proposal!.ops));
         admin.apply(entry.id);
+        if (admin.activeEntry?.status === 'applied' && turn?.page) { agent?.openPage(turn.page.url); wallFrame.current = turn.page.url; } // promise-agent: the kept wall shows its page, live; the camera frames it
         if (admin.activeEntry?.status === 'applied') { keptLog = [...keptLog, { id: entry.id, sentence }].slice(-24); setKept(keptLog); redoLog = []; setRedoable(redoLog); }
         setTurn(undefined); focusPrompt();
     };
@@ -300,8 +357,11 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             // One meaning per key: with text, Enter refines and Ctrl/Cmd+Enter keeps; an empty prompt's Enter keeps.
             if (proposed && (event.ctrlKey || event.metaKey)) keep();
             else if (text.trim() || pills.length) send(text); else if (proposed) keep();
+        } else if (isTalkKey(event)) { // promise-agent: hold Alt+T to talk to Omo (see SHAPE_TALK_KEY)
+            event.preventDefault(); if (!event.repeat) holdVoice();
         } else if (event.key === 'Escape') {
             event.preventDefault();
+            if (answer) { setAnswer(undefined); return; }
             if (proposed) undo(); else if (pills.length || text) { setPills([]); setText(''); } else show(false);
         } else if (event.key === 'Backspace' && !text && pills.length) { setPills(pills.slice(0, -1));
         } else if (!text && (event.ctrlKey || event.metaKey) && ((event.key.toLowerCase() === 'z' && event.shiftKey) || event.key.toLowerCase() === 'y')) { event.preventDefault(); redo(); }
@@ -309,7 +369,11 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
 
     const typing = !!text.trim() || pills.length > 0;
     const proposal = proposed ? entry!.plan!.proposal! : undefined;
-    const sentence = proposal ? captionFor(proposal.summary, turn?.idea, turn?.where, spokenNames(proposal.ops)) : '';
+    const sentence = proposal ? (turn?.page ? pageSentence(turn.page.title) : captionFor(proposal.summary, turn?.idea, turn?.where, spokenNames(proposal.ops))) : '';
+    sendRef.current = send;
+    const holdVoice = (): void => { if (voice?.hold()) setListening(true); else if (voice) setAnswer({ text: voice.state.error || voice.state.notice || 'Voice is not available in this browser.', kind: 'note' }); };
+    const releaseVoice = (): void => { if (!listening) return; setListening(false); voice?.release(); };
+    const voiceOk = !!voice && voice.available;
     const failed = !busy && entry && (entry.status === 'failed' || entry.status === 'answered' || entry.status === 'stale') ? firstSentence(entry.plan?.notes[0] ?? entry.outcome ?? entry.plan?.explanation ?? '') : '';
     const chips = suggestionsFor(store.world);
     const hermes = adminState.useHermes && adminState.hermesConfirmed;
@@ -338,14 +402,23 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
                     {redoable.length > 0 && !proposed && <button type="button" className="omo-shape-redo" data-testid="shape-redo" title="Redo (Ctrl+Shift+Z)" onMouseDown={e => e.preventDefault()} onClick={redo}>Redo</button>}
                 </div>}
                 {busy && <div className="omo-shape-status" role="status" data-testid="shape-thinking"><span className="omo-shape-spinner" aria-hidden="true" />{hermes ? 'Asking Hermes…' : 'Shaping…'}</div>}
-                {!busy && failed && <div className="omo-shape-status is-note" role="status" data-testid="shape-note">{failed}</div>}
+                {!busy && failed && !answer && <div className="omo-shape-status is-note" role="status" data-testid="shape-note">{failed}</div>}
+                {making && <div className="omo-shape-status" role="status" data-testid="omo-making"><span className="omo-shape-spinner" aria-hidden="true" />{making}</div>}
+                {answer && <div className={`omo-shape-answer${answer.kind === 'note' ? ' is-note' : ''}`} role="status" data-testid="omo-answer" data-target={answer.target ?? ''}>
+                    <span className="omo-shape-answer-mark" aria-hidden="true">◈</span><span data-testid="omo-answer-text">{answer.text}</span>
+                    <button type="button" aria-label="Dismiss" onMouseDown={e => e.preventDefault()} onClick={() => { setAnswer(undefined); focusPrompt(); }}>×</button></div>}
+                {listening && <div className="omo-shape-status" role="status" data-testid="omo-listening"><span className="omo-shape-rec" aria-hidden="true" />{voice?.state.interim ? `“${voice.state.interim}”` : 'Listening… release to send'}</div>}
                 <form className="omo-shape-prompt" data-testid="shape-prompt" onSubmit={e => { e.preventDefault(); send(text); }}>
                     <span className="omo-shape-mark" aria-hidden="true"><ShapeGlyph size={16} /></span>
                     {pills.map(p => <span key={p.id} className="omo-shape-pill" data-testid="shape-pill" data-entity={p.id}>{p.name}
                         <button type="button" aria-label={`Remove ${p.name}`} onMouseDown={e => e.preventDefault()} onClick={() => { setPills(pills.filter(x => x.id !== p.id)); focusPrompt(); }}>×</button></span>)}
                     <input ref={input} data-testid="shape-input" value={text} maxLength={400} spellCheck={false} autoComplete="off"
-                        placeholder={proposed ? 'Refine it… or press Enter to keep' : pills.length ? 'Say what to do with it…' : 'Describe a change…'} aria-label="Describe a change"
-                        onChange={e => setText(e.currentTarget.value)} onKeyDown={onKey} />
+                        placeholder={listening ? 'Listening…' : proposed ? 'Refine it… or press Enter to keep' : pills.length ? 'Say what to do with it…' : 'Describe a change…'} aria-label="Describe a change"
+                        onChange={e => setText(e.currentTarget.value)} onKeyDown={onKey} onKeyUp={e => { if (isTalkRelease(e)) releaseVoice(); }} />
+                    {voice && <button type="button" className={`omo-shape-mic${listening ? ' is-on' : ''}`} data-testid="shape-mic" aria-pressed={listening} aria-disabled={!voiceOk}
+                        title={voiceOk ? 'Hold to talk to Omo (or hold Alt+T)' : (voice.state.notice || 'On-device speech is not available in this browser')}
+                        onMouseDown={e => e.preventDefault()} onPointerDown={e => { e.preventDefault(); holdVoice(); }} onPointerUp={releaseVoice} onPointerLeave={releaseVoice}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg></button>}
                     {typing && <kbd className="omo-shape-enter" data-testid="shape-enter-hint" aria-hidden="true">{proposed ? 'Enter = refine' : '↵'}</kbd>}
                     <button type="button" className="omo-shape-browse" data-testid="shape-browse" aria-pressed={browse} onMouseDown={e => e.preventDefault()} onClick={() => setBrowse(!browse)} title="Pick from the catalogue instead">Browse</button>
                 </form>
@@ -357,6 +430,8 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     </>;
 }
 
+/** promise-agent: the caption for a page made on request. */
+function pageSentence(title: string): string { return `A live page on a new wall: ${title}.`; }
 /** The tag over a ghosted thing: its name in sentence case ("Floor lamp"), as the caption says it. */
 function tagName(e: WorldEntity | undefined): string {
     if (!e) return '';
@@ -408,7 +483,19 @@ function ghostedAll(three: THREE.Scene, ids: string[]): boolean { return ids.eve
 /** shape — ease the room's overview camera onto a box (the change), or back (undefined): RoomScene.frameFocus. */
 function frameOn(scene: BuildMode['scene'], box: THREE.Box3 | undefined): void {
     scene?.frameFocus(box, 500);
-    const canvas = threeOf(scene).canvas; if (canvas) canvas.dataset.shapeFramed = box ? 'true' : 'false';
+    const canvas = threeOf(scene).canvas; if (canvas) { canvas.dataset.shapeFramed = box ? 'true' : 'false'; delete canvas.dataset.framedWall; }
+}
+/**
+ * promise-agent fix 2 — face a web wall: the camera turns square to its screen at a low angle, close enough that
+ * the page fills ~70% of the view width, with the kit's solid walls and ceiling drawn (no dollhouse cut).
+ */
+function frameWall(scene: BuildMode['scene'], wall: Extract<WorldEntity, { kind: 'web-wall' }>): void {
+    const t = threeOf(scene); if (!scene || !t.camera) return;
+    const half = THREE.MathUtils.degToRad(t.camera.fov / 2), hHalf = Math.atan(Math.tan(half) * t.camera.aspect);
+    const distance = Math.max((wall.width / 2) / 0.72 / Math.tan(hHalf), (wall.height / 2) / 0.62 / Math.tan(half), 2.2);
+    const target = { x: wall.transform.x, y: wall.elevation + wall.height / 2, z: wall.transform.z };
+    scene.frameFocus(undefined, 700, { azimuth: wall.transform.rotation, elevation: 0.16, distance, target, solid: true });
+    if (t.canvas) { t.canvas.dataset.shapeFramed = 'true'; t.canvas.dataset.framedWall = wall.id; }
 }
 /** Top centre of the pending things (world space): the caption points here. */
 function ghostAnchor(three: THREE.Scene | undefined, ids: string[]): { x: number; y: number; z: number } | undefined {
