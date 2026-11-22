@@ -594,6 +594,7 @@ export class BuildMode {
     }
     private storeChanged(change: WorldStoreChange): void {
         this.pushWorld();
+        (threeOf(this.bound?.scene).canvas as (HTMLCanvasElement & { omoMagic?: { storeChanged(c: WorldStoreChange): void } }) | undefined)?.omoMagic?.storeChanged(change); // world-magic
         if (change.reason === 'error' && change.error) this.warn(change.error);
         // A selected thing that no longer exists (removed, undone) is dropped.
         if (this.state.selected && !this.entity(this.state.selected)) this.set({ selected: undefined, setupFor: undefined });
