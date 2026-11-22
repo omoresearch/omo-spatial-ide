@@ -10,11 +10,11 @@
     }
   ],
   "dependencies": {
-    "@theia/core": "1.74.3",
-    "@theia/editor": "1.74.3",
-    "@theia/filesystem": "1.74.3",
-    "@theia/workspace": "1.74.3",
-    "@theia/terminal": "1.74.3",
+    "@theia/core": "1.77.0",
+    "@theia/editor": "1.77.0",
+    "@theia/filesystem": "1.77.0",
+    "@theia/workspace": "1.77.0",
+    "@theia/terminal": "1.77.0",
     "puppeteer-core": "25.1.0",
     "three": "0.180.0"
   }
