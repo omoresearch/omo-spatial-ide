@@ -193,6 +193,9 @@ test('since you left: finished, waiting, started; quiet when nothing changed', (
   const same = agent.returnRecord({ desks: [{ id: 'terminal', phase: 'live', tabs: [{ name: 'Shell', kind: 'shell' }] }] }, names, 10);
   assert.equal(agent.sinceYouLeft({ at: 0, desks: [{ id: 'terminal', name: 'x', status: 'shell' }] }, same), 'Since you left: nothing changed · 1 desk still open.');
   assert.equal(agent.sinceYouLeft(undefined, same), undefined);
+  // a busy desk now back at its plain shell has finished; a busy desk now not connected has stopped
+  const back = agent.returnRecord({ desks: [{ id: 'terminal', phase: 'live', tabs: [{ name: 'Shell', kind: 'shell' }] }, { id: 'terminal-2', phase: 'idle', tabs: [] }] }, names, 3 * 60000);
+  assert.equal(agent.sinceYouLeft({ at: 0, desks: [{ id: 'terminal', name: 'Claude desk', status: 'working' }, { id: 'terminal-2', name: 'Desk two', status: 'waiting' }] }, back), 'Since you left: 1 desk finished, 1 desk stopped (not connected now) (away 3 min).');
   assert.equal(agent.deskStatus({ id: 'x', phase: 'live', tabs: [{ name: 'a', kind: 'claude', status: 'working' }, { name: 'b', kind: 'codex', status: 'waiting-approval' }] }), 'waiting');
   assert.equal(agent.deskStatus(undefined), 'off');
 });

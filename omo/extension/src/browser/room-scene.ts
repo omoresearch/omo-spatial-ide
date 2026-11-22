@@ -1312,7 +1312,7 @@ export class RoomScene {
     private emitPose(pose:PlayerPose,now:number,moving:boolean):void{
         const l=this.lastPose;
         if(pose.x!==l.x||pose.z!==l.z||pose.yaw!==l.yaw||pose.pitch!==l.pitch){l.x=pose.x;l.z=pose.z;l.yaw=pose.yaw;l.pitch=pose.pitch;l.pending=true;}
-        if(l.pending&&(!moving||now-l.at>=POSE_INTERVAL_MS)){l.pending=false;l.at=now;this.options.onPose?.(pose);}
+        if(l.pending&&(!moving||now-l.at>=POSE_INTERVAL_MS)){l.pending=false;l.at=now;this.setData('playerPose',`${pose.x.toFixed(2)},${pose.z.toFixed(2)},${pose.yaw.toFixed(2)}`);this.options.onPose?.(pose);}
     }
     /**
      * Screen-space labels follow the view every rendered frame (transform only: no layout). Test/inspection

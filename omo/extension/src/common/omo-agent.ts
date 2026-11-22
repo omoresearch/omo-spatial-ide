@@ -282,18 +282,22 @@ function away(ms: number): string {
 export function sinceYouLeft(before: ReturnRecord | undefined, now: ReturnRecord): string | undefined {
     if (!before || !before.desks.length) return undefined;
     const prev = new Map(before.desks.map(d => [d.id, d.status]));
-    let finished = 0, waiting = 0, started = 0;
+    let finished = 0, waiting = 0, started = 0, stopped = 0;
     for (const d of now.desks) {
-        const was = prev.get(d.id);
+        const was = prev.get(d.id), busy = was === 'working' || was === 'waiting';
         if (d.status === 'waiting') waiting++;
-        else if ((d.status === 'idle') && (was === 'working' || was === 'waiting')) finished++;
+        // An agent that was busy and is now idle, or gone back to its plain shell, has finished.
+        else if ((d.status === 'idle' || d.status === 'shell') && busy) finished++;
         else if (d.status === 'working' && was !== 'working') started++;
+        // A busy desk that is not connected now: its agent stopped while you were away.
+        else if (d.status === 'off' && busy) stopped++;
     }
     const parts: string[] = [];
     const n = (k: number, one: string, many = `${one}s`): string => `${k} ${k === 1 ? one : many}`;
     if (finished) parts.push(`${n(finished, 'desk')} finished`);
     if (waiting) parts.push(`${waiting} waiting for you`);
     if (started) parts.push(`${n(started, 'desk')} started working`);
+    if (stopped) parts.push(`${n(stopped, 'desk')} stopped (not connected now)`);
     const gap = away(now.at - before.at);
     if (!parts.length) {
         const ready = now.desks.filter(d => d.status !== 'off').length;
