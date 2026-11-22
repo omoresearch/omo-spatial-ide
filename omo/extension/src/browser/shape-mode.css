@@ -133,7 +133,7 @@ body.omo-shaping.omo-shape-browse .omo-shape-dock { left: calc((100% - var(--omo
 /* The leader from the caption to the change: a hairline and a soft breathing ring on the change. */
 .omo-shape-leader { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; opacity: 0; transition: opacity 180ms var(--sh-ease); }
 .omo-shape-leader[data-on="true"] { opacity: 1; }
-.omo-shape-leader line { stroke: #7fe0ff; stroke-width: 2; stroke-linecap: round; filter: drop-shadow(0 0 1.5px rgba(4, 10, 16, .9)) drop-shadow(0 0 6px rgba(127, 224, 255, .5)); }
+.omo-shape-leader line { stroke: #9be8ff; stroke-width: 2.5; stroke-linecap: round; filter: drop-shadow(0 0 1.5px rgba(4, 10, 16, .9)) drop-shadow(0 0 6px rgba(127, 224, 255, .5)); }
 .omo-shape-leader circle { fill: #ffffff; stroke: rgba(4, 10, 16, .8); stroke-width: 1.5; }
 .omo-shape-leader circle.is-halo { fill: rgba(127, 224, 255, .22); stroke: #7fe0ff; stroke-width: 2; animation: omo-shape-halo 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 2px rgba(4, 10, 16, .8)); }
 @keyframes omo-shape-halo { 50% { transform: scale(1.35); opacity: .5; } }
@@ -147,3 +147,5 @@ body.omo-shape-proposed .omo-scene-label { opacity: .12 !important; }
 .omo-shape-prompt:focus-within { box-shadow: 0 0 0 2px rgba(143, 227, 196, .45), 0 12px 40px rgba(0, 0, 0, .45); }
 /* Zone labels step back while shaping (the change and its caption carry the meaning). */
 body.omo-shape-open .omo-scene-label { opacity: 0 !important; pointer-events: none !important; transition: opacity .18s ease; }
+/* The card sits beside the change; the leader carries the pointing, so the stem shows only when it is straight above. */
+.omo-shape-caption:not([data-side="above"]) .omo-shape-caption-stem { display: none; }

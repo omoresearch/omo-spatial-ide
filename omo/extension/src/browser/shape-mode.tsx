@@ -3,7 +3,7 @@
  *   Space (no screen focused) or the top-bar "Shape" button opens ONE floating glass prompt at the bottom
  *   centre with three quiet chips. Enter sends the text to the EXISTING admin planner (AdminController.ask:
  *   rules by default, Hermes only after its own confirmation). The proposal shows as build mode's pending
- *   preview in the room, with ONE caption card anchored above the change: one plain sentence + Keep (Enter)
+ *   preview in the room, with ONE caption card beside the change (never over it): one plain sentence + Keep (Enter)
  *   / Undo (Esc). Keep = AdminController.apply, Undo = AdminController.discard. Typing again refines (the
  *   ghost is replaced). Clicking a thing adds it as a pill. Kept changes become dots in a history strip;
  *   a dot undoes back to before it (the existing WorldStore undo). "Browse" shows the old World Builder.
@@ -156,31 +156,55 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             const t = threeOf(build.scene);
             breathe(t.scene, pendingIds, build.store?.preview);
             const card = caption.current; if (!card || !t.camera || !t.canvas) return;
-            const main = pendingIds.slice(0, 1); // the card points at the main thing (the first new or changed one)
-            const at = ghostAnchor(t.scene, main) ?? anchorOf(build.store?.preview, main); if (!at) return;
+            const main = pendingIds.slice(0, 1); // the leader points at the main thing (the first new or changed one)
             const r = t.canvas.getBoundingClientRect();
-            const v = new THREE.Vector3(at.x, at.y, at.z).project(t.camera);
             const host = card.offsetParent?.getBoundingClientRect() ?? r;
-            let x = r.left + (v.x + 1) / 2 * r.width - host.left, y = r.top + (1 - v.y) / 2 * r.height - host.top;
-            if (v.z > 1) { x = host.width / 2; y = host.height * 0.3; }
-            const w = card.offsetWidth, h = card.offsetHeight;
-            x = Math.max(w / 2 + 16, Math.min(host.width - w / 2 - 16, x));
-            y = Math.max(h + 72, Math.min(host.height - 190, y - 18));
-            // Nothing covers the centre of the room: a card over the centre lifts above it (still above the change).
-            const cx = host.width / 2, cy = host.height / 2;
-            const zone = host.height * 0.07;
-            if (Math.abs(x - cx) < w / 2 + host.width * 0.07 && y > cy - zone - 12 && y - h < cy + zone) y = Math.max(h + 72, cy - zone - 12);
-            card.style.transform = `translate(${Math.round(x - w / 2)}px, ${Math.round(y - h)}px)`;
-            const ax = r.left + (v.x + 1) / 2 * r.width, ay = r.top + (1 - v.y) / 2 * r.height;
-            card.dataset.anchor = `${Math.round(ax)},${Math.round(ay)}`;
-            // A thin leader from the card's stem to the change, ending in a soft ring on it.
+            const toHost = (p: THREE.Vector3): { x: number; y: number; z: number } => { const v = p.clone().project(t.camera!); return { x: r.left + (v.x + 1) / 2 * r.width - host.left, y: r.top + (1 - v.y) / 2 * r.height - host.top, z: v.z }; };
+            // The whole change on screen (all pending things): the card never covers it.
+            const all = ghostBounds(t.scene, pendingIds);
+            const at = ghostAnchor(t.scene, main) ?? anchorOf(build.store?.preview, main); if (!at) return;
+            const a = toHost(new THREE.Vector3(at.x, at.y, at.z));
+            let g = { l: a.x - 30, t: a.y - 30, r: a.x + 30, b: a.y + 30 };
+            if (all) {
+                const xs: number[] = [], ys: number[] = [];
+                for (const cx of [all.min.x, all.max.x]) for (const cy of [all.min.y, all.max.y]) for (const cz of [all.min.z, all.max.z]) { const q = toHost(new THREE.Vector3(cx, cy, cz)); if (q.z <= 1) { xs.push(q.x); ys.push(q.y); } }
+                if (xs.length) g = { l: Math.min(...xs), t: Math.min(...ys), r: Math.max(...xs), b: Math.max(...ys) };
+            }
+            const w = card.offsetWidth, h = card.offsetHeight, gap = 28, pad = 16, top = 72, bottom = host.height - 190;
+            const cx = host.width / 2, cy = host.height / 2, zx = host.width * 0.07, zy = host.height * 0.07;
+            const hits = (x: number, y: number, o: { l: number; t: number; r: number; b: number }, m = 0): boolean => x < o.r + m && x + w > o.l - m && y < o.b + m && y + h > o.t - m;
+            const centre = { l: cx - zx, t: cy - zy, r: cx + zx, b: cy + zy };
+            // Beside the change, never over it: above-left, above-right, then left, right, above, below.
+            const lift = Math.min(h * 0.55, Math.max(0, (g.b - g.t) * 0.5));
+            const spots: Array<[string, number, number]> = [
+                ['above-left', g.l - gap - w, g.t - h + lift], ['above-right', g.r + gap, g.t - h + lift],
+                ['left', g.l - gap - w, (g.t + g.b) / 2 - h / 2], ['right', g.r + gap, (g.t + g.b) / 2 - h / 2],
+                ['above', (g.l + g.r) / 2 - w / 2, g.t - gap - h], ['below', (g.l + g.r) / 2 - w / 2, g.b + gap]
+            ];
+            let pick: [string, number, number] | undefined;
+            for (const [side, x0, y0] of spots) {
+                const x = Math.max(pad, Math.min(host.width - w - pad, x0)), y = Math.max(top, Math.min(bottom - h, y0));
+                if (hits(x, y, g, 8) || hits(x, y, centre)) continue;
+                pick = [side, x, y]; break;
+            }
+            if (!pick) { // nowhere free: the corner farthest from the change
+                const far = (g.l + g.r) / 2 > cx ? pad : host.width - w - pad;
+                pick = ['corner', far, top];
+            }
+            const [side, x, y] = pick;
+            card.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+            card.dataset.side = side;
+            card.dataset.anchor = `${Math.round(a.x + host.left)},${Math.round(a.y + host.top)}`;
+            card.dataset.ghostRect = [g.l + host.left, g.t + host.top, g.r + host.left, g.b + host.top].map(Math.round).join(',');
+            // A thin leader from the card's nearest edge to the change, ending in a soft ring on it.
             const lead = leader.current;
             if (lead) {
-                const hx = ax - host.left, hy = ay - host.top, sx = x, sy = y + 6;
-                lead.setAttribute('data-on', String(v.z <= 1));
-                lead.querySelector('line')?.setAttribute('x1', String(Math.round(sx))); lead.querySelector('line')?.setAttribute('y1', String(Math.round(sy)));
-                lead.querySelector('line')?.setAttribute('x2', String(Math.round(hx))); lead.querySelector('line')?.setAttribute('y2', String(Math.round(hy)));
-                for (const c of Array.from(lead.querySelectorAll('circle'))) { c.setAttribute('cx', String(Math.round(hx))); c.setAttribute('cy', String(Math.round(hy))); }
+                const sx = Math.max(x, Math.min(x + w, a.x)), sy = Math.max(y, Math.min(y + h, a.y));
+                lead.setAttribute('data-on', String(a.z <= 1));
+                const line = lead.querySelector('line');
+                line?.setAttribute('x1', String(Math.round(sx))); line?.setAttribute('y1', String(Math.round(sy)));
+                line?.setAttribute('x2', String(Math.round(a.x))); line?.setAttribute('y2', String(Math.round(a.y)));
+                for (const c of Array.from(lead.querySelectorAll('circle'))) { c.setAttribute('cx', String(Math.round(a.x))); c.setAttribute('cy', String(Math.round(a.y))); }
             }
         };
         tick();

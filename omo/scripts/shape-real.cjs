@@ -4,7 +4,7 @@
  * fixture CLIs only, never real agents). Rules planner only (Hermes is never confirmed here).
  *   1. Space (canvas focused, no screen) opens Shape: one prompt (560-640 px, 44 px, 15 px, 'Describe a change…'),
  *      3 chips, HUD at 30%, the World Builder hidden; the top-bar Shape button exists.
- *   2. "add a reading nook by the window" -> a pending ghost + ONE anchored caption (one sentence, Keep / Undo).
+ *   2. "add a reading nook by the window" -> a pending ghost + ONE caption beside the change, never over it (one sentence, Keep / Undo).
  *   3. "make it bigger" -> the ghost changes (bigger things). Enter keeps -> the entities exist in the saved world.
  *   4. Click a sofa -> a pill -> "move this closer to the screen" -> the proposal names that entity; Esc undoes.
  *   5. A second kept change -> the history strip has 2 dots; clicking the first undoes back before it.
@@ -96,8 +96,11 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const cap1 = await page.evaluate(() => { const e = document.querySelector('[data-testid="shape-caption"]'); const r = e?.getBoundingClientRect(); return e ? { n: document.querySelectorAll('[data-testid="shape-caption"]').length, anchor: e.dataset.anchor, box: [r.left, r.top, r.right, r.bottom].map(Math.round), keep: !!e.querySelector('[data-testid="shape-keep"]'), undo: !!e.querySelector('[data-testid="shape-undo"]') } : null; });
         check('The plan shows as a pending ghost in the room (3 new things)', g1.ids.split(',').filter(Boolean).length === 3, g1);
         check('ONE caption card: one plain sentence + Keep / Undo', !!cap1 && cap1.n === 1 && cap1.keep && cap1.undo && /^[A-Z][^.]*\.$/.test(c1) && !/\bop\b|diff|proposal/i.test(c1), { c1, cap1 });
-        const anchored = !!cap1?.anchor && (() => { const [ax, ay] = cap1.anchor.split(',').map(Number); return cap1.box[3] <= ay + 4 && Math.abs((cap1.box[0] + cap1.box[2]) / 2 - ax) < 200 && ay - cap1.box[3] < 260; })();
-        check('The caption is anchored above the change (its centre projected to the screen)', anchored, cap1);
+        const cap1b = await page.evaluate(() => { const e = document.querySelector('[data-testid="shape-caption"]'); const r = e?.getBoundingClientRect(); return e ? { side: e.dataset.side, anchor: e.dataset.anchor, ghost: e.dataset.ghostRect, box: [r.left, r.top, r.right, r.bottom].map(Math.round) } : null; });
+        const beside = !!cap1b?.anchor && (() => { const [ax, ay] = cap1b.anchor.split(',').map(Number), [l, t, r, b] = cap1b.box; const dx = Math.max(l - ax, 0, ax - r), dy = Math.max(t - ay, 0, ay - b); return Math.hypot(dx, dy) < 320; })();
+        check('The caption sits beside the change (near its projected anchor, a leader joins them)', beside, cap1b);
+        const clear = !!cap1b?.ghost && (() => { const [gl, gt, gr, gb] = cap1b.ghost.split(',').map(Number), [l, t, r, b] = cap1b.box; return gr > gl && gb > gt && (r <= gl || l >= gr || b <= gt || t >= gb); })();
+        check('The caption never covers the change (its rect misses the projected ghost bounds)', clear, cap1b);
         check('A leader line joins the caption to the change', await page.$eval('.omo-shape-leader', e => e.dataset.on === 'true').catch(() => false));
         check('Nothing covers the centre of the room (with the caption up)', (await centreFree()).every(t => t === 'CANVAS'), await centreFree());
         const savedMid = await savedWorld();
