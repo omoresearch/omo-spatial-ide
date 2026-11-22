@@ -75,6 +75,10 @@ function stagePayload(stage, version, platformArch) {
     copy('browser-app/package.json');
     copy('plugins');
     copy('runtime', { filter: src => noPyc(src) && !src.includes(`${path.sep}tests${path.sep}`) });
+    // mac-kits: style-kit assets (baked rooms + CC0 props) when installed by scripts/fetch-style-kits.cjs. Without them the app
+    // draws the procedural shells, so a release build sets OMO_REQUIRE_KITS=1 and a missing kit fails the package.
+    if (fs.existsSync(path.join(ROOT, 'kits'))) copy('kits');
+    if (fs.existsSync(path.join(ROOT, 'style-kits.lock.json'))) copy('style-kits.lock.json');
     for (const rel of ['scripts/start.cjs', 'scripts/runtime-ide-plugins.cjs', 'scripts/doctor.cjs', 'scripts/prepare-ide.cjs', 'ide-extensions.lock.json', 'package.json', 'README.md', 'MAC-SETUP.md', 'SETUP.md']) {
         if (fs.existsSync(path.join(ROOT, rel))) copy(rel);
     }
@@ -156,9 +160,15 @@ const PAYLOAD_REQUIRED = [
     'server/omo-room-server.cjs', 'server/src/server.cjs', 'server/src/hub.cjs', 'server/vendor/world-model.cjs', 'server/vendor/presence-protocol.cjs',
     'server/vendor/player-state.cjs', 'server/node_modules/ws/index.js'
 ];
+/** mac-kits: kit files a release package must carry when OMO_REQUIRE_KITS=1. */
+const KITS_REQUIRED = ['kits/skyline-penthouse/room.glb', 'kits/skyline-penthouse/props.json', 'style-kits.lock.json'];
 function verifyPayload(stage) {
     const missing = PAYLOAD_REQUIRED.filter(rel => !fs.existsSync(path.join(stage, rel)));
     if (missing.length) throw new Error(`Package payload incomplete: ${missing.join(', ')}`);
+    if (process.env.OMO_REQUIRE_KITS === '1') {
+        const kitMissing = KITS_REQUIRED.filter(rel => !fs.existsSync(path.join(stage, rel)));
+        if (kitMissing.length) throw new Error(`Package payload has no style kits (OMO_REQUIRE_KITS=1): ${kitMissing.join(', ')}`);
+    }
     const tests = path.join(stage, 'runtime', 'tests');
     if (fs.existsSync(tests)) fs.rmSync(tests, { recursive: true, force: true }); // the filter keeps an empty dir
 }
@@ -315,4 +325,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
-module.exports = { parseArgs, infoPlist, PAYLOAD_REQUIRED };
+module.exports = { parseArgs, infoPlist, PAYLOAD_REQUIRED, KITS_REQUIRED };
