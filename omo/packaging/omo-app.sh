@@ -39,13 +39,13 @@ $2}" >/dev/null 2>&1
     exit 1
 }
 
-# Node.js: the bundled runtime, else a Node 22+ on PATH.
+# Node.js: the bundled runtime, else a Node 24+ on PATH.
 NODE="$HERE/vendor/node/bin/node"
 if [ ! -x "$NODE" ]; then
     NODE="$(command -v node 2>/dev/null || true)"
-    [ -n "$NODE" ] || fail "Node.js 22 or newer was not found." "brew install node@22 && brew link --overwrite --force node@22"
+    [ -n "$NODE" ] || fail "Node.js 24 or newer was not found." "brew install node@24 && brew link --overwrite --force node@24"
     major=$("$NODE" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
-    [ "$major" -ge 22 ] 2>/dev/null || fail "Node.js $("$NODE" -v 2>/dev/null) is too old; Omo needs Node.js 22 or newer." "brew install node@22 && brew link --overwrite --force node@22"
+    [ "$major" -ge 24 ] 2>/dev/null || fail "Node.js $("$NODE" -v 2>/dev/null) is too old; Omo needs Node.js 24 or newer." "brew install node@24 && brew link --overwrite --force node@24"
 fi
 [ -f "$HERE/scripts/desktop-launch.cjs" ] || fail "This copy of Omo is incomplete (scripts/desktop-launch.cjs is missing). Download it again." ""
 

@@ -4,7 +4,7 @@ This is a Linux-first developer alpha on `omo/agent-runtime-v1`, not a packaged 
 
 ## First setup
 
-Use Node.js 22 or newer, npm, Python 3, bash and tmux. Git enables project change review. Chrome/Chromium and agent CLIs are optional: missing agents must not prevent normal shell use. Native dependencies can need Linux build tools and libsecret.
+Use Node.js 24 or newer, npm, Python 3, bash and tmux. Git enables project change review. Chrome/Chromium and agent CLIs are optional: missing agents must not prevent normal shell use. Native dependencies can need Linux build tools and libsecret.
 
 From this checkout's `omo/` directory:
 

@@ -108,9 +108,9 @@ could still be heard while "muted".
 Prerequisites: the borrowed `omo/node_modules`, read-only; nothing installed.
 
     cd omo
-    npx --yes --package=node@22.23.4 --call 'npm run compile'
-    npx --yes --package=node@22.23.4 --call 'node --test --test-concurrency=1 extension/test/web-runtime.test.cjs'
-    npx --yes --package=node@22.23.4 --call 'node extension/test/web-runtime-mutation-check.cjs'
+    npx --yes --package=node@24.22.3 --call 'npm run compile'
+    npx --yes --package=node@24.22.3 --call 'node --test --test-concurrency=1 extension/test/web-runtime.test.cjs'
+    npx --yes --package=node@24.22.3 --call 'node extension/test/web-runtime-mutation-check.cjs'
 
 The tests use:
 

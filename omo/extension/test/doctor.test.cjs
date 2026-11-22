@@ -21,7 +21,7 @@ function fixture() {
     fs.writeFileSync(path.join(root, 'browser-app/lib/backend/main.js'), `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'started');`);
     for (const name of ['bash', 'python3', 'tmux', 'git', 'chrome', 'hermes', 'claude', 'codex']) fs.writeFileSync(path.join(bin, name), `#!/bin/sh\nprintf executed > '${marker}'\n`, { mode: 0o755 });
     const env = { PATH: bin, HOME: home, OMO_SPATIAL_DATA: path.join(root, 'data'), OMO_SPATIAL_TMUX_SOCKET: 'omo-doctor-owned', OMO_SPATIAL_TMUX: path.join(bin, 'tmux'), OMO_SPATIAL_PYTHON: path.join(bin, 'python3'), OMO_SPATIAL_HOST_SCRIPT: path.join(root, 'runtime/omo_spatial_host.py'), OMO_SPATIAL_CHROME: path.join(bin, 'chrome'), OMO_SPATIAL_HERMES_BIN: path.join(bin, 'hermes'), OMO_SPATIAL_CLAUDE_BIN: path.join(bin, 'claude'), OMO_SPATIAL_CODEX_BIN: path.join(bin, 'codex'), SOME_API_KEY: 'DOCTOR_MUST_NOT_DISCLOSE_THIS_VALUE' };
-    return { root, bin, home, marker, env, options: { root, home, env, nodeVersion: '22.23.4', platform: 'linux' }, dispose() { fs.rmSync(root, { recursive: true, force: true }); } };
+    return { root, bin, home, marker, env, options: { root, home, env, nodeVersion: '24.22.3', platform: 'linux' }, dispose() { fs.rmSync(root, { recursive: true, force: true }); } };
 }
 test('setup doctor finds real filesystem prerequisites without running tools or exposing environment secrets', () => {
     const f = fixture();
@@ -61,7 +61,7 @@ test('missing core tools fail; missing optional agents do not block shells', () 
 test('fresh unbuilt checkout reports failures without creating files', () => {
     const root = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'omo-doctor-empty-'));
     try {
-        const report = doctor().collectReport({ root, home: root, env: { PATH: '' }, platform: 'linux', nodeVersion: '22.23.4' });
+        const report = doctor().collectReport({ root, home: root, env: { PATH: '' }, platform: 'linux', nodeVersion: '24.22.3' });
         assert.equal(report.prerequisitesFound, false);
         assert.equal(report.checks.find(c => c.id === 'build').status, 'missing');
         assert.equal(report.checks.find(c => c.id === 'runtime').status, 'missing');

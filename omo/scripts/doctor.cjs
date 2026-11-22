@@ -71,7 +71,7 @@ function collectReport(options = {}) {
     const platform = options.platform ?? process.platform;
     const checks = [];
     const add = (id, required, found, detail, fix = '') => checks.push({ id, required, status: found ? 'ok' : required ? 'missing' : 'warning', detail: clean(detail), ...(found ? {} : { fix }) });
-    add('node', true, Number(nodeVersion.split('.')[0]) >= 22, `Node.js ${nodeVersion}`, 'Use Node.js 22 or newer.');
+    add('node', true, Number(nodeVersion.split('.')[0]) >= 24, `Node.js ${nodeVersion}`, 'Use Node.js 24 or newer.');
     const mac = platform === 'darwin';
     // macOS: supported code paths exist but have not been executed on a Mac yet. Warn "unverified"; never fail.
     add('platform', false, platform === 'linux', platform === 'linux' ? 'Linux: the verified local alpha platform.'
@@ -80,7 +80,7 @@ function collectReport(options = {}) {
     mac ? 'Follow omo/MAC-SETUP.md (Homebrew tmux, python, bash, git) and report the verification checklist results.'
         : 'Use Linux (or a Linux environment). macOS and Windows installation are not certified.');
     const brewPrefixes = mac ? ['/opt/homebrew', '/usr/local'].filter(prefix => isExecutable(path.join(prefix, 'bin', 'brew'))) : [];
-    if (mac) add('homebrew', false, brewPrefixes.length > 0, brewPrefixes.length ? `Homebrew at ${brewPrefixes.join(', ')} (not executed)` : 'Homebrew was not found in /opt/homebrew or /usr/local.', 'Install Homebrew from https://brew.sh, then: brew install node@22 tmux python bash git');
+    if (mac) add('homebrew', false, brewPrefixes.length > 0, brewPrefixes.length ? `Homebrew at ${brewPrefixes.join(', ')} (not executed)` : 'Homebrew was not found in /opt/homebrew or /usr/local.', 'Install Homebrew from https://brew.sh, then: brew install node@24 tmux python bash git');
     const brewHint = (formula, otherwise) => `Install it with Homebrew (brew install ${formula}) or ${otherwise}`;
     const built = isFile(path.join(root, 'browser-app/lib/backend/main.js'));
     add('build', true, built, built ? 'The built Theia backend entry exists.' : 'The Theia application has not been built.', 'Stop any app using this checkout, then install locked dependencies with npm ci and run npm run build from omo/.');

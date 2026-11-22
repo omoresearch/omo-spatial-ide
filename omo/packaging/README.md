@@ -13,7 +13,7 @@ CI: `.github/workflows/omo-macos-release.yml` (release matrix; attaches everythi
 
 ## Files
 
-- `pins.json` + `fetch-pinned.cjs`: the bundled Node.js 22, static tmux, appimagetool and AppImage
+- `pins.json` + `fetch-pinned.cjs`: the bundled Node.js 24, static tmux, appimagetool and AppImage
   runtime. Every download is sha256-checked before use.
 - `omo-app.sh`: copied into each package as `./omo-app`. The .app executable
   (`Contents/MacOS/Omo Spatial IDE`) and the AppImage `AppRun` both exec it. It selects the bundled

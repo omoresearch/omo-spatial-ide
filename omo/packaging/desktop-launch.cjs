@@ -242,7 +242,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
         console.log(`Usage: omo-app [--workspace DIR] [--port N] [--foreground|--background]\nStarts ${APP_NAME} on 127.0.0.1 and opens it in Chrome (app window) or the default browser.`);
         return 0;
     }
-    if (Number(process.versions.node.split('.')[0]) < 22) throw new Error(`${APP_NAME} needs Node.js 22 or newer (found ${process.version}).`);
+    if (Number(process.versions.node.split('.')[0]) < 24) throw new Error(`${APP_NAME} needs Node.js 24 or newer (found ${process.version}).`);
     const { state, logs } = dirs(env);
     fs.mkdirSync(state, { recursive: true, mode: 0o700 });
     const { file: logFile, fd, log } = openLog(logs);
