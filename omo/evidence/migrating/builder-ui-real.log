@@ -1,0 +1,20 @@
+PASS B opens the World Builder panel
+PASS Nothing covers the screen centre or the bottom-centre monitor point — {"hits":["CANVAS#omo-world-canvas.","CANVAS#omo-world-canvas."],"panel":[1064,68,1424,884],"canvas":[0,0,1440,900]}
+PASS World Builder tabs are not covered by any popover — [true,true,true]
+PASS No native <select> inside the World Builder
+PASS Talk: plan shows steps and a diff summary — {"steps":["World: open world (no outer walls) — the old walls become the “Main room”","Add room “Main room” 18 × 12 m, door on the front at x 0 m, z 0 m — the room you had, unchanged","World: size 20 × 40 m — so the new research room fits","Add room “Research 
+PASS Talk: ghost preview hook lists the proposed things — "main-room,research-desk-1,research-desk-2,research-room"
+PASS Talk: Apply adds the room and 2 desks — {"rooms":["main-room","research-room"],"desks":5,"desks0":3}
+PASS Add: the custom follows select shows the picked desk
+PASS Add: placement ghosts placed a monitor wall and a web wall — {"g1":"-12.25,-2.75,0,true","g2":"9.25,-2,0,true"}
+PASS Add: tray shows the diff summary — "+1 monitor wall, +1 web wall, world 33 × 40 m"
+PASS Add: monitor wall exists and follows Desk one — {"deskOne":"terminal","monitors":[["monitors-1","terminal"]]}
+PASS Add: web wall exists with the owned page URL — {"webUrl":"http://127.0.0.1:3842/page.html","webs":[["web",null],["web-wall-1","http://127.0.0.1:3842/page.html"]]}
+PASS Inspector: clicking a desk shows the inspector in the builder — {"picked":true,"selected":"terminal","view":"inspect"}
+PASS Inspector: rename is a pending change, undo restores the name — {"oldName":"Plan · Hermes","pending":"1 changed","after":"Plan · Hermes"}
+PASS Add: a desk past the edge grows the world — {"g4":"-20.75,10.25,0,true","before4":{"width":33,"depth":40,"open":true},"after4":{"width":49,"depth":40,"open":true}}
+PASS Rooms tab lists the rooms — 2
+PASS no page errors — []
+17/17 checks passed
+builder-ui-real rc=0
+ 01:41:43 up  1:02,  4 users,  load average: 25.26, 13.19, 6.80

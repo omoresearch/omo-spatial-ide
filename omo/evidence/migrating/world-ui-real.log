@@ -1,0 +1,34 @@
+PASS A saved room opens immersive by default — {"immersive":"true","body":true}
+PASS One floating top bar, 44 px high — {"h":44,"top":8,"w":1424}
+PASS No IDE menu/status bar, omo header, form rows, voice rows, station strip or footer — {"#theia-top-panel":false,"#theia-statusBar":false,".omo-header":false,".omo-footer":false,".omo-console-dock":false,".omo-stage-heading":false,".omo-station-switch":false,"[data-testid=\"presence-bar\"]":false,"[data-testid=\"voice-panel\"]":false,"[data-testid=\"runtime-console\"]":false}
+PASS Top bar: room + people left, World/Tasks/Code centre, voice/share/⌘K right — {"left":["topbar-room","topbar-people"],"centre":["World","Tasks","Code"],"right":["topbar-voice","topbar-bell","topbar-settings","topbar-share","topbar-palette","topbar-shape"]}
+PASS No "Walk up and click this screen" banner in the DOM chrome — 0
+PASS No raw project path visible
+PASS Tokens (walking): overlay text only 12/13/15/20 px; Share is not mint; no mint window border — {"bad":[],"sizes":[12,13,15],"share":"rgba(255, 255, 255, 0.08)","canvasOutline":""}
+PASS ⌘K opens the command palette — 26
+PASS Palette holds name/room code (share), recipes, agents, voice, speech, settings, customise
+PASS Typing filters the palette — ["station-recipes"]
+PASS Enter runs the command: Station recipes opens in the settings sheet — "desks"
+PASS Settings → Share holds name + room code + Join
+PASS Settings → Voice holds the voice panel and Voice check
+PASS Settings → Agents holds the agents panel
+PASS Settings → Room holds Customise
+PASS Esc closes the sheet
+PASS Ctrl+K opens the palette while walking; Esc closes it
+PASS Tasks view shows under the bar
+PASS World returns to the room
+PASS Build mode: the World Builder opens below the top bar — {"builderTop":68,"barBottom":52}
+PASS Build: the toolbar sits just below the top bar (8-16 px gap) and left of the panel — {"barBottom":52,"toolsTop":60,"toolsH":44,"toolsRight":831,"panelLeft":1064,"building":0,"badge":false,"toast":false,"under":[],"disabled":[0.32,0.32,0.32,0.32,0.32]}
+PASS Build: ONE mode indicator (no Building pill, no badge, no centre toast) — {"barBottom":52,"toolsTop":60,"toolsH":44,"toolsRight":831,"panelLeft":1064,"building":0,"badge":false,"toast":false,"under":[],"disabled":[0.32,0.32,0.32,0.32,0.32]}
+PASS Top bar: nothing coloured is drawn under its blur (no glow smudge) — []
+PASS Build overview: the room is framed left of the World Builder (no label behind the panel, centred in the visible area) — {"panelLeft":1064,"canvasLeft":0,"labels":[[276,411],[391,526],[315,408],[515,658]],"mid":467,"visibleMid":532}
+PASS Build: disabled tools look disabled (opacity <= .4) — [0.32,0.32,0.32,0.32,0.32]
+PASS Add: one card grammar (same height, 2 columns, one-line title + subtitle, no size badges), Draw a room is a button, no settings box — {"n":17,"heights":[56],"cols":1,"oneLine":true,"badges":0,"options":false,"drawIsButton":true}
+PASS Tokens (build): overlay text only 12/13/15/20 px — {"bad":[],"sizes":[12,13,15],"share":"rgba(255, 255, 255, 0.08)","canvasOutline":""}
+PASS Esc does not leave immersive
+PASS G leaves immersive and the choice is saved — {"off":"false","ls":"0"}
+PASS G enters immersive again
+PASS no page errors — []
+31/31 checks passed
+world-ui-real rc=0
+ 01:40:04 up  1:01,  4 users,  load average: 15.01, 7.51, 4.45

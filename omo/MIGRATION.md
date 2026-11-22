@@ -165,7 +165,34 @@ for Kaviru/Harry: host them as a GitHub release zip (recommended) or turn on LFS
 
 ## 5. Tests on `omo/migrating`
 
-TEST_RESULTS_PLACEHOLDER
+All on this host (Linux, Node 26, RTX 5060 Ti) on commit `c6191a0a0` (code) — logs in `omo/evidence/migrating/`.
+GitHub CI has not run yet; it runs on the self-hosted pool when the PR opens.
+
+| check | result | master baseline (w4, `e9cf892c1`) |
+|---|---|---|
+| `npx tsc -p extension` | 0 errors | 0 |
+| `npm run build` | 0 | 0 |
+| `npm test` (unit) | 536/536 | 491/491 |
+| Python runtime (`unittest discover runtime/tests`) | 67/67 | ok |
+| room server `check.cjs` + client smokes | ok, 7/7 + 19/19 | ok |
+| room server `e2e-smoke.cjs` | 53 checks pass, then hangs at the oversized-frame step | same hang on master (pre-existing, not from this branch) |
+| browser `ci-e2e.cjs` (14 real-app slices) | 101 PASS, rc 0 | 101 |
+| browser `run-extra-three.cjs` | 9 PASS, rc 0 | 9 |
+| two-app multiplayer (`remote-two-app-real.cjs`) | 23/23 | 23/23 |
+| Shape (`shape-real.cjs`, GPU) | 38/38 | new |
+| World magic (`world-magic-real.cjs`, GPU) | 7/7 | new |
+| World UI (`world-ui-real.cjs`) | 31/31 | new |
+| Builder UI (`builder-ui-real.cjs`) | 17/17 | new |
+| w3 expand (`w3-expand-real.cjs`) | 18/18 | 18/18 |
+
+Fixes needed to get there (each its own commit on this branch):
+- `server/vendor` was stale since `omo/skyline-merge` (skyline theme not vendored): regenerated.
+- `workstation-label-real-app` failed since `omo/world-ui` r4/3 (`2812dcd3f`, found by bisect): the idle desk
+  label now hides while walking. Added the opt-out pref `omo.deskLabel.idleHide='0'`, set only by the legacy
+  test driver (the repo's pattern for new defaults). Product default unchanged.
+- `git-review-real-app` / `room-layout-real-app` read the project path from the footer, which world-ui changed
+  to the room name. The footer now carries `data-project-path`; the checks read that.
+
 
 ## Licences
 
