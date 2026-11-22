@@ -139,7 +139,30 @@ export function buildReviewScreen(entity: ReviewScreenEntity, texture: THREE.Tex
 
 export function buildDecorEntity(entity: DecorEntity, jungle: boolean): BuiltEntity {
     const group = rootFor(entity);
-    group.add(buildDecor(entity.decor, entity.id, jungle));
+    const look = buildDecor(entity.decor, entity.id, jungle);
+    // promise:onboarding — imported note boards and topic signs show their words on the board (no marker doodles).
+    if (entity.decor === 'whiteboard' && /^(note|sign)-/.test(entity.id) && entity.label && typeof document !== 'undefined') {
+        look.children.filter(c => c instanceof THREE.Mesh && (c.material as THREE.Material) instanceof THREE.MeshBasicMaterial).forEach(c => look.remove(c));
+        const sign = entity.id.startsWith('sign-');
+        const { canvas, texture } = canvasTexture(704, 400);
+        const c = canvas.getContext('2d');
+        if (c) {
+            c.fillStyle = sign ? '#05110d' : '#f7f8f4'; c.fillRect(0, 0, 704, 400);
+            c.fillStyle = sign ? '#7cf2d0' : '#13201b'; c.textAlign = 'left'; c.textBaseline = 'top';
+            if (sign) { c.font = '500 26px sans-serif'; c.fillText('ROOM', 40, 36); }
+            else { c.fillStyle = '#7cf2d0'; c.fillRect(40, 40, 64, 8); c.fillStyle = '#13201b'; }
+            c.font = `600 ${sign ? 72 : 50}px sans-serif`;
+            const words = entity.label.split(/\s+/), lines: string[] = []; let line = '';
+            for (const w of words) { const next = line ? `${line} ${w}` : w; if (c.measureText(next).width > 624 && line) { lines.push(line); line = w; } else line = next; }
+            if (line) lines.push(line);
+            lines.slice(0, sign ? 3 : 5).forEach((l, i) => c.fillText(l, 40, (sign ? 92 : 76) + i * (sign ? 84 : 62), 624));
+            texture.needsUpdate = true;
+        }
+        const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.76, 1.0), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
+        plate.position.set(0, 1.3, 0.03); plate.userData.ownsMap = true; plate.userData.part = sign ? 'mind-sign' : 'mind-note';
+        look.add(plate);
+    }
+    group.add(look);
     return { root: group };
 }
 

@@ -89,6 +89,8 @@ import { OnboardingFlow } from './onboarding-flow';
 import { OnboardingPlanBackend } from './onboarding-admin';
 import { OnboardingWorldSink, saveOnboardingWorld, readLocalWorld } from './onboarding-store';
 import { v1RoomFor } from './onboarding-planner';
+import { FirstMinute, firstMinuteEnabled } from './first-minute'; // promise:onboarding
+import { MindImportService } from '../common/mind-import-protocol'; // promise:onboarding
 import { classifyDesks, setDeskPriority } from './desk-activity'; // w3:perf
 // --- end w2:onboard ---
 
@@ -178,6 +180,10 @@ export class OmoWorldWidget extends ReactWidget {
     @inject(OnboardingPlanBackend) @optional() protected readonly onboardingPlanner?: OnboardingPlanBackend;
     @inject(OnboardingWorldSink) @optional() protected readonly onboardingSink?: OnboardingWorldSink;
     private onboardingClassic = false;
+    // promise:onboarding — the first minute (welcome -> your mind's home -> bring your mind -> ready) on a true first run.
+    @inject(MindImportService) @optional() protected readonly mindImport?: MindImportService;
+    private firstMinuteDone = false;
+    private firstMinuteShown(): boolean { return this.configuring && !this.room && !this.firstMinuteDone && !this.onboardingClassic && !this.savedOnboardingWorld() && firstMinuteEnabled(safeStorage()); }
     private onboardingSaved?: { key: string; world?: WorldSpec };
     private savedOnboardingWorld(): WorldSpec | undefined {
         if (!this.project) return undefined;
@@ -1057,7 +1063,9 @@ export class OmoWorldWidget extends ReactWidget {
             <div className={`omo-body ${this.configuring ? 'is-onboarding' : ''}`} style={this.reviewOpen||this.taskOverviewOpen||this.taskWorkspacesOpen?{display:'none'}:undefined}>
                 {/* design lane (omo/build-design): setup markup + classNames only — scroll body + pinned action footer */}
                 {/* w2:onboard (mount hook): new 3-step flow; the classic form below stays reachable via "Room settings" */}
-                {this.configuring && !this.onboardingClassic && <OnboardingFlow key={`${this.project?.toString() ?? ''}:${this.onboardingEpoch}`} initialName={this.draftName} initialTheme={this.draftTheme}
+                {this.firstMinuteShown() && <FirstMinute initialName={this.draftName} projectPath={this.project?.path.toString()} busy={this.busy || this.presetLoading} mind={this.mindImport}
+                    onPreview={this.onboardingPreview} onCreate={this.onboardingCreate} onChooseProject={this.chooseProject} onManual={() => { this.firstMinuteDone = true; this.update(); }}/>}{/* promise:onboarding */}
+                {this.configuring && !this.onboardingClassic && !this.firstMinuteShown() && <OnboardingFlow key={`${this.project?.toString() ?? ''}:${this.onboardingEpoch}`} initialName={this.draftName} initialTheme={this.draftTheme}
                     savedWorld={this.savedOnboardingWorld()} projectPath={this.project?.path.toString()} hasRoom={!!this.room} busy={this.busy || this.presetLoading}
                     hermes={this.onboardingPlanner} fullPreview={typeof (this.worldScene as unknown as { setWorld?: unknown } | undefined)?.setWorld === 'function'}
                     onPreview={this.onboardingPreview} onCreate={this.onboardingCreate} onChooseProject={this.chooseProject} onCancel={this.cancelConfiguration}
