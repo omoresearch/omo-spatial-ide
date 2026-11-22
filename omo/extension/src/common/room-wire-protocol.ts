@@ -35,7 +35,7 @@ import { isRoomCode } from './room-code'; // promise:share
 import { withPoint } from './shared-pointer'; // promise:share
 import type { PlayerPose } from './player-state';
 import type { WorldOp, WorldSpec } from './world-model';
-import { validateWorld, WORLD_MAX_BYTES } from './world-model';
+import { SHELL_MAX, validateWorld, WORLD_MAX_BYTES } from './world-model';
 import type { ChatEmote, ChatMessage, ChatSay, PresenceColour, RoomMember, VoiceSignal, VoiceSignalEnvelope, VoiceStatus } from './presence-protocol';
 import { CHAT_EMOTES, PRESENCE_COLOURS, chatSay, presenceColour, voiceSignal, voiceStatus } from './presence-protocol';
 
@@ -69,8 +69,9 @@ export const ROOM_MEMBER_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
 /** Invite codes, member tokens and owner tokens: opaque URL-safe strings. t2:pkg: '.' allowed (the room server's keys are `omo1.<room>.<member>.<secret>`, invites `omoinv1.<payload>.<sig>`). */
 export const ROOM_SECRET_RE = /^[A-Za-z0-9_.-]{16,256}$/;
 const RID_RE = /^[A-Za-z0-9_-]{1,64}$/;
-/** Half of the largest WorldShell size (40 m): poses are room-space metres, clamped by the world, not the v1 room. */
-export const ROOM_POSE_LIMIT_M = 20;
+/** Half of the largest WorldShell size (SHELL_MAX): poses are room-space metres, clamped by the world, not the v1 room.
+ *  promise:share: was a fixed 20 m from the 40 m world era, which dropped every pose (and pointer) in a bigger open world. */
+export const ROOM_POSE_LIMIT_M = SHELL_MAX / 2;
 
 /**
  * WebSocket close codes. Codes in ROOM_CLOSE_FINAL mean "do NOT auto-reconnect"; any other close

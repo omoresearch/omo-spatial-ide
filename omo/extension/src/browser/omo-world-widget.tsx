@@ -374,7 +374,7 @@ export class OmoWorldWidget extends ReactWidget {
         // --- end omo parity2 lane ---
         // --- w2:mp-client (mount hook): remote rooms reuse the same presence path; terminals stay local. Starts nothing. ---
         this.remoteRoom=new RemoteRoomController(this.remoteRoomService,this.presenceRouter,{joinPresence:(roomId,name)=>this.joinPresence(roomId,name),leavePresence:()=>this.leavePresence(),
-            presence:()=>this.presenceState,agents:()=>this.voiceHub?.state.agents??[],seedWorld:()=>this.room?worldFromRoomV1({theme:this.room.theme,projectName:this.room.projectName,layout:this.room.layout,kit:this.room.kit}):undefined,
+            presence:()=>this.presenceState,agents:()=>this.voiceHub?.state.agents??[],seedWorld:()=>this.savedWorld()/* promise:share: the CURRENT world (saved v2 world, else the v1 room migrated), not always the v1 room */,
             schedule:(fn,ms)=>window.setTimeout(fn,ms),cancel:id=>window.clearTimeout(id as number),onChange:()=>this.update(),
             voiceTransport:t=>{void this.voiceHub?.useTransport(t);}/* t3:mp2 */});
         this.currentWorldStore(); // t3:mp2: bind the store to the remote world source now
