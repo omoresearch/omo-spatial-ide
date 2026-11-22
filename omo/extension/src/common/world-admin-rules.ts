@@ -1489,3 +1489,35 @@ export function summarize(steps: string[]): string {
     const text = short.slice(0, 4).join('; ') + (short.length > 4 ? `; and ${short.length - 4} more` : '');
     return text.length > 240 ? `${text.slice(0, 237)}…` : text;
 }
+
+/**
+ * promise:share (L7) — plan "replace this world with that one" (a data world or an opened world file) as ONE
+ * proposal through the same planner contract: every op is described, the whole list is checked with
+ * applyWorldOps, locked desks refuse, and nothing changes until the user presses Apply.
+ */
+export function planDataWorld(world: WorldSpec, target: WorldSpec, prompt: string, options: RulePlanOptions = {}): RulePlanResult {
+    const none = (explanation: string): RulePlanResult => ({ ops: [], steps: [], notes: [explanation], summary: '', explanation, proposal: null });
+    const validNow = validateWorld(world), validTarget = validateWorld(target);
+    if (!validNow.ok) return none(`This world could not be read: ${validNow.error}`);
+    if (!validTarget.ok) return none(`The new world is not valid: ${validTarget.error}`);
+    const locked = world.entities.filter((e): e is StationEntity => e.kind === 'station' && e.station.locked);
+    if (locked.length) return none(`${locked.map(e => `“${entityName(e)}”`).join(', ')} ${locked.length === 1 ? 'is' : 'are'} locked. Unlock ${locked.length === 1 ? 'it' : 'them'} in Station Setup first. Nothing was changed.`);
+    const ops: WorldOp[] = [];
+    if (world.name !== target.name) ops.push({ op: 'name', name: target.name });
+    ops.push({ op: 'shell', shell: { theme: target.shell.theme, width: target.shell.width, depth: target.shell.depth, open: !!target.shell.open } });
+    // Mirrors go first (removing a desk would take its mirrors with it), then everything else.
+    const order = [...world.entities.filter(e => e.kind === 'mirror'), ...world.entities.filter(e => e.kind !== 'mirror')];
+    for (const e of order) ops.push({ op: 'remove', id: e.id });
+    for (const e of target.entities) ops.push({ op: 'add', entity: JSON.parse(JSON.stringify(e)) as WorldEntity });
+    const result = applyWorldOps(world, ops);
+    if (!result.ok) return none(`That world does not fit: ${result.error} Nothing was changed.`);
+    const steps: string[] = [];
+    let draft = world;
+    for (const op of ops) { steps.push(describeOp(draft, op)); const next = applyWorldOps(draft, [op]); if (next.ok) draft = next.world; }
+    const rooms = target.entities.filter(e => e.kind === 'room').length;
+    const summary = `Build “${target.name}”: ${rooms} room${rooms === 1 ? '' : 's'}, ${target.entities.length - rooms} things`;
+    const proposal: WorldProposal = { id: (options.makeId ?? (() => newProposalId()))(), source: options.source ?? 'admin', summary, ops, baseRevision: world.revision };
+    const notes = ops.length > 64 ? ['A shared room takes at most 64 changes at once: build this in your own room, then share it.'] : [];
+    const explanation = `Here is my plan for “${String(prompt).slice(0, 120)}”: ${ops.length} changes that replace this world. Nothing changes until you press Apply.${notes.length ? ` Note: ${notes[0]}` : ''}`;
+    return { ops, steps, notes, summary, explanation, proposal };
+}
