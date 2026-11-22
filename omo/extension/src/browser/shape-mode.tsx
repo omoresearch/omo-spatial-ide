@@ -27,7 +27,7 @@ import type { OmoAgent } from './omo-agent-ui';
 import { clearBeam, showBeam } from './omo-agent-ui';
 import { routeOmo } from '../common/omo-agent';
 import type { DictationController } from './voice-dictation';
-import { ShapeVoice } from './shape-voice';
+import { intoPrompt, isTalkKey, isTalkRelease, ShapeVoice } from './shape-voice';
 import '../../src/browser/world-tokens.css';
 import '../../src/browser/shape-mode.css';
 
@@ -67,7 +67,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     const [answer, setAnswer] = React.useState<Answer | undefined>();
     const [making, setMaking] = React.useState('');
     const sendRef = React.useRef<(text: string) => void>(() => undefined);
-    const voice = React.useMemo(() => props.dictation ? new ShapeVoice(props.dictation, text => { setText(text); window.setTimeout(() => sendRef.current(text), 0); }) : undefined, [props.dictation]);
+    const voice = React.useMemo(() => props.dictation ? new ShapeVoice(props.dictation, intoPrompt(setText, text => sendRef.current(text))) : undefined, [props.dictation]);
     const [listening, setListening] = React.useState(false);
     React.useEffect(() => () => voice?.cancel(), [voice]);
     // The beam follows the answer: on while a place answer shows, gone with it (or Shape) after 20 s at most.
@@ -348,7 +348,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             // One meaning per key: with text, Enter refines and Ctrl/Cmd+Enter keeps; an empty prompt's Enter keeps.
             if (proposed && (event.ctrlKey || event.metaKey)) keep();
             else if (text.trim() || pills.length) send(text); else if (proposed) keep();
-        } else if (event.key.toLowerCase() === 't' && event.altKey) { // promise-agent: hold Alt+T to talk to Omo
+        } else if (isTalkKey(event)) { // promise-agent: hold Alt+T to talk to Omo (see SHAPE_TALK_KEY)
             event.preventDefault(); if (!event.repeat) holdVoice();
         } else if (event.key === 'Escape') {
             event.preventDefault();
@@ -405,7 +405,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
                         <button type="button" aria-label={`Remove ${p.name}`} onMouseDown={e => e.preventDefault()} onClick={() => { setPills(pills.filter(x => x.id !== p.id)); focusPrompt(); }}>×</button></span>)}
                     <input ref={input} data-testid="shape-input" value={text} maxLength={400} spellCheck={false} autoComplete="off"
                         placeholder={listening ? 'Listening…' : proposed ? 'Refine it… or press Enter to keep' : pills.length ? 'Say what to do with it…' : 'Describe a change…'} aria-label="Describe a change"
-                        onChange={e => setText(e.currentTarget.value)} onKeyDown={onKey} onKeyUp={e => { if (e.key.toLowerCase() === 't' || e.key === 'Alt') releaseVoice(); }} />
+                        onChange={e => setText(e.currentTarget.value)} onKeyDown={onKey} onKeyUp={e => { if (isTalkRelease(e)) releaseVoice(); }} />
                     {voice && <button type="button" className={`omo-shape-mic${listening ? ' is-on' : ''}`} data-testid="shape-mic" aria-pressed={listening} aria-disabled={!voiceOk}
                         title={voiceOk ? 'Hold to talk to Omo (or hold Alt+T)' : (voice.state.notice || 'On-device speech is not available in this browser')}
                         onMouseDown={e => e.preventDefault()} onPointerDown={e => { e.preventDefault(); holdVoice(); }} onPointerUp={releaseVoice} onPointerLeave={releaseVoice}>

@@ -14,6 +14,24 @@ export function voicePrompt(spoken: string): string {
     return t;
 }
 
+/**
+ * The talk key in the Shape prompt. voice-hub's hold-to-dictate key is T (V is push-to-talk to people), but
+ * the prompt is a text box where a plain T types a letter, so Shape uses the same letter with Alt: hold Alt+T.
+ */
+export const SHAPE_TALK_KEY = 't';
+export function isTalkKey(e: { key: string; altKey: boolean; ctrlKey?: boolean; metaKey?: boolean }): boolean {
+    return e.key.toLowerCase() === SHAPE_TALK_KEY && e.altKey && !e.ctrlKey && !e.metaKey;
+}
+/** Releasing either key of the chord ends the line. */
+export function isTalkRelease(e: { key: string }): boolean { return e.key.toLowerCase() === SHAPE_TALK_KEY || e.key === 'Alt'; }
+/**
+ * The spoken line goes into the prompt (so you see it) and is then sent by the same send() Enter uses,
+ * on the next tick, after the prompt shows the words.
+ */
+export function intoPrompt(setText: (text: string) => void, send: (text: string) => void, defer: (fn: () => void) => void = fn => { setTimeout(fn, 0); }): (text: string) => void {
+    return text => { setText(text); defer(() => send(text)); };
+}
+
 export class ShapeVoice {
     private held = false;
     constructor(private readonly dictation: DictationController, private readonly submit: (text: string) => void) {}
