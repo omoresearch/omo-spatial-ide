@@ -12,6 +12,7 @@
  * Nothing here starts an agent, types into a terminal or changes the world.
  */
 import type { WorldSpec, WorldEntity, EntityKind } from './world-model';
+import { activeKit, kitProp } from './world-style-kits';
 
 // ---- runtime state (what the widget knows live) --------------------------------------------------------
 
@@ -332,6 +333,91 @@ export function agoWords(ms: number): string {
     const h = Math.round(m / 60);
     return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
 }
+
+// ---- where a made page hangs: a solid wall, clear of furniture, in sight -----------------------------------
+
+export type Side = 'north' | 'south' | 'east' | 'west';
+/** A wall spot for a new page: centre on the floor plan, rotation (the screen faces into the room), height. */
+export interface WallSpot { x: number; z: number; rotation: number; elevation: number; width: number; height: number; side: Side }
+interface Box2 { x: number; z: number; hx: number; hz: number; tall: boolean }
+/** Eye height (m) the page's centre hangs at. */
+export const PAGE_EYE = 1.55;
+function footprint(e: WorldEntity): Box2 | undefined {
+    const { x, z, rotation } = e.transform;
+    const turn = Math.abs(Math.sin(rotation)) > 0.7;
+    let hx = 0.4, hz = 0.4, tall = true;
+    if (e.kind === 'room') return undefined;
+    if (e.kind === 'station') { hx = 1.8; hz = 1.05; tall = true; }
+    else if (e.kind === 'web-wall' || e.kind === 'monitor-wall') { hx = e.width / 2; hz = 0.2; }
+    else if (e.kind === 'mirror') { hx = 0.7; hz = 0.2; }
+    else if (e.kind === 'review-screen') { hx = 0.9; hz = 0.3; }
+    else if (e.kind === 'decor') {
+        const prop = kitProp(e.prop), k = e.scale ?? 1;
+        if (prop) { hx = prop.half.x * k; hz = prop.half.z * k; tall = prop.category === 'plant' || prop.category === 'shelf' || prop.category === 'storage'; }
+        else { tall = e.decor !== 'rug'; if (e.decor === 'rug') return undefined; }
+    }
+    return { x, z, hx: turn ? hz : hx, hz: turn ? hx : hz, tall };
+}
+const hit = (a: Box2, b: Box2, gap: number): boolean => Math.abs(a.x - b.x) < a.hx + b.hx + gap && Math.abs(a.z - b.z) < a.hz + b.hz + gap;
+/** True when the floor segment p -> q crosses the box (slab test). */
+function crosses(p: { x: number; z: number }, q: { x: number; z: number }, b: Box2): boolean {
+    let t0 = 0, t1 = 1;
+    for (const [o, d, lo, hi] of [[p.x, q.x - p.x, b.x - b.hx, b.x + b.hx], [p.z, q.z - p.z, b.z - b.hz, b.z + b.hz]] as const) {
+        if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return false; continue; }
+        let a = (lo - o) / d, c = (hi - o) / d; if (a > c) [a, c] = [c, a];
+        t0 = Math.max(t0, a); t1 = Math.min(t1, c); if (t0 > t1) return false;
+    }
+    return true;
+}
+/**
+ * promise-agent fix 2 — the wall a made page hangs on. Only solid walls (a kit's glazing, e.g. the penthouse's
+ * north and east glass, never), clear of the kit's baked furniture and every thing in the world, the centre at
+ * eye height, and a clear line of sight from where you stand (`from`). Best: in sight, about 5 m away.
+ * Undefined in an open world (no walls) — the planner then finds its own spot.
+ */
+export function pageWallSpot(world: WorldSpec, from?: { x: number; z: number }, size: { width: number; height: number } = { width: 3.2, height: 1.8 }): WallSpot | undefined {
+    if (world.shell.open) return undefined;
+    const kit = activeKit(world);
+    const glass = new Set<Side>(kit?.glass ?? []);
+    const W = world.shell.width / 2, D = world.shell.depth / 2, hw = size.width / 2, inset = 0.35;
+    const things: Box2[] = [
+        ...(kit?.blocks ?? []).map(b => ({ x: b.x, z: b.z, hx: b.hx, hz: b.hz, tall: true })),
+        ...world.entities.map(footprint).filter((b): b is Box2 => !!b)
+    ];
+    const eye = from ?? (kit ? { x: kit.spawn.x, z: kit.spawn.z } : { x: 0, z: Math.min(4.1, D - 0.9) });
+    const sides: Array<{ side: Side; rotation: number; at(u: number): { x: number; z: number }; span: number }> = [
+        { side: 'south', rotation: Math.PI, at: u => ({ x: u, z: D - inset }), span: W },
+        { side: 'west', rotation: Math.PI / 2, at: u => ({ x: -W + inset, z: u }), span: D },
+        { side: 'north', rotation: 0, at: u => ({ x: u, z: -D + inset }), span: W },
+        { side: 'east', rotation: -Math.PI / 2, at: u => ({ x: W - inset, z: u }), span: D }
+    ];
+    let best: { score: number; spot: WallSpot } | undefined;
+    for (const s of sides) {
+        if (glass.has(s.side)) continue;
+        for (let u = -s.span + hw + 0.3; u <= s.span - hw - 0.3 + 1e-9; u += 0.2) {
+            const c = s.at(u), along = s.side === 'south' || s.side === 'north';
+            const me: Box2 = { x: c.x, z: c.z, hx: along ? hw : 0.2, hz: along ? 0.2 : hw, tall: true };
+            if (things.some(b => hit(me, b, 0.25))) continue;
+            // In front of the screen, 1.2 m of floor stays free (you can stand there and look at it).
+            const front: Box2 = { x: c.x + Math.sin(s.rotation) * 0.9, z: c.z + Math.cos(s.rotation) * 0.9, hx: along ? hw : 0.6, hz: along ? 0.6 : hw, tall: false };
+            if (things.some(b => b.tall && hit(front, b, 0))) continue;
+            const dist = Math.hypot(c.x - eye.x, c.z - eye.z);
+            // Things you stand inside or right against (your own desk) do not block the view.
+            const blocked = things.filter(b => b.tall && crosses(eye, c, b) && !(Math.abs(eye.x - b.x) <= b.hx + 0.1 && Math.abs(eye.z - b.z) <= b.hz + 0.1)).length;
+            const score = blocked * 10 + Math.abs(dist - 5) + Math.abs(u) * 0.02;
+            if (!best || score < best.score) best = { score, spot: { x: Math.round(c.x * 100) / 100, z: Math.round(c.z * 100) / 100, rotation: s.rotation, elevation: Math.round(Math.max(0.3, PAGE_EYE - size.height / 2) * 100) / 100, width: size.width, height: size.height, side: s.side } };
+        }
+    }
+    return best?.spot;
+}
+/** The side of the shell a wall thing hangs on (nearest edge), for checks and words. */
+export function wallSide(world: WorldSpec, at: { x: number; z: number }): Side {
+    const W = world.shell.width / 2, D = world.shell.depth / 2;
+    const d: Array<[Side, number]> = [['north', at.z + D], ['south', D - at.z], ['west', at.x + W], ['east', W - at.x]];
+    return d.sort((a, b) => a[1] - b[1])[0][0];
+}
+/** True when that side of the shell is glazing (a kit's glass), so no screen should hang there. */
+export function isGlassSide(world: WorldSpec, side: Side): boolean { return !!activeKit(world)?.glass?.includes(side); }
 
 export interface StandPose { x: number; z: number; yaw: number; pitch: number }
 /** Where to stand to look at a thing: in front of its screen, facing it, inside the floor. */

@@ -16,7 +16,7 @@
 import { applyWorldOps, validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model';
 import type { WorldProposal, WorldResult, WorldSpec } from '../common/world-model';
 import type { RoomState } from '../common/room-state';
-import type { WorldAdminHermesStatus, WorldAdminPlan, WorldAdminService } from '../common/world-admin-protocol';
+import type { WorldAdminHermesStatus, WorldAdminPlan, WorldAdminRequest, WorldAdminService } from '../common/world-admin-protocol';
 import { WORLD_ADMIN_PROFILE_RE, WORLD_ADMIN_PROMPT_MAX } from '../common/world-admin-protocol';
 
 /** What the admin console needs from the world store (build lane). */
@@ -204,7 +204,7 @@ export class AdminController {
     }
 
     // ---- Asking ----------------------------------------------------------------------------
-    async ask(prompt: string): Promise<void> {
+    async ask(prompt: string, extra: { wallSpot?: WorldAdminRequest['wallSpot'] } = {}): Promise<void> {
         const text = prompt.trim();
         if (!text || this.state.busy) return;
         if (text.length > WORLD_ADMIN_PROMPT_MAX) { this.emit({ error: `Keep the request under ${WORLD_ADMIN_PROMPT_MAX} characters.` }); return; }
@@ -222,7 +222,7 @@ export class AdminController {
         this.emit({ entries: [...entries, entry].slice(-MAX_ENTRIES), activeId: id, busy: true, error: '' });
         const epoch = ++this.epoch;
         try {
-            const plan = await this.host.service.plan({ world, prompt: text, ...(useHermes ? { useHermes: true, confirmedHermes: true, profile: this.state.profile || 'default' } : {}) });
+            const plan = await this.host.service.plan({ world, prompt: text, ...(extra.wallSpot ? { wallSpot: extra.wallSpot } : {}), ...(useHermes ? { useHermes: true, confirmedHermes: true, profile: this.state.profile || 'default' } : {}) });
             if (epoch !== this.epoch) return;
             if (plan.proposal) {
                 const now = this.host.store()?.world;

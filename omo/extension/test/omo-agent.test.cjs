@@ -15,7 +15,9 @@ const pages = require('../src/common/omo-pages.ts');
 const { OmoPagesStore } = require('../src/node/omo-pages-store.ts');
 const model = require('../src/common/world-model.ts');
 const { planWithRules } = require('../src/common/world-admin-rules.ts');
+require('../src/common/world-templates.ts');
 Module._extensions['.ts'] = originalTsLoader;
+const require2 = id => require(id);
 
 /** The default room, with Desk one renamed "Claude desk" (a Claude tab) and named "Lounge". */
 function lounge() {
@@ -247,3 +249,37 @@ test('memory you can walk: visits, where was I (skips where you stand and things
   assert.ok(Math.abs(desk.z - 2.25) < 1e-6 && desk.yaw === 0, JSON.stringify(desk));
   assert.equal(agent.findEntity(agent.worldSnapshot(w), 'the web wall').id, 'web');
 });
+
+test('fix 2: a made page hangs on a solid wall (never the penthouse glass), clear of furniture, eye height, in sight; the planner uses it', () => {
+  const templates = require2('../src/common/world-templates.ts');
+  const kits = require2('../src/common/world-style-kits.ts');
+  const w = templates.instantiateTemplate('nyc-skyscraper');
+  const kit = kits.activeKit(w);
+  assert.deepEqual([...kit.glass].sort(), ['east', 'north']);
+  const spot = agent.pageWallSpot(w, { x: kit.spawn.x, z: kit.spawn.z });
+  assert.ok(spot, 'a spot');
+  assert.ok(spot.side === 'south' || spot.side === 'west', `solid side, got ${spot.side}`);
+  assert.equal(agent.wallSide(w, spot), spot.side);
+  assert.equal(agent.isGlassSide(w, spot.side), false);
+  assert.equal(agent.isGlassSide(w, 'north'), true);
+  assert.ok(Math.abs(spot.elevation + spot.height / 2 - agent.PAGE_EYE) < 0.01, 'centre at eye height');
+  // Clear of the kit's baked furniture and of every thing in the world (0.25 m gap).
+  const along = spot.side === 'south' || spot.side === 'north';
+  const me = { x: spot.x, z: spot.z, hx: along ? spot.width / 2 : 0.2, hz: along ? 0.2 : spot.width / 2 };
+  for (const b of kit.blocks) assert.ok(!(Math.abs(me.x - b.x) < me.hx + b.hx + 0.25 && Math.abs(me.z - b.z) < me.hz + b.hz + 0.25), `clear of block ${JSON.stringify(b)}`);
+  for (const e of w.entities.filter(e => e.kind === 'web-wall')) assert.ok(Math.abs(me.x - e.transform.x) > me.hx + e.width / 2, `clear of ${e.id}`);
+  // The screen faces into the room.
+  assert.ok(Math.cos(spot.rotation) * -Math.sign(spot.z) > 0.9 || Math.sin(spot.rotation) * -Math.sign(spot.x) > 0.9);
+  // The planner puts the page's web wall exactly there.
+  const plan = planWithRules(w, 'add a web wall called Desk dashboard showing http://127.0.0.1:3755/omo-pages/desk-dashboard.html', { wallSpot: spot, makeId: () => 'p' });
+  const add = plan.ops.find(o => o.op === 'add' && o.entity.kind === 'web-wall');
+  assert.deepEqual([add.entity.transform.x, add.entity.transform.z, add.entity.elevation], [spot.x, spot.z, spot.elevation]);
+  assert.equal(add.entity.transform.rotation, spot.rotation);
+  // A spot that does not fit (inside a desk) falls back to the free-spot search.
+  const bad = planWithRules(w, 'add a web wall called X showing http://127.0.0.1:3755/omo-pages/x.html', { wallSpot: { x: -1.4, z: 1, rotation: 0, elevation: 0.65 }, makeId: () => 'p' });
+  const add2 = bad.ops.find(o => o.op === 'add');
+  assert.ok(add2 && !(add2.entity.transform.x === -1.4 && add2.entity.transform.z === 1));
+  // An open world has no walls: no spot.
+  assert.equal(agent.pageWallSpot({ ...w, shell: { ...w.shell, open: true } }), undefined);
+});
+

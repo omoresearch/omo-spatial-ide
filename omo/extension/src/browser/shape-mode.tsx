@@ -60,6 +60,8 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     const tags = React.useRef<HTMLDivElement>(null);
     /** The proposal the camera is framed on ('' = the plain overview). */
     const framed = React.useRef('');
+    /** promise-agent fix 2: the URL of a page just kept; its wall is framed next. */
+    const wallFrame = React.useRef('');
     const enteredBuild = React.useRef(false);
     const navBefore = React.useRef<'walk' | 'overview' | undefined>(undefined);
     const openRef = React.useRef(open); openRef.current = open;
@@ -275,6 +277,13 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     // Keep / Undo / close: the camera eases back to the plain overview.
     // (A refinement keeps the frame while it thinks, then glides to the new change.)
     React.useEffect(() => { if ((!open || (!proposed && !busy)) && framed.current) { framed.current = ''; frameOn(build.scene, undefined); } }, [open, proposed, busy]);
+    // promise-agent fix 2: after Keep of a made page, the camera eases to face its wall (solid walls drawn, the page fills the view).
+    React.useEffect(() => {
+        const url = wallFrame.current; if (!open || proposed || busy || !url) return;
+        wallFrame.current = '';
+        const wall = build.store?.world.entities.find(e => e.kind === 'web-wall' && e.home === url);
+        if (wall && wall.kind === 'web-wall') { framed.current = `wall:${wall.id}`; frameWall(build.scene, wall); }
+    }, [open, proposed, busy, kept]);
 
     if (!admin || !adminState) return null;
     const store = build.store;
@@ -304,7 +313,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
             void agent.makePage(route.page).then(made => {
                 setMaking('');
                 setTurn({ prompt: made.prompt, idea: made.title, page: { title: made.title, url: made.url } });
-                void admin.ask(made.prompt);
+                void admin.ask(made.prompt, made.spot ? { wallSpot: { x: made.spot.x, z: made.spot.z, rotation: made.spot.rotation, elevation: made.spot.elevation } } : {});
             }, error => { setMaking(''); setAnswer({ text: `The page was not made: ${error instanceof Error ? error.message : String(error)}`, kind: 'note' }); });
             focusPrompt();
             return;
@@ -323,7 +332,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
         if (!entry || !proposed) return;
         const sentence = turn?.page ? pageSentence(turn.page.title) : captionFor(entry.plan!.proposal!.summary, turn?.idea, turn?.where, spokenNames(entry.plan!.proposal!.ops));
         admin.apply(entry.id);
-        if (admin.activeEntry?.status === 'applied' && turn?.page) agent?.openPage(turn.page.url); // promise-agent: the kept wall shows its page, live
+        if (admin.activeEntry?.status === 'applied' && turn?.page) { agent?.openPage(turn.page.url); wallFrame.current = turn.page.url; } // promise-agent: the kept wall shows its page, live; the camera frames it
         if (admin.activeEntry?.status === 'applied') { keptLog = [...keptLog, { id: entry.id, sentence }].slice(-24); setKept(keptLog); redoLog = []; setRedoable(redoLog); }
         setTurn(undefined); focusPrompt();
     };
@@ -474,7 +483,19 @@ function ghostedAll(three: THREE.Scene, ids: string[]): boolean { return ids.eve
 /** shape — ease the room's overview camera onto a box (the change), or back (undefined): RoomScene.frameFocus. */
 function frameOn(scene: BuildMode['scene'], box: THREE.Box3 | undefined): void {
     scene?.frameFocus(box, 500);
-    const canvas = threeOf(scene).canvas; if (canvas) canvas.dataset.shapeFramed = box ? 'true' : 'false';
+    const canvas = threeOf(scene).canvas; if (canvas) { canvas.dataset.shapeFramed = box ? 'true' : 'false'; delete canvas.dataset.framedWall; }
+}
+/**
+ * promise-agent fix 2 — face a web wall: the camera turns square to its screen at a low angle, close enough that
+ * the page fills ~70% of the view width, with the kit's solid walls and ceiling drawn (no dollhouse cut).
+ */
+function frameWall(scene: BuildMode['scene'], wall: Extract<WorldEntity, { kind: 'web-wall' }>): void {
+    const t = threeOf(scene); if (!scene || !t.camera) return;
+    const half = THREE.MathUtils.degToRad(t.camera.fov / 2), hHalf = Math.atan(Math.tan(half) * t.camera.aspect);
+    const distance = Math.max((wall.width / 2) / 0.72 / Math.tan(hHalf), (wall.height / 2) / 0.62 / Math.tan(half), 2.2);
+    const target = { x: wall.transform.x, y: wall.elevation + wall.height / 2, z: wall.transform.z };
+    scene.frameFocus(undefined, 700, { azimuth: wall.transform.rotation, elevation: 0.16, distance, target, solid: true });
+    if (t.canvas) { t.canvas.dataset.shapeFramed = 'true'; t.canvas.dataset.framedWall = wall.id; }
 }
 /** Top centre of the pending things (world space): the caption points here. */
 function ghostAnchor(three: THREE.Scene | undefined, ids: string[]): { x: number; y: number; z: number } | undefined {

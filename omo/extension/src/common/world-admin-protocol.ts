@@ -33,6 +33,8 @@ export interface WorldAdminRequest {
     useHermes?: boolean;
     /** Must be true when useHermes is true: the user confirmed the Hermes call in the panel. */
     confirmedHermes?: boolean;
+    /** promise-agent fix 2: where a new web wall (a page Omo made) hangs — a solid wall spot Omo chose. Used when it fits. */
+    wallSpot?: { x: number; z: number; rotation: number; elevation: number };
 }
 
 export interface WorldAdminPlan {

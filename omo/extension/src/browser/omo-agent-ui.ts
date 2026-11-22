@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import type { RoomScene } from './room-scene';
 import type { WorldSpec } from '../common/world-model';
 import type { PlayerPose } from '../common/player-state';
-import { answerQuestion, findEntity, OmoAnswer, PageRequest, placePose, rememberPlace, RuntimeSnapshot, VisitedPlace, whereWasI, worldSnapshot, WorldSnapshot, agoWords, entityName } from '../common/omo-agent';
+import { answerQuestion, findEntity, OmoAnswer, PageRequest, pageWallSpot, placePose, WallSpot, rememberPlace, RuntimeSnapshot, VisitedPlace, whereWasI, worldSnapshot, WorldSnapshot, agoWords, entityName } from '../common/omo-agent';
 import { renderPage, pageStateFrom, PAGES_ROUTE } from '../common/omo-pages';
 import { ambientHost } from './agent-avatars';
 import { sceneControls } from './focus-screen';
@@ -27,7 +27,7 @@ export interface OmoAgentHost {
     message(text: string): void;
 }
 
-export interface MadePage { url: string; path: string; title: string; prompt: string }
+export interface MadePage { url: string; path: string; title: string; prompt: string; /** fix 2: the solid wall spot the page hangs on (sent with the request) */ spot?: WallSpot }
 
 export class OmoAgent {
     constructor(private readonly host: OmoAgentHost) {}
@@ -42,7 +42,10 @@ export class OmoAgent {
         const html = renderPage(req, pageStateFrom(snap), snap.text);
         const saved = await this.host.savePage(req.slug, html);
         const url = `${this.host.origin()}${saved.path}`;
-        return { url, path: saved.path, title: req.title, prompt: `add a web wall called ${req.title} showing ${url}` };
+        // fix 2: a solid wall (never the glass), clear of furniture, eye height, in sight from where you stand.
+        const pose = this.host.scene()?.getPlayerPose();
+        const spot = pageWallSpot(snap.world, pose ? { x: pose.x, z: pose.z } : undefined);
+        return { url, path: saved.path, title: req.title, prompt: `add a web wall called ${req.title} showing ${url}`, spot };
     }
     /** A one-line note in the footer (after a walk, Shape is closed). */
     say(text: string): void { this.host.message(text); }

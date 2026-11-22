@@ -303,7 +303,7 @@ export class WorldAdminBackend implements WorldAdminService {
         const world = valid.world;
 
         if (planner === 'rules') {
-            const result = planWithRules(world, prompt);
+            const result = planWithRules(world, prompt, input.wallSpot ? { wallSpot: input.wallSpot } : {});
             return { proposal: result.proposal, explanation: result.explanation, planner, steps: result.steps, notes: result.notes };
         }
 
