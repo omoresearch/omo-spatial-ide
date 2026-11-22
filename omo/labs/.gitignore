@@ -1,0 +1,18 @@
+# Big lab binaries live outside git; install with scripts/fetch-lab-assets.cjs (lock: lab-assets.lock.json)
+*.blend
+*.blend1
+*.glb
+*.exr
+*.hdr
+*.splat
+*.mp4
+*.webm
+*.stl
+*.bin
+*.png
+*.jpg
+*.r1
+*.pyc
+__pycache__/
+.pydeps/
+node_modules/

@@ -1,0 +1,3 @@
+# Originals and reference shots stay out of git; install with scripts/fetch-lab-assets.cjs --lab onboarding-mockup
+images/originals/
+references/

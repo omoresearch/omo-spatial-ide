@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Penthouse at dusk — CC0 assets lane</title>
+<link rel="icon" href="data:,">
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#000}canvas{display:block;width:100vw;height:100vh}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+RectAreaLightUniformsLib.init();
+
+const Q = new URLSearchParams(location.search);
+const W = innerWidth, H = innerHeight;
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(1);
+renderer.setSize(W, H, false);
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = Number(Q.get('exp') || 1.0);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(Number(Q.get('fov') || 46), W / H, 0.05, 400);
+camera.rotation.order = 'YXZ';
+
+// ---------- room dimensions (metres) ----------
+const RX0 = -12, RX1 = 12, RZ0 = -8, RZ1 = 8, CEIL = 3.5;
+const HDRI_ROT = Number(Q.get('rot') ?? 1.05);   // radians; puts the skyline + sunset glow in the north glass
+
+const gltfLoader = new GLTFLoader();
+const texLoader = new THREE.TextureLoader();
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+function loadTex(url, srgb, rx, ry) {
+  return new Promise((res, rej) => texLoader.load(url, t => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = maxAniso;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t);
+  }, undefined, rej));
+}
+async function pbr(id, rx, ry, extra = {}) {
+  const b = `assets/tex/${id}/${id}_`;
+  const [map, normalMap, arm] = await Promise.all([
+    loadTex(b + 'diff_1k.jpg', true, rx, ry), loadTex(b + 'nor_gl_1k.jpg', false, rx, ry), loadTex(b + 'arm_1k.jpg', false, rx, ry)]);
+  return new THREE.MeshStandardMaterial({ map, normalMap, aoMap: arm, roughnessMap: arm, metalnessMap: arm, metalness: 0, ...extra });
+}
+function loadModel(id) {
+  return new Promise((res, rej) => gltfLoader.load(`assets/models/${id}/${id}.gltf`, g => {
+    g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material.map) o.material.map.anisotropy = maxAniso; } });
+    res(g.scene);
+  }, undefined, rej));
+}
+
+// ---------- terminal screen textures ----------
+const TERMS = [
+  ['harry@omo:~/sky-lab$ npm run build', '> omo-sky-lab@0.4.2 build', '> vite build --mode production', '', 'vite v6.2.0 building for production...', '\u2713 1287 modules transformed.', 'dist/index.html            0.62 kB', 'dist/assets/index.css     18.40 kB', 'dist/assets/index.js     412.77 kB', '\u2713 built in 3.91s', '', 'harry@omo:~/sky-lab$ git status', 'On branch main', 'nothing to commit, working tree clean', 'harry@omo:~/sky-lab$ \u2588'],
+  ['$ pytest -q tests/', '........................................ [ 41%]', '........................................ [ 83%]', '................                         [100%]', '96 passed in 4.22s', '', '$ python train.py --epochs 12', 'epoch 01  loss 2.4113  val 2.3870', 'epoch 02  loss 1.9032  val 1.9456', 'epoch 03  loss 1.6120  val 1.7011', 'epoch 04  loss 1.4478  val 1.5893', 'epoch 05  loss 1.3305  val 1.5120', 'epoch 06  loss 1.2471  val 1.4702', '\u2588'],
+  ['top - 18:42:07 up 12 days,  3:11,  2 users', 'Tasks: 312 total,   2 running', '%Cpu(s):  7.3 us,  1.9 sy, 90.1 id', 'MiB Mem : 64012.4 total, 21877.0 free', '', '  PID USER   %CPU %MEM  COMMAND', ' 4121 harry  38.2  4.1  node server.js', ' 3310 harry  12.7  2.2  postgres', ' 2290 harry   6.1  1.3  redis-server', ' 5512 harry   3.4  0.9  nginx: worker', ' 1187 root    1.2  0.4  systemd-journal', ' 6034 harry   0.7  0.2  ssh-agent', '', '$ \u2588'],
+];
+function terminalTexture(lines, accent) {
+  const c = document.createElement('canvas'); c.width = 1280; c.height = 750;
+  const g = c.getContext('2d');
+  g.fillStyle = '#0b0f14'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#161b22'; g.fillRect(0, 0, c.width, 44);
+  ['#ff5f56', '#ffbd2e', '#27c93f'].forEach((col, i) => { g.fillStyle = col; g.beginPath(); g.arc(28 + i * 26, 22, 8, 0, 7); g.fill(); });
+  g.fillStyle = '#8b949e'; g.font = '22px "DejaVu Sans Mono", monospace'; g.fillText('zsh — 120×36', 540, 30);
+  g.font = 'bold 40px "DejaVu Sans Mono", "Liberation Mono", monospace';
+  lines.slice(0, 13).forEach((l, i) => {
+    g.fillStyle = l.startsWith('$') || l.includes('$ ') ? accent : (l.includes('\u2713') || l.includes('passed') ? '#7ee787' : '#d6dde6');
+    g.fillText(l.slice(0, 50), 30, 100 + i * 50);
+  });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+}
+
+function box(w, h, d, mat, x, y, z, cast = true) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z);
+  m.castShadow = cast; m.receiveShadow = true; scene.add(m); return m;
+}
+
+async function build() {
+  // ---------- HDRI: 8k for the view through the glass, 2k for image-based lighting ----------
+  const rgbe = new RGBELoader();
+  const [bg, envSrc] = await Promise.all([
+    rgbe.loadAsync('assets/hdri/sunset_jhbcentral_8k.hdr'),
+    rgbe.loadAsync('assets/hdri/sunset_jhbcentral_2k.hdr')]);
+  bg.mapping = THREE.EquirectangularReflectionMapping;
+  envSrc.mapping = THREE.EquirectangularReflectionMapping;
+  scene.background = bg;
+  scene.backgroundRotation.set(0, HDRI_ROT, 0);
+  scene.backgroundIntensity = Number(Q.get('bgi') || 0.6);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envRT = pmrem.fromEquirectangular(envSrc);
+  // interior bounce: blend a neutral room env so indoor reflections are not just the sky
+  scene.environment = envRT.texture;
+  scene.environmentRotation.set(0, HDRI_ROT, 0);
+  scene.environmentIntensity = Number(Q.get('envi') || 0.35);
+  renderer.toneMappingExposure = Number(Q.get('exp') || 1.0);
+
+  // ---------- materials ----------
+  const [floorMat, wallMat, ceilMat, rugMat, stoneMat, marbleMat, walnutMat] = await Promise.all([
+    pbr('herringbone_parquet', (RX1 - RX0) / 3.4, (RZ1 - RZ0) / 3.4, { envMapIntensity: 0.8, roughness: 1.15 }),
+    pbr('white_plaster_02', 6, 1.2, { color: 0xf1ece4 }),
+    pbr('white_plaster_02', 3, 2, { color: 0xfaf7f2, normalScale: new THREE.Vector2(0.25, 0.25) }),
+    pbr('wool_boucle', 14, 11, { color: 0xd9d2c6 }),
+    pbr('grey_cartago_01', 4, 3),
+    pbr('marble_01', 2, 1),
+    pbr('walnut_veneer', 1, 1, { roughness: 0.5 }),
+  ]);
+  floorMat.aoMap = null; // arm AO on large floor tiles reads as dirt
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x15171a, metalness: 0.85, roughness: 0.32 });
+  const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0, roughness: 0.02, transmission: 0, transparent: true, opacity: 0.08, envMapIntensity: 1.2, specularIntensity: 1, ior: 1.5, depthWrite: false, side: THREE.DoubleSide });
+  const ledMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.82, 0.62).multiplyScalar(5) });
+  const blackMat = new THREE.MeshStandardMaterial({ color: 0x0d0e10, metalness: 0.4, roughness: 0.35 });
+  const alumMat = new THREE.MeshStandardMaterial({ color: 0xb8bcc2, metalness: 1, roughness: 0.28 });
+  const oakMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.45 });
+
+  // ---------- shell ----------
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(RX1 - RX0, RZ1 - RZ0), floorMat);
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(RX1 - RX0, RZ1 - RZ0), ceilMat);
+  ceil.rotation.x = Math.PI / 2; ceil.position.y = CEIL; scene.add(ceil);
+  // solid walls: west (x=-12) and south (z=+8)
+  box(0.2, CEIL, RZ1 - RZ0, wallMat, RX0 - 0.1, CEIL / 2, 0, false);
+  box(RX1 - RX0, CEIL, 0.2, wallMat, 0, CEIL / 2, RZ1 + 0.1, false);
+  // stone-clad core on the south wall
+  box(5.2, CEIL, 0.3, stoneMat, -1.5, CEIL / 2, RZ1 - 0.15, false);
+  // ceiling slot lights (warm LED lines) + bulkhead along the glass
+  box(RX1 - RX0, 0.35, 0.9, ceilMat, 0, CEIL - 0.175, RZ0 + 0.45, false);
+  box(0.9, 0.35, RZ1 - RZ0, ceilMat, RX1 - 0.45, CEIL - 0.175, 0, false);
+  box(RX1 - RX0 - 0.9, 0.02, 0.04, ledMat, -0.45, CEIL - 0.36, RZ0 + 0.92, false);
+  // skirting
+  box(RX1 - RX0, 0.08, 0.02, frameMat, 0, 0.04, RZ1 - 0.01, false);
+
+  // floor-to-ceiling glass on north (z=-8) and east (x=+12)
+  const MULL = 1.6;
+  for (let x = RX0; x <= RX1 + 0.01; x += MULL) box(0.05, CEIL, 0.12, frameMat, x, CEIL / 2, RZ0, true);
+  for (let z = RZ0; z <= RZ1 + 0.01; z += MULL) box(0.12, CEIL, 0.05, frameMat, RX1, CEIL / 2, z, true);
+  box(RX1 - RX0, 0.06, 0.14, frameMat, 0, 0.03, RZ0, false); box(RX1 - RX0, 0.06, 0.14, frameMat, 0, CEIL - 0.03, RZ0, false);
+  box(0.14, 0.06, RZ1 - RZ0, frameMat, RX1, 0.03, 0, false); box(0.14, 0.06, RZ1 - RZ0, frameMat, RX1, CEIL - 0.03, 0, false);
+  const gN = new THREE.Mesh(new THREE.PlaneGeometry(RX1 - RX0, CEIL), glassMat); gN.position.set(0, CEIL / 2, RZ0); scene.add(gN);
+  const gE = new THREE.Mesh(new THREE.PlaneGeometry(RZ1 - RZ0, CEIL), glassMat); gE.rotation.y = -Math.PI / 2; gE.position.set(RX1, CEIL / 2, 0); scene.add(gE);
+  // exterior: thin slab edge + parapet outside the glass (hides the HDRI photographer's own roof directly below)
+  if (Q.get('terrace') !== '0') {
+    const slabMat = stoneMat.clone(); slabMat.color = new THREE.Color(0xb9b4ad);
+    const T = Number(Q.get('tw') || 1.2);
+    box(RX1 - RX0 + T, 0.3, T, slabMat, T / 2, -0.15, RZ0 - T / 2, false);
+    box(T, 0.3, RZ1 - RZ0, slabMat, RX1 + T / 2, -0.15, 0, false);
+    box(RX1 - RX0 + T, 0.12, 0.08, frameMat, T / 2, 0.06, RZ0 - T + 0.04, false);
+    box(0.08, 0.12, RZ1 - RZ0, frameMat, RX1 + T - 0.04, 0.06, 0, false);
+  }
+  // two round columns
+  for (const [x, z] of [[-4.2, -3.6], [4.0, 3.6]]) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, CEIL, 48), wallMat); c.position.set(x, CEIL / 2, z); c.castShadow = c.receiveShadow = true; scene.add(c);
+  }
+
+  // ---------- CC0 models ----------
+  const ids = ['metal_office_desk', 'modern_arm_chair_01', 'sofa_02', 'mid_century_lounge_chair', 'modern_coffee_table_01', 'side_table_01', 'modern_ceiling_lamp_01', 'potted_plant_04', 'calathea_orbifolia_01', 'potted_plant_02', 'pachira_aquatica_01', 'modern_wooden_cabinet', 'ceramic_vase_01', 'Ottoman_01', 'desk_lamp_arm_01', 'potted_plant_01', 'steel_frame_shelves_03', 'hanging_picture_frame_02', 'standing_picture_frame_01', 'book_encyclopedia_set_01', 'brass_vase_01', 'round_wooden_table_01', 'dining_chair_02', 'bar_chair_round_01'];
+  const M = Object.fromEntries(await Promise.all(ids.map(async id => [id, await loadModel(id)])));
+  const place = (id, x, z, ry = 0, s = 1, y = 0) => { const o = M[id].clone(true); o.position.set(x, y, z); o.rotation.y = ry; o.scale.setScalar(s); scene.add(o); return o; };
+
+  // work zone: three desks facing the north glass, screens face the walk path
+  const DESKS = [[-9.7, -5.7], [-7.3, -5.7], [-4.9, -5.7]];
+  const accents = ['#79c0ff', '#ffa657', '#d2a8ff'];
+  DESKS.forEach(([x, z], i) => {
+    // walnut slab desk on black steel legs (geometry + CC0 walnut veneer texture)
+    box(1.7, 0.04, 0.8, walnutMat, x, 0.72, z);
+    for (const sx of [-0.8, 0.8]) { box(0.04, 0.7, 0.04, frameMat, x + sx, 0.35, z - 0.36); box(0.04, 0.7, 0.04, frameMat, x + sx, 0.35, z + 0.36); box(0.04, 0.04, 0.72, frameMat, x + sx, 0.05, z); }
+    place('modern_arm_chair_01', x + 0.1, z + 0.85, Math.PI + 0.12 * (i - 1));
+    // monitor (simple geometry; screen is a canvas terminal), faces the sitter (south), sitter faces the glass
+    const mon = new THREE.Group(); mon.position.set(x, 0.74, z - 0.16); mon.rotation.y = 0;
+    const bez = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.44, 0.025), blackMat); bez.position.y = 0.42; bez.castShadow = true; mon.add(bez);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.71, 0.415), new THREE.MeshBasicMaterial({ map: terminalTexture(TERMS[i], accents[i]), toneMapped: false, color: new THREE.Color(0.9, 0.9, 0.9) }));
+    scr.position.set(0, 0.42, 0.0135); mon.add(scr);
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 0.03), alumMat); neck.position.set(0, 0.11, -0.05); mon.add(neck);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.012, 0.18), alumMat); foot.position.set(0, 0.006, -0.03); mon.add(foot);
+    const kb = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.015, 0.13), alumMat); kb.position.set(0, 0.008, 0.3); mon.add(kb);
+    scene.add(mon);
+    // screen spill light onto the desk/chair
+    const sl = new THREE.PointLight(0x8fb6ff, 0.35, 2.2, 2); sl.position.set(x, 1.15, z + 0.25); scene.add(sl);
+    if (i === 1) { place('desk_lamp_arm_01', x + 0.62, z - 0.2, -0.5, 0.8, 0.74);
+      const dlp = new THREE.PointLight(0xffb070, 0.45, 2.5, 2); dlp.position.set(x + 0.55, 1.25, z + 0.05); scene.add(dlp); }
+    if (i === 0) for (let k = 0; k < 5; k++) place('book_encyclopedia_set_01', x - 0.7 + k * 0.045, z - 0.2, Math.PI / 2 + 0.1, 1.0, 0.74);
+    if (i === 2) { place('ceramic_vase_01', x + 0.65, z - 0.2, 0, 0.45, 0.74); place('potted_plant_04', x - 0.62, z - 0.15, 1.0, 0.9, 0.74); }
+  });
+  { // calathea is pot-less: give it a matte ceramic planter
+    const potMat = new THREE.MeshStandardMaterial({ color: 0xd8d2c8, roughness: 0.6 });
+    for (const [px, pz] of [[-11.3, -4.3], [-3.5, -7.3]]) {
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.21, 0.42, 48), potMat); pot.position.set(px, 0.21, pz); pot.castShadow = pot.receiveShadow = true; scene.add(pot);
+      place('calathea_orbifolia_01', px, pz, px, 1.1, 0.36);
+    }
+  }
+  
+
+  // lounge zone in the north-east corner
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.6), rugMat); rug.rotation.x = -Math.PI / 2; rug.position.set(7.6, 0.006, -4.4); rug.receiveShadow = true; scene.add(rug);
+  place('sofa_02', 5.9, -4.4, Math.PI / 2);
+  place('mid_century_lounge_chair', 9.5, -5.6, -Math.PI / 2 - 0.5);
+  place('Ottoman_01', 9.3, -3.0, -0.3);
+  place('modern_coffee_table_01', 7.5, -4.4, 0);
+  place('side_table_01', 5.9, -6.0, 0);
+  place('ceramic_vase_01', 7.5, -4.15, 0, 0.6, 0.39);
+  place('pachira_aquatica_01', 11.0, -7.0, 0.8, 1.15);
+  place('potted_plant_01', 3.4, -7.2, 0.0, 1.2);
+  place('potted_plant_02', 11.1, -1.2, 1.2, 1.2);
+  place('potted_plant_01', 11.2, 4.6, 1.0, 1.3);
+  place('mid_century_lounge_chair', 10.3, 5.8, -Math.PI / 2 + 0.7);
+  place('side_table_01', 10.9, 6.9, 0.2);
+  for (const [x, z] of [[7.0, -4.4], [8.1, -4.4]]) place('modern_ceiling_lamp_01', x, z, 0, 1.0, CEIL - 0.95);
+  scene.traverse(o => { if (o.isMesh && /globe|glass/.test(o.material.name) && o.material.name.startsWith('modern_ceiling')) { o.material = o.material.clone(); o.material.emissive = new THREE.Color(1.0, 0.78, 0.52); o.material.emissiveIntensity = 1.2; } });
+  const pend = new THREE.PointLight(0xffc58a, 6, 6, 2); pend.position.set(7.55, CEIL - 1.0, -4.4); pend.castShadow = true; pend.shadow.mapSize.set(1024, 1024); pend.shadow.bias = -0.002; scene.add(pend);
+
+  // west wall: long walnut cabinet with vase
+  place('modern_wooden_cabinet', RX0 + 0.36, 1.6, Math.PI / 2);
+  place('brass_vase_01', RX0 + 0.36, 0.7, 0, 0.8, 0.68);
+  place('potted_plant_02', RX0 + 0.36, 2.6, 0, 0.55, 0.68);
+  place('steel_frame_shelves_03', RX0 + 0.62, 5.2, Math.PI / 2);
+  for (let k = 0; k < 7; k++) place('book_encyclopedia_set_01', RX0 + 0.5, 4.3 + k * 0.05, Math.PI / 2, 1.0, 1.21);
+  place('ceramic_vase_01', RX0 + 0.5, 5.9, 0, 0.7, 1.21);
+  place('pachira_aquatica_01', 1.2, 7.1, 0.2, 1.1);
+  // art: CC0 framed photographs, scaled up as large prints
+  const art1 = place('hanging_picture_frame_02', RX0 + 0.02, 1.85, Math.PI / 2, 2.6, 1.55);
+  place('hanging_picture_frame_02', -1.5, RZ1 - 0.3, Math.PI, 2.2, 1.75);
+  place('standing_picture_frame_01', 7.3, -4.55, 0.6, 1.2, 0.39);
+  for (let k = 0; k < 4; k++) place('book_encyclopedia_set_01', 7.75, -4.75 + k * 0.045, 0.0, 1.0, 0.39).rotation.z = Math.PI / 2;
+  place('brass_vase_01', 5.9, -6.0, 0, 0.55, 0.55);
+  place('ceramic_vase_01', 2.2, 5.4, 0, 0.55, 0.96);
+  place('brass_vase_01', 3.5, 5.35, 0, 0.45, 0.96);
+  // dining
+  const rug2 = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), rugMat); rug2.rotation.x = -Math.PI / 2; rug2.position.set(-3.2, 0.006, 2.6); rug2.receiveShadow = true; scene.add(rug2);
+  place('round_wooden_table_01', -3.2, 2.6, 0, 1.0);
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; place('dining_chair_02', -3.2 + Math.sin(a) * 0.95, 2.6 + Math.cos(a) * 0.95, a + Math.PI); }
+  place('ceramic_vase_01', -3.2, 2.6, 0, 0.7, 0.765);
+  place('modern_ceiling_lamp_01', -3.2, 2.6, 0, 1.15, CEIL - 1.1);
+  const dpl = new THREE.PointLight(0xffc58a, 5, 5, 2); dpl.position.set(-3.2, CEIL - 1.15, 2.6); dpl.castShadow = true; dpl.shadow.mapSize.set(1024, 1024); dpl.shadow.bias = -0.002; scene.add(dpl);
+  // kitchen stools
+  for (const x of [1.8, 2.8, 3.8]) place('bar_chair_round_01', x, 4.65, 0, 1.0);
+
+  // marble kitchen island near the core
+  box(3.2, 0.92, 1.0, marbleMat, 2.8, 0.46, 5.4);
+  box(3.3, 0.04, 1.1, marbleMat, 2.8, 0.94, 5.4);
+
+  // ---------- lights ----------
+  scene.add(new THREE.HemisphereLight(0x9fb3dd, 0x3a2e26, 0.18));
+  // warm wall-wash on the solid walls + ceiling cove (RectAreaLights)
+  const wash = (w, h, x, y, z, tx, ty, tz, I, col = 0xffc890) => { const l = new THREE.RectAreaLight(col, I, w, h); l.position.set(x, y, z); l.lookAt(tx, ty, tz); scene.add(l); };
+  wash(10, 0.3, -1.5, CEIL - 0.25, RZ1 - 0.5, -1.5, 0.5, RZ1, Number(Q.get('wash') || 4));
+  wash(0.3, 12, RX0 + 0.5, CEIL - 0.25, 1, RX0, 0.5, 1, Number(Q.get('wash') || 4));
+  wash(20, 1.2, 0, 0.6, RZ0 + 1.2, 0, CEIL, RZ0 + 1.5, 1.2, 0xffd6a8);
+  wash(18, 10, 0, 0.4, 0, 0, CEIL, 0.01, Number(Q.get('ceilfill') || 1.1), 0xffe2c0);
+  // low warm dusk key from the sunset direction (casts mullion shadows)
+  const sun = new THREE.DirectionalLight(0xff9a62, Number(Q.get('sun') || 0.6));
+  sun.position.set(-6, 5, -22); sun.target.position.set(2, 0, 2); scene.add(sun, sun.target);
+  sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+  Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 12, bottom: -12, near: 1, far: 60 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+  // recessed downlights
+  const DL = [[-9.7, -5.3], [-7.3, -5.3], [-4.9, -5.3], [2.8, 5.4], [7.6, -2.0], [-8.5, 4.5], [-0.5, 5.6], [-10.8, 1.6], [9.8, 2.6]];
+  DL.forEach(([x, z], i) => {
+    const s = new THREE.SpotLight(0xffc890, Number(Q.get('dl') || 30), 9, 0.6, 0.7, 2);
+    s.position.set(x, CEIL - 0.02, z); s.target.position.set(x, 0, z); scene.add(s, s.target);
+    if (i < 5) { s.castShadow = true; s.shadow.mapSize.set(1024, 1024); s.shadow.bias = -0.0008; }
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.07, 32), ledMat); disc.rotation.x = Math.PI / 2; disc.position.set(x, CEIL - 0.012, z); scene.add(disc);
+  });
+}
+
+// ---------- post ----------
+const rt = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType, samples: 4 });
+const composer = new EffectComposer(renderer, rt);
+composer.setPixelRatio(1); composer.setSize(W, H);
+composer.addPass(new RenderPass(scene, camera));
+let gtao = null;
+if (Q.get('ao') !== '0') {
+  gtao = new GTAOPass(scene, camera, W, H);
+  gtao.updateGtaoMaterial({ radius: 0.7, distanceExponent: 1.5, thickness: 1.5, scale: 1.0, samples: 16 });
+  gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+  gtao.blendIntensity = Number(Q.get('aoi') || 1.0);
+  composer.addPass(gtao);
+}
+const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.18, 0.45, 0.97);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+const grade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uVig: { value: 0.32 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig; varying vec2 vUv;
+    void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; float l = dot(c, vec3(0.2126,0.7152,0.0722));
+      vec3 shadowTint = vec3(0.90, 0.96, 1.10), hiTint = vec3(1.05, 1.0, 0.93);
+      c *= mix(shadowTint, hiTint, smoothstep(0.15, 0.75, l));
+      c = mix(vec3(l), c, 1.06);
+      c = (c - 0.5) * 1.05 + 0.5;
+      vec2 d = vUv - 0.5; c *= 1.0 - uVig * dot(d, d) * 1.6;
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0); }`
+});
+composer.addPass(grade);
+
+// ---------- deterministic tour ----------
+// keys: t, x, z, yaw (0 = looking -Z / north glass, + turns left), pitch
+const KEYS = [
+  [0.00, -10.8, 6.9, -1.0, -0.08],
+  [0.15, -9.0, 0.5, -0.2, -0.15],
+  [0.30, -7.3, -3.7, 0.0, -0.22],
+  [0.42, -3.0, -2.0, -0.9, -0.12],
+  [0.52, 6.8, 0.6, -1.30, -0.16],
+  [0.60, 10.9, 2.4, -1.57, -0.42],
+  [0.68, 11.0, 2.4, -1.47, -0.34],
+  [0.78, 11.3, 2.3, -0.90, -0.12],
+  [0.90, 10.8, 2.0, 0.35, -0.10],
+  [1.00, 10.2, 1.8, 1.25, -0.08],
+];
+const ss = x => x * x * (3 - 2 * x);
+function pose(t) {
+  t = Math.min(1, Math.max(0, t));
+  let i = 0; while (i < KEYS.length - 2 && t > KEYS[i + 1][0]) i++;
+  const a = KEYS[i], b = KEYS[i + 1], u = (t - a[0]) / (b[0] - a[0]);
+  // Catmull-Rom on position for smooth walking, smoothstep on angles
+  const p0 = KEYS[Math.max(0, i - 1)], p3 = KEYS[Math.min(KEYS.length - 1, i + 2)];
+  const cr = (k) => { const P0 = p0[k], P1 = a[k], P2 = b[k], P3 = p3[k]; const u2 = u * u, u3 = u2 * u;
+    return 0.5 * ((2 * P1) + (-P0 + P2) * u + (2 * P0 - 5 * P1 + 4 * P2 - P3) * u2 + (-P0 + 3 * P1 - 3 * P2 + P3) * u3); };
+  const e = ss(u);
+  return { x: cr(1), z: cr(2), yaw: a[3] + (b[3] - a[3]) * e, pitch: a[4] + (b[4] - a[4]) * e };
+}
+function render() { composer.render(); }
+window.__tourAt = (t) => {
+  const p = pose(t);
+  const bob = Math.sin(t * Math.PI * 2 * 9) * 0.012;
+  camera.position.set(p.x, 1.65 + bob, p.z);
+  camera.rotation.set(p.pitch, p.yaw, 0);
+  camera.updateMatrixWorld();
+  render();
+};
+window.__setPose = (p) => { camera.position.set(p.x, p.y ?? 1.65, p.z); camera.rotation.set(p.pitch || 0, p.yaw || 0, 0); render(); };
+
+// ---------- live WASD + mouse-look (only after a human interacts) ----------
+let live = false; const keys = {}; let last = performance.now();
+addEventListener('keydown', e => { keys[e.code] = true; live = true; });
+addEventListener('keyup', e => { keys[e.code] = false; });
+canvas.addEventListener('click', () => { live = true; canvas.requestPointerLock?.(); });
+addEventListener('mousemove', e => { if (document.pointerLockElement !== canvas) return; camera.rotation.y -= e.movementX * 0.0022; camera.rotation.x = Math.max(-1.3, Math.min(1.3, camera.rotation.x - e.movementY * 0.0022)); });
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (live) {
+    const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), r = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), sp = 2.2 * dt;
+    const y = camera.rotation.y;
+    camera.position.x += (-Math.sin(y) * f + Math.cos(y) * r) * sp;
+    camera.position.z += (-Math.cos(y) * f - Math.sin(y) * r) * sp;
+    camera.position.x = Math.max(RX0 + 0.4, Math.min(RX1 - 0.3, camera.position.x));
+    camera.position.z = Math.max(RZ0 + 0.3, Math.min(RZ1 - 0.4, camera.position.z));
+    camera.position.y = 1.65; render();
+  }
+  requestAnimationFrame(loop);
+}
+
+build().then(async () => {
+  window.__tourAt(Number(Q.get('t') || 0));
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  window.__tourAt(Number(Q.get('t') || 0));
+  window.__ready = true;
+  requestAnimationFrame(loop);
+}).catch(e => { console.error('build failed', e); });
+</script>
+</body>
+</html>

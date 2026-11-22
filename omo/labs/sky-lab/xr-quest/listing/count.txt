@@ -1,0 +1,8 @@
+3. Short description: 317/500 OK
+4. Long description: 1357/1500 OK
+8. Early Access note: 465/1500 OK
+name "Omo Space": 9/40 OK
+name "Omo Space: Agent Desk": 21/40 OK
+name "Omo Space: Terminals in VR": 26/40 OK
+keywords: ['terminal', 'productivity', 'coding', 'AIagents', 'workspace'] count 5 OK
+ALL WITHIN LIMITS

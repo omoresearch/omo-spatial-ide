@@ -1,0 +1,26 @@
+{
+ "model": "segmind/tiny-sd",
+ "seed": 21,
+ "W1": 4096,
+ "H1": 1024,
+ "steps1": 30,
+ "steps2": 30,
+ "strength2": 0.42,
+ "cfg": 7.0,
+ "upscale": 2,
+ "west_deg": 90.0,
+ "prompts": {
+  "sky_warm": "RAW photo, 8k uhd, dslr, highly detailed, sharp focus, award winning architectural photography, twilight sky over New York, deep blue sky fading to warm orange and pink sunset glow, soft wispy clouds, clean gradient sky",
+  "sky_cool": "RAW photo, 8k uhd, dslr, highly detailed, sharp focus, award winning architectural photography, blue hour sky over New York, deep indigo and violet twilight sky, faint soft clouds, clean gradient sky",
+  "sky_line_warm": "RAW photo, 8k uhd, dslr, highly detailed, sharp focus, award winning architectural photography, Manhattan skyline at dusk seen from a penthouse, distant skyscrapers silhouetted against orange sunset glow, Hudson river, New Jersey on the horizon",
+  "sky_line_cool": "RAW photo, 8k uhd, dslr, highly detailed, sharp focus, award winning architectural photography, Manhattan skyline at blue hour seen from a penthouse, distant skyscrapers with glowing windows against deep blue sky, hazy horizon",
+  "city": "RAW photo, 8k uhd, dslr, highly detailed, sharp focus, award winning architectural photography, aerial view of Manhattan at dusk from the top of a supertall skyscraper, dense skyscrapers and rooftops with thousands of warm glowing windows, city lights",
+  "streets": "RAW photo, 8k uhd, dslr, highly detailed, sharp focus, award winning architectural photography, looking straight down from a supertall skyscraper at New York city streets at night, avenues with car light trails, rooftops, street lights, dense city grid"
+ },
+ "negative": "text, watermark, logo, signature, letters, people, person, blurry, cartoon, painting, illustration, cgi, deformed, low quality, jpeg artifacts, frame, border, window frame, interior, airplane, birds, fisheye",
+ "band_elevation_deg": [
+  20,
+  -70
+ ],
+ "seconds": 282.2
+}

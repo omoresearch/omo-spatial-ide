@@ -1,0 +1,41 @@
+{
+  "fps": 30,
+  "size": [
+    1920,
+    1080
+  ],
+  "profile": "quest",
+  "segs": [
+    {
+      "id": "a-walk",
+      "caption": "A calm office in the sky",
+      "frames": 210
+    },
+    {
+      "id": "b-type",
+      "caption": "Point at a desk. Type into a real shell.",
+      "frames": 203
+    },
+    {
+      "id": "c-move",
+      "caption": "Grab a screen. Put it anywhere.",
+      "frames": 151
+    },
+    {
+      "id": "d-desks",
+      "caption": "Every terminal keeps running. Even when you leave.",
+      "frames": 150
+    },
+    {
+      "id": "e-city",
+      "caption": "Step to the window whenever you need a break.",
+      "frames": 150
+    },
+    {
+      "id": "f-comfort",
+      "caption": "Teleport, snap turn, comfort vignette, seated mode.",
+      "frames": 135,
+      "note": "teleport aim valid=true, landed at 9.53,0.00,-6.69"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+tiny-sd removed (re-downloadable from HF segmind/tiny-sd); see ai-image-backdrop/ASSETS.md

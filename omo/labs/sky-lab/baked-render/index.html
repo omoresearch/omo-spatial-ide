@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<title>Omo sky lab — baked-render</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#06070b}canvas{display:block;width:100vw;height:100vh}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/","@sparkjsdev/spark":"./vendor/spark.module.js"}}</script>
+</head>
+<body>
+<script type="module">
+// Lane C "baked-render": Blender Cycles (OptiX) bakes all room lighting into lightmaps; three.js only draws textures.
+// Baked: direct+indirect diffuse light (lm_*.exr), AO (ao_*.png), HDR reflection probe (probe.exr), city panorama + depth.
+// Realtime: specular reflections from the probe, CC0 plants/books (probe-lit), glass, terminal screens, bloom, optional splat city.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Walker } from './vendor/walk.js';
+
+const Q = new URLSearchParams(location.search);
+const CITY = Q.get('city') || 'pano';           // 'pano' (baked Cycles panorama) or 'splat' (panorama + distant Gaussian-splat NYC)
+const EXPO = Number(Q.get('expo') || 1.0);
+const BK = Q.get('baked') === 'next' ? 'baked/next/' : 'baked/';   // ?baked=next previews a candidate bake before the swap
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = EXPO;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, W / H, 0.05, 9000);
+camera.rotation.order = 'YXZ';
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+// Blender (x, y, z-up) -> three (x, z, -y). Room: x 0..18 (east glass at 18), z 0..-12 (north glass at -12), y 0..3.4.
+const PANO_C = new THREE.Vector3(9.0, 1.65, -6.0);
+const LANE_LOAD = [];
+const exr = new EXRLoader(), tl = new THREE.TextureLoader(), gl = new GLTFLoader();
+const loadExr = (u) => new Promise((res, rej) => exr.load(u, res, undefined, rej));
+const loadTex = (u) => new Promise((res, rej) => tl.load(u, res, undefined, rej));
+const loadGltf = (u) => new Promise((res, rej) => gl.load(u, res, undefined, rej));
+
+// ------------------------------------------------------------------ terminal screens (CanvasTexture, crisp text)
+const TERM = [
+  ['harry@omo:~/sky-lab/baked-render$ ./bake.sh 256 4096', '[ 0.8s] baking FLOOR 2048 px  (OptiX, RTX 5060 Ti)', '[31.6s] saved lm_floor.exr  mean 0.35 0.27 0.21', '[31.7s] baking ARCH 4096 px', '[145.7s] saved lm_arch.exr', '[145.7s] baking FURN 4096 px  253,117 faces', '[194.0s] saved lm_furn.exr', '[209.4s] probe done  2048x1024 HDR', '[340.4s] pano 8192x4096 + depth', '[341.7s] ALL DONE', 'harry@omo:~/sky-lab/baked-render$ _'],
+  ['$ git log --oneline -9', 'e41b0c7 bake: 256 spp, 4k lightmaps, OIDN denoise', '9a2f3d1 swap box props for CC0 Poly Haven glTF', '5cc81e0 city: dimmer windows, fewer lit floors', '77d01ab terminals: CanvasTexture monitors', '3be9f42 backdrop: depth-corrected panorama', 'c06e2aa walker: capsule physics from ../physics', '1f9d7b3 probe: env reflections, no diffuse IBL', '0a4410e init baked-render lane', '', '$ du -sh baked/', '64M\tbaked/', '$ _'],
+  ['top - 18:42:07 up 3 days,  load average: 0.41', 'Tasks: 412 total,   1 running', '%Cpu(s):  6.1 us,  1.2 sy, 92.4 id', 'MiB Mem : 63912.4 total, 21420.0 free', 'GPU 0: RTX 5060 Ti   38%   2.1 GiB', '', '  PID USER   %CPU %MEM COMMAND', ' 4412 harry  21.2  3.1 chrome --gpu', ' 4471 harry   9.0  1.2 node capture.cjs', ' 2210 harry   3.3  0.8 ollama serve', '  913 harry   0.7  0.1 hermes', '$ _'],
+];
+function termTexture(lines, accent) {
+  const c = document.createElement('canvas'); c.width = 1600; c.height = 928; const g = c.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 0, c.height); bg.addColorStop(0, '#0d1219'); bg.addColorStop(1, '#090c11');
+  g.fillStyle = bg; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#1a212b'; g.fillRect(0, 0, c.width, 58);
+  ['#ff5f57', '#febc2e', '#28c840'].forEach((col, i) => { g.fillStyle = col; g.beginPath(); g.arc(34 + i * 34, 29, 10, 0, 7); g.fill(); });
+  g.fillStyle = '#8b96a5'; g.font = '26px "DejaVu Sans Mono", monospace'; g.textAlign = 'center'; g.fillText('zsh — omo — 132×40', c.width / 2, 38); g.textAlign = 'left';
+  g.font = '36px "DejaVu Sans Mono", "Liberation Mono", monospace'; g.textBaseline = 'top';
+  lines.forEach((l, i) => {
+    g.fillStyle = l.includes('$') ? accent : (l.startsWith('[') ? '#7fd1ff' : (/^[0-9a-f]{7} /.test(l) ? '#e6c07b' : '#d6dde6'));
+    g.fillText(l, 36, 84 + i * 66);
+  });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+}
+
+// ------------------------------------------------------------------ city backdrop: baked Cycles panorama with depth
+// The panorama was rendered from PANO_C. For each view ray we solve where it meets the depth panorama, so the city
+// keeps correct parallax while walking, and we write that depth so splats/meshes sort against the buildings.
+function makeBackdrop(colorTex, depthTex) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { cmap: { value: colorTex }, dmap: { value: depthTex }, C: { value: PANO_C }, gain: { value: Number(Q.get('cityexp') || 0.9) }, cut: { value: 1e9 }, haze: { value: Number(Q.get('haze') || 0.45) }, foot: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] }, nfoot: { value: 0 } },
+    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `
+      uniform sampler2D cmap, dmap; uniform vec3 C; uniform float gain, cut, haze; uniform vec4 foot[3]; uniform int nfoot; uniform mat4 projectionMatrix; varying vec3 vW;
+      const float PI = 3.14159265359;
+      vec2 puv(vec3 d){ return vec2(fract(atan(d.z, d.x) / (2.0 * PI) + 0.75), asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5); }
+      float depthAt(vec3 d){ vec3 e = texture2D(dmap, puv(d)).rgb * 255.0; return exp((e.r * 256.0 + e.g) / 65535.0 * log(6000.0)); }
+      void main(){
+        vec3 r = normalize(vW - cameraPosition); vec3 m = cameraPosition - C; float b = dot(m, r), c0 = dot(m, m);
+        float t = 300.0; vec3 q = m + r * t; float dist = 300.0;
+        for (int i = 0; i < 6; i++) { q = m + r * t; dist = depthAt(normalize(q)); t = -b + sqrt(max(b * b - c0 + dist * dist, 0.0)); }
+        q = m + r * t; vec3 dir = normalize(q);
+        vec3 col = texture2D(cmap, puv(dir)).rgb;
+        col = pow(col, vec3(2.2)) * gain;
+        vec3 hp = C + q;
+        for (int k = 0; k < 3; k++) { if (k < nfoot && dist < 5000.0 && hp.x > foot[k].x && hp.x < foot[k].z && hp.z > foot[k].y && hp.z < foot[k].w) discard; }  // splat city owns this footprint
+        col = mix(col, vec3(0.055, 0.045, 0.06), haze * (1.0 - exp(-max(dist - 250.0, 0.0) / 2200.0)));
+        vec4 clip = projectionMatrix * viewMatrix * vec4(cameraPosition + r * min(t, 8000.0), 1.0);
+        gl_FragDepth = clamp(clip.z / clip.w * 0.5 + 0.5, 0.0, 0.999999);
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    side: THREE.BackSide, depthWrite: true, toneMapped: true,
+  });
+  const m = new THREE.Mesh(new THREE.SphereGeometry(50, 64, 32), mat); m.frustumCulled = false; m.renderOrder = -10;
+  m.onBeforeRender = (r, s, cam) => m.position.copy(cam.position);
+  return m;
+}
+
+// ------------------------------------------------------------------ material patching
+// The lightmap already holds all diffuse light (direct + indirect). Remove the probe's diffuse IBL so it is not counted
+// twice, and use the baked AO only to occlude the probe reflections.
+function patchBaked(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <lights_fragment_maps>', THREE.ShaderChunk.lights_fragment_maps.replace('iblIrradiance += getIBLIrradiance( geometryNormal );', ''))
+      .replace('#include <aomap_fragment>', THREE.ShaderChunk.aomap_fragment.replace('reflectedLight.indirectDiffuse *= ambientOcclusion;', ''));
+  };
+  mat.customProgramCacheKey = () => 'baked1';
+}
+
+// ------------------------------------------------------------------ boot
+const status = { stage: 'start' };
+window.__status = status;
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), Number(Q.get('bloom') || 0.12), 0.35, 2.4); composer.addPass(bloom);
+composer.addPass(new OutputPass());
+function draw() { composer.render(); }
+
+const colliders = [];
+let walker = null;
+(async () => {
+  status.stage = 'loading';
+  const t0 = performance.now();
+  const [glb, lmF, lmA, lmU, aoF, aoA, aoU, probe, city, cityD] = await Promise.all([
+    loadGltf(BK + 'room.glb'), loadExr(BK + 'lm_floor.exr'), loadExr(BK + 'lm_arch.exr'), loadExr(BK + 'lm_furn.exr'),
+    loadTex(BK + 'ao_floor.png'), loadTex(BK + 'ao_arch.png'), loadTex(BK + 'ao_furn.png'),
+    loadExr(BK + 'probe.exr'), loadTex(BK + 'city.jpg'), loadTex(BK + 'city_depth.png'),
+  ]);
+  status.loadMs = Math.round(performance.now() - t0);
+  // EXR rows come bottom-first; glTF UVs expect top-first -> flip V through the texture transform
+  const FLIP = Q.get('lmflip') !== '0';
+  for (const t of [lmF, lmA, lmU]) { t.channel = 1; if (FLIP) { t.repeat.set(1, -1); t.offset.set(0, 1); } t.anisotropy = 4; t.colorSpace = THREE.LinearSRGBColorSpace; t.needsUpdate = true; }
+  for (const t of [aoF, aoA, aoU]) { t.channel = 1; t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true; }
+  const LM = { LM_FLOOR: [lmF, aoF], LM_ARCH: [lmA, aoA], LM_FURN: [lmU, aoU] };
+
+  // probe: Blender equirect has +X at u=0.75; three expects it at u=0.5 -> roll rows by a quarter turn
+  { const img = probe.image, w = img.width, h = img.height, ch = img.data.length / (w * h), src = img.data, dst = new src.constructor(src.length), s = w / 4;
+    for (let y = 0; y < h; y++) { const o = y * w * ch; dst.set(src.subarray(o + s * ch, o + w * ch), o); dst.set(src.subarray(o, o + s * ch), o + (w - s) * ch); }
+    img.data = dst; probe.mapping = THREE.EquirectangularReflectionMapping; probe.needsUpdate = true; }
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envTex = pmrem.fromEquirectangular(probe).texture;
+  scene.environment = envTex; scene.environmentIntensity = 1.0;
+
+  city.colorSpace = THREE.NoColorSpace; city.generateMipmaps = false; city.minFilter = THREE.LinearFilter; city.anisotropy = 1;
+  cityD.colorSpace = THREE.NoColorSpace; cityD.generateMipmaps = false; cityD.minFilter = cityD.magFilter = THREE.NearestFilter;
+  const backdrop = makeBackdrop(city, cityD);
+    scene.add(backdrop);
+
+  // room: one glTF, four joined meshes (floor / walls+ceiling / furniture / emitters)
+  const room = glb.scene; scene.add(room);
+  const cache = new Map(); let screenIdx = 0;
+  room.traverse((o) => {
+    if (!o.isMesh) return;
+    let g = o; while (g && !/^LM_/.test(g.name)) g = g.parent; const grp = g ? g.name : '';
+    const m0 = o.material, key = grp + '/' + m0.name;
+    if (/^EmitScreen/.test(m0.name)) {
+      const k = Number(m0.name.slice(-1)) || 0;
+      const geo = o.geometry; geo.computeBoundingBox(); const bb = geo.boundingBox, P = geo.attributes.position, uv = geo.attributes.uv;
+      for (let i = 0; i < P.count; i++) uv.setXY(i, (P.getX(i) - bb.min.x) / (bb.max.x - bb.min.x), (P.getY(i) - bb.min.y) / (bb.max.y - bb.min.y));
+      uv.needsUpdate = true;
+      o.material = new THREE.MeshBasicMaterial({ map: termTexture(TERM[k], ['#7ee787', '#ffb86b', '#c792ea'][k]), color: new THREE.Color(1, 1, 1).multiplyScalar(Number(Q.get('screen') || 0.9)) });
+      screenIdx++; return;
+    }
+    if (!cache.has(key)) {
+      const m = m0.clone();
+      if (LM[grp]) { m.lightMap = LM[grp][0]; m.lightMapIntensity = Math.PI; m.aoMap = LM[grp][1]; m.aoMapIntensity = 1.0; patchBaked(m); }
+      if (m.map) m.map.anisotropy = maxAniso;
+            m.envMapIntensity = /Parquet/.test(m.name) ? Number(Q.get('floorrefl') || 0.32) : 1.0;
+      if (/Parquet/.test(m.name)) {  // satin oiled oak: soft, blurred reflections, no wavy mirror
+        // the Poly Haven roughness map averages ~0.1 and three multiplies it in -> near-mirror. Drop it, use a real satin value.
+        m.roughnessMap = null; m.roughness = Number(Q.get('floorrough') || 0.55); if (m.normalScale) m.normalScale.set(0.22, 0.22);
+        if ('clearcoat' in m) { m.clearcoat = 0; m.clearcoatRoughness = 1; } if ('specularIntensity' in m) m.specularIntensity = 0.6;
+      }
+      if (/desk_lamp_arm_01_light/.test(m.name)) m.emissiveIntensity = Number(Q.get('desklamp') || 1.0);
+      if (/EmitStrip/.test(m.name)) m.emissiveIntensity = Number(Q.get('strip') || 2.4);
+      if (/EmitDown/.test(m.name)) m.emissiveIntensity = 3;
+      if (/EmitShade/.test(m.name)) m.emissiveIntensity = 0.75;
+      if (/EmitCandle/.test(m.name)) m.emissiveIntensity = 3;
+      if (/EmitWatch/.test(m.name)) m.emissiveIntensity = 1.0;
+      cache.set(key, m);
+    }
+    o.material = cache.get(key);
+    if (grp !== 'LM_EMIT') colliders.push(o);
+  });
+  status.screens = screenIdx;
+
+  // lamps: the bake already holds their light; small realtime point lights add the live glow/falloff on props + floor
+  try {
+    const lamps = await (await fetch(BK + 'lamps.json')).json();
+    for (const L of lamps) { const pl = new THREE.PointLight(new THREE.Color(...L.color), L.intensity * Number(Q.get('lamps') || 1), L.distance, 2); pl.position.set(...L.pos); scene.add(pl); }
+    status.lamps = lamps.length;
+  } catch (e) { status.lamps = 0; }
+
+  // glass: a faint dark tint plus an additive reflection layer (real glass reflects ~4-10%, more at grazing angles)
+  const tintMat = new THREE.MeshBasicMaterial({ color: 0x0b1218, transparent: true, opacity: 0.10, depthWrite: false, side: THREE.DoubleSide });
+  const reflMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.03, metalness: 0.0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, envMapIntensity: Number(Q.get('glass') || 0.55), side: THREE.DoubleSide });
+  const glassPanes = [];
+  const pane = (w, x, z, ry) => { for (const mt of [tintMat, reflMat]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, 3.4), mt); p.position.set(x, 1.7, z); p.rotation.y = ry; p.renderOrder = mt === tintMat ? 20 : 21; scene.add(p); if (mt === tintMat) glassPanes.push(p); } };
+  pane(18, 9, -11.96, 0); pane(12, 17.96, -6, -Math.PI / 2);
+  colliders.push(...glassPanes);
+
+  // real CC0 props drawn live (plants, books): positions come from the Blender build (also shadow casters in the bake)
+  const props = await (await fetch(BK + 'props.json')).json();
+  const srcOf = (p) => p.url ? BK + p.url : `vendor/cc0/${p.id}/${p.id}.gltf`;   // cut-out potted plants ship with the bake
+  const uniq = [...new Set(props.map(srcOf))];
+  const gltfs = Object.fromEntries(await Promise.all(uniq.map(async u => [u, await loadGltf(u)])));
+  for (const p of props) {
+    const o = gltfs[srcOf(p)].scene.clone(true); o.position.set(...p.pos); o.rotation.y = p.rotY; o.scale.setScalar(p.scale);
+    o.traverse(c => { if (c.isMesh) { c.material = c.material.clone(); c.material.envMapIntensity = 0.85; if (c.material.map) c.material.map.anisotropy = maxAniso; } });
+    scene.add(o); colliders.push(o);
+  }
+
+  // optional distant city: Gaussian splats (Skyfall-GS NYC tiles), every splat > 600 m from the glass
+  if (CITY === 'splat') {
+    const { SparkRenderer, SplatMesh } = await import('@sparkjsdev/spark');
+    const spark = new SparkRenderer({ renderer }); scene.add(spark);
+    const TILES = [  // [file, x, ground y, z, rotY]
+      ['vendor/splat/NYC_004_dusk.splat', 240, -191.4, -1150, 0.0],
+      ['vendor/splat/NYC_219_dusk.splat', 1250, -199.1, -420, 0.0],
+      ['vendor/splat/NYC_010_dusk.splat', 1050, -193.6, -1350, Math.PI / 2],
+    ];
+    const meshes = TILES.map(([url, x, y, z, ry]) => { const m = new SplatMesh({ url }); m.rotation.set(-Math.PI / 2, 0, ry, 'YXZ'); m.position.set(x, y, z); m.recolor = new THREE.Color(1.0, 0.86, 0.74).multiplyScalar(Number(Q.get('splatexp') || 0.85)); scene.add(m); return m; });  // recolor warms the cool dusk grade toward the baked city
+    await Promise.all(meshes.map(m => m.initialized));
+    // footprints (three x/z) of the tiles, inset 40 m; the baked panorama hands these areas to the splats
+    const F = [[-206, -1496, 540, -692], [858, -803, 1635, -21], [666, -1739, 1450, -951]];
+    F.forEach((f, i) => backdrop.material.uniforms.foot.value[i].set(f[0] + 40, f[1] + 40, f[2] - 40, f[3] - 40));
+    backdrop.material.uniforms.nfoot.value = 3; scene.background = new THREE.Color(0x0d0b12);
+    status.splats = TILES.length;
+  }
+
+  scene.updateMatrixWorld(true);
+  walker = new Walker(camera, renderer.domElement, { colliders, eye: 1.65, spawn: { x: 3.0, y: 0, z: -1.6, yaw: -0.5 } });
+  walker.enabled = false;
+  status.tris = walker.triangleCount;
+
+  setPose(poseAt(0));
+  for (let i = 0; i < 30; i++) { draw(); await new Promise(r => requestAnimationFrame(r)); }
+  status.stage = 'ready'; status.readyMs = Math.round(performance.now() - t0);
+  requestAnimationFrame(loop);
+  await (await import('./ui/ui.js')).attachUi({ THREE, renderer, composer, bloom, camera, walker: () => walker, status }); // ui:hook
+  await (await import('./live/live.js')).attachLive({ scene, camera, renderer, root: room, walker: () => walker, draw }); // live:hook
+  await (await import('./mp/mp.js')).attachMp({ scene, camera, renderer, root: room, walker: () => walker, draw }); // mp:hook
+  await (await import('./touch/touch.js')).attachTouch({ scene, camera, renderer, composer, walker: () => walker, live: window.__live }); // touch:hook
+  await (await import(Q.get('avatars') === 'classic' ? './avatars/avatars.js' : './avatars/avatars-rp1.js')).attachAvatars({ scene, camera, renderer, composer }); // avatars:hook (RP1 robots by default; ?avatars=classic for the old ones)
+  await (await import('./social/social.js')).attachSocial({ scene, camera, renderer, composer, root: room, walker: () => walker }); // social:hook
+  await (await import('./screens/screens.js')).attachScreens({ scene, camera, renderer, root: room, walker: () => walker, draw }); // screens:hook
+  await (await import('./flat/flat.js')).attachFlat({ scene, camera, renderer, composer, bloom, walker: () => walker, draw }); // flat:hook
+  window.__ready = true;
+})().catch(e => { status.stage = 'error'; status.error = String(e && e.stack || e); console.error(e); });
+
+// ------------------------------------------------------------------ tour (~20 s; yaw 0 = look north (-z), -90 = east)
+const deg = Math.PI / 180;
+const KEYS_OFFICE = [  // [t, x, z, yaw, pitch]
+  [0.00, 2.6, -1.4, -38, -5],     // by the lifts, looking across the floor to the glass corner
+  [0.13, 5.4, -3.0, -16, -8],     // walking along the desk row
+  [0.25, 7.6, -3.45, -2, -13],    // behind the middle chair: terminal text up close
+  [0.36, 9.3, -4.0, -8, -8],
+  [0.47, 9.3, -7.6, -4, -10],     // through the gap between desks toward the glass
+  [0.58, 9.75, -11.3, -4, -36],   // at the glass, looking out and DOWN at the street grid
+  [0.69, 10.6, -11.0, -50, -22],
+  [0.80, 11.4, -9.9, -112, -9],  // turning to the lounge corner
+  [0.90, 12.4, -8.3, 100, -7],
+  [1.00, 12.0, -7.4, 78, -6],    // looking back over the desks and the slat wall
+];
+const KEYS_LOUNGE = [  // [t, x, z, yaw, pitch]  cosy-lounge layout (zones.py r5: shelving divider at z -8.05, opening x 6.6..8.6)
+  [0.00, 8.6, -5.0, 97, -10],     // behind the bar gantry: lounge pit facing the big watch screen (divider out of frame)
+  [0.15, 7.6, -2.3, 48, -8],      // from the lifts side, over the pit toward the nook
+  [0.23, 7.6, -8.1, 70, -8],      // through the opening in the shelving divider
+  [0.30, 4.7, -10.6, 96, -9],     // reading nook + bookshelf from the studio side (no lamp near the lens)
+  [0.45, 11.2, -10.9, -20, -22],  // at the glass, looking out over the city
+  [0.53, 8.0, -9.0, -8, -12],     // back toward the divider opening
+  [0.60, 7.6, -8.5, 0, -14],      // work studio, just inside the divider opening: three walnut desks with live monitors
+  [0.75, 13.2, -5.4, -142, -9],   // the bar and its stools
+  [0.90, 14.8, -7.4, 92, -7],     // looking back west over the bar to the pit and screen
+  [1.00, 13.6, -9.2, 68, -6],
+];
+// the tour must match the room that is actually loaded: the lounge tour aims away from the office's south web wall,
+// and Chrome never loads an iframe that is off screen (live/test-live.cjs reload check failed 30/31 on the office bake).
+const KEYS = BK === 'baked/next/' || Q.get('tour') === 'lounge' ? KEYS_LOUNGE : KEYS_OFFICE;
+function smooth(a) { return a * a * (3 - 2 * a); }
+function poseAt(t) {
+  t = Math.min(1, Math.max(0, t)); let i = 0; while (i < KEYS.length - 2 && t > KEYS[i + 1][0]) i++;
+  const A = KEYS[i], B = KEYS[i + 1], P = KEYS[Math.max(0, i - 1)], N = KEYS[Math.min(KEYS.length - 1, i + 2)];
+  const u = (t - A[0]) / (B[0] - A[0]);
+  const cr = (p0, p1, p2, p3, s) => 0.5 * (2 * p1 + (-p0 + p2) * s + (2 * p0 - 5 * p1 + 4 * p2 - p3) * s * s + (-p0 + 3 * p1 - 3 * p2 + p3) * s * s * s);
+  let dy = B[3] - A[3]; if (dy > 180) dy -= 360; if (dy < -180) dy += 360;
+  const k = smooth(u);
+  return { x: cr(P[1], A[1], B[1], N[1], u), z: cr(P[2], A[2], B[2], N[2], u), yaw: A[3] + dy * k, pitch: A[4] + (B[4] - A[4]) * k };
+}
+function setPose(p) {
+  camera.position.set(p.x, p.y ?? 1.65, p.z); camera.rotation.set((p.pitch || 0) * deg, (p.yaw || 0) * deg, 0); camera.updateMatrixWorld();
+}
+let manual = false;
+window.__tourAt = (t) => { manual = false; if (walker) walker.enabled = false; setPose(poseAt(t)); draw(); };
+window.__setPose = (p) => { manual = false; if (walker) walker.enabled = false; setPose(p); draw(); };
+window.__tour = [0, 0.3, 0.6, 0.9].map(t => poseAt(t));
+window.__label = 'baked-render: Blender Cycles lightmaps + CC0 glTF props + ' + (CITY === 'splat' ? 'splat NYC' : 'baked city panorama');
+
+// ------------------------------------------------------------------ live: WASD + mouse look via the shared capsule Walker
+function goManual() {
+  if (manual || !walker) return; manual = true;
+  walker.setPose({ x: camera.position.x, y: 0, z: camera.position.z, yaw: camera.rotation.y, pitch: camera.rotation.x }); walker.enabled = true;
+}
+addEventListener('keydown', goManual); renderer.domElement.addEventListener('mousedown', goManual);
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (manual && walker) walker.update(dt);
+  draw(); requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
