@@ -20,6 +20,7 @@ import type { DeskAgent, PlanResult } from './onboarding-planner';
 import { planWithBackend } from './onboarding-admin';
 import type { OnboardingPlanBackend } from './onboarding-admin';
 import '../../src/browser/onboarding.css';
+import { penthouseStarter, starterWorld, STARTER_NOTE } from './starter-world'; // world-ui (g)
 
 export interface OnboardingFlowProps {
     initialName: string;
@@ -118,7 +119,11 @@ export function OnboardingFlow(props: OnboardingFlowProps): React.ReactElement {
     /** The step-1 inputs the current plan was made from; unchanged inputs keep the user's step-2 edits. */
     const [planFor, setPlanFor] = React.useState(props.savedWorld ? `${props.savedWorld.plan ?? ''}\u0000${props.savedWorld.shell.theme}` : '');
 
-    const live = React.useMemo(() => planWorld(prompt, { name, theme: themeTouched ? theme : undefined }), [prompt, name, theme, themeTouched]);
+    // world-ui (g): an empty plan starts in the skyline penthouse (the baked kit), unless another theme was picked.
+    const live = React.useMemo((): PlanResult => {
+        const starter = !prompt.trim() && (!themeTouched || theme === 'skyline') ? starterWorld(name) : undefined;
+        return starter ? { world: starter, notes: [STARTER_NOTE], warnings: [] } : planWorld(prompt, { name, theme: themeTouched ? theme : undefined });
+    }, [prompt, name, theme, themeTouched]);
     const world = step === 1 ? live.world : (plan?.world ?? live.world);
     const shownTheme = step === 1 ? live.world.shell.theme : world.shell.theme;
 
@@ -222,7 +227,7 @@ export function OnboardingFlow(props: OnboardingFlowProps): React.ReactElement {
                         onChange={e => setPrompt(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); toStep2(); } e.stopPropagation(); }} />
                 </label>
                 <div className="omo-ob-understood" data-testid="onboarding-understood" aria-live="polite">
-                    <span>{prompt.trim() ? 'Omo understood' : 'Empty plan = the classic room'}</span><strong>{describeWorld(live.world)}</strong>
+                    <span>{prompt.trim() ? 'Omo understood' : penthouseStarter() ? 'Empty plan = the skyline penthouse' : 'Empty plan = the classic room'}</span><strong>{describeWorld(live.world)}</strong>
                 </div>
                 <span className="omo-ob-label">Or start from a template</span>
                 <div className="omo-ob-templates">{ONBOARDING_TEMPLATES.map(t => <button key={t.id} type="button" data-testid={`onboarding-template-${t.id}`}

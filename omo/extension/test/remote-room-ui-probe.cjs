@@ -45,7 +45,7 @@ wss.on('connection', ws => { let me, room;
     const opts = p => ({ executablePath: '/opt/google/chrome/chrome', headless: true, userDataDir: p, args: ['--window-size=1600,1000', '--enable-unsafe-swiftshader'], defaultViewport: { width: 1600, height: 1000 } });
     const bA = await launch(opts(profileA)), bB = await launch(opts(profileB));
     const open = async b => { const page = await b.newPage();
-        await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0') /* world-ui: legacy checks use the IDE chrome */; } catch {} });
+        await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0'); localStorage.setItem('omo.starter', 'classic') /* world-ui: legacy checks use the IDE chrome */; } catch {} });
         await page.goto(APP, { waitUntil: 'domcontentloaded', timeout: 60000 });
         await page.waitForSelector('[data-testid="omo-world"]', { timeout: 60000 }); await sleep(4500);
         await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors'); if (b) b.click(); });

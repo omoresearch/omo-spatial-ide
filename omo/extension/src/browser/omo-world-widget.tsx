@@ -1,3 +1,4 @@
+import { starterTheme } from './starter-world'; // world-ui (g)
 import * as React from 'react';
 import { injectable, inject, postConstruct, optional } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
@@ -217,7 +218,7 @@ export class OmoWorldWidget extends ReactWidget {
     private agentSignalPoller?: AgentSignalPoller; // w2:agents
     private project?: URI;
     private room?: RoomState;
-    private draftTheme: RoomTheme = 'station';
+    private draftTheme: RoomTheme = starterTheme(); // world-ui (g): new rooms start in the skyline penthouse
     private draftLayout: RoomLayoutId = 'classic';
     private draftKit: RoomKitId = 'hermes-desk';
     private draftName = '';
@@ -1013,7 +1014,7 @@ export class OmoWorldWidget extends ReactWidget {
         } catch { this.error = 'Those saved appearance settings could not be exported.'; this.update(); }
     };
     private cancelConfiguration = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetRevision++; this.presetStatus = ''; this.error = ''; this.configuring = false; this.update(); };
-    private configure = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.onboardingEpoch++; this.onboardingClassic = !!this.room; /* w2:onboard */ this.update(); };
+    private configure = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? starterTheme(); this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.onboardingEpoch++; this.onboardingClassic = !!this.room; /* w2:onboard */ this.update(); };
 
     /** world-ui: the console-dock controls. Shown as the dock row with the IDE chrome, or inside the settings sheet while immersive. */
     private dockPieces(taskSourceUri: string | undefined, only?: 'share' | 'voice' | 'desks' | 'agents'): React.ReactNode {
