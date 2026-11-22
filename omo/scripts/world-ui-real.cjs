@@ -115,6 +115,23 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await page.keyboard.press('b'); await page.waitForSelector('[data-testid="world-builder"]', { timeout: 10000 }).catch(() => {});
         const wb = await page.evaluate(() => { const b = document.querySelector('[data-testid="world-builder"]')?.getBoundingClientRect(), t = document.querySelector('[data-testid="world-topbar"]')?.getBoundingClientRect(); return b && t ? { builderTop: Math.round(b.top), barBottom: Math.round(t.bottom) } : null; });
         check('Build mode: the World Builder opens below the top bar', !!wb && wb.builderTop >= wb.barBottom, wb);
+        await pause(500); // the toolbar's drop-in animation
+        // world-ui step 3 (a, b): ONE build-mode indicator, the toolbar just below the bar, nothing under the bar's blur.
+        const ind = await page.evaluate(() => {
+            const r = s => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(), cs = getComputedStyle(e); return b.width > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' ? b : null; };
+            const bar = r('[data-testid="world-topbar"]'), tools = r('.omo-build-topbar'), panel = r('[data-testid="world-builder"]');
+            const texts = [...document.querySelectorAll('body *')].filter(e => e.children.length === 0 && e.getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== 'hidden').map(e => e.textContent.trim());
+            const toast = r('.omo-build > .omo-build-notice');
+            // Anything with a coloured fill drawn under the top bar (other than the bar's own children).
+            const under = [...document.querySelectorAll('.omo-scene-wrap *')].filter(e => { if (e.closest('[data-testid="world-topbar"]')) return false; const b = e.getBoundingClientRect(); if (!bar || b.width < 4 || b.bottom <= bar.top || b.top >= bar.bottom || e.tagName === 'CANVAS') return false; const cs = getComputedStyle(e); return cs.display !== 'none' && cs.visibility !== 'hidden' && +cs.opacity > 0.05 && cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && !e.classList.contains('omo-scene-wrap'); }).map(e => e.className || e.tagName).slice(0, 5);
+            const disabled = [...document.querySelectorAll('.omo-build-tool:disabled')].map(e => +getComputedStyle(e).opacity);
+            return { barBottom: bar && Math.round(bar.bottom), toolsTop: tools && Math.round(tools.top), toolsH: tools && Math.round(tools.height), toolsRight: tools && Math.round(tools.right), panelLeft: panel && Math.round(panel.left),
+                building: texts.filter(t => /^Building\b/.test(t)).length, badge: !!document.querySelector('.omo-build-badge'), toast: !!toast, under, disabled };
+        });
+        check('Build: the toolbar sits just below the top bar (8-16 px gap) and left of the panel', ind.toolsTop !== null && ind.toolsTop - ind.barBottom >= 4 && ind.toolsTop - ind.barBottom <= 16 && ind.toolsRight <= ind.panelLeft, ind);
+        check('Build: ONE mode indicator (no Building pill, no badge, no centre toast)', ind.building === 0 && !ind.badge && !ind.toast, ind);
+        check('Top bar: nothing coloured is drawn under its blur (no glow smudge)', ind.under.length === 0, ind.under);
+        check('Build: disabled tools look disabled (opacity <= .4)', ind.disabled.length > 0 && ind.disabled.every(o => o <= 0.4), ind.disabled);
         await click('[data-testid="builder-tab-add"]').catch(() => {}); await pause(400);
         await shot('7-build-add');
         await click('[data-testid="builder-tab-talk"]').catch(() => {}); await pause(300);

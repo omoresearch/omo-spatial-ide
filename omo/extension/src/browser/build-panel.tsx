@@ -41,9 +41,11 @@ export function BuildToggle(props: { build: BuildMode }): React.ReactElement {
     React.useEffect(() => { props.build.sync(); });
     React.useEffect(() => { const id = window.setInterval(() => props.build.sync(), 500); return () => window.clearInterval(id); }, [props.build]);
     const on = props.build.active;
+    // world-ui — one build-mode indicator: while building, the top toolbar is the indicator (no 'Building' pill).
+    if (on) return <></>;
     return <button type="button" className={`omo-build-toggle${on ? ' is-on' : ''}`} data-testid="build-toggle" aria-pressed={on}
         title={on ? 'Leave build mode (B)' : 'Build mode (B)'} onMouseDown={e => e.preventDefault()} onClick={() => props.build.toggle()}>
-        <BuildGlyph name="build" size={14} />{on ? 'Building' : 'Build'} <kbd>B</kbd>
+        <BuildGlyph name="build" size={14} />Build <kbd>B</kbd>
     </button>;
 }
 
@@ -62,7 +64,6 @@ export function BuildPanel(props: { build: BuildMode; admin?: AdminController; a
     };
     return <div className="omo-build" data-testid="build-mode" data-tool={s.tool} data-ghost={s.ghostAt && (s.tool === 'place' || s.tool === 'move') ? `${s.ghostAt.x},${s.ghostAt.z},${s.ghostAt.rotation},${s.ghostValid}` : ''} data-selected={s.selected ?? ''} data-hover={s.hover ?? ''} onKeyDown={onKey}>
         <div className="omo-build-topbar" role="toolbar" aria-label="Build tools">
-            <span className="omo-build-badge"><BuildGlyph name="build" size={14} /> Build</span>
             <ToolButton glyph="cursor" label="Select" keyHint="V" active={s.tool === 'select'} onClick={() => build.selectTool()} />
             <ToolButton glyph="move" label="Move" keyHint="M" active={s.tool === 'move'} disabled={!selected} onClick={() => build.startMove()} />
             <ToolButton glyph="rotate" label="Turn" keyHint="R" disabled={!selected && s.tool !== 'place'} onClick={() => build.rotate(1)} />
@@ -77,9 +78,10 @@ export function BuildPanel(props: { build: BuildMode; admin?: AdminController; a
         {/* builder-ui — one World Builder panel in the right column: Talk / Add / Rooms / Inspect, with the proposal tray at its foot. */}
         <WorldBuilder build={build} admin={props.admin} adminState={props.adminState}
             inspector={selected && !setupFor ? <Inspector key={selected.id} build={build} entity={selected} /> : undefined}
-            tray={store.proposal ? <ProposalBar build={build} /> : undefined} />
+            tray={store.proposal ? <ProposalBar build={build} /> : undefined}
+            notice={s.notice ? <div className={`omo-build-notice is-${s.noticeTone}`} role={s.noticeTone === 'warn' ? 'alert' : 'status'} data-testid="build-notice">{s.noticeTone === 'warn' ? <Icon name="alert" size={14} /> : <Icon name="check" size={14} />}{s.notice}</div> : undefined} />
         <div className={`omo-build-hint${s.tool === 'place' || s.tool === 'move' ? (s.ghostValid ? ' is-ok' : ' is-bad') : ''}`} role="status" data-testid="build-hint">{s.hint}</div>
-        {s.notice && <div className={`omo-build-notice is-${s.noticeTone}`} role={s.noticeTone === 'warn' ? 'alert' : 'status'} data-testid="build-notice">{s.noticeTone === 'warn' ? <Icon name="alert" size={14} /> : <Icon name="check" size={14} />}{s.notice}</div>}
+        {/* world-ui — no centre toast: build notices show inside the World Builder panel (above the tray). */}
         {!s.worldRenderer && <div className="omo-build-renderer-note" data-testid="build-renderer-note">Blueprint view · New things show as outlines until the world renderer draws them.</div>}
         {setupFor && <StationSetup key={setupFor.id} build={build} entity={setupFor} />}
     </div>;

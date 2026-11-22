@@ -42,6 +42,8 @@ export interface WorldBuilderProps {
     inspector?: React.ReactNode;
     /** The shared proposal tray (rendered by build-panel.tsx). */
     tray?: React.ReactNode;
+    /** world-ui — the build notice (was a centre toast), shown in the panel above the tray. */
+    notice?: React.ReactNode;
 }
 
 const isField = (t: EventTarget | null): boolean => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName));
@@ -117,6 +119,7 @@ export function WorldBuilder(props: WorldBuilderProps): React.ReactElement | nul
             {view === 'rooms' && <RoomsTab build={build} world={preview} />}
             {view === 'inspect' && (props.inspector ?? <p className="omo-wb-empty">Click a thing in the world to inspect it.</p>)}
         </div>
+        {props.notice && <div className="omo-wb-notice">{props.notice}</div>}
         {store.proposal && <div className="omo-wb-tray">
             {summary && <p className="omo-wb-summary" data-testid="builder-diff-summary"><span className="omo-wb-ghostdot" aria-hidden="true" />{summary}</p>}
             {props.tray}

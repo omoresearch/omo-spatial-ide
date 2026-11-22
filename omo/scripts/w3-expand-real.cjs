@@ -41,7 +41,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const page = await browser.newPage();
         page.on('pageerror', e => errors.push(String(e.message || e)));
         await page.evaluateOnNewDocument(() => {
-            try { localStorage.setItem('omo.coach.v1', 'seen'); } catch {}
+            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0') /* world-ui: legacy checks use the IDE chrome */; } catch {}
             new MutationObserver(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click()).observe(document, { childList: true, subtree: true });
         });
         const ds = () => page.$eval(CANVAS, c => ({ ...c.dataset }));

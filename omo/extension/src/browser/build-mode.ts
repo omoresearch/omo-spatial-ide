@@ -201,7 +201,7 @@ export class BuildMode {
         this.layer.attach(threeOf(this.bound.scene).scene);
         this.markWrap(true); this.pushWorld();
         this.render();
-        this.options.message('Build mode · Pick something from the palette · Click a thing to select it · B to leave.');
+        // world-ui — no extra 'Build mode' status text: the top toolbar is the one build-mode indicator.
     }
     /** Leave build mode. A pending draft must be applied or discarded first, unless forced (room closed). */
     exit(force = false): boolean {

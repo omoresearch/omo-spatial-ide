@@ -302,3 +302,12 @@
 .omo-build-hint { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; padding: 0 !important; border: 0 !important; }
 .omo-scene-wrap[data-building="true"] .omo-navigation-switch { right: calc(var(--omo-wb-w) + 2 * var(--omo-sp-3)); }
 .omo-scene-wrap[data-building="true"] .omo-scene-controls { right: calc(var(--omo-wb-w) + 2 * var(--omo-sp-3)); }
+
+/* world-ui — ONE build-mode indicator: the toolbar sits just below the top bar (8 px gap), centred in the
+   room area left of the World Builder panel, never under the bar's blur. No badge, no 'Building' pill, no toast.
+   Disabled tools look disabled: faded, no hover, not-allowed cursor. */
+.omo-root[data-immersive="true"] .omo-build-topbar { top: calc(var(--omo-w-bar-h, 44px) + 2 * var(--omo-w-gap, 8px)); }
+.omo-scene-wrap[data-building="true"] .omo-build-topbar { left: calc((100% - var(--omo-wb-w) - 2 * var(--omo-sp-3)) / 2); }
+.omo-build-topbar { height: 44px; padding: 0 4px; gap: 2px; border-radius: 10px; }
+.omo-build-tool, .omo-build-exit { height: 36px; padding: 0 12px; border-radius: 8px; font-size: 13px; }
+.omo-root .omo-build .omo-build-tool:disabled { opacity: .32; cursor: not-allowed; background: transparent !important; color: var(--omo-text-3); }

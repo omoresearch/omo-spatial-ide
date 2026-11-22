@@ -159,7 +159,9 @@
 .omo-wb-tray > .omo-build-proposal footer { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: var(--omo-sp-2); }
 
 /* While the builder is open, the old floating palette column and the build hint shift left of the panel. */
-.omo-build .omo-build-notice { max-width: min(520px, calc(100% - 820px)); }
+/* world-ui — build notices live inside the panel (no centre toast). */
+.omo-wb-notice { flex: 0 0 auto; padding: 0 12px 8px; }
+.omo-wb-notice .omo-build-notice { position: static; transform: none; max-width: none; animation: none; box-shadow: none; backdrop-filter: none; }
 .omo-scene-wrap { --omo-wb-w: min(360px, calc(33vw - var(--omo-sp-3))); }
 @media (max-width: 1100px) { .omo-scene-wrap { --omo-wb-w: 300px; } }
 @media (prefers-reduced-motion: reduce) { .omo-wb * { transition: none !important; } }
