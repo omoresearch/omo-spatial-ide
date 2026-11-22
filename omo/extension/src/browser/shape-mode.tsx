@@ -22,7 +22,7 @@ import type { WorldSpec } from '../common/world-model';
 import { activeKit, decorPropFor } from '../common/world-style-kits';
 import { shapeStore, SHAPE_TOGGLE_EVENT, setShapeKeyHandler } from './shape-store';
 import { ShapeTopButton, ShapeGlyph } from './shape-topbar';
-import { ShapePill, captionFor, composePrompt, expandIdea, refinePrompt, resolveScreens, suggestionsFor, whereOf } from './shape-logic';
+import { ShapePill, captionFor, composePrompt, expandIdea, refinePrompt, resolveScreens, spokenNames, suggestionsFor, whereOf } from './shape-logic';
 import '../../src/browser/world-tokens.css';
 import '../../src/browser/shape-mode.css';
 
@@ -232,7 +232,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     };
     const keep = (): void => {
         if (!entry || !proposed) return;
-        const sentence = captionFor(entry.plan!.proposal!.summary, turn?.idea, turn?.where);
+        const sentence = captionFor(entry.plan!.proposal!.summary, turn?.idea, turn?.where, spokenNames(entry.plan!.proposal!.ops));
         admin.apply(entry.id);
         if (admin.activeEntry?.status === 'applied') { keptLog = [...keptLog, { id: entry.id, sentence }].slice(-24); setKept(keptLog); }
         setTurn(undefined); focusPrompt();
@@ -257,7 +257,7 @@ export function ShapeMode(props: { build: BuildMode; admin?: AdminController; ad
     };
 
     const proposal = proposed ? entry!.plan!.proposal! : undefined;
-    const sentence = proposal ? captionFor(proposal.summary, turn?.idea, turn?.where) : '';
+    const sentence = proposal ? captionFor(proposal.summary, turn?.idea, turn?.where, spokenNames(proposal.ops)) : '';
     const failed = !busy && entry && (entry.status === 'failed' || entry.status === 'answered' || entry.status === 'stale') ? firstSentence(entry.plan?.notes[0] ?? entry.outcome ?? entry.plan?.explanation ?? '') : '';
     const chips = suggestionsFor(store.world);
     const hermes = adminState.useHermes && adminState.hermesConfirmed;
@@ -478,5 +478,9 @@ function breathe(three: THREE.Scene | undefined, ids: string[], world?: WorldSpe
     });
     if (touched || ids.length) ambientHost(three)?.invalidate(real.touched);
     const canvas = document.querySelector<HTMLElement>('canvas[data-testid="omo-world-canvas"]');
-    if (canvas) { const r = [...real.present].join(','), n = String(ghosted.size); if (canvas.dataset.ghostReal !== r) canvas.dataset.ghostReal = r; if (canvas.dataset.ghostMeshes !== n) canvas.dataset.ghostMeshes = n; }
+    if (canvas) {
+        const r = [...real.present].join(','), n = String(ghosted.size);
+        const props = (world?.entities ?? []).filter(e => ids.includes(e.id) && e.kind === 'decor').map(e => `${e.id}:${e.kind === 'decor' ? e.prop ?? e.decor : ''}`).join(',');
+        if (canvas.dataset.ghostReal !== r) canvas.dataset.ghostReal = r; if (canvas.dataset.ghostMeshes !== n) canvas.dataset.ghostMeshes = n; if (canvas.dataset.ghostProps !== props) canvas.dataset.ghostProps = props;
+    }
 }

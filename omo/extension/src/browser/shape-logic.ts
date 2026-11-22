@@ -1,7 +1,7 @@
 /**
  * shape — pure helpers of Shape mode (no DOM, no THREE), so they are unit-tested on their own.
  *   - expandIdea: a few room ideas the rules planner does not know as words ("a reading nook") become
- *     the plain things it does know ("an armchair, a lamp and a bookshelf").
+ *     the plain things it does know ("an armchair, a lamp and a bookshelf"); the nook's armchair is the kit's lounge chair.
  *   - composePrompt: the typed text plus the pointed pills ("move [Sofa] closer") as one planner prompt.
  *   - refinePrompt: a follow-up turn ("bigger", "move it left") on top of the pending prompt.
  *   - captionFor: one plain sentence for the caption card, from the proposal summary.
@@ -9,12 +9,13 @@
  * Nothing here plans or changes the world: the existing planner service does that.
  */
 import type { WorldSpec, WorldEntity } from '../common/world-model';
+import { kitProp } from '../common/world-style-kits';
 
 export interface ShapePill { id: string; name: string }
 
 interface Idea { re: RegExp; words: string; caption: string; /** the first thing: the rest goes next to it */ near?: string }
 const IDEAS: Idea[] = [
-    { re: /\b(?:a |an |the )?(?:cosy |cozy |little |small )?reading (?:nook|corner)\b/i, words: 'an armchair, a lamp and a bookshelf', caption: 'A reading nook', near: 'armchair' },
+    { re: /\b(?:a |an |the )?(?:cosy |cozy |little |small )?reading (?:nook|corner)\b/i, words: 'a reading chair called Armchair, a lamp and a bookshelf', caption: 'A reading nook', near: 'armchair' },
     { re: /\b(?:a |an |the )?(?:cosy |cozy )?(?:lounge|chill|relax(?:ing)?) (?:corner|nook|area|spot)\b/i, words: 'a sofa, a rug and a lamp', caption: 'A lounge corner' },
     { re: /\b(?:a |an |the )?(?:bit of |some )?greenery\b/i, words: '2 plants', caption: 'Some greenery' },
     { re: /\b(?:a |an |the )?(?:planning|ideas?) (?:corner|wall|spot)\b/i, words: 'a whiteboard and a lamp', caption: 'A planning corner' }
@@ -28,7 +29,9 @@ export function expandIdea(text: string): { prompt: string; idea?: string } {
         if (m && idea.near) {
             const where = text.trim().slice(m[1].length).replace(idea.re, '').trim();
             const [first, ...rest] = idea.words.replace(/ and /, ', ').split(/,\s*/);
-            return { prompt: [`${m[1]} ${first}${where ? ` ${where}` : ''}`, ...rest.map(r => `add ${r} next to the ${idea.near}`)].join(', then '), idea: idea.caption };
+            // "a reading chair called Armchair": the kit's lounge armchair, named so the rest can sit next to it (the name follows the place).
+            const [thing, named] = first.split(/ (?=called )/);
+            return { prompt: [`${m[1]} ${thing}${where ? ` ${where}` : ''}${named ? ` ${named}` : ''}`, ...rest.map(r => `add ${r} next to the ${idea.near}`)].join(', then '), idea: idea.caption };
         }
         return { prompt: text.replace(idea.re, idea.words), idea: idea.caption };
     }
@@ -91,7 +94,7 @@ function nameOf(e: WorldEntity): string {
  * One plain sentence from a proposal summary ("Add armchair (size ×1.4); Add lamp; Add bookshelf").
  * The summary's first sentence only; verbs are grouped: "Adds a big armchair, a lamp and a bookshelf."
  */
-export function captionFor(summary: string, idea?: string, where?: string): string {
+export function captionFor(summary: string, idea?: string, where?: string, names?: Readonly<Record<string, string>>): string {
     const first = summary.split(/(?<=[.!?])\s+/)[0].replace(/[.]+$/, '');
     const parts = first.split(/\s*;\s*/).map(s => s.trim()).filter(Boolean);
     const groups = new Map<string, string[]>(); let more = 0;
@@ -100,6 +103,8 @@ export function captionFor(summary: string, idea?: string, where?: string): stri
         const m = /^(Add|Place|Remove|Move|Rename|Turn|Link|Resize|Name|Lock|Unlock|Build|Arrange|Reshape)\s+(.*)$/i.exec(raw);
         const verb = m ? m[1].toLowerCase() : 'change';
         let thing = (m ? m[2] : raw).replace(/[“”"]/g, '').replace(/\s+at\s+\(?-?\d.*$/i, '').trim();
+        const plain = thing.replace(/\s*\(kit model [^)]*\)/, '').replace(/\s*\(size ×[^)]*\)/, '').toLowerCase();
+        if (names?.[plain]) thing = thing.replace(new RegExp(plain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), names[plain]);
         const big = /\(size ×\s*1\.[3-9]\d*\)|\(size ×\s*[2-9]/.test(thing); thing = thing.replace(/\s*\(size ×[^)]*\)/, '');
         if (verb === 'add' || verb === 'place' || verb === 'build') thing = ARTICLE(`${big ? 'big ' : ''}${thing.replace(/^(desk|room)\s+(.+)$/i, '$2')}`.toLowerCase().replace(/\b(claude|codex|hermes)\b/g, w => w[0].toUpperCase() + w.slice(1)));
         const key = verb === 'place' || verb === 'build' ? 'add' : verb;
@@ -115,6 +120,21 @@ export function captionFor(summary: string, idea?: string, where?: string): stri
     } else sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1);
     if (where) sentence += ` ${where}`;
     return `${sentence}.`;
+}
+
+/**
+ * The words the caption and the ghost tags use for added things: a named thing says its own name
+ * ("lounge chair" -> "armchair" when the plan called it Armchair), so the sentence matches the tags.
+ */
+export function spokenNames(ops: readonly { op: string; entity?: WorldEntity }[]): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const o of ops) {
+        const e = o.op === 'add' ? o.entity : undefined;
+        if (!e || e.kind !== 'decor' || !e.label) continue;
+        const said = (e.prop ? kitProp(e.prop)?.label : undefined) ?? e.decor;
+        if (said && said.toLowerCase() !== e.label.toLowerCase()) out[said.toLowerCase()] = e.label.toLowerCase();
+    }
+    return out;
 }
 
 /** "… by the window" -> "by the window": where the change goes, for the caption. */

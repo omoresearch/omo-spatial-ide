@@ -109,6 +109,8 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await pause(600);
         const real1 = await page.$eval(CANVAS, e => ({ real: e.dataset.ghostReal ?? '', meshes: Number(e.dataset.ghostMeshes ?? 0) }));
         check('The ghost is the real furniture (tinted models, not boxes)', real1.real.split(',').filter(Boolean).length === 3 && real1.meshes > 0, real1);
+        const props1 = await page.$eval(CANVAS, e => e.dataset.ghostProps ?? '');
+        check('The nook armchair is the kit lounge armchair (mid_century_lounge_chair), named in the caption', /\barmchair:mid_century_lounge_chair\b/.test(props1) && /\barmchair\b/i.test(c1) && !/lounge chair/i.test(c1), { props1, c1 });
         await shot('2-ghost-caption');
 
         // 3. Refine, then keep.
