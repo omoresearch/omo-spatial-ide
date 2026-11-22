@@ -14,7 +14,7 @@ import {
     applyWorldOps, defaultStation, entityRadius, growOpsFor, roomRect, rooms, stations, validateWorld,
     ROOM_MAX, ROOM_MIN, SHELL_MAX, SHELL_MIN, WALL_SIDES, WORLD_ID_RE, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS
 } from './world-model';
-import { KIT_PROPS, STYLE_KITS, kitForTheme, propEntity } from './world-style-kits'; // sky:merge M7
+import { KIT_PROPS, STYLE_KITS, activeKit, kitForTheme, propEntity } from './world-style-kits'; // sky:merge M7
 import type { StyleKit, StyleKitProp } from './world-style-kits';
 import { WORLD_TEMPLATES } from './world-templates'; // sky:merge M7
 import type { WorldTemplate } from './world-templates';
@@ -1013,7 +1013,10 @@ class Planner {
         const m = /\b(?:next to|beside|near|by|close to|behind|in front of|opposite)\s+(.+)$/.exec(lower);
         if (!m) return undefined;
         const found = this.lookup(m[1]);
-        return found.length === 1 ? { x: found[0].transform.x, z: found[0].transform.z } : undefined;
+        if (found.length === 1) return { x: found[0].transform.x, z: found[0].transform.z };
+        // shape: a baked kit has its glass in the shell, not as a window entity: "by the window" means the kit's window spot.
+        if (/\b(windows?|glass|the view)\b/.test(m[1])) { const spot = activeKit(this.draft)?.windowSpot; if (spot) return { ...spot }; }
+        return undefined;
     }
 
     remove(lower: string): void {

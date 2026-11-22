@@ -41,6 +41,8 @@ export interface StyleKit {
     theme: RoomTheme;
     /** Floor size the baked shell fits exactly (metres). The world shell must not be larger to use it. */
     shell: { width: number; depth: number; ceiling: number };
+    /** shape: where "by the window" lands (a free spot just inside the glass), in world metres. */
+    windowSpot?: { x: number; z: number };
     /** Baked-file origin -> world: world = baked + offset (baked rooms are modelled from a corner). */
     offset: { x: number; z: number };
     /** Station anchors (world space, rotation 0 = facing -z). */
@@ -101,6 +103,8 @@ export const STYLE_KITS: readonly StyleKit[] = [{
     description: 'A baked glass penthouse floor above the city at dusk: three desks facing the glass, a lounge, a docs wall.',
     theme: 'skyline',
     shell: { width: 18, depth: 12, ceiling: 3.4 },
+    // shape: the north glass between the two window plants (x -1.8 / 3.35), clear of the dining and lounge blocks.
+    windowSpot: { x: 0.8, z: -4.6 },
     offset: { x: -9, z: 6 },
     // Baked desks at blender x 4.2 / 7.6 / 11.0, y 5.0 (three z -5.0) facing south: world (x - 9, z + 6).
     desks: [{ x: -4.8, z: 1, rotation: 0 }, { x: -1.4, z: 1, rotation: 0 }, { x: 2, z: 1, rotation: 0 }],

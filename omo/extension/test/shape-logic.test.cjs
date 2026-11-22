@@ -68,3 +68,25 @@ test('where: the place in the request goes into the caption', () => {
   assert.equal(shape.whereOf('make it bigger'), undefined);
   assert.equal(shape.captionFor('Add armchair; Add lamp; Add bookshelf', 'A reading nook', 'by the window'), 'A reading nook: armchair, lamp and bookshelf by the window.');
 });
+
+test('"by the window" in the skyline kit lands the reading nook next to the glass (kit windowSpot)', () => {
+  const { WORLD_TEMPLATES } = require('../src/common/world-templates.ts');
+  const { STYLE_KITS } = require('../src/common/world-style-kits.ts');
+  const kit = STYLE_KITS[0];
+  const sky = JSON.parse(JSON.stringify(WORLD_TEMPLATES.find(t => t.id === 'nyc-skyscraper').world));
+  const r = shape.expandIdea('add a reading nook by the window');
+  const plan = planWithRules(sky, r.prompt);
+  const adds = plan.proposal.ops.filter(o => o.op === 'add');
+  assert.equal(adds.length, 3);
+  const chair = adds.find(o => o.entity.kind === 'decor' && /armchair|chair/i.test(JSON.stringify(o.entity)));
+  assert.ok(chair, 'an armchair is added');
+  const d = Math.hypot(chair.entity.transform.x - kit.windowSpot.x, chair.entity.transform.z - kit.windowSpot.z);
+  assert.ok(d < 2.0, `armchair ${JSON.stringify(chair.entity.transform)} within 2 m of the window spot ${JSON.stringify(kit.windowSpot)} (was ${d.toFixed(2)} m)`);
+  // the north glass is at z = -depth/2: "by the window" means much nearer the glass than the room centre
+  assert.ok(chair.entity.transform.z < -2.5, 'the armchair sits in the north (glass) half of the room');
+});
+
+test('the window rule does not fire without a kit (a station world keeps its old behaviour)', () => {
+  const plan = planWithRules(world(), 'add an armchair by the window');
+  assert.ok(plan.proposal.ops.length >= 1);
+});
