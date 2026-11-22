@@ -14,9 +14,11 @@
  *   L5  Proximity voice: both turn voice on; B stands ~1 m from A then walks to 13 m; the volume A's app applies
  *       for B (canvas data-voice-gains: volume + the real gain node value) goes from ~1.0 to 0.
  *   Security: B's page never holds the owner key, the invite token or A's terminal text.
+ * Two people = two machines: A and B each run their OWN app (own IDE server, workspace, data and tmux socket) on
+ *   PORT and PORT+1. With one shared app, A's world changes reloaded B's window and dropped B out of the room.
  * Screenshots: omo/evidence/promises-share/ (1-palette, 2-data-dialog, 3-data-world, 4-boards-close, 5-room-panel,
  *   6-opened-on-b, 7-room-code, 8-joined-b, 9-pointer-b, 10-voice-near, 11-voice-far).
- * Usage: node scripts/share-promises-real.cjs [outDir] [port 3750-3759]
+ * Usage: node scripts/share-promises-real.cjs [outDir] [port 3750-3758]  (A's app on port, B's app on port + 1)
  */
 'use strict';
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
@@ -25,7 +27,8 @@ const ROOT = path.resolve(__dirname, '..');
 const puppeteer = require(path.join(ROOT, 'node_modules', 'puppeteer-core'));
 const OUT = path.resolve(process.argv[2] || path.join(ROOT, 'evidence', 'promises-share'));
 const PORT = Number(process.argv[3] || 3756);
-if (!(PORT >= 3750 && PORT <= 3759)) { console.error('Use a port from 3750 to 3759.'); process.exit(2); }
+if (!(PORT >= 3750 && PORT <= 3758)) { console.error('Use a port from 3750 to 3758 (B uses the next one).'); process.exit(2); }
+const PORTS = { a: PORT, b: PORT + 1 };
 const CSV = path.join(ROOT, 'extension', 'test', 'fixtures', 'customers.csv');
 const ROOM_BIN = path.join(ROOT, 'server', 'omo-room-server.cjs');
 const CANVAS = 'canvas[data-testid="omo-world-canvas"]';
@@ -36,14 +39,18 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
 (async () => {
     fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
     const S = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'omo-share-'));
-    const project = path.join(S, 'share'); fs.mkdirSync(project); fs.writeFileSync(path.join(project, 'README.md'), '# share\n');
     const bin = path.join(S, 'bin'); fs.mkdirSync(bin);
     for (const k of ['hermes', 'claude', 'codex']) { fs.writeFileSync(path.join(bin, k), '#!/usr/bin/python3\n# fixture only\nimport sys\nprint("FIXTURE", flush=True)\nfor l in sys.stdin: pass\n'); fs.chmodSync(path.join(bin, k), 0o755); }
-    const socket = `omo-share-${PORT}`;
-    const env = { ...process.env, THEIA_CONFIG_DIR: path.join(S, 'theia'), OMO_SPATIAL_DATA: path.join(S, 'data'), OMO_SPATIAL_TMUX_SOCKET: socket,
-        OMO_SPATIAL_HERMES_BIN: path.join(bin, 'hermes'), OMO_SPATIAL_CLAUDE_BIN: path.join(bin, 'claude'), OMO_SPATIAL_CODEX_BIN: path.join(bin, 'codex') };
-    const log = fs.openSync(path.join(OUT, 'server.log'), 'a');
-    const server = spawn(process.execPath, [path.join(ROOT, 'scripts', 'start.cjs'), '--workspace', project, '--port', String(PORT)], { env, detached: true, stdio: ['ignore', log, log] });
+    // One app per person (two machines): own workspace, Theia config, Omo data and tmux socket.
+    const servers = [], sockets = [];
+    for (const [tag, port] of Object.entries(PORTS)) {
+        const home = path.join(S, `app-${tag}`), project = path.join(home, 'share'); fs.mkdirSync(project, { recursive: true }); fs.writeFileSync(path.join(project, 'README.md'), '# share\n');
+        const socket = `omo-share-${port}`; sockets.push(socket);
+        const env = { ...process.env, THEIA_CONFIG_DIR: path.join(home, 'theia'), OMO_SPATIAL_DATA: path.join(home, 'data'), OMO_SPATIAL_TMUX_SOCKET: socket,
+            OMO_SPATIAL_HERMES_BIN: path.join(bin, 'hermes'), OMO_SPATIAL_CLAUDE_BIN: path.join(bin, 'claude'), OMO_SPATIAL_CODEX_BIN: path.join(bin, 'codex') };
+        const log = fs.openSync(path.join(OUT, `server-${tag}.log`), 'a');
+        servers.push(spawn(process.execPath, [path.join(ROOT, 'scripts', 'start.cjs'), '--workspace', project, '--port', String(port)], { env, detached: true, stdio: ['ignore', log, log] }));
+    }
     // Real room server, loopback only.
     const ROOM_DATA = path.join(S, 'rooms');
     const created = execFileSync(process.execPath, [ROOM_BIN, 'create-room', '--data', ROOM_DATA, '--id', 'share-room', '--name', 'Share room', '--owner', 'Ana'], { encoding: 'utf8' });
@@ -54,7 +61,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
     let A, B;
     try {
         check('The room server listens on 127.0.0.1 only', /^http:\/\/127\.0\.0\.1:\d+$/.test(roomInfo.url), roomInfo.url);
-        for (let i = 0; i < 400; i++) { try { if ((await fetch(`http://127.0.0.1:${PORT}/`)).ok) break; } catch {} await pause(300); }
+        for (const port of Object.values(PORTS)) for (let i = 0; i < 400; i++) { try { if ((await fetch(`http://127.0.0.1:${port}/`)).ok) break; } catch {} await pause(300); }
 
         const open = async tag => {
             const browser = await puppeteer.launch({ executablePath: '/opt/google/chrome/chrome', headless: true, userDataDir: path.join(S, `chrome-${tag}`),
@@ -64,7 +71,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             const page = await browser.newPage();
             page.setDefaultTimeout(60000);
             page.on('pageerror', e => errors[tag].push(String(e.message || e)));
-            await browser.defaultBrowserContext().overridePermissions(`http://127.0.0.1:${PORT}`, ['microphone']);
+            await browser.defaultBrowserContext().overridePermissions(`http://127.0.0.1:${PORTS[tag]}`, ['microphone']);
             await page.evaluateOnNewDocument(() => {
                 try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.focus.clickAttach', 'false'); } catch {}
                 new MutationObserver(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click()).observe(document, { childList: true, subtree: true });
@@ -72,7 +79,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             const downloads = path.join(S, `downloads-${tag}`); fs.mkdirSync(downloads);
             const cdp = await page.createCDPSession();
             await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
-            await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded' });
+            await page.goto(`http://127.0.0.1:${PORTS[tag]}/`, { waitUntil: 'domcontentloaded' });
             await page.waitForSelector('[data-testid="omo-scene"][data-ready="true"]', { timeout: 180000 });
             for (let i = 0; i < 3; i++) { await page.$eval('[data-testid="create-room"]', e => e.click()).catch(() => {}); try { await page.waitForSelector(`${CANVAS}[data-navigation="walk"]`, { timeout: 8000 }); break; } catch {} }
             await page.waitForFunction(() => !document.querySelector('.theia-preload'), { timeout: 60000 }); await pause(2000);
@@ -282,10 +289,10 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ failed, checks, errors }, null, 1));
         for (const b of browsers) await b.close().catch(() => {});
         try { rooms.kill('SIGTERM'); } catch {}
-        try { process.kill(-server.pid, 'SIGTERM'); } catch {}
-        await pause(2500); try { process.kill(-server.pid, 'SIGKILL'); } catch {}
+        for (const server of servers) try { process.kill(-server.pid, 'SIGTERM'); } catch {}
+        await pause(2500); for (const server of servers) try { process.kill(-server.pid, 'SIGKILL'); } catch {}
         const tmux = spawnSync('sh', ['-c', 'command -v tmux'], { encoding: 'utf8' }).stdout.trim();
-        if (tmux) spawnSync(tmux, ['-L', socket, 'kill-server'], { stdio: 'ignore' });
+        if (tmux) for (const socket of sockets) spawnSync(tmux, ['-L', socket, 'kill-server'], { stdio: 'ignore' });
         fs.rmSync(S, { recursive: true, force: true });
         console.log(`${checks.filter(c => c.pass).length}/${checks.length} checks passed${failed ? ` (${failed} failed)` : ''}`);
         process.exitCode = failed ? 1 : 0;
