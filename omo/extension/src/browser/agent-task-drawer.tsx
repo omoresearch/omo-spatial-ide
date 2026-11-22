@@ -144,7 +144,7 @@ function TaskDraft(props: { target: AgentTaskTarget; ready: boolean; state: Runt
 export function AgentTaskDrawer(props: { state: RuntimeConsoleState; controller?: RuntimeConsoleController; onReview?: () => Promise<GitReviewSnapshot | undefined> }): React.ReactElement {
     const { state, controller } = props;
     const target = controller?.taskTarget();
-    const previous = React.useRef<AgentTaskTarget>();
+    const previous = React.useRef<AgentTaskTarget | undefined>(undefined);
     if (target) previous.current = target;
     const selected = previous.current;
     const contextMismatch = !!selected && !!state.workspace && (selected.workspaceId !== state.workspace.id || selected.projectUri !== state.workspace.projectUri || (!!state.activeTabId && selected.tabId !== state.activeTabId));

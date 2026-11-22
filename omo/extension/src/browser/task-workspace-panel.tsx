@@ -15,7 +15,7 @@ export function TaskWorkspacePanel(props: TaskWorkspacePanelProps): React.ReactE
     const [state, setState] = React.useState<TaskWorkspaceState>({ phase: 'idle', entries: [], notice: '' });
     const [form, setForm] = React.useState({ projectUri: props.projectUri, name: '', confirmed: false });
     const [openError, setOpenError] = React.useState<{ projectUri: string; message: string }>();
-    const binding = React.useRef<{ projectUri: string; controller: TaskWorkspaceController }>();
+    const binding = React.useRef<{ projectUri: string; controller: TaskWorkspaceController } | undefined>(undefined);
     const latestProject = React.useRef(props.projectUri);
     latestProject.current = props.projectUri;
 

@@ -106,7 +106,7 @@ const THEMES = {
 
 function SceneView(props: { theme: RoomTheme; layout: RoomLayoutId; kit: RoomKitId; camera: RoomState['camera']; onSelect: (station: Workstation, point?: ScreenPoint) => void; onTextSelect: (station: TerminalWorkstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrames: Record<TerminalWorkstation, MonitorFrame>; webFrame?: WebSurfaceFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onPaste: (text: string) => void; onScroll?: (delta: number) => void; onWebScroll?: (point: ScreenPoint, deltaY: number, deltaX: number) => void; onMessage: (text: string) => void; onShortcut?: (shortcut: 'new-shell' | 'select-tab-2' | 'workspace-picker') => void; onOpenLink?: (url: string) => void; onPose?: (pose: PlayerPose) => void; children?: React.ReactNode }): React.ReactElement {
     const host = React.useRef<HTMLDivElement>(null);
-    const instance = React.useRef<RoomScene>();
+    const instance = React.useRef<RoomScene | undefined>(undefined);
     const callbacks = React.useRef(props); callbacks.current = props;
     const [error, setError] = React.useState('');
     const [ready, setReady] = React.useState(false);

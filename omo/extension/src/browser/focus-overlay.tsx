@@ -20,7 +20,7 @@ export interface FocusOverlayProps {
 const DESK_LABEL: Record<string, string> = new Proxy({ terminal: 'Desk one', 'terminal-2': 'Desk two' } as Record<string, string>, { get: (base, id: string) => stationName(id) || base[id] || id });
 
 /** Live size of an element, for fitting the terminal text to it. */
-function useSize(ref: React.RefObject<HTMLElement>): { width: number; height: number } | undefined {
+function useSize(ref: React.RefObject<HTMLElement | null>): { width: number; height: number } | undefined {
     const [size, setSize] = React.useState<{ width: number; height: number }>();
     React.useLayoutEffect(() => {
         const el = ref.current; if (!el) return;

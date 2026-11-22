@@ -15,7 +15,7 @@ export const FRAME = { x: 2 * (20 + 20 + 1), y: 2 * (14 + 14 + 1) };
  * (its computed font-family), again once web fonts settle. Used to work out how many columns fit
  * the box; the column pitch itself is the font's own advance, never a guess.
  */
-export function useCellRatio(ref: React.RefObject<HTMLElement>): number {
+export function useCellRatio(ref: React.RefObject<HTMLElement | null>): number {
     const [ratio, setRatio] = React.useState(0.6);
     React.useEffect(() => {
         let live = true;
