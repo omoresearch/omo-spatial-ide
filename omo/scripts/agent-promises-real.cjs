@@ -178,7 +178,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             try {
                 const t = JSON.parse(sessionStorage.getItem('omo.test.return') || 'null'); if (!t) return; sessionStorage.removeItem('omo.test.return');
                 const rec = JSON.parse(localStorage.getItem(t.key) || 'null'); if (!rec) return;
-                rec.at = Date.now() - 12 * 60000; rec.desks = rec.desks.map(d => d.id === t.deskId ? { ...d, status: 'working' } : d);
+                rec.at = Date.now() - 12 * 60000; rec.desks = rec.desks.map(d => d.id === t.deskId ? { ...d, status: 'working', agent: 'Claude' } : d);
                 localStorage.setItem(t.key, JSON.stringify(rec));
             } catch {}
         });
@@ -186,7 +186,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await page.reload({ waitUntil: 'domcontentloaded' }); await ready();
         await page.waitForSelector('[data-testid="omo-since"]', { timeout: 20000 }).catch(() => {});
         const s1 = await omo();
-        check('After reload with a desk state change: the "Since you left" line names what changed', /^Since you left: .*(finished|waiting|started|stopped).*\(away \d+ min\)\.?/.test(s1.since.replace('×', '').trim()), { since: s1.since, recBefore: (recBefore ?? '').slice(0, 300) });
+        check('After reload with a desk state change: the "Since you left" line names the desk and what changed, in plain words', (() => { const line = s1.since.replace('×', '').trim(); const deskName = claude?.label || claude?.station?.name; return /^Since you left \(\d+ min\): .+ · .*(finished|waiting|started|stopped)/.test(line) && !!deskName && (line.includes(`${deskName} · Claude `) || (/ · Claude$/.test(deskName) && line.includes(`${deskName} stopped`) && !line.includes(`${deskName} · Claude`))); })(), { since: s1.since, desk: claude?.label || claude?.station?.name, recBefore: (recBefore ?? '').slice(0, 300) });
         await shot('5-since-you-left');
 
         // 5. Where was I: use the Claude desk, walk to another desk, ask "where was I" -> the camera walks back.

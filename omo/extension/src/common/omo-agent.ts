@@ -7,7 +7,7 @@
  *     beam to it. Extensible: add a row to ANSWERS. No LLM is needed for these.
  *   - routeOmo: what the Shape prompt should do with a line (answer / make a page / walk somewhere / change).
  *   - pageRequest: "make a dashboard of my desks" -> a local page template + title.
- *   - sinceYouLeft: the quiet one-line return card from two runtime readings.
+ *   - sinceYouLeft: the quiet one-line return card from two runtime readings, naming each desk and its agent.
  *   - placePose: where to stand to look at a thing (for "take me to …" / "where was I").
  * Nothing here starts an agent, types into a terminal or changes the world.
  */
@@ -353,43 +353,57 @@ export function pageRequest(text: string): PageRequest | undefined {
 
 // ---- walking back in ------------------------------------------------------------------------------------
 
-export interface ReturnRecord { at: number; desks: Array<{ id: string; name: string; status: DeskStatus }> }
+/** One desk as it was when you left: its name, its status and (when one was open) the agent's plain name. */
+export interface ReturnDesk { id: string; name: string; status: DeskStatus; agent?: string }
+export interface ReturnRecord { at: number; desks: ReturnDesk[] }
+const AGENT_NAMES: Record<string, string> = { claude: 'Claude', codex: 'Codex', hermes: 'Hermes', opencode: 'OpenCode', gemini: 'Gemini' };
+/** The plain name of the agent on a desk: the busiest agent tab (waiting, then working, then any), e.g. "Claude". */
+function deskAgent(desk: RuntimeDesk): string | undefined {
+    const agents = desk.tabs.filter(t => t.kind !== 'shell');
+    const pick = agents.find(t => t.status === 'waiting-approval') ?? agents.find(t => t.status === 'working') ?? agents[0];
+    return pick ? (AGENT_NAMES[pick.kind] ?? (pick.name || pick.kind)) : undefined;
+}
 export function returnRecord(snap: RuntimeSnapshot, names: (id: string) => string, at = Date.now()): ReturnRecord {
-    return { at, desks: snap.desks.map(d => ({ id: d.id, name: names(d.id) || d.name || d.id, status: deskStatus(d) })) };
+    return { at, desks: snap.desks.map(d => { const agent = deskAgent(d); return { id: d.id, name: names(d.id) || d.name || d.id, status: deskStatus(d), ...(agent ? { agent } : {}) }; }) };
 }
-function away(ms: number): string {
+function awayFor(ms: number): string {
     const m = Math.round(ms / 60000);
-    if (m < 1) return '';
-    if (m < 60) return ` (away ${m} min)`;
+    if (!(m >= 1)) return '';
+    if (m < 60) return `${m} min`;
     const h = Math.round(m / 60);
-    return h < 48 ? ` (away ${h} h)` : ` (away ${Math.round(h / 24)} days)`;
+    return h < 48 ? `${h} h` : `${Math.round(h / 24)} days`;
 }
-/** "Since you left: 2 desks finished, 1 waiting for you." from what the desks were doing then and now. */
+export const SINCE_MAX_DESKS = 3;
+/**
+ * The quiet return line, in plain words that name each desk and its agent:
+ *   "Since you left (12 min): Code · Claude stopped."
+ *   "Since you left (25 min): Claude desk · Claude finished; Desk three · Claude is waiting for you."
+ * finished = the agent is still open and now idle; stopped = the agent tab is gone (back to the plain shell) or
+ * the desk is not connected now; started = an agent began working. More than SINCE_MAX_DESKS desks: "+N more".
+ */
 export function sinceYouLeft(before: ReturnRecord | undefined, now: ReturnRecord): string | undefined {
     if (!before || !before.desks.length) return undefined;
-    const prev = new Map(before.desks.map(d => [d.id, d.status]));
-    let finished = 0, waiting = 0, started = 0, stopped = 0;
+    const prev = new Map(before.desks.map(d => [d.id, d]));
+    const changes: string[] = [];
     for (const d of now.desks) {
-        const was = prev.get(d.id), busy = was === 'working' || was === 'waiting';
-        if (d.status === 'waiting') waiting++;
-        // An agent that was busy and is now idle, or gone back to its plain shell, has finished.
-        else if ((d.status === 'idle' || d.status === 'shell') && busy) finished++;
-        else if (d.status === 'working' && was !== 'working') started++;
-        // A busy desk that is not connected now: its agent stopped while you were away.
-        else if (d.status === 'off' && busy) stopped++;
+        const was = prev.get(d.id), busy = was?.status === 'working' || was?.status === 'waiting';
+        const who = d.agent ?? was?.agent ?? 'the agent', desk = d.name || was?.name || d.id;
+        let what: string | undefined;
+        if (d.status === 'waiting') what = 'is waiting for you';
+        else if (d.status === 'idle' && busy) what = 'finished';
+        else if (d.status === 'shell' && busy) what = 'stopped';
+        else if (d.status === 'working' && was?.status !== 'working') what = 'started working';
+        else if (d.status === 'off' && busy) what = 'stopped, desk not connected';
+        // A desk already named for its agent ("Code · Claude") does not say the agent twice.
+        if (what) changes.push(desk.toLowerCase().endsWith(` · ${who}`.toLowerCase()) ? `${desk} ${what}` : `${desk} · ${who} ${what}`);
     }
-    const parts: string[] = [];
-    const n = (k: number, one: string, many = `${one}s`): string => `${k} ${k === 1 ? one : many}`;
-    if (finished) parts.push(`${n(finished, 'desk')} finished`);
-    if (waiting) parts.push(`${waiting} waiting for you`);
-    if (started) parts.push(`${n(started, 'desk')} started working`);
-    if (stopped) parts.push(`${n(stopped, 'desk')} stopped (not connected now)`);
-    const gap = away(now.at - before.at);
-    if (!parts.length) {
-        const ready = now.desks.filter(d => d.status !== 'off').length;
-        return `Since you left: nothing changed${ready ? ` · ${n(ready, 'desk')} still open` : ''}${gap}.`;
+    const gap = awayFor(now.at - before.at), head = gap ? `Since you left (${gap}):` : 'Since you left:';
+    if (!changes.length) {
+        const open = now.desks.filter(d => d.status !== 'off').length;
+        return `${head} nothing changed${open ? ` · ${open} ${open === 1 ? 'desk' : 'desks'} open` : ''}.`;
     }
-    return `Since you left: ${parts.join(', ')}${gap}.`;
+    const shown = changes.slice(0, SINCE_MAX_DESKS), more = changes.length - shown.length;
+    return `${head} ${shown.join('; ')}${more ? `; +${more} more` : ''}.`;
 }
 
 // ---- memory you can walk: the places you used, newest last -----------------------------------------------

@@ -212,20 +212,34 @@ test('a page goes on a wall through the rules planner: a web wall with the page 
   assert.equal(add.entity.home, url);
 });
 
-test('since you left: finished, waiting, started; quiet when nothing changed', () => {
+test('since you left: plain words that name the desk and its agent; quiet when nothing changed', () => {
   const names = id => ({ terminal: 'Claude desk', 'terminal-2': 'Desk two', d3: 'Desk three' }[id]);
-  const then = { at: 0, desks: [{ id: 'terminal', name: 'Claude desk', status: 'working' }, { id: 'terminal-2', name: 'Desk two', status: 'working' }, { id: 'd3', name: 'Desk three', status: 'working' }] };
+  const then = { at: 0, desks: [{ id: 'terminal', name: 'Claude desk', status: 'working', agent: 'Claude' }, { id: 'terminal-2', name: 'Desk two', status: 'working', agent: 'Codex' }, { id: 'd3', name: 'Desk three', status: 'working', agent: 'Claude' }] };
   const now = agent.returnRecord({ desks: [
     { id: 'terminal', phase: 'live', tabs: [{ name: 'Claude', kind: 'claude', status: 'idle' }] },
     { id: 'terminal-2', phase: 'live', tabs: [{ name: 'Codex', kind: 'codex', status: 'exited' }] },
-    { id: 'd3', phase: 'live', tabs: [{ name: 'Claude', kind: 'claude', status: 'waiting-approval' }] }] }, names, 25 * 60000);
-  assert.equal(agent.sinceYouLeft(then, now), 'Since you left: 2 desks finished, 1 waiting for you (away 25 min).');
+    { id: 'd3', phase: 'live', tabs: [{ name: 'Shell', kind: 'shell' }, { name: 'my claude', kind: 'claude', status: 'waiting-approval' }] }] }, names, 25 * 60000);
+  assert.deepEqual(now.desks.map(d => d.agent), ['Claude', 'Codex', 'Claude'], 'the agent is named by its kind, in plain words');
+  assert.equal(agent.sinceYouLeft(then, now), 'Since you left (25 min): Claude desk · Claude finished; Desk two · Codex finished; Desk three · Claude is waiting for you.');
+  // The example from the brief: the Code desk's Claude was working; now the desk is back at its plain shell.
+  const code = agent.returnRecord({ desks: [{ id: 'c', phase: 'live', tabs: [{ name: 'Shell', kind: 'shell' }] }] }, () => 'Code', 12 * 60000);
+  assert.equal(agent.sinceYouLeft({ at: 0, desks: [{ id: 'c', name: 'Code', status: 'working', agent: 'Claude' }] }, code), 'Since you left (12 min): Code · Claude stopped.');
+  // A desk named for its agent (the onboarding names, e.g. "Code · Claude") does not repeat the agent.
+  const named = agent.returnRecord({ desks: [{ id: 'c', phase: 'live', tabs: [{ name: 'Shell', kind: 'shell' }] }] }, () => 'Code · Claude', 12 * 60000);
+  assert.equal(agent.sinceYouLeft({ at: 0, desks: [{ id: 'c', name: 'Code · Claude', status: 'working', agent: 'Claude' }] }, named), 'Since you left (12 min): Code · Claude stopped.');
+  // An old record with no agent name still reads as plain words.
+  assert.equal(agent.sinceYouLeft({ at: 0, desks: [{ id: 'c', name: 'Code', status: 'working' }] }, code), 'Since you left (12 min): Code · the agent stopped.');
   const same = agent.returnRecord({ desks: [{ id: 'terminal', phase: 'live', tabs: [{ name: 'Shell', kind: 'shell' }] }] }, names, 10);
-  assert.equal(agent.sinceYouLeft({ at: 0, desks: [{ id: 'terminal', name: 'x', status: 'shell' }] }, same), 'Since you left: nothing changed · 1 desk still open.');
+  assert.equal(agent.sinceYouLeft({ at: 0, desks: [{ id: 'terminal', name: 'x', status: 'shell' }] }, same), 'Since you left: nothing changed · 1 desk open.');
   assert.equal(agent.sinceYouLeft(undefined, same), undefined);
-  // a busy desk now back at its plain shell has finished; a busy desk now not connected has stopped
-  const back = agent.returnRecord({ desks: [{ id: 'terminal', phase: 'live', tabs: [{ name: 'Shell', kind: 'shell' }] }, { id: 'terminal-2', phase: 'idle', tabs: [] }] }, names, 3 * 60000);
-  assert.equal(agent.sinceYouLeft({ at: 0, desks: [{ id: 'terminal', name: 'Claude desk', status: 'working' }, { id: 'terminal-2', name: 'Desk two', status: 'waiting' }] }, back), 'Since you left: 1 desk finished, 1 desk stopped (not connected now) (away 3 min).');
+  // a busy desk now not connected has stopped; an agent that began while you were away has started; hours read as h
+  const back = agent.returnRecord({ desks: [{ id: 'terminal', phase: 'live', tabs: [{ name: 'Hermes', kind: 'hermes', status: 'working' }] }, { id: 'terminal-2', phase: 'idle', tabs: [] }] }, names, 3 * 3600000);
+  assert.equal(agent.sinceYouLeft({ at: 0, desks: [{ id: 'terminal', name: 'Claude desk', status: 'shell' }, { id: 'terminal-2', name: 'Desk two', status: 'waiting', agent: 'Codex' }] }, back), 'Since you left (3 h): Claude desk · Hermes started working; Desk two · Codex stopped, desk not connected.');
+  // many changes: the first three, then "+N more"
+  const many = { at: 0, desks: [1, 2, 3, 4, 5].map(i => ({ id: `d${i}`, name: `Desk ${i}`, status: 'working', agent: 'Claude' })) };
+  const manyNow = agent.returnRecord({ desks: [1, 2, 3, 4, 5].map(i => ({ id: `d${i}`, phase: 'live', tabs: [{ name: 'Claude', kind: 'claude', status: 'idle' }] })) }, id => `Desk ${id.slice(1)}`, 5 * 60000);
+  assert.equal(agent.sinceYouLeft(many, manyNow), 'Since you left (5 min): Desk 1 · Claude finished; Desk 2 · Claude finished; Desk 3 · Claude finished; +2 more.');
+  assert.doesNotMatch(agent.sinceYouLeft(many, manyNow), /\(not connected now\)|\(away/, 'no old bracketed jargon');
   assert.equal(agent.deskStatus({ id: 'x', phase: 'live', tabs: [{ name: 'a', kind: 'claude', status: 'working' }, { name: 'b', kind: 'codex', status: 'waiting-approval' }] }), 'waiting');
   assert.equal(agent.deskStatus(undefined), 'off');
 });
