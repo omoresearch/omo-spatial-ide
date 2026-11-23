@@ -576,7 +576,9 @@ function ghostShadows(three: THREE.Scene): THREE.Group {
     return g;
 }
 function restoreMesh(mesh: THREE.Mesh): void {
-    if (mesh.userData.shapeOrig) { mesh.material = mesh.userData.shapeOrig as THREE.Material; mesh.castShadow = !!mesh.userData.shapeCast; mesh.renderOrder = mesh.userData.shapeOrder as number ?? 0; }
+    // beauty r2 fix 4 — restore only while our ghost glass is still on (world magic may have swapped it meanwhile; it hands
+    // the real material back itself), so a kept thing never ends on the ghost ShaderMaterial.
+    if (mesh.userData.shapeOrig) { if (mesh.material === ghostMaterial) mesh.material = mesh.userData.shapeOrig as THREE.Material; mesh.castShadow = !!mesh.userData.shapeCast; mesh.renderOrder = mesh.userData.shapeOrder as number ?? 0; }
     delete mesh.userData.shapeOrig; delete mesh.userData.shapeCast; delete mesh.userData.shapeOrder;
     ghosted.delete(mesh);
 }

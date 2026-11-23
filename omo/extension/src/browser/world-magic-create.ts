@@ -652,7 +652,9 @@ export class WorldCreation {
 
 function swapMaterial(mesh: THREE.Mesh): MatSwap | undefined {
     if (mesh.userData.magicSwap) return undefined; // already swapped by another effect
-    const original = mesh.material; const src = Array.isArray(original) ? original[0] : original; if (!src) return undefined;
+    // beauty r2 fix 4 — never clone Shape's ghost glass as if it were the mesh's own material: start from the real one.
+    const shaped = mesh.userData.shapeOrig as THREE.Material | undefined;
+    const original = shaped ?? mesh.material; const src = Array.isArray(original) ? original[0] : original; if (!src) return undefined;
     const clone = src.clone();
     const anyC = clone as THREE.MeshStandardMaterial;
     const base = { color: anyC.color?.clone(), emissive: anyC.emissive?.clone(), emissiveIntensity: anyC.emissiveIntensity, opacity: clone.opacity, transparent: clone.transparent };
@@ -667,7 +669,13 @@ function restoreMaterial(s: MatSwap): void {
     else if (s.adopted && o.color && s.base.color) o.color.copy(s.base.color);
     if (c.emissive && o.emissive && set.emissive && !c.emissive.equals(set.emissive)) o.emissive.copy(c.emissive);
     else if (s.adopted && o.emissive && s.base.emissive) o.emissive.copy(s.base.emissive);
-    s.mesh.material = s.original; delete s.mesh.userData.magicSwap;
+    // beauty r2 fix 4 — Shape mode may have swapped this mesh too (its cyan ghost glass, a ShaderMaterial, with the real
+    // material kept in userData.shapeOrig). Only put the original back when our clone is still on; when Shape holds our
+    // clone as its 'original', hand it the real one instead. Otherwise a kept room could stay on the ghost ShaderMaterial
+    // (or a 16 %-opacity clone) for good — the planner-rooms 'room-7-1' off-look meshes.
+    if (s.mesh.material === s.clone) s.mesh.material = s.original;
+    else if (s.mesh.userData.shapeOrig === s.clone) s.mesh.userData.shapeOrig = s.original;
+    delete s.mesh.userData.magicSwap;
     s.clone.dispose();
 }
 const WARM = new THREE.Color(MAGIC_WARM);
