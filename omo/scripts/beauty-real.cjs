@@ -26,6 +26,8 @@ const CANVAS = 'canvas[data-testid="omo-world-canvas"]';
 const SENTENCE = 'A lighthouse library at the edge of the sea';
 const SHOTS = ['1-onboarding-overview', '2-topic-room', '3-csv-world', '4-boards-close'];
 const pause = ms => new Promise(r => setTimeout(r, ms));
+// room modules: OMO_BEAUTY_MODULES=1 shows every room as its baked module (library / lounge / studio) and checks it.
+const MODULES_ON = process.env.OMO_BEAUTY_MODULES === '1';
 const checks = []; let failed = 0;
 const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail }); if (!pass) failed++; console.log(`${pass ? 'PASS' : 'FAIL'} ${name}${detail !== undefined ? ' — ' + JSON.stringify(detail).slice(0, 400) : ''}`); };
 
@@ -48,10 +50,12 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const page = await browser.newPage();
         page.setDefaultTimeout(60000);
         page.on('pageerror', e => errors.push(String(e.message || e)));
-        await page.evaluateOnNewDocument(() => {
-            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.focus.clickAttach', 'false'); } catch {}
+        page.on('console', m => { if (/room module|omo-kits/i.test(m.text())) console.log('CONSOLE', m.text().slice(0, 300)); });
+        page.on('response', r => { if (/omo-kits\/modules/.test(r.url()) && r.status() >= 400) console.log('HTTP', r.status(), r.url()); });
+        await page.evaluateOnNewDocument((MODULES_ON) => {
+            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.focus.clickAttach', 'false'); if (MODULES_ON) localStorage.setItem('omo.modules.force', '1'); } catch {}
             new MutationObserver(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click()).observe(document, { childList: true, subtree: true });
-        });
+        }, MODULES_ON);
         const click = sel => page.$eval(sel, e => e.click());
         const shot = name => page.screenshot({ path: path.join(OUT, `${name}.png`) });
         const savedWorld = () => page.evaluate(() => { const k = Object.keys(localStorage).find(k => k.startsWith('omo.world.v2:')); return k ? JSON.parse(localStorage.getItem(k)) : null; });
@@ -112,6 +116,12 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         fs.writeFileSync(path.join(OUT, 'world-onboarding.json'), JSON.stringify(w1, null, 1)); // beauty r3: the world under test (layout checks offline)
         const mindRooms = (w1?.entities ?? []).filter(e => e.kind === 'room' && e.id.startsWith('mind-'));
         check('Onboarding built the lighthouse library with imported topic rooms', w1?.name === 'Lighthouse library' && mindRooms.length >= 4, { name: w1?.name, rooms: mindRooms.length });
+        const moduleCheck = async (stage) => {
+            if (!MODULES_ON) return;
+            const m = await page.waitForFunction(() => { const d = JSON.parse(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.moduleRooms || 'null'); return d && d.rooms > 0 && d.ready.length >= d.rooms ? d : false; }, { timeout: 60000 }).then(h => h.jsonValue()).catch(async () => page.$eval(CANVAS, c => JSON.parse(c.dataset.moduleRooms || 'null')));
+            check(`${stage}: every room shows its baked room module`, !!m && m.rooms > 0 && m.ready.length === m.rooms, m);
+        };
+        await moduleCheck('Onboarding');
         perf.onboarding = await walkFps();
         check(`Walking view keeps 50+ fps in the onboarding world (${perf.onboarding.fps} fps, p90 ${perf.onboarding.p90} ms)`, perf.onboarding.fps >= 50, perf.onboarding);
         await settledAudit('onboarding');
@@ -163,6 +173,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const w3 = await savedWorld();
         fs.writeFileSync(path.join(OUT, 'world-csv.json'), JSON.stringify(w3, null, 1)); // beauty r3: the world under test (layout checks offline)
         check('The CSV world has the 4 region rooms', (w3?.entities ?? []).filter(e => e.kind === 'room').length >= 4, (w3?.entities ?? []).filter(e => e.kind === 'room').map(e => e.label));
+        await moduleCheck('CSV world');
         await walk().catch(() => {});
         await pause(1500);
         perf.csv = await walkFps();

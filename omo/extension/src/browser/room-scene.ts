@@ -38,6 +38,8 @@ import { SkylineKitLoader, buildKitStation } from './world-scene-skyline-baked';
 import { activeKit, decorPropFor, kitDeskIndex, styleKit } from '../common/world-style-kits'; // sky:merge M1
 import { decorKitPlan, fitKitDecor } from './world-scene-decor'; // beauty:foundation
 import { dressingBlocks, dressRoom, roomDressing } from './world-scene-dressing'; // beauty r2 (5): set-dressed rooms
+import { isKnownModule, ModuleRoomLoader, moduleBlocks } from './world-scene-module-room'; // room modules
+import { MODULES, pickModule } from '../common/room-modules'; // room modules
 import { LIGHT_RIG } from './world-look'; // beauty:foundation
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'; // beauty:foundation
 import type { StyleKit } from '../common/world-style-kits'; // sky:merge M1
@@ -59,6 +61,19 @@ function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMet
  * cursor (the last 22 when there is no cursor). A frame that already fits is returned as is.
  * Malformed metadata is dropped, never trusted: the monitor only crops, it never crashes.
  */
+/**
+ * room modules — the module a room shows: its own `module`, or (test/preview hook, localStorage 'omo.modules.force' = '1')
+ * one picked from its label words so worlds made before the planner wrote modules can be previewed.
+ */
+export function roomModule(room: RoomEntity): string | undefined {
+    if (isKnownModule(room.module)) return room.module;
+    let force = false; try { force = globalThis.localStorage?.getItem('omo.modules.force') === '1'; } catch { /* no storage */ }
+    return force ? pickModule(room.label ?? room.id, [], false) : undefined;
+}
+/** room modules — world-space colliders of every module room's baked furniture (from the module table in common/room-modules.ts). */
+function moduleRoomBlocks(world: WorldSpec): ReturnType<typeof moduleBlocks> {
+    return world.entities.flatMap(e => { if (e.kind !== 'room') return []; const id = roomModule(e); return isKnownModule(id) ? moduleBlocks(e.id, e.transform, MODULES[id]) : []; });
+}
 export function monitorWindow(frame: MonitorFrame): MonitorFrame {
     const lines = Array.isArray(frame.lines) ? frame.lines : [];
     const wide = (row: unknown): boolean => typeof row === 'string' ? Array.from(row).length > MONITOR_COLS : Array.isArray(row) && row.length > MONITOR_COLS;
@@ -273,6 +288,8 @@ export class RoomScene {
     private neutralSky?: THREE.CanvasTexture;
     /** sky:merge M1 — the baked style-kit shell: loader per kit, its loaded shell, and kits whose assets are missing. */
     private kitLoaders = new Map<string, SkylineKitLoader>();
+    private moduleLoader?: ModuleRoomLoader; // room modules — the baked library/lounge/studio rooms
+    private moduleErrors: string[] = [];
     /** beauty:foundation — loads CC0 kit props for decor in EVERY world (not only kit worlds); never builds a shell. */
     private propLoader?: SkylineKitLoader;
     /** beauty:foundation — the one light rig's environment probe (reflections on brass, glass, oak) for non-kit worlds. */
@@ -576,7 +593,7 @@ export class RoomScene {
         // Walking: footprint collision, bounds and reset spot of this world.
         if (this.walker) {
             const firstOpen = world.shell.open && (!previous || !previous.shell.open || this.homeKey !== world.name); // w3:look (6): a newly loaded open world starts in its plaza
-            this.walker.mover = worldMover(world, [...(kitShell ? kit!.blocks.map((b, i) => ({ id: `kit-${i}`, x: b.x, z: b.z, rotation: 0, rect: { left: -b.hx, right: b.hx, front: -b.hz, back: b.hz } })) : []), ...dressingBlocks(world)]); // sky:merge M1 — baked furniture collides
+            this.walker.mover = worldMover(world, [...(kitShell ? kit!.blocks.map((b, i) => ({ id: `kit-${i}`, x: b.x, z: b.z, rotation: 0, rect: { left: -b.hx, right: b.hx, front: -b.hz, back: b.hz } })) : []), ...dressingBlocks({ ...world, entities: world.entities.filter(e => !(e.kind === 'room' && roomModule(e))) }), ...moduleRoomBlocks(world)]); // sky:merge M1 — baked furniture collides; room modules: the module's baked furniture
             this.walker.eye = kitShell ? kit!.render.eye : undefined; // world-ui r4/2: the kit's eye height
             this.walker.home = kitShell ? { x: kit!.spawn.x, z: kit!.spawn.z, yaw: kit!.spawn.yaw, pitch: kit!.spawn.pitch ?? 0 } : worldHome(world.shell, world.entities);
             const firstKit = !!kitShell && this.homeKey !== `kit:${world.name}`; // world-ui (2): a kit world starts at the kit's desk view once
@@ -591,6 +608,7 @@ export class RoomScene {
         canvas.dataset.worldStations = JSON.stringify(stations.map(e => e.id));
         canvas.dataset.worldShell = JSON.stringify({ width: world.shell.width, depth: world.shell.depth, open: !!world.shell.open }); // w3:test
         canvas.dataset.worldRooms = JSON.stringify(world.entities.filter(e => e.kind === 'room').map(e => e.id)); // w3:test
+        this.publishModules(); // room modules test hook
         canvas.dataset.styleKit = kit ? (kitShell ? kit.id : this.kitMissing.has(kit.id) ? 'missing' : 'loading') : ''; // sky:merge M1 — test hook
         canvas.dataset.kitStations = JSON.stringify(kitShell ? stations.filter(e => this.onKitAnchor(kit!, e)).map(e => e.id) : []);
         canvas.dataset.deskPositions = JSON.stringify(Object.fromEntries(stations.map(e => [e.id, { x: e.transform.x, z: e.transform.z }])));
@@ -806,7 +824,8 @@ export class RoomScene {
     private applyKitView(): void {
         if (!this.renderer || !this.world) return;
         const kit = activeKit(this.world), shell = kit ? this.kitShells.get(kit.id) : undefined, overview = this.navigation !== 'walk' && !this.solidView;
-        this.renderer.localClippingEnabled = !!shell;
+        this.renderer.localClippingEnabled = !!shell || !!this.moduleLoader?.used;
+        if (this.moduleLoader) { this.moduleLoader.cut.constant = overview ? KIT_CUT : 1e4; this.moduleLoader.wallCut.constant = overview ? KIT_WALL_CUT : 1e4; } // room modules: the same dollhouse cut
         const cut = shell?.root.userData.cutPlane as THREE.Plane | undefined;
         if (cut) { const c = overview ? KIT_CUT : 1e4; if (cut.constant !== c) { cut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
         const wallCut = shell?.root.userData.wallCutPlane as THREE.Plane | undefined; // world-ui r4 fix 1: dollhouse walls
@@ -890,6 +909,21 @@ export class RoomScene {
             }
             case 'room': {
                 const built = buildRoom(entity, jungle); setRoomCutaway(built.root, this.navigation !== 'walk', false); // w3:render — real rooms (world-scene-rooms.ts)
+                // room modules — a room naming a known module shows the baked module; the code-built room is the loading fallback.
+                const moduleId = roomModule(entity);
+                if (isKnownModule(moduleId) && this.renderer) {
+                    const ml = this.moduleLoader ??= new ModuleRoomLoader(this.renderer);
+                    built.root.userData.moduleWanted = moduleId; queueMicrotask(() => this.publishModules());
+                    ml.room(moduleId).then(({ root }) => {
+                        if (this.disposed || this.entities.get(entity.id)?.built !== built) return;
+                        const sign = built.root.userData.roomSign as THREE.Object3D | undefined;
+                        for (const c of [...built.root.children]) if (c !== sign) c.visible = false; // the code-built shell stays as the fallback only
+                        root.traverse(n => { n.userData.entity = entity.id; });
+                        built.root.add(root); built.root.userData.moduleReady = moduleId; this.publishModules();
+                        refreezeNode(built.root); this.applyKitView(); this.renderer.shadowMap.needsUpdate = true; this.invalidate();
+                    }, error => { this.moduleErrors.push(`${moduleId}: ${error instanceof Error ? error.message : String(error)}`.slice(0, 200)); this.publishModules(); console.warn(`[omo] room module ${moduleId} not loaded, using the built room:`, error instanceof Error ? error.message : error); });
+                    return built;
+                }
                 // beauty r2 (5): every room is set-dressed from the CC0 kit by its deterministic preset (async, like decor).
                 const loader = this.propsLoader(), dressing = this.world ? roomDressing(entity, this.world) : undefined;
                 built.root.userData.dressPreset = dressing?.preset; built.root.userData.dressPlanned = dressing?.pieces.length ?? 0;
@@ -1148,6 +1182,11 @@ export class RoomScene {
         for (const [id, surface] of this.linkedSurfaces) if (surface.parked && !this.farScreen(id, surface)) { surface.parked = false; linked = true; }
         if (linked) this.paintLinked();
         this.publishParked();
+    }
+    /** room modules test hook: rooms that want a module and rooms whose module is on screen. */
+    private publishModules(): void {
+        const rooms = [...this.entities.values()].filter(i => i.entity.kind === 'room');
+        this.setData('moduleRooms', JSON.stringify({ rooms: rooms.length, wanted: rooms.filter(i => i.built.root.userData.moduleWanted).length, ready: rooms.filter(i => i.built.root.userData.moduleReady).map(i => `${i.entity.id}:${i.built.root.userData.moduleReady}`), errors: this.moduleErrors.slice(-3), force: (() => { try { return localStorage.getItem('omo.modules.force'); } catch { return 'n/a'; } })() }));
     }
     private publishParked(): void {
         this.setData('parkedScreens', JSON.stringify([...this.terminalSurfaces, ...this.linkedSurfaces].filter(([, s]) => s.parked).map(([id]) => id)));
