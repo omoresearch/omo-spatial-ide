@@ -61,7 +61,11 @@ export interface DecorEntity extends EntityBase { kind: 'decor'; decor: DecorKin
  * is 0 or ±PI/2 (90° steps only). `theme` defaults to the world shell's theme. Stations and other
  * entities are NOT children of a room: they are placed in world coordinates like everything else.
  */
-export interface RoomEntity extends EntityBase { kind: 'room'; width: number; depth: number; theme?: RoomTheme; doors?: WallSide[] }
+export interface RoomEntity extends EntityBase {
+    kind: 'room'; width: number; depth: number; theme?: RoomTheme; doors?: WallSide[];
+    /** room modules — the baked room this room shows ('library' | 'lounge' | 'studio', common/room-modules.ts). Optional: old worlds stay valid; unknown ids are ignored by the renderer. */
+    module?: string;
+}
 export type WorldEntity = StationEntity | MonitorWallEntity | WebWallEntity | MirrorEntity | ReviewScreenEntity | DecorEntity | RoomEntity;
 
 export interface WorldShell {
@@ -145,7 +149,8 @@ export function validEntity(e: unknown, shell: WorldShell): e is WorldEntity {
 export function validRoom(v: RoomEntity): boolean {
     const quarter = Math.abs(Math.round(v.transform.rotation / (Math.PI / 2)) * (Math.PI / 2) - v.transform.rotation) < 1e-6;
     const doors = v.doors === undefined || (Array.isArray(v.doors) && v.doors.length <= 4 && new Set(v.doors).size === v.doors.length && v.doors.every(d => WALL_SIDES.includes(d)));
-    return finite(v.width, ROOM_MIN, ROOM_MAX) && finite(v.depth, ROOM_MIN, ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle' || v.theme === 'skyline');
+    return finite(v.width, ROOM_MIN, ROOM_MAX) && finite(v.depth, ROOM_MIN, ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle' || v.theme === 'skyline')
+        && (v.module === undefined || (typeof v.module === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(v.module)));
 }
 
 export function validateWorld(w: unknown): WorldResult {

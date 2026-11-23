@@ -23,7 +23,10 @@ import { ROOM_DOOR_WIDTH, ROOM_WALL_THICKNESS, roomDoors } from './world-scene-r
 import { buildDecor, fitKitDecor, KitPlace, seeded } from './world-scene-decor';
 import { lampLight, lightPool } from './world-look';
 
-export type DressPreset = 'library' | 'observatory' | 'dining' | 'lounge' | 'work' | 'garden' | 'generic';
+import type { DressPreset } from '../common/room-modules';
+import { PURPOSE_WORDS } from '../common/room-modules';
+export type { DressPreset } from '../common/room-modules'; // room modules: the purpose words moved to common (shared with the planner)
+export { PURPOSE_WORDS } from '../common/room-modules';
 
 /** Kit model sizes at scale 1 (glTF accessor bounds, metres): width x, height y, depth z. Front faces +z. */
 const SIZE: Record<string, [number, number, number]> = {
@@ -52,14 +55,7 @@ export interface DressPiece {
 export interface RoomDressing { preset: DressPreset; pieces: DressPiece[]; blocks: Footprint[] }
 
 // ------------------------------------------------------------------------------------------------ purpose
-const WORDS: Array<[DressPreset, RegExp]> = [
-    ['library', /\b(librar\w*|books?|novels?|reading|read|stories|story|poems?|poetry|archives?|lighthouses?|writing|writers?|authors?|literature|journals?)\b/i],
-    ['observatory', /\b(moon\w*|space|stars?|starry|astro\w*|planets?|rockets?|galax\w*|cosmos|cosmic|orbit\w*|observatory|telescopes?|night sky|mars|lunar|solar)\b/i],
-    ['dining', /\b(recipes?|food|foods|kitchen|cook\w*|meals?|bak(e|es|ing|ery)|dinners?|lunch|breakfast|dining|eat\w*|menu|chef|pantry)\b/i],
-    ['garden', /\b(gardens?|plants?|greenhouse|flowers?|park|botanic\w*|green)\b/i],
-    ['lounge', /\b(lounge|living|sofa|cosy|cozy|lobby|cafe|café|chill|chats?|chatting|other|misc\w*|messages?|talk\w*|social|friends?|family|hangout|inbox)\b/i],
-    ['work', /\b(office|work\w*|desks?|studio)\b/i]
-];
+const WORDS = PURPOSE_WORDS;
 /** The room's preset: its title words first (library/book/novel/lighthouse -> library, moon/space -> observatory, recipe/food -> dining,
  * garden/plant -> garden, lounge/chats/other -> lounge, office -> work), else desks -> work, else generic. */
 export function dressPreset(room: Pick<RoomEntity, 'label'>, contents: readonly WorldEntity[] = []): DressPreset {
