@@ -29,6 +29,7 @@ class DataDir {
         const raw = JSON.parse(fs.readFileSync(this.roomFile(id), 'utf8'));
         if (!raw || raw.fileVersion !== ROOM_FILE_VERSION || raw.id !== id) throw new Error(`Room file ${id} is not a version ${ROOM_FILE_VERSION} room.`);
         raw.members ??= {}; raw.usedInvites ??= {}; raw.revokedInvites ??= {};
+        if (raw.world) raw.world = W.upgradeWorld(raw.world); // foundation:v3: v2 room files load as v3 (lossless)
         return raw;
     }
     write(room) { U.atomicWriteJson(this.roomFile(room.id), room); }
@@ -75,6 +76,7 @@ async function createRoom(data, { id, name, ownerName, theme = 'station', world 
     if (data.exists(id)) throw new Error(`Room ${id} already exists.`);
     const roomName = U.roomName(name || id);
     let spec = world ? JSON.parse(JSON.stringify(world)) : W.worldFromRoomV1({ theme, projectName: roomName });
+    spec = W.upgradeWorld(spec); // foundation:v3
     spec.revision = 0;
     const valid = W.validateWorld(spec);
     if (!valid.ok) throw new Error(`World is invalid: ${valid.error}`);

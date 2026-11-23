@@ -14,7 +14,7 @@
  */
 import {
     WorldSpec, WorldOp, WorldProposal, WorldResult, WorldEntity, StationConfig, WorldShell,
-    applyWorldOps, validateWorld, worldFromRoomV1, worldStorageKey
+    applyWorldOps, readWorld, validateWorld, worldFromRoomV1, worldStorageKey
 } from '../common/world-model';
 import { parseRoomState } from '../common/room-state';
 import type { RoomState } from '../common/room-state';
@@ -330,13 +330,13 @@ function summarize(steps: ProposalStep[]): string {
     return `${steps[steps.length - 1].label} (+${steps.length - 1} more)`;
 }
 export function parseWorld(raw: string): WorldResult {
-    try { return validateWorld(JSON.parse(raw)); } catch { return { ok: false, error: 'Not JSON.' }; }
+    try { return readWorld(JSON.parse(raw)); } catch { return { ok: false, error: 'Not JSON.' }; } // foundation:v3: v2 saves upgrade
 }
 
 // ---------------------------------------------------------------- diff + description helpers
 
 const ENTITY_NOUN: Record<WorldEntity['kind'], string> = {
-    station: 'desk', 'monitor-wall': 'monitor wall', 'web-wall': 'web wall', mirror: 'mirror', 'review-screen': 'review screen', decor: 'decor', room: 'room'
+    station: 'desk', 'monitor-wall': 'monitor wall', 'web-wall': 'web wall', mirror: 'mirror', 'review-screen': 'review screen', decor: 'decor', room: 'room', prop: 'prop' // foundation:v3
 };
 /** The name a person reads for an entity. */
 export function entityTitle(entity: WorldEntity | undefined, fallbackId = ''): string {

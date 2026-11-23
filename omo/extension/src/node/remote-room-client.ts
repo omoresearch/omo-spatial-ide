@@ -19,7 +19,7 @@ import {
     agentSummaries, encodeFrame, parseInviteLink, parseServerFrame, roomDisplayName, roomServerOrigin, roomSocketUrl, wirePose
 } from '../common/room-wire-protocol';
 import type { WorldOp, WorldSpec } from '../common/world-model';
-import { applyWorldOps, validateWorld } from '../common/world-model';
+import { applyWorldOps, readWorld } from '../common/world-model';
 import type { RemoteRoomTokenStore } from './remote-room-token-store';
 
 /** Minimal WebSocket surface (WHATWG). Node 22's global WebSocket satisfies it; tests can inject one. */
@@ -140,7 +140,7 @@ export class RemoteRoomClient {
         if (typeof input.ownerToken !== 'string' || !ROOM_SECRET_RE.test(input.ownerToken.trim())) throw new Error('Paste the owner token from the room server (16+ letters, numbers, - or _).');
         const auth: RoomAuth = { kind: 'owner', roomId: input.roomId, ownerToken: input.ownerToken.trim() };
         if (input.roomName?.trim()) auth.roomName = input.roomName.trim().slice(0, 120);
-        if (input.seedWorld) { const v = validateWorld(input.seedWorld); if (!v.ok) throw new Error(`Starting world: ${v.error}`); auth.seedWorld = v.world; }
+        if (input.seedWorld) { const v = readWorld(input.seedWorld); if (!v.ok) throw new Error(`Starting world: ${v.error}`); auth.seedWorld = v.world; }
         return this.start({ server, socketUrl: roomSocketUrl(server), roomId: input.roomId, join: this.cleanJoin(join), auth });
     }
 

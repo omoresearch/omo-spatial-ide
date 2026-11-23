@@ -26,7 +26,7 @@ import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { applyWorldOps, validateWorld, ROOM_MAX, ROOM_MIN, SHELL_MAX, SHELL_MIN, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS } from '../common/world-model';
+import { applyWorldOps, readWorld, validateWorld, ROOM_MAX, ROOM_MIN, SHELL_MAX, SHELL_MIN, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS } from '../common/world-model';
 import type { WorldOp, WorldProposal, WorldSpec } from '../common/world-model';
 import {
     WORLD_ADMIN_PROFILE_RE, WORLD_ADMIN_PROMPT_MAX
@@ -298,7 +298,7 @@ export class WorldAdminBackend implements WorldAdminService {
         const refuse = (error: string): WorldAdminPlan => ({ proposal: null, explanation: error, planner, steps: [], notes: [], error });
         if (!prompt) return refuse('Type what you want to change.');
         if (prompt.length > WORLD_ADMIN_PROMPT_MAX) return refuse(`Keep the request under ${WORLD_ADMIN_PROMPT_MAX} characters.`);
-        const valid = validateWorld(input.world);
+        const valid = readWorld(input.world);
         if (!valid.ok) return refuse(`The world sent with the request is not valid: ${valid.error}`);
         const world = valid.world;
 

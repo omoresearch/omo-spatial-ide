@@ -160,7 +160,9 @@ test('w3 onboarding: small plans (<= 4 desks) give exactly the same single class
   const crypto = require('node:crypto');
   for (const [prompt, hash] of Object.entries(SMALL_PLAN_GOLDEN)) {
     const w = onboarding.planWorld(prompt).world;
-    assert.equal(crypto.createHash('sha256').update(JSON.stringify(w)).digest('hex').slice(0, 16), hash, prompt);
+    // foundation:v3 — the goldens are v2 worlds: the v3 plan is byte-identical apart from the version number.
+    assert.equal(w.version, 3, prompt);
+    assert.equal(crypto.createHash('sha256').update(JSON.stringify({ ...w, version: 2 })).digest('hex').slice(0, 16), hash, prompt);
     assert.equal(model.rooms(w).length, 0, prompt); assert.equal(w.shell.open, undefined, prompt);
   }
 });

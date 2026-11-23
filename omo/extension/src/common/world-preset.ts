@@ -5,7 +5,7 @@
 import type { RoomPreset } from './room-preset';
 import { CAMERA_KEYS, hasExactKeys, isRecord, parseRoomPreset, validCamera } from './room-preset';
 import type { StationConfig, Transform, WorldEntity, WorldShell, WorldSpec } from './world-model';
-import { validateWorld, WORLD_MAX_BYTES, WORLD_VERSION } from './world-model';
+import { upgradeWorld, validateWorld, WORLD_MAX_BYTES, WORLD_VERSION } from './world-model';
 
 /* ------------------------------------------------------------------------------------------------
  * w2:templates — World preset v2: a portable WorldSpec (appearance + entities + station setup).
@@ -42,14 +42,16 @@ const ENTITY_KEYS: Record<WorldEntity['kind'], readonly string[]> = {
     'web-wall': ['id', 'kind', 'transform', 'label', 'width', 'height', 'elevation', 'home'],
     'mirror': ['id', 'kind', 'transform', 'label', 'link'],
     'review-screen': ['id', 'kind', 'transform', 'label'],
-    'decor': ['id', 'kind', 'transform', 'label', 'decor', 'scale'],
-    'room': ['id', 'kind', 'transform', 'label', 'width', 'depth', 'theme', 'doors'] // w3:expand
+    'decor': ['id', 'kind', 'transform', 'label', 'decor', 'scale', 'prop'], // sky:merge prop (was dropped on preset export)
+    'room': ['id', 'kind', 'transform', 'label', 'width', 'depth', 'theme', 'doors', 'module', 'purpose'], // room modules + foundation:v3 purpose
+    'prop': ['id', 'kind', 'transform', 'label', 'asset', 'scale', 'y', 'slot'] // foundation:v3 // w3:expand
 };
-const WORLD_KEYS = ['version', 'name', 'shell', 'entities', 'revision', 'plan'] as const;
+const WORLD_KEYS = ['version', 'name', 'shell', 'site', 'entities', 'revision', 'plan'] as const; // foundation:v3: + site
 const SHELL_KEYS = ['theme', 'width', 'depth', 'open'] as const; // w3:admin: + open
 const TRANSFORM_KEYS = ['x', 'z', 'rotation'] as const;
 const STATION_KEYS = ['name', 'kind', 'profile', 'tabs', 'locked'] as const;
 const TAB_KEYS = ['name', 'kind'] as const;
+const SITE_KEYS = ['kit', 'time', 'weather', 'vista', 'seed'] as const; // foundation:v3
 const V2_KEYS = ['format', 'version', 'world', 'camera'] as const;
 
 /** Host paths: unix home/system roots, ~/, Windows drives, UNC shares, file: URLs. */
@@ -100,6 +102,7 @@ function cleanWorld(source: WorldSpec, mode: 'export' | 'import', name?: string)
     };
     if (mode === 'import' && !onlyKeys(source, WORLD_KEYS)) refuse('The world has unknown fields.');
     if (mode === 'import' && !onlyKeys(source.shell, SHELL_KEYS)) refuse('The room shell has unknown fields.');
+    if (mode === 'import' && source.site !== undefined && !onlyKeys(source.site, SITE_KEYS)) refuse('The site has unknown fields.');
     const shell: WorldShell = { theme: source.shell.theme, width: source.shell.width, depth: source.shell.depth, ...(source.shell.open === true ? { open: true } : {}) };
     const transform = (t: Transform): Transform => {
         if (mode === 'import' && !onlyKeys(t, TRANSFORM_KEYS)) refuse('A position has unknown fields.');
@@ -132,15 +135,20 @@ function cleanWorld(source: WorldSpec, mode: 'export' | 'import', name?: string)
             }
             case 'mirror': return { ...base, kind: 'mirror', link: e.link };
             case 'review-screen': return { ...base, kind: 'review-screen' };
-            case 'decor': return { ...base, kind: 'decor', decor: e.decor, ...(e.scale !== undefined ? { scale: e.scale } : {}) };
+            case 'decor': return { ...base, kind: 'decor', decor: e.decor, ...(e.scale !== undefined ? { scale: e.scale } : {}), ...(e.prop !== undefined ? { prop: e.prop } : {}) };
             // w3:admin — rooms keep their size, theme and doorways (allow-listed fields only).
-            case 'room': return { ...base, kind: 'room', width: e.width, depth: e.depth, ...(e.theme !== undefined ? { theme: e.theme } : {}), ...(e.doors !== undefined ? { doors: [...e.doors] } : {}) };
+            case 'room': return { ...base, kind: 'room', width: e.width, depth: e.depth, ...(e.theme !== undefined ? { theme: e.theme } : {}), ...(e.doors !== undefined ? { doors: [...e.doors] } : {}), ...(e.module !== undefined ? { module: e.module } : {}), ...(e.purpose !== undefined ? { purpose: e.purpose } : {}) };
+            // foundation:v3 — a catalogue prop keeps its asset id, size, height and slot.
+            case 'prop': return { ...base, kind: 'prop', asset: e.asset, ...(e.scale !== undefined ? { scale: e.scale } : {}), ...(e.y !== undefined ? { y: e.y } : {}), ...(e.slot !== undefined ? { slot: e.slot } : {}) };
             default: return refuse('A world item has an unknown kind.');
         }
     });
     const worldName = safe(name ?? source.name, WORLD_PRESET_DEFAULT_NAME, 'The world name') ?? WORLD_PRESET_DEFAULT_NAME;
     // The onboarding plan is free text and may hold anything: never exported, ignored on import.
-    return { version: WORLD_VERSION, name: worldName, shell, entities, revision: 0 };
+    // foundation:v3 — the site is ids / enum words / a number only: kept as is (known fields).
+    const s = source.site;
+    const site = s ? { kit: s.kit, ...(s.time !== undefined ? { time: s.time } : {}), ...(s.weather !== undefined ? { weather: s.weather } : {}), ...(s.vista !== undefined ? { vista: s.vista } : {}), ...(s.seed !== undefined ? { seed: s.seed } : {}) } : undefined;
+    return { version: WORLD_VERSION, name: worldName, shell, ...(site ? { site } : {}), entities, revision: 0 };
 }
 
 /**
@@ -148,7 +156,7 @@ function cleanWorld(source: WorldSpec, mode: 'export' | 'import', name?: string)
  * leak; pass the world name explicitly to keep it. Throws if the result is invalid or too large.
  */
 export function exportWorldPreset(world: WorldSpec, options: { name?: string; camera?: RoomPreset['camera']; includeProfiles?: boolean } = {}): string {
-    const checked = validateWorld(world);
+    const checked = validateWorld(upgradeWorld(world));
     if (!checked.ok) throw new Error(`This world cannot be exported: ${checked.error}`);
     let clean: WorldSpec;
     try { clean = cleanWorld(checked.world, 'export', options.name ?? WORLD_PRESET_DEFAULT_NAME); }
@@ -173,7 +181,7 @@ export function parseWorldPreset(raw: string): WorldPreset {
         throw new Error('That file is not an Omo world preset (version 2).');
     }
     if (value.camera !== undefined && (!isRecord(value.camera) || !hasExactKeys(value.camera, CAMERA_KEYS) || !validCamera(value.camera))) throw new Error('The camera in that preset is invalid.');
-    const first = validateWorld(value.world);
+    const first = validateWorld(upgradeWorld(value.world)); // foundation:v3: v2 presets import (upgraded losslessly)
     if (!first.ok) throw new Error(first.error);
     let world: WorldSpec;
     try { world = cleanWorld(first.world, 'import'); }

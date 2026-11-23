@@ -106,7 +106,7 @@ class Client {
         ok(![ownerToken, j1.body.token, j2.body.token, j3.body.token].some(t => stored.includes(t.split('.')[3])), 'no member secret on disk');
 
         const w = await request(port, 'GET', '/api/world', undefined, { authorization: `Bearer ${j3.body.token}` });
-        ok(w.status === 200 && w.body.world.version === 2 && w.body.role === 'viewer', 'GET /api/world with bearer key');
+        ok(w.status === 200 && w.body.world.version === 3 && w.body.role === 'viewer', 'GET /api/world with bearer key');
         ok((await request(port, 'GET', '/api/world', undefined, { authorization: 'Bearer omo1.team-a.m_0000000000000000.' + 'A'.repeat(43) })).status === 401, 'bad key -> 401');
 
         // ---- sockets ----

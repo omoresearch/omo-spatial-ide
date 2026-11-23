@@ -117,9 +117,11 @@ test('groundFor: the bounding box plus 4 m, in whole even metres', () => {
 test('RoomEntity.module is optional: old worlds stay valid, a module id validates, junk does not', () => {
   const world = (module) => ({ version: 2, name: 'w', shell: { theme: 'station', width: 40, depth: 40, open: true }, revision: 0,
     entities: [{ id: 'r', kind: 'room', label: 'R', transform: { x: 0, z: 0, rotation: 0 }, width: 8, depth: 6, doors: ['front'], ...(module === undefined ? {} : { module }) }] });
-  assert.equal(model.validateWorld(world(undefined)).ok, true);
-  assert.equal(model.validateWorld(world('library')).ok, true);
-  assert.equal(model.validateWorld(world('future-room')).ok, true); // forward compatible: the renderer ignores ids it does not know
-  assert.equal(model.validateWorld(world(42)).ok, false);
-  assert.equal(model.validateWorld(world('<script>')).ok, false);
+  // foundation:v3 — these are v2 documents: the v2 reader (readWorld = upgradeWorld + validateWorld) keeps them valid.
+  assert.equal(model.readWorld(world(undefined)).ok, true);
+  assert.equal(model.readWorld(world('library')).ok, true);
+  assert.equal(model.readWorld(world('future-room')).ok, true); // forward compatible: the renderer ignores ids it does not know
+  assert.equal(model.readWorld(world(42)).ok, false);
+  assert.equal(model.readWorld(world('<script>')).ok, false);
+  assert.equal(model.readWorld(world('library')).world.entities[0].module, 'library');
 });

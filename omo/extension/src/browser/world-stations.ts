@@ -18,7 +18,7 @@ import type { PresenceJoin } from '../common/presence-protocol';
 import { presenceStation } from '../common/presence-protocol';
 import type { RoomState } from '../common/room-state';
 import type { StationConfig, StationEntity, WorldEntity, WorldOp, WorldResult, WorldSpec } from '../common/world-model';
-import { WORLD_ID_RE, applyWorldOps, stations as worldStations, validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model';
+import { WORLD_ID_RE, applyWorldOps, stations as worldStations, readWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model';
 import { RuntimeConsoleController, bindingKey } from './runtime-console-controller';
 import type { RuntimeConsoleState, StationBinding, StorageLike } from './runtime-console-controller';
 import type { StationRecipe, StationRecipeTab } from './station-recipe';
@@ -117,7 +117,7 @@ export function loadWorld(storage: StorageLike | undefined, projectUri: string, 
     try {
         const raw = storage?.getItem(worldStorageKey(projectUri));
         if (raw && raw.length <= 256 * 1024) {
-            const result = validateWorld(JSON.parse(raw));
+            const result = readWorld(JSON.parse(raw)); // foundation:v3: v2 saves upgrade
             if (result.ok) return { world: result.world, stored: true };
         }
     } catch { /* an unreadable world falls back to the v1 room */ }

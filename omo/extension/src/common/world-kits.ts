@@ -8,7 +8,7 @@
  * Kits never start an agent: a station only lists the tabs it WOULD open.
  */
 import type { StationConfig, TabKind, Transform, WorldEntity, WorldOp, WorldResult, WorldSpec } from './world-model';
-import { applyWorldOps, entityRadius, shellToFit, WORLD_ID_RE, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS } from './world-model';
+import { applyWorldOps, entityRadius, shellToFit, WORLD_ID_RE, WORLD_MAX_ENTITIES, WORLD_MAX_STATIONS, WORLD_VERSION } from './world-model';
 import { isDevBuild } from './world-templates';
 
 export type WorldKitId = 'hermes-desk-kit' | 'pair-programming-kit' | 'review-corner' | 'research-nook' | 'lounge-corner';
@@ -103,7 +103,7 @@ export function worldKit(id: string): WorldKit | undefined { return WORLD_KITS.f
 /** Dev assert at module load: every kit must insert cleanly into an empty room (dev: throw, prod: warn). */
 function checkKits(): void {
     const strict = isDevBuild();
-    const empty: WorldSpec = { version: 2, name: 'Kit check', shell: { theme: 'station', width: 12, depth: 10 }, entities: [], revision: 0 };
+    const empty: WorldSpec = { version: WORLD_VERSION, name: 'Kit check', shell: { theme: 'station', width: 12, depth: 10 }, entities: [], revision: 0 };
     for (const kit of WORLD_KITS) {
         const result = insertKit(empty, kit.id, { x: 0, z: 0, rotation: 0 });
         if (result.ok) continue;

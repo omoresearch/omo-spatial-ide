@@ -10,7 +10,7 @@
  *   bind(OnboardingWorldSink).toDynamicValue(ctx => ({ save: (uri, w) => ctx.container.get(WorldStore).replace(uri, w) }))
  * (or whatever WorldStore's "set the whole world" call is named). Until then the fallback below runs.
  */
-import { validateWorld, worldStorageKey } from '../common/world-model';
+import { readWorld, validateWorld, worldStorageKey } from '../common/world-model';
 import type { WorldSpec } from '../common/world-model';
 
 export const OnboardingWorldSink = Symbol('OnboardingWorldSink');
@@ -34,7 +34,7 @@ export function readLocalWorld(storage: Storage | undefined, projectUri: string)
     try {
         const raw = storage?.getItem(worldStorageKey(projectUri));
         if (!raw) return undefined;
-        const checked = validateWorld(JSON.parse(raw));
+        const checked = readWorld(JSON.parse(raw));
         return checked.ok ? checked.world : undefined;
     } catch { return undefined; }
 }
@@ -56,6 +56,6 @@ export async function saveOnboardingWorld(world: WorldSpec, projectUri: string, 
 }
 
 export async function loadOnboardingWorld(projectUri: string, sink: OnboardingWorldSink | undefined, storage: Storage | undefined): Promise<WorldSpec | undefined> {
-    try { const fromSink = sink?.load ? await sink.load(projectUri) : undefined; if (fromSink && validateWorld(fromSink).ok) return fromSink; } catch { /* fall back to local */ }
+    try { const fromSink = sink?.load ? await sink.load(projectUri) : undefined; const read = fromSink ? readWorld(fromSink) : undefined; if (read?.ok) return read.world; } catch { /* fall back to local */ }
     return readLocalWorld(storage, projectUri);
 }

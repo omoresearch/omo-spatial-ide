@@ -19,7 +19,7 @@ import { sceneControls } from './focus-screen';
 import type { WorldStore, WorldStoreChange } from './world-store';
 import { entityTitle, describeChange } from './world-store';
 import type { WorldEntity, WorldOp, WorldSpec, StationConfig, Transform, RoomEntity, WallSide } from '../common/world-model';
-import { applyWorldOps, roomRect, ROOM_MIN, ROOM_MAX } from '../common/world-model';
+import { applyWorldOps, roomRect, ROOM_MIN, ROOM_MAX, WORLD_VERSION } from '../common/world-model';
 import { BuildLayer, GhostSpec, rendererApi, hasWorldRenderer, threeOf } from './build-scene';
 import { PaletteId, paletteItem, makeEntity, placement, footprint, normalizeRotation, defaultLinkTarget } from './build-catalog';
 import { growFor, roomFromDrag, quarterTurn, roomWalls, polygonHitsWalls, shrinkProblem, shellSizeOps } from './build-room'; // w3:build
@@ -670,7 +670,7 @@ export class BuildMode {
     diff(): string[] { const s = this.store; return s?.proposal ? describeChange(s.world, s.preview) : []; }
 }
 
-const emptyWorld: WorldSpec = { version: 2, name: 'World', shell: { theme: 'station', width: 12, depth: 10 }, entities: [], revision: 0 };
+const emptyWorld: WorldSpec = { version: WORLD_VERSION, name: 'World', shell: { theme: 'station', width: 12, depth: 10 }, entities: [], revision: 0 };
 
 /** Contract errors in words a person reads. */
 function friendly(error: string, world: WorldSpec): string {

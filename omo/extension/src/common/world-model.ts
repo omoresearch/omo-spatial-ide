@@ -1,11 +1,16 @@
 /**
- * World model v2 — the SHARED CONTRACT for the expandable world.
+ * World model v3 — the SHARED CONTRACT for the expandable world (v2 worlds upgrade losslessly: `upgradeWorld`).
  *
  * A world is data: a room shell plus any number of entities (agent stations/desks, monitor walls,
  * web walls, mirrors, code-review screens, decor). Everything that builds the world (onboarding,
  * the in-world build mode, the Hermes admin, multiplayer sync) changes it ONLY through WorldOp
  * patches validated and applied by `applyWorldOps`. The renderer, runtime bindings and HUD only
  * READ a WorldSpec. Version 1 rooms (theme + layout + kit) migrate losslessly via `worldFromRoomV1`.
+ *
+ * foundation:v3 — additive over v2: an optional `site` (kit, time, weather, vista, seed), a room `purpose`
+ * word, and `prop` entities that name a catalogue asset (common/asset-catalogue.ts) by id. A v2 world is a
+ * valid v3 world once its version is 3, so `upgradeWorld` keeps every id and field. Every load path calls
+ * `upgradeWorld` (or `loadWorld`) before `validateWorld`, which accepts version 3 only.
  *
  * Rules (all lanes): no secrets, tokens or host paths in a WorldSpec (it is shared and exported);
  * no op ever starts an agent; positions are metres in room space (x right, z towards the door, y up);
@@ -15,7 +20,9 @@ import type { RoomLayoutId, RoomKitId } from './player-state';
 import { ROOM_LAYOUTS } from './player-state';
 import type { RoomTheme } from './room-state';
 
-export const WORLD_VERSION = 2 as const;
+export const WORLD_VERSION = 3 as const;
+/** foundation:v3 — the previous contract version; `upgradeWorld` reads it. */
+export const WORLD_VERSION_V2 = 2 as const;
 export const WORLD_MAX_ENTITIES = 256; // w3:expand (was 64)
 export const WORLD_MAX_STATIONS = 48; // w3:expand (was 16)
 export const WORLD_MAX_BYTES = 192 * 1024; // w3:expand (was 64 KiB)
@@ -31,7 +38,7 @@ export const WORLD_ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
 
 export type StationKind = 'hermes' | 'shell';
 export type TabKind = 'shell' | 'hermes' | 'claude' | 'codex' | 'dsh'; // w2:agents
-export type EntityKind = 'station' | 'monitor-wall' | 'web-wall' | 'mirror' | 'review-screen' | 'decor' | 'room'; // w3:expand: + room
+export type EntityKind = 'station' | 'monitor-wall' | 'web-wall' | 'mirror' | 'review-screen' | 'decor' | 'room' | 'prop'; // w3:expand: + room; foundation:v3: + prop
 export type DecorKind = 'plant' | 'lamp' | 'crystal' | 'sofa' | 'bookshelf' | 'whiteboard' | 'rug' | 'window';
 
 export interface Transform { x: number; z: number; /** radians, 0 = facing -z (towards the back wall) */ rotation: number; }
@@ -65,8 +72,32 @@ export interface RoomEntity extends EntityBase {
     kind: 'room'; width: number; depth: number; theme?: RoomTheme; doors?: WallSide[];
     /** room modules — the baked room this room shows ('library' | 'lounge' | 'studio', common/room-modules.ts). Optional: old worlds stay valid; unknown ids are ignored by the renderer. */
     module?: string;
+    /** foundation:v3 — what the room is for, one short word ('library', 'lounge', 'studio', 'entry' ...). */
+    purpose?: string;
 }
-export type WorldEntity = StationEntity | MonitorWallEntity | WebWallEntity | MirrorEntity | ReviewScreenEntity | DecorEntity | RoomEntity;
+/**
+ * foundation:v3 — a catalogue-backed thing (common/asset-catalogue.ts). `asset` is a catalogue id; the world
+ * only names it, so an old world keeps working when a kit updates. `y` lifts it (a vase on a shelf or a lamp
+ * on a table); `slot` is the solver slot it fills ('wall:shelf', 'desks:lamp' ...). Until the runtime draws
+ * catalogue models (milestone 3) a prop is drawn like a decor fallback.
+ */
+export interface PropEntity extends EntityBase { kind: 'prop'; asset: string; scale?: number; y?: number; slot?: string }
+export type WorldEntity = StationEntity | MonitorWallEntity | WebWallEntity | MirrorEntity | ReviewScreenEntity | DecorEntity | RoomEntity | PropEntity;
+
+/** foundation:v3 — where the world stands: the kit (catalogue pack) plus time, weather, the view out and a layout seed. */
+export type SiteTime = 'dawn' | 'day' | 'dusk' | 'night';
+export type SiteWeather = 'clear' | 'rain' | 'fog' | 'snow';
+export type SiteVista = 'sea' | 'city' | 'garden' | 'desert' | 'forest';
+export const SITE_TIMES: readonly SiteTime[] = ['dawn', 'day', 'dusk', 'night'];
+export const SITE_WEATHERS: readonly SiteWeather[] = ['clear', 'rain', 'fog', 'snow'];
+export const SITE_VISTAS: readonly SiteVista[] = ['sea', 'city', 'garden', 'desert', 'forest'];
+export interface Site { kit: string; time?: SiteTime; weather?: SiteWeather; vista?: SiteVista; seed?: number }
+/** Catalogue ids (assets, kits): lowercase, digits, `_ . -`. */
+export const ASSET_ID_RE = /^[a-z0-9][a-z0-9_.-]{0,63}$/;
+/** A room purpose word. */
+export const PURPOSE_RE = /^[a-z][a-z0-9-]{0,31}$/;
+/** A solver slot name ('wall:shelf', 'desks:lamp'). */
+export const SLOT_RE = /^[a-z0-9][a-z0-9_:.-]{0,47}$/;
 
 export interface WorldShell {
     theme: RoomTheme;
@@ -84,6 +115,8 @@ export interface WorldSpec {
     version: typeof WORLD_VERSION;
     name: string;
     shell: WorldShell;
+    /** foundation:v3 — the site (kit, time, weather, vista, seed). Absent: the shell theme's look only. */
+    site?: Site;
     entities: WorldEntity[];
     /** Free text the world was built from (onboarding prompt). Informational only. */
     plan?: string;
@@ -102,6 +135,8 @@ export type WorldOp =
     | { op: 'shell'; shell: Partial<WorldShell> }
     /** w3:expand — resize a room entity (width x depth, metres) and optionally set its doorways / theme. */
     | { op: 'reshape'; id: string; width: number; depth: number; doors?: WallSide[]; theme?: RoomTheme }
+    /** foundation:v3 — set site fields (merged into the current site; a world with no site needs `kit`). */
+    | { op: 'site'; site: Partial<Site> }
     | { op: 'name'; name: string };
 
 /** A proposed change (from the build mode, onboarding or the Hermes admin) awaiting explicit Apply. */
@@ -142,20 +177,53 @@ export function validEntity(e: unknown, shell: WorldShell): e is WorldEntity {
         case 'review-screen': return true;
         case 'decor': return ['plant', 'lamp', 'crystal', 'sofa', 'bookshelf', 'whiteboard', 'rug', 'window'].includes(v.decor) && (v.scale === undefined || finite(v.scale, 0.25, 4)) && (v.prop === undefined || (typeof v.prop === 'string' && /^[A-Za-z0-9_]{1,48}$/.test(v.prop))); // sky:merge prop
         case 'room': return validRoom(v);
+        case 'prop': return validProp(v);
         default: return false;
     }
+}
+/** foundation:v3 — a prop entity: the asset id FORMAT only (catalogues are installed separately, so not its existence). */
+export function validProp(v: PropEntity): boolean {
+    return typeof v.asset === 'string' && ASSET_ID_RE.test(v.asset) && (v.scale === undefined || finite(v.scale, 0.05, 10))
+        && (v.y === undefined || finite(v.y, 0, 10)) && (v.slot === undefined || (typeof v.slot === 'string' && SLOT_RE.test(v.slot)));
+}
+/** foundation:v3 — a site: a kit id plus known time / weather / vista words and a whole-number seed. */
+export function validSite(s: unknown): s is Site {
+    const v = s as Site;
+    return !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.kit === 'string' && ASSET_ID_RE.test(v.kit)
+        && (v.time === undefined || SITE_TIMES.includes(v.time)) && (v.weather === undefined || SITE_WEATHERS.includes(v.weather))
+        && (v.vista === undefined || SITE_VISTAS.includes(v.vista)) && (v.seed === undefined || (Number.isInteger(v.seed) && v.seed >= 0 && v.seed <= 0x7fffffff));
 }
 /** w3:expand — a room entity: size within ROOM_MIN..ROOM_MAX, rotation in 90° steps, known doorway sides (no repeats). */
 export function validRoom(v: RoomEntity): boolean {
     const quarter = Math.abs(Math.round(v.transform.rotation / (Math.PI / 2)) * (Math.PI / 2) - v.transform.rotation) < 1e-6;
     const doors = v.doors === undefined || (Array.isArray(v.doors) && v.doors.length <= 4 && new Set(v.doors).size === v.doors.length && v.doors.every(d => WALL_SIDES.includes(d)));
     return finite(v.width, ROOM_MIN, ROOM_MAX) && finite(v.depth, ROOM_MIN, ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle' || v.theme === 'skyline')
-        && (v.module === undefined || (typeof v.module === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(v.module)));
+        && (v.module === undefined || (typeof v.module === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(v.module)))
+        && (v.purpose === undefined || (typeof v.purpose === 'string' && PURPOSE_RE.test(v.purpose)));
 }
+
+/**
+ * foundation:v3 — the v2-compatible reader. A version 2 world becomes version 3 with every id and field kept
+ * (v3 only adds optional fields); a version 3 world is returned as a copy; anything else is returned as is
+ * (validateWorld then refuses it). Never throws.
+ */
+export function upgradeWorld(w: unknown): unknown {
+    if (!w || typeof w !== 'object' || Array.isArray(w)) return w;
+    const v = (w as { version?: unknown }).version;
+    if (v !== WORLD_VERSION_V2 && v !== WORLD_VERSION) return w;
+    let copy: Record<string, unknown>;
+    try { copy = JSON.parse(JSON.stringify(w)); } catch { return w; }
+    copy.version = WORLD_VERSION;
+    return copy;
+}
+/** foundation:v3 — read a stored / imported / received world of version 2 or 3: upgrade, then validate. */
+export function readWorld(w: unknown): WorldResult { return validateWorld(upgradeWorld(w)); }
+/** True for a world document of the previous (v2) contract. */
+export function isWorldV2(w: unknown): boolean { return !!w && typeof w === 'object' && (w as { version?: unknown }).version === WORLD_VERSION_V2; }
 
 export function validateWorld(w: unknown): WorldResult {
     const v = w as WorldSpec;
-    if (!v || v.version !== WORLD_VERSION || !text(v.name, 120) || !Number.isInteger(v.revision) || v.revision < 0) return { ok: false, error: 'Not a version 2 world.' };
+    if (!v || v.version !== WORLD_VERSION || !text(v.name, 120) || !Number.isInteger(v.revision) || v.revision < 0) return { ok: false, error: 'Not a version 3 world.' };
     if (!v.shell || !['station', 'jungle', 'skyline'].includes(v.shell.theme) || !finite(v.shell.width, SHELL_MIN, SHELL_MAX) || !finite(v.shell.depth, SHELL_MIN, SHELL_MAX)
         || (v.shell.open !== undefined && typeof v.shell.open !== 'boolean')) return { ok: false, error: 'The room shell is invalid.' };
     if (!Array.isArray(v.entities) || v.entities.length > WORLD_MAX_ENTITIES) return { ok: false, error: `A world holds at most ${WORLD_MAX_ENTITIES} things.` };
@@ -175,13 +243,14 @@ export function validateWorld(w: unknown): WorldResult {
         if (link !== undefined && v.entities.find(x => x.id === link)?.kind !== 'station') return { ok: false, error: `${e.id} links to ${link}, which is not a station.` };
     }
     if (v.plan !== undefined && (typeof v.plan !== 'string' || v.plan.length > 4000)) return { ok: false, error: 'The plan text is too long.' };
+    if (v.site !== undefined && !validSite(v.site)) return { ok: false, error: 'The site is invalid.' };
     if (JSON.stringify(v).length > WORLD_MAX_BYTES) return { ok: false, error: 'The world is too large.' };
     return { ok: true, world: v };
 }
 
 /** Apply ops atomically: all succeed or the world is unchanged. Locked stations refuse edits except unlock. */
 export function applyWorldOps(world: WorldSpec, ops: readonly WorldOp[]): WorldResult {
-    const next: WorldSpec = JSON.parse(JSON.stringify(world));
+    const next: WorldSpec = upgradeWorld(world) as WorldSpec; // foundation:v3: a v2 world in memory is upgraded by its next edit (a fresh copy)
     const find = (id: string): WorldEntity | undefined => next.entities.find(e => e.id === id);
     const locked = (e: WorldEntity | undefined): boolean => e?.kind === 'station' && e.station.locked;
     for (const o of ops) {
@@ -212,6 +281,14 @@ export function applyWorldOps(world: WorldSpec, ops: readonly WorldOp[]): WorldR
                 e.width = o.width; e.depth = o.depth;
                 if (o.doors !== undefined) e.doors = [...o.doors];
                 if (o.theme !== undefined) e.theme = o.theme;
+                break;
+            }
+            case 'site': {
+                if (!o.site || typeof o.site !== 'object' || Array.isArray(o.site)) return { ok: false, error: 'site needs fields.' };
+                const site = { ...(next.site ?? {}), ...o.site } as Site;
+                for (const k of Object.keys(site) as Array<keyof Site>) if (site[k] === undefined) delete site[k];
+                if (!validSite(site)) return { ok: false, error: 'The site is invalid.' };
+                next.site = site;
                 break;
             }
             case 'name': next.name = o.name; break;
@@ -270,6 +347,7 @@ export function entityRadius(e: WorldEntity): number {
         case 'monitor-wall': case 'web-wall': return e.width / 2 + 0.3;
         case 'station': return 1.3;
         case 'decor': return 0.8 * (e.scale ?? 1);
+        case 'prop': return 0.6 * (e.scale ?? 1); // foundation:v3: catalogue footprint not known here
         default: return 0.9;
     }
 }

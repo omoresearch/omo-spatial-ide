@@ -165,6 +165,7 @@ function glyphFor(e: WorldEntity): string {
         case 'review-screen': return 'review';
         case 'decor': return e.decor;
         case 'room': return 'room'; // w3:build: real glyph in build-glyphs.tsx
+        case 'prop': return 'plant'; // foundation:v3: decor glyph until milestone 3
     }
 }
 

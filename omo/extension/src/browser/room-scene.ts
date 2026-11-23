@@ -16,10 +16,10 @@ import { workstationLabelVisible, layoutLabels, declutterLabels, chipText, avoid
 import { PoseSmoother } from './movement-smoothing';
 // w2:render — the room is built from a WorldSpec (shared contract) by the world scene builders.
 import type { RoomEntity, WorldEntity, WorldSpec } from '../common/world-model';
-import { roomRect, validateWorld } from '../common/world-model';
+import { readWorld, roomRect } from '../common/world-model';
 import { buildShell, nearWall, shellColors } from './world-scene-shell';
 import type { OrbSpot } from './world-scene-shell';
-import { BuiltEntity, placeRoot, buildDecorEntity, topicBoardLines, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
+import { BuiltEntity, placeRoot, propAsDecor, buildDecorEntity, topicBoardLines, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
 import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
@@ -336,7 +336,7 @@ export class RoomScene {
     }
     private init(): void {
         // w2:render — the world to draw: the given WorldSpec, else the v1 room (same look as before).
-        const given = this.options.world ? validateWorld(this.options.world) : undefined;
+        const given = this.options.world ? readWorld(this.options.world) : undefined;
         if (given && !given.ok) this.options.onError(`This world could not be drawn: ${given.error} Showing the classic room.`);
         const world = given?.ok ? given.world : legacyRoomWorld({ theme: this.options.theme, layout: this.options.layout, kit: this.options.kit });
         const colors = world.shell.theme === 'skyline' ? SKYLINE_COLORS : shellColors(world.shell.theme === 'jungle'); // sky:render
@@ -529,7 +529,7 @@ export class RoomScene {
      */
     setWorld(world: WorldSpec): void {
         if (this.disposed || !this.renderer) return;
-        const result = validateWorld(world);
+        const result = readWorld(world);
         if (!result.ok) throw new Error(result.error);
         this.applyWorld(JSON.parse(JSON.stringify(result.world)));
     }
@@ -939,6 +939,8 @@ export class RoomScene {
                 }
                 return built;
             }
+            // foundation:v3 — a catalogue prop is drawn as a decor fallback (plant look) until the runtime loads catalogue models (milestone 3).
+            case 'prop': { const built = buildDecorEntity(propAsDecor(entity), jungle); built.root.position.y = entity.y ?? 0; built.root.userData.asset = entity.asset; return built; }
         }
     }
     private linkedSurface(id: string): ScreenSurface {

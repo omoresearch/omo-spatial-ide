@@ -66,6 +66,8 @@ export function footprint(entity: WorldEntity): Footprint {
         }
         // w3:build — a room is a floor: a thin slab (its walls are drawn and checked separately, see build-room.ts roomWalls).
         case 'room': return { width: entity.width, depth: entity.depth, offsetZ: 0, height: 0.06, elevation: 0 };
+        // foundation:v3 — a catalogue prop: a 0.8 m placeholder box until the runtime reads catalogue sizes (milestone 3).
+        case 'prop': { const s = entity.scale ?? 1; return { width: 0.8 * s, depth: 0.8 * s, offsetZ: 0, height: 1.0 * s, elevation: entity.y ?? 0 }; }
     }
 }
 

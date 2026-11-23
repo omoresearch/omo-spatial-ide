@@ -1,11 +1,16 @@
-// GENERATED from omo/extension/src/common/world-model.ts (sha256 5c23056836d055cf4a82c9e3c31b27072cf65e7377b2aaef4b519d6ce9e784fe). Do not edit.
+// GENERATED from omo/extension/src/common/world-model.ts (sha256 9c2b9d80ed365ae115db0c8d246d5fad7ad6aca83613979f32ce025efbeaec40). Do not edit.
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.worldStorageKey = exports.WORLD_ID_RE = exports.WALL_SIDES = exports.ROOM_MAX = exports.ROOM_MIN = exports.SHELL_MAX = exports.SHELL_MIN = exports.WORLD_MAX_BYTES = exports.WORLD_MAX_STATIONS = exports.WORLD_MAX_ENTITIES = exports.WORLD_VERSION = void 0;
+exports.worldStorageKey = exports.SLOT_RE = exports.PURPOSE_RE = exports.ASSET_ID_RE = exports.SITE_VISTAS = exports.SITE_WEATHERS = exports.SITE_TIMES = exports.WORLD_ID_RE = exports.WALL_SIDES = exports.ROOM_MAX = exports.ROOM_MIN = exports.SHELL_MAX = exports.SHELL_MIN = exports.WORLD_MAX_BYTES = exports.WORLD_MAX_STATIONS = exports.WORLD_MAX_ENTITIES = exports.WORLD_VERSION_V2 = exports.WORLD_VERSION = void 0;
 exports.validTransform = validTransform;
 exports.validStation = validStation;
 exports.validEntity = validEntity;
+exports.validProp = validProp;
+exports.validSite = validSite;
 exports.validRoom = validRoom;
+exports.upgradeWorld = upgradeWorld;
+exports.readWorld = readWorld;
+exports.isWorldV2 = isWorldV2;
 exports.validateWorld = validateWorld;
 exports.applyWorldOps = applyWorldOps;
 exports.stations = stations;
@@ -17,7 +22,9 @@ exports.shellToFit = shellToFit;
 exports.growOpsFor = growOpsFor;
 exports.rooms = rooms;
 const player_state_1 = require("./player-state.cjs");
-exports.WORLD_VERSION = 2;
+exports.WORLD_VERSION = 3;
+/** foundation:v3 — the previous contract version; `upgradeWorld` reads it. */
+exports.WORLD_VERSION_V2 = 2;
 exports.WORLD_MAX_ENTITIES = 256; // w3:expand (was 64)
 exports.WORLD_MAX_STATIONS = 48; // w3:expand (was 16)
 exports.WORLD_MAX_BYTES = 192 * 1024; // w3:expand (was 64 KiB)
@@ -29,6 +36,15 @@ exports.ROOM_MIN = 3;
 exports.ROOM_MAX = 60;
 exports.WALL_SIDES = ['back', 'front', 'left', 'right'];
 exports.WORLD_ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
+exports.SITE_TIMES = ['dawn', 'day', 'dusk', 'night'];
+exports.SITE_WEATHERS = ['clear', 'rain', 'fog', 'snow'];
+exports.SITE_VISTAS = ['sea', 'city', 'garden', 'desert', 'forest'];
+/** Catalogue ids (assets, kits): lowercase, digits, `_ . -`. */
+exports.ASSET_ID_RE = /^[a-z0-9][a-z0-9_.-]{0,63}$/;
+/** A room purpose word. */
+exports.PURPOSE_RE = /^[a-z][a-z0-9-]{0,31}$/;
+/** A solver slot name ('wall:shelf', 'desks:lamp'). */
+exports.SLOT_RE = /^[a-z0-9][a-z0-9_:.-]{0,47}$/;
 const finite = (n, lo, hi) => typeof n === 'number' && Number.isFinite(n) && n >= lo && n <= hi;
 const text = (s, max) => typeof s === 'string' && s.trim().length > 0 && s.length <= max && !/[\u0000-\u001f]/.test(s);
 const PROFILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -57,19 +73,59 @@ function validEntity(e, shell) {
         case 'review-screen': return true;
         case 'decor': return ['plant', 'lamp', 'crystal', 'sofa', 'bookshelf', 'whiteboard', 'rug', 'window'].includes(v.decor) && (v.scale === undefined || finite(v.scale, 0.25, 4)) && (v.prop === undefined || (typeof v.prop === 'string' && /^[A-Za-z0-9_]{1,48}$/.test(v.prop))); // sky:merge prop
         case 'room': return validRoom(v);
+        case 'prop': return validProp(v);
         default: return false;
     }
+}
+/** foundation:v3 — a prop entity: the asset id FORMAT only (catalogues are installed separately, so not its existence). */
+function validProp(v) {
+    return typeof v.asset === 'string' && exports.ASSET_ID_RE.test(v.asset) && (v.scale === undefined || finite(v.scale, 0.05, 10))
+        && (v.y === undefined || finite(v.y, 0, 10)) && (v.slot === undefined || (typeof v.slot === 'string' && exports.SLOT_RE.test(v.slot)));
+}
+/** foundation:v3 — a site: a kit id plus known time / weather / vista words and a whole-number seed. */
+function validSite(s) {
+    const v = s;
+    return !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.kit === 'string' && exports.ASSET_ID_RE.test(v.kit)
+        && (v.time === undefined || exports.SITE_TIMES.includes(v.time)) && (v.weather === undefined || exports.SITE_WEATHERS.includes(v.weather))
+        && (v.vista === undefined || exports.SITE_VISTAS.includes(v.vista)) && (v.seed === undefined || (Number.isInteger(v.seed) && v.seed >= 0 && v.seed <= 0x7fffffff));
 }
 /** w3:expand — a room entity: size within ROOM_MIN..ROOM_MAX, rotation in 90° steps, known doorway sides (no repeats). */
 function validRoom(v) {
     const quarter = Math.abs(Math.round(v.transform.rotation / (Math.PI / 2)) * (Math.PI / 2) - v.transform.rotation) < 1e-6;
     const doors = v.doors === undefined || (Array.isArray(v.doors) && v.doors.length <= 4 && new Set(v.doors).size === v.doors.length && v.doors.every(d => exports.WALL_SIDES.includes(d)));
-    return finite(v.width, exports.ROOM_MIN, exports.ROOM_MAX) && finite(v.depth, exports.ROOM_MIN, exports.ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle' || v.theme === 'skyline');
+    return finite(v.width, exports.ROOM_MIN, exports.ROOM_MAX) && finite(v.depth, exports.ROOM_MIN, exports.ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle' || v.theme === 'skyline')
+        && (v.module === undefined || (typeof v.module === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(v.module)))
+        && (v.purpose === undefined || (typeof v.purpose === 'string' && exports.PURPOSE_RE.test(v.purpose)));
 }
+/**
+ * foundation:v3 — the v2-compatible reader. A version 2 world becomes version 3 with every id and field kept
+ * (v3 only adds optional fields); a version 3 world is returned as a copy; anything else is returned as is
+ * (validateWorld then refuses it). Never throws.
+ */
+function upgradeWorld(w) {
+    if (!w || typeof w !== 'object' || Array.isArray(w))
+        return w;
+    const v = w.version;
+    if (v !== exports.WORLD_VERSION_V2 && v !== exports.WORLD_VERSION)
+        return w;
+    let copy;
+    try {
+        copy = JSON.parse(JSON.stringify(w));
+    }
+    catch {
+        return w;
+    }
+    copy.version = exports.WORLD_VERSION;
+    return copy;
+}
+/** foundation:v3 — read a stored / imported / received world of version 2 or 3: upgrade, then validate. */
+function readWorld(w) { return validateWorld(upgradeWorld(w)); }
+/** True for a world document of the previous (v2) contract. */
+function isWorldV2(w) { return !!w && typeof w === 'object' && w.version === exports.WORLD_VERSION_V2; }
 function validateWorld(w) {
     const v = w;
     if (!v || v.version !== exports.WORLD_VERSION || !text(v.name, 120) || !Number.isInteger(v.revision) || v.revision < 0)
-        return { ok: false, error: 'Not a version 2 world.' };
+        return { ok: false, error: 'Not a version 3 world.' };
     if (!v.shell || !['station', 'jungle', 'skyline'].includes(v.shell.theme) || !finite(v.shell.width, exports.SHELL_MIN, exports.SHELL_MAX) || !finite(v.shell.depth, exports.SHELL_MIN, exports.SHELL_MAX)
         || (v.shell.open !== undefined && typeof v.shell.open !== 'boolean'))
         return { ok: false, error: 'The room shell is invalid.' };
@@ -98,13 +154,15 @@ function validateWorld(w) {
     }
     if (v.plan !== undefined && (typeof v.plan !== 'string' || v.plan.length > 4000))
         return { ok: false, error: 'The plan text is too long.' };
+    if (v.site !== undefined && !validSite(v.site))
+        return { ok: false, error: 'The site is invalid.' };
     if (JSON.stringify(v).length > exports.WORLD_MAX_BYTES)
         return { ok: false, error: 'The world is too large.' };
     return { ok: true, world: v };
 }
 /** Apply ops atomically: all succeed or the world is unchanged. Locked stations refuse edits except unlock. */
 function applyWorldOps(world, ops) {
-    const next = JSON.parse(JSON.stringify(world));
+    const next = upgradeWorld(world); // foundation:v3: a v2 world in memory is upgraded by its next edit (a fresh copy)
     const find = (id) => next.entities.find(e => e.id === id);
     const locked = (e) => e?.kind === 'station' && e.station.locked;
     for (const o of ops) {
@@ -194,6 +252,18 @@ function applyWorldOps(world, ops) {
                     e.theme = o.theme;
                 break;
             }
+            case 'site': {
+                if (!o.site || typeof o.site !== 'object' || Array.isArray(o.site))
+                    return { ok: false, error: 'site needs fields.' };
+                const site = { ...(next.site ?? {}), ...o.site };
+                for (const k of Object.keys(site))
+                    if (site[k] === undefined)
+                        delete site[k];
+                if (!validSite(site))
+                    return { ok: false, error: 'The site is invalid.' };
+                next.site = site;
+                break;
+            }
             case 'name':
                 next.name = o.name;
                 break;
@@ -244,6 +314,7 @@ function entityRadius(e) {
         case 'web-wall': return e.width / 2 + 0.3;
         case 'station': return 1.3;
         case 'decor': return 0.8 * (e.scale ?? 1);
+        case 'prop': return 0.6 * (e.scale ?? 1); // foundation:v3: catalogue footprint not known here
         default: return 0.9;
     }
 }

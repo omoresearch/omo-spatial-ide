@@ -12,7 +12,7 @@ import { RoomScene, Workstation, TerminalWorkstation, ScreenPoint, MonitorFrame,
 import { RoomState, RoomTheme, parseRoomState } from '../common/room-state';
 import { exportRoomPreset, parseRoomPreset, ROOM_PRESET_FILENAME, ROOM_PRESET_MAX_BYTES } from '../common/room-preset';
 import { exportWorldPreset, exportStationSetupPreset, parseAnyRoomPreset, stationConfigFromSetup, WORLD_PRESET_FILENAME, WORLD_PRESET_MAX_BYTES } from '../common/world-preset'; // w2:templates
-import { validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model'; // w2:templates
+import { readWorld, validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model'; // w2:templates
 import type { WorldOp, WorldSpec } from '../common/world-model'; // w2:templates; t2:regress WorldOp
 import { WorldPresetPanel } from './world-preset-panel'; // w2:templates
 import { ROOM_LAYOUTS, ROOM_KITS } from '../common/player-state';
@@ -656,7 +656,7 @@ export class OmoWorldWidget extends ReactWidget {
         let raw: string | null = null;
         try { raw = safeStorage()?.getItem(worldStorageKey(this.project.toString())) ?? null; } catch { return; }
         if (!raw) return;
-        try { const result = validateWorld(JSON.parse(raw)); if (result.ok) scene.setWorld(result.world); else { this.feedback = `The saved world could not be drawn: ${result.error}`; } }
+        try { const result = readWorld(JSON.parse(raw)); if (result.ok) scene.setWorld(result.world); else { this.feedback = `The saved world could not be drawn: ${result.error}`; } }
         catch { this.feedback = 'The saved world could not be read. Showing the classic room.'; }
     }
     private async initialize(): Promise<void> {
@@ -1083,7 +1083,7 @@ export class OmoWorldWidget extends ReactWidget {
     // w2:templates — the saved v2 world for this project, or the v1 room migrated (never written here).
     private savedWorld(): WorldSpec | undefined {
         if (!this.project) return undefined;
-        try { const raw = safeStorage()?.getItem(worldStorageKey(this.project.toString())); if (raw) { const checked = validateWorld(JSON.parse(raw)); if (checked.ok) return checked.world; } } catch { /* fall back to the v1 room */ }
+        try { const raw = safeStorage()?.getItem(worldStorageKey(this.project.toString())); if (raw) { const checked = readWorld(JSON.parse(raw)); if (checked.ok) return checked.world; } } catch { /* fall back to the v1 room */ }
         return this.room ? worldFromRoomV1(this.room) : undefined;
     }
     // w2:templates — a locked desk must be identical in the preview (same place, same setup) before Save.

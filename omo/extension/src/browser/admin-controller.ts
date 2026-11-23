@@ -13,7 +13,7 @@
  * If the store has `preview(proposal | undefined)` (build lane ghost preview), the console calls
  * it to highlight the proposed changes in the room; otherwise the preview is the op list only.
  */
-import { applyWorldOps, validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model';
+import { applyWorldOps, readWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model';
 import type { WorldProposal, WorldResult, WorldSpec } from '../common/world-model';
 import type { RoomState } from '../common/room-state';
 import type { WorldAdminHermesStatus, WorldAdminPlan, WorldAdminRequest, WorldAdminService } from '../common/world-admin-protocol';
@@ -48,7 +48,7 @@ export class LocalAdminWorldStore implements AdminWorldStore {
     private load(room: RoomState | undefined): WorldSpec | undefined {
         try {
             const raw = this.storage?.getItem(worldStorageKey(this.projectUri));
-            if (raw) { const parsed = validateWorld(JSON.parse(raw)); if (parsed.ok) return parsed.world; }
+            if (raw) { const parsed = readWorld(JSON.parse(raw)); if (parsed.ok) return parsed.world; }
         } catch { /* fall back to the v1 room */ }
         return room ? worldFromRoomV1(room) : undefined;
     }

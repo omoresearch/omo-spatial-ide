@@ -5,7 +5,7 @@
  * code review screen) is copied from the original room, so a v1 world looks the same.
  */
 import * as THREE from 'three';
-import type { DecorEntity, MirrorEntity, MonitorWallEntity, ReviewScreenEntity, RoomEntity, StationEntity, WebWallEntity, WorldEntity, WorldSpec } from '../common/world-model';
+import type { DecorEntity, PropEntity, MirrorEntity, MonitorWallEntity, ReviewScreenEntity, RoomEntity, StationEntity, WebWallEntity, WorldEntity, WorldSpec } from '../common/world-model';
 import { roomRect, worldFromRoomV1 } from '../common/world-model';
 import type { RoomKitId, RoomLayoutId } from '../common/player-state';
 import type { RoomTheme } from '../common/room-state';
@@ -26,9 +26,13 @@ export interface BuiltEntity {
 export const DESK_SCREEN = { y: 1.99, z: -0.296, width: 1.58, height: 0.9 } as const;
 
 export function placeRoot(root: THREE.Object3D, entity: WorldEntity): void {
-    root.position.set(entity.transform.x, 0, entity.transform.z);
+    root.position.set(entity.transform.x, entity.kind === 'prop' ? entity.y ?? 0 : 0, entity.transform.z);
     root.rotation.set(0, entity.transform.rotation, 0);
-    if (entity.kind === 'decor') root.scale.setScalar(entity.scale ?? 1);
+    if (entity.kind === 'decor' || entity.kind === 'prop') root.scale.setScalar(entity.scale ?? 1);
+}
+/** foundation:v3 — the decor stand-in a catalogue prop is drawn with until milestone 3 (same id, transform, label and scale). */
+export function propAsDecor(entity: PropEntity): DecorEntity {
+    return { id: entity.id, kind: 'decor', decor: 'plant', transform: entity.transform, ...(entity.label !== undefined ? { label: entity.label } : {}), ...(entity.scale !== undefined ? { scale: entity.scale } : {}) };
 }
 export function rootFor(entity: WorldEntity, labelHeight?: number): THREE.Group {
     const root = new THREE.Group(); root.name = `omo-entity:${entity.id}`;
@@ -200,6 +204,7 @@ export function entityTitle(entity: WorldEntity, world: WorldSpec): string {
         case 'monitor-wall': return entity.label ?? (entity.link ? `Monitor wall · ${station(entity.link) ?? entity.link}` : 'Monitor wall');
         case 'decor': return entity.label ?? entity.decor;
         case 'room': return entity.label ?? 'Room';
+        case 'prop': return entity.label ?? entity.asset; // foundation:v3
     }
 }
 

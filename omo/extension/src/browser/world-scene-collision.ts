@@ -43,6 +43,8 @@ export function entityRect(entity: WorldEntity): LocalRect | undefined {
             const s = entity.scale ?? 1;
             return { left: rect.left * s, right: rect.right * s, front: rect.front * s, back: rect.back * s };
         }
+        // foundation:v3 — a floor prop blocks like a plant until catalogue colliders arrive (milestone 3); a raised one (on a shelf / table) does not.
+        case 'prop': { if ((entity.y ?? 0) > 0.05) return undefined; const r = 0.42 * (entity.scale ?? 1); return { left: -r, right: r, front: -r, back: r }; }
     }
 }
 export function footprints(world: WorldSpec): Footprint[] {

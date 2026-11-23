@@ -15,8 +15,8 @@
  *
  * Pure module (no DOM / Node APIs): the browser, the tests and any future server share it.
  */
-import type { StationConfig, Transform, WorldEntity, WorldShell, WorldSpec } from './world-model';
-import { validateWorld, WORLD_MAX_BYTES, WORLD_VERSION } from './world-model';
+import type { Site, StationConfig, Transform, WorldEntity, WorldShell, WorldSpec } from './world-model';
+import { upgradeWorld, validateWorld, WORLD_MAX_BYTES, WORLD_VERSION } from './world-model';
 import { isShareableText, shareableUrl } from './world-preset';
 
 export const WORLD_FILE_FORMAT = 'omo-world' as const;
@@ -38,11 +38,12 @@ export interface ShareResult { text: string; file: WorldFile; redacted: number; 
 export interface OpenResult { world: WorldSpec; redacted: number; summary: string }
 
 const FILE_KEYS = ['format', 'version', 'world', 'redacted'] as const;
-const WORLD_KEYS = ['version', 'name', 'shell', 'entities', 'revision', 'plan'] as const;
+const WORLD_KEYS = ['version', 'name', 'shell', 'site', 'entities', 'revision', 'plan'] as const; // foundation:v3: + site
 const SHELL_KEYS = ['theme', 'width', 'depth', 'open'] as const;
 const TRANSFORM_KEYS = ['x', 'z', 'rotation'] as const;
 const STATION_KEYS = ['name', 'kind', 'profile', 'tabs', 'locked'] as const;
 const TAB_KEYS = ['name', 'kind'] as const;
+const SITE_KEYS = ['kit', 'time', 'weather', 'vista', 'seed'] as const; // foundation:v3
 const ENTITY_KEYS: Record<WorldEntity['kind'], readonly string[]> = {
     'station': ['id', 'kind', 'transform', 'label', 'station'],
     'monitor-wall': ['id', 'kind', 'transform', 'label', 'width', 'height', 'elevation', 'link'],
@@ -50,7 +51,8 @@ const ENTITY_KEYS: Record<WorldEntity['kind'], readonly string[]> = {
     'mirror': ['id', 'kind', 'transform', 'label', 'link'],
     'review-screen': ['id', 'kind', 'transform', 'label'],
     'decor': ['id', 'kind', 'transform', 'label', 'decor', 'scale', 'prop'],
-    'room': ['id', 'kind', 'transform', 'label', 'width', 'depth', 'theme', 'doors']
+    'room': ['id', 'kind', 'transform', 'label', 'width', 'depth', 'theme', 'doors', 'module', 'purpose'], // room modules + foundation:v3 purpose
+    'prop': ['id', 'kind', 'transform', 'label', 'asset', 'scale', 'y', 'slot'] // foundation:v3
 };
 
 /** Emails are not secrets, but a shared layout has no reason to carry them. */
@@ -88,6 +90,7 @@ export function cleanShareWorld(source: WorldSpec, strict = false): { world: Wor
     };
     if (strict && !onlyKeys(source, WORLD_KEYS)) refuse('The world in that file has unknown fields.');
     if (strict && !onlyKeys(source.shell, SHELL_KEYS)) refuse('The room shell in that file has unknown fields.');
+    if (strict && source.site !== undefined && !onlyKeys(source.site, SITE_KEYS)) refuse('The site in that file has unknown fields.');
     const shell: WorldShell = { theme: source.shell.theme, width: source.shell.width, depth: source.shell.depth, ...(source.shell.open === true ? { open: true } : {}) };
     const transform = (t: Transform): Transform => {
         if (strict && !onlyKeys(t, TRANSFORM_KEYS)) refuse('A position in that file has unknown fields.');
@@ -120,13 +123,22 @@ export function cleanShareWorld(source: WorldSpec, strict = false): { world: Wor
             case 'mirror': return { ...base, kind: 'mirror', link: e.link };
             case 'review-screen': return { ...base, kind: 'review-screen' };
             case 'decor': return { ...base, kind: 'decor', decor: e.decor, ...(e.scale !== undefined ? { scale: e.scale } : {}), ...(e.prop !== undefined ? { prop: e.prop } : {}) };
-            case 'room': return { ...base, kind: 'room', width: e.width, depth: e.depth, ...(e.theme !== undefined ? { theme: e.theme } : {}), ...(e.doors !== undefined ? { doors: [...e.doors] } : {}) };
+            case 'room': return { ...base, kind: 'room', width: e.width, depth: e.depth, ...(e.theme !== undefined ? { theme: e.theme } : {}), ...(e.doors !== undefined ? { doors: [...e.doors] } : {}), ...(e.module !== undefined ? { module: e.module } : {}), ...(e.purpose !== undefined ? { purpose: e.purpose } : {}) };
+            // foundation:v3 — a catalogue prop keeps its asset id, size, height and slot.
+            case 'prop': return { ...base, kind: 'prop', asset: e.asset, ...(e.scale !== undefined ? { scale: e.scale } : {}), ...(e.y !== undefined ? { y: e.y } : {}), ...(e.slot !== undefined ? { slot: e.slot } : {}) };
             default: return refuse('A thing in that world has an unknown kind.');
         }
     });
     if (typeof source.plan === 'string') redacted++; // free text the world was planned from: never shared
     const name = text(source.name, DEFAULT_NAME) ?? DEFAULT_NAME;
-    return { world: { version: WORLD_VERSION, name, shell, entities, revision: 0 }, redacted };
+    const site = cleanSite(source.site);
+    return { world: { version: WORLD_VERSION, name, shell, ...(site ? { site } : {}), entities, revision: 0 }, redacted };
+}
+
+/** foundation:v3 — the site's known fields only (all are ids / enum words / a number: nothing private). */
+export function cleanSite(site: Site | undefined): Site | undefined {
+    if (!site) return undefined;
+    return { kit: site.kit, ...(site.time !== undefined ? { time: site.time } : {}), ...(site.weather !== undefined ? { weather: site.weather } : {}), ...(site.vista !== undefined ? { vista: site.vista } : {}), ...(site.seed !== undefined ? { seed: site.seed } : {}) };
 }
 
 /** A file name from the world name: letters, digits and dashes only. */
@@ -137,7 +149,7 @@ export function worldFileName(world: Pick<WorldSpec, 'name'>): string {
 
 /** "Share this world": the clean file text, the count of replaced texts and a file name. Throws a readable Error. */
 export function shareWorld(world: WorldSpec): ShareResult {
-    const checked = validateWorld(world);
+    const checked = validateWorld(upgradeWorld(world));
     if (!checked.ok) throw new Error(`This world cannot be shared: ${checked.error}`);
     let clean: { world: WorldSpec; redacted: number };
     try { clean = cleanShareWorld(checked.world); }
@@ -160,7 +172,7 @@ export function openWorldFile(raw: string): OpenResult {
     if (value.version !== WORLD_FILE_VERSION) throw new Error('That world file is from a newer version of Omo.');
     if (!onlyKeys(value, FILE_KEYS) || !isRecord(value.world)) throw new Error('That world file has unknown fields.');
     if (value.redacted !== undefined && !(Number.isInteger(value.redacted) && (value.redacted as number) >= 0)) throw new Error('That world file is damaged (redacted count).');
-    const first = validateWorld(value.world);
+    const first = validateWorld(upgradeWorld(value.world)); // foundation:v3: v2 world files open (upgraded losslessly)
     if (!first.ok) throw new Error(`That world is not valid: ${first.error}`);
     let clean: { world: WorldSpec; redacted: number };
     try { clean = cleanShareWorld(first.world, true); }
@@ -179,6 +191,6 @@ export function summarizeWorld(world: WorldSpec): string {
     parts.push(plural(n('station'), 'desk'));
     const walls = n('web-wall') + n('monitor-wall');
     if (walls) parts.push(plural(walls, 'wall'));
-    if (n('decor')) parts.push(plural(n('decor'), 'decor item'));
+    if (n('decor') + n('prop')) parts.push(plural(n('decor') + n('prop'), 'decor item'));
     return `“${world.name}”: ${parts.join(', ')} · ${world.shell.width} × ${world.shell.depth} m${world.shell.open ? ' open world' : ''}`;
 }

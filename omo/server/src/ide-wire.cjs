@@ -145,7 +145,7 @@ function serveIdeSocket(ws, ctx) {
             try {
                 const { canonicalWorld, worldLeaks } = require('./world-guard.cjs');
                 const W = require('../vendor/world-model.cjs');
-                const seed = canonicalWorld({ ...JSON.parse(JSON.stringify(a.seedWorld)), revision: 0 });
+                const seed = canonicalWorld({ ...W.upgradeWorld(JSON.parse(JSON.stringify(a.seedWorld))), revision: 0 }); // foundation:v3
                 if (W.validateWorld(seed).ok && !worldLeaks(seed)) { found.r.rec.world = seed; hub.saveNow(found.r); }
             } catch (e) { log('ide seed world refused', e.message); }
         }

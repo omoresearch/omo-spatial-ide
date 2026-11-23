@@ -35,7 +35,7 @@ import { isRoomCode } from './room-code'; // promise:share
 import { withPoint } from './shared-pointer'; // promise:share
 import type { PlayerPose } from './player-state';
 import type { WorldOp, WorldSpec } from './world-model';
-import { SHELL_MAX, validateWorld, WORLD_MAX_BYTES } from './world-model';
+import { SHELL_MAX, readWorld, WORLD_MAX_BYTES } from './world-model';
 import type { ChatEmote, ChatMessage, ChatSay, PresenceColour, RoomMember, VoiceSignal, VoiceSignalEnvelope, VoiceStatus } from './presence-protocol';
 import { CHAT_EMOTES, PRESENCE_COLOURS, chatSay, presenceColour, voiceSignal, voiceStatus } from './presence-protocol';
 
@@ -338,7 +338,7 @@ function worldOps(input: unknown): WorldOp[] {
     return JSON.parse(JSON.stringify(input));
 }
 function world(input: unknown): WorldSpec {
-    const r = validateWorld(input);
+    const r = readWorld(input); // foundation:v3: an older room server still sends v2 worlds
     if (!r.ok) throw new Error(r.error);
     return JSON.parse(JSON.stringify(r.world));
 }

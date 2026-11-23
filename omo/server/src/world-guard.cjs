@@ -11,8 +11,10 @@ const MAX_OPS = 64;
 const MAX_OPS_BYTES = 192 * 1024; // w3:expand (worlds up to WORLD_MAX_BYTES)
 const OP_KEYS = {
     add: ['entity'], remove: ['id'], move: ['id', 'transform'], 'update-station': ['id', 'station'],
-    resize: ['id', 'width', 'height', 'elevation'], link: ['id', 'to'], rename: ['id', 'label'], shell: ['shell'], name: ['name'], reshape: ['id', 'width', 'depth', 'doors', 'theme'] // w3:expand
+    resize: ['id', 'width', 'height', 'elevation'], link: ['id', 'to'], rename: ['id', 'label'], shell: ['shell'], name: ['name'], reshape: ['id', 'width', 'depth', 'doors', 'theme'], // w3:expand
+    site: ['site'] // foundation:v3
 };
+const SITE_KEYS = ['kit', 'time', 'weather', 'vista', 'seed'];
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const pick = (o, keys) => { const out = {}; for (const k of keys) if (o[k] !== undefined) out[k] = o[k]; return out; };
 
@@ -31,7 +33,9 @@ function canonicalEntity(e) {
         case 'web-wall': Object.assign(out, pick(e, ['width', 'height', 'elevation', 'home'])); break;
         case 'mirror': out.link = e.link; break;
         case 'decor': Object.assign(out, pick(e, ['decor', 'scale', 'prop'])); break; // sky:merge prop
-        case 'room': Object.assign(out, pick(e, ['width', 'depth', 'theme'])); if (Array.isArray(e.doors)) out.doors = [...e.doors]; break; // w3:expand
+        // w3:expand; room modules + foundation:v3: `module` and `purpose` were dropped here, so multiplayer lost room modules.
+        case 'room': Object.assign(out, pick(e, ['width', 'depth', 'theme', 'module', 'purpose'])); if (Array.isArray(e.doors)) out.doors = [...e.doors]; break;
+        case 'prop': Object.assign(out, pick(e, ['asset', 'scale', 'y', 'slot'])); break; // foundation:v3
         default: break;
     }
     return out;
@@ -39,6 +43,7 @@ function canonicalEntity(e) {
 function canonicalWorld(w) {
     const out = { version: w.version, name: w.name, shell: { theme: w.shell.theme, width: w.shell.width, depth: w.shell.depth, ...(w.shell.open === true ? { open: true } : {}) }, entities: w.entities.map(canonicalEntity), revision: w.revision };
     if (w.plan !== undefined) out.plan = w.plan;
+    if (isObj(w.site)) out.site = pick(w.site, SITE_KEYS); // foundation:v3
     return out;
 }
 function worldTexts(w) {
@@ -74,6 +79,8 @@ function sanitizeOps(raw) {
         if (o.op === 'move' && !isObj(op.transform)) throw new Error('move needs a transform.');
         if (o.op === 'update-station' && !isObj(op.station)) throw new Error('update-station needs station fields.');
         if (o.op === 'shell' && !isObj(op.shell)) throw new Error('shell needs fields.');
+        if (o.op === 'site' && !isObj(op.site)) throw new Error('site needs fields.'); // foundation:v3
+        if (o.op === 'site') op.site = pick(op.site, SITE_KEYS);
         if (o.op === 'rename' && typeof op.label !== 'string') throw new Error('rename needs a label.');
         if (o.op === 'name' && typeof op.name !== 'string') throw new Error('name needs a name.');
         if (o.op === 'link' && op.to !== undefined && typeof op.to !== 'string') throw new Error('link target must be an id.');
@@ -88,6 +95,7 @@ function sanitizeOps(raw) {
  */
 function applyBatch(world, baseRevision, rawOps) {
     if (!Number.isInteger(baseRevision)) return { ok: false, error: 'baseRevision is required.' };
+    world = W.upgradeWorld(world); // foundation:v3: a room saved as v2 upgrades on its next edit
     if (baseRevision !== world.revision) return { ok: false, conflict: true, error: `The world changed (now revision ${world.revision}). Reload and try again.` };
     let ops;
     try { ops = sanitizeOps(rawOps); } catch (e) { return { ok: false, error: e.message }; }
@@ -101,4 +109,4 @@ function applyBatch(world, baseRevision, rawOps) {
     return { ok: true, world: next, ops };
 }
 
-module.exports = { applyBatch, sanitizeOps, canonicalWorld, worldTexts, worldLeaks, MAX_OPS };
+module.exports = { applyBatch, sanitizeOps, canonicalWorld, worldTexts, worldLeaks, MAX_OPS, OP_KEYS };

@@ -9,9 +9,10 @@ import { roomRect } from '../common/world-model';
 /** What a person calls one thing of each kind (singular, plural). */
 const NOUN: Record<WorldEntity['kind'], [string, string]> = {
     room: ['room', 'rooms'], station: ['desk', 'desks'], 'monitor-wall': ['monitor wall', 'monitor walls'],
-    'web-wall': ['web wall', 'web walls'], mirror: ['mirror', 'mirrors'], 'review-screen': ['code review', 'code reviews'], decor: ['decor item', 'decor items']
+    'web-wall': ['web wall', 'web walls'], mirror: ['mirror', 'mirrors'], 'review-screen': ['code review', 'code reviews'], decor: ['decor item', 'decor items'],
+    prop: ['thing', 'things'] // foundation:v3
 };
-const ORDER: Array<WorldEntity['kind']> = ['room', 'station', 'monitor-wall', 'web-wall', 'mirror', 'review-screen', 'decor'];
+const ORDER: Array<WorldEntity['kind']> = ['room', 'station', 'monitor-wall', 'web-wall', 'mirror', 'review-screen', 'decor', 'prop'];
 
 function label(e: WorldEntity): string {
     if (e.label) return e.label;

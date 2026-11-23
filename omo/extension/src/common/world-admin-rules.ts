@@ -88,7 +88,7 @@ const KIND_WORDS: Array<[EntityKind, RegExp]> = [
     ['room', /\b(rooms?|wings?|lounges?|offices?|labs?)\b/] // w3:admin
 ];
 const KIND_NAME: Record<EntityKind, string> = {
-    station: 'desk', 'monitor-wall': 'monitor wall', 'web-wall': 'web wall', mirror: 'mirror', 'review-screen': 'code review screen', decor: 'decor', room: 'room'
+    station: 'desk', 'monitor-wall': 'monitor wall', 'web-wall': 'web wall', mirror: 'mirror', 'review-screen': 'code review screen', decor: 'decor', room: 'room', prop: 'prop' // foundation:v3
 };
 const AGENT_WORDS: Array<[TabKind, RegExp]> = [
     ['codex', /\bcodex\b/], ['claude', /\bclaude(?: code)?\b/], ['hermes', /\bhermes\b/], ['shell', /\b(shell|bash|terminal only|plain terminal)\b/]
