@@ -10,10 +10,11 @@
  */
 import * as THREE from 'three';
 import type { WorldShell } from '../common/world-model';
-import { box, cylinder, glow, material } from './world-scene-kit';
+import { part, rod, slab } from './world-scene-kit';
+import { look, lookSkyDome, PALETTE } from './world-look';
 
 /** Sky / horizon colour of an open world (the scene background and fog colour). */
-export function openSky(jungle: boolean): string { return jungle ? '#b9dcef' : '#a9cdea'; } // w3:look (4): a clear blue sky, distinct from the ground
+export function openSky(_jungle: boolean): string { return `#${new THREE.Color(PALETTE.day.low).getHexString()}`; } // beauty:foundation — the look's day sky
 /** At most this many ambient props on open ground, whatever the size. */
 export const OPEN_PROP_CAP = 44;
 /** Ground area per ambient prop (square metres): sparse. */
@@ -28,13 +29,13 @@ function hash(i: number, salt: number): number {
 }
 
 /** Grid lines for a W x D rectangle every `step` metres, as one LineSegments (one draw call). */
-function gridLines(W: number, D: number, step: number, color: number, opacity: number, y: number): THREE.LineSegments {
+function gridLines(W: number, D: number, step: number, y: number): THREE.LineSegments {
     const hw = W / 2, hd = D / 2, points: number[] = [];
     for (let x = -Math.floor(hw / step) * step; x <= hw + 1e-6; x += step) points.push(x, y, -hd, x, y, hd);
     for (let z = -Math.floor(hd / step) * step; z <= hd + 1e-6; z += step) points.push(-hw, y, z, hw, y, z);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-    const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+    const lines = new THREE.LineSegments(geometry, look('grid'));
     lines.raycast = () => undefined;
     return lines;
 }
@@ -47,35 +48,26 @@ export type PropMaker = (root: THREE.Object3D, x: number, z: number, scale: numb
  */
 export function buildOpenGround(root: THREE.Group, shell: WorldShell, free: (x: number, z: number) => boolean, makers: { jungle: PropMaker[]; station: PropMaker[] }): void {
     const jungle = shell.theme === 'jungle';
+    // beauty:foundation — a textured lawn on an earth plinth, a faint 10 m survey grid, the look's sky dome; world-look only.
     const W = shell.width, D = shell.depth, hw = W / 2, hd = D / 2;
     // Ground slab: top face at y -0.02 (same walking level as the classic floor), a thin darker edge band.
-    box(root, [W + 0.6, 0.4, D + 0.6], [0, -0.42, 0], jungle ? 0x4b6640 : 0x56634a);
-    const ground = box(root, [W, 0.12, D], [0, -0.08, 0], jungle ? 0x6f9a5c : 0x7d8f6e); // w3:look (4): warm green-grey ground
-    ground.castShadow = false;
-    // Grids: 1 m (subtle) and 10 m (a little stronger): the Minecraft-like sense of scale and distance.
-    root.add(gridLines(W, D, 1, jungle ? 0x86ad73 : 0x92a283, 0.14, 0.02)); // 4 cm over the ground: no depth flicker from far overview cameras
-    if (Math.max(W, D) >= 20) root.add(gridLines(W, D, 10, jungle ? 0xcfe3b8 : 0xc9d6b4, 0.22, 0.024));
+    slab(root, [W + 0.6, 0.4, D + 0.6], [0, -0.42, 0], 'ground.surround');
+    const ground = slab(root, [W, 0.12, D], [0, -0.08, 0], 'ground.lawn');
+    ground.castShadow = false; ground.userData.part = 'ground';
+    // A faint 10 m survey grid only (the 1 m grid read as graph paper).
+    if (Math.max(W, D) >= 20) root.add(gridLines(W, D, 10, 0.024));
     // Horizon: a large plane just below the ground in the sky colour; the fog blends its far edge into the sky.
     const span = Math.max(W, D);
-    const horizon = new THREE.Mesh(new THREE.PlaneGeometry(span * 8 + 600, span * 8 + 600), material(jungle ? 0x3e5a3a : 0x4a5743) /* w3:look: a darker surround so the world edge reads */);
-    // w3:look (4) — a sky dome: pale at the horizon, deeper blue overhead (fog off, never picked).
-    {
-        const dome = new THREE.SphereGeometry(330, 24, 12), pos = dome.getAttribute('position'), colors: number[] = [];
-        const low = new THREE.Color(jungle ? 0xdcefe9 : 0xd8e8f2), high = new THREE.Color(jungle ? 0x6fb3d6 : 0x5c9fd6), c = new THREE.Color();
-        for (let i = 0; i < pos.count; i++) { const t = Math.max(0, pos.getY(i) / 330); c.copy(low).lerp(high, Math.pow(t, 0.6)); colors.push(c.r, c.g, c.b); }
-        dome.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-        const sky = new THREE.Mesh(dome, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
-        sky.renderOrder = -10; sky.raycast = () => undefined; sky.userData.part = 'sky'; sky.frustumCulled = false;
-        // w4:big — the dome is centred on the camera every frame, so it never ends or clips in a 1 km world.
-        sky.onBeforeRender = (_r, _s, camera) => { sky.position.copy(camera.position); sky.updateMatrixWorld(true); };
-        root.add(sky);
-    }
+    const horizon = new THREE.Mesh(new THREE.PlaneGeometry(span * 8 + 600, span * 8 + 600), look('ground.surround'));
+    // w4:big — the sky dome is centred on the camera every frame, so it never ends or clips in a 1 km world.
+    root.add(lookSkyDome());
+    void jungle;
     horizon.rotation.x = -Math.PI / 2; horizon.position.y = -0.62; horizon.receiveShadow = false; horizon.raycast = () => undefined; root.add(horizon);
     // Spawn marker (the classic room's centre disc and crystal), when free.
     if (free(0.2, 3)) {
-        cylinder(root, 0.7, 0.15, [0.2, 0.06, 3], jungle ? 0xb9ba91 : 0x8398a5, 0.75);
-        const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.35, 0), material(jungle ? 0xd6e7a4 : 0x7cdae2, 0.6));
-        core.position.set(0.2, 0.65, 3); root.add(core);
+        rod(root, 0.7, 0.15, [0.2, 0.06, 3], 'stone', 0.75, 40);
+        rod(root, 0.72, 0.02, [0.2, 0.145, 3], 'metal.brass', 0.72, 40);
+        part(root, new THREE.OctahedronGeometry(0.3, 0), 'crystal', [0.2, 0.65, 3]).scale.y = 1.5;
     }
     // Sparse ambient props.
     const list = jungle ? makers.jungle : makers.station;
@@ -94,11 +86,10 @@ export function buildOpenGround(root: THREE.Group, shell: WorldShell, free: (x: 
 
 /** Station-theme props for open ground. */
 export function crystal(root: THREE.Object3D, x: number, z: number, scale: number): void {
-    cylinder(root, 0.5 * scale, 0.12, [x, 0.06, z], 0x6f8597, 0.6 * scale, 10);
-    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.4 * scale, 0), material(0x7cdae2, 0.5));
-    core.position.set(x, 0.75 * scale, z); core.scale.y = 1.7; core.castShadow = true; root.add(core);
+    rod(root, 0.5 * scale, 0.12, [x, 0.06, z], 'stone.dark', 0.6 * scale, 16);
+    part(root, new THREE.OctahedronGeometry(0.4 * scale, 0), 'crystal', [x, 0.75 * scale, z]).scale.y = 1.7;
 }
 export function pylon(root: THREE.Object3D, x: number, z: number, scale: number): void {
-    box(root, [0.3, 3.2 * scale, 0.3], [x, 1.6 * scale, z], 0x728896);
-    glow(root, [0.07, 2.4 * scale, 0.07], [x, 1.7 * scale, z + 0.17], 0x98dce9);
+    slab(root, [0.3, 3.2 * scale, 0.3], [x, 1.6 * scale, z], 'metal.graphite');
+    slab(root, [0.07, 2.4 * scale, 0.07], [x, 1.7 * scale, z + 0.17], 'emissive.warm');
 }

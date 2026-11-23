@@ -9,8 +9,10 @@ import type { DecorEntity, MirrorEntity, MonitorWallEntity, ReviewScreenEntity, 
 import { roomRect, worldFromRoomV1 } from '../common/world-model';
 import type { RoomKitId, RoomLayoutId } from '../common/player-state';
 import type { RoomTheme } from '../common/room-state';
-import { box, canvasTexture, cylinder, glow } from './world-scene-kit';
+import { canvasTexture, mesh, rod, slab } from './world-scene-kit';
 import { buildDecor } from './world-scene-decor';
+import { look as lookMat, lookPaper, lookPlate, lookScreen, lookStatusLamp, paintCard, paintNamePlate, paintTopicBoard as paintBoardFace } from './world-look';
+import type { BoardRow } from './world-look';
 
 export interface BuiltEntity {
     root: THREE.Group;
@@ -40,67 +42,58 @@ export function rootFor(entity: WorldEntity, labelHeight?: number): THREE.Group 
 function stand(group: THREE.Object3D, halfWidth: number, top: number, z: number): void {
     if (top < 0.08) return;
     for (const x of [-halfWidth, halfWidth]) {
-        box(group, [0.08, top, 0.08], [x, top / 2, z], 0x2a3644, 0.35);
-        box(group, [0.12, 0.05, 0.6], [x, 0.025, z], 0x2a3644, 0.35);
+        slab(group, [0.08, top, 0.08], [x, top / 2, z], 'metal.graphite');
+        slab(group, [0.12, 0.05, 0.6], [x, 0.025, z], 'metal.graphite');
     }
 }
 
 export function buildStation(entity: StationEntity, jungle: boolean, texture: THREE.Texture): BuiltEntity {
     const group = rootFor(entity);
-    box(group, [3.2, 0.15, 1.55], [0, 1.15, 0], jungle ? 0xc0aa7b : 0xd2c9b5);
-    for (const leg of [-1.28, 1.28]) box(group, [0.13, 1.1, 1.25], [leg, 0.54, 0], jungle ? 0x394e42 : 0x374656);
-    box(group, [0.65, 0.06, 0.48], [0, 1.26, -0.25], 0x293645);
-    box(group, [0.1, 0.35, 0.1], [0, 1.43, -0.35], 0x435664);
-    box(group, [1.72, 1.04, 0.11], [0, 1.99, -0.36], 0x17222e);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(DESK_SCREEN.width, DESK_SCREEN.height), new THREE.MeshBasicMaterial({ map: texture }));
+    // beauty:foundation — an oak desk top on graphite steel legs, a brass monitor stem, a linen chair: all look materials.
+    void jungle;
+    slab(group, [3.2, 0.15, 1.55], [0, 1.15, 0], 'wood');
+    for (const leg of [-1.28, 1.28]) slab(group, [0.13, 1.1, 1.25], [leg, 0.54, 0], 'metal.graphite');
+    slab(group, [0.65, 0.06, 0.48], [0, 1.26, -0.25], 'metal.graphite');
+    slab(group, [0.1, 0.35, 0.1], [0, 1.43, -0.35], 'metal.brass');
+    slab(group, [1.72, 1.04, 0.11], [0, 1.99, -0.36], 'bezel');
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(DESK_SCREEN.width, DESK_SCREEN.height), lookScreen(texture, true));
     screen.position.set(0, DESK_SCREEN.y, DESK_SCREEN.z); group.add(screen);
-    box(group, [0.9, 0.045, 0.3], [-0.15, 1.26, 0.28], 0x344353);
-    for (let i = 0; i < 3; i++) box(group, [0.72, 0.008, 0.012], [-0.15, 1.285, 0.2 + i * 0.075], 0x71808c);
-    cylinder(group, 0.11, 0.25, [1.15, 1.32, 0.3], jungle ? 0xd3d3a8 : 0xc9a478);
-    const lamp = glow(group, [0.3, 0.025, 0.025], [-0.6, 1.42, -0.265], 0x6d7c86);
+    slab(group, [0.9, 0.045, 0.3], [-0.15, 1.26, 0.28], 'metal.graphite');
+    for (let i = 0; i < 3; i++) slab(group, [0.72, 0.008, 0.012], [-0.15, 1.285, 0.2 + i * 0.075], 'metal.steel');
+    rod(group, 0.11, 0.25, [1.15, 1.32, 0.3], 'ceramic', 0.11, 24);
+    const lamp = mesh(group, new THREE.BoxGeometry(0.3, 0.025, 0.025), lookStatusLamp(), [-0.6, 1.42, -0.265]);
     // Chair and footrest. These are navigation landmarks, not pretend agents.
-    cylinder(group, 0.15, 0.5, [0, 0.3, 1.35], 0x374656);
-    box(group, [0.9, 0.16, 0.85], [0, 0.62, 1.35], jungle ? 0x758968 : 0x648697);
-    box(group, [0.9, 0.85, 0.14], [0, 1.03, 1.72], jungle ? 0x758968 : 0x648697);
+    rod(group, 0.15, 0.5, [0, 0.3, 1.35], 'metal.graphite', 0.15, 24);
+    slab(group, [0.9, 0.16, 0.85], [0, 0.62, 1.35], 'fabric');
+    slab(group, [0.9, 0.85, 0.14], [0, 1.03, 1.72], 'fabric');
     namePlate(group, entity);
     return { root: group, screen, lamp };
 }
 
 /** The desk's name plate: on the front apron under the desk top, facing the walkway. sky:merge — `at` places it on a kit desk. */
 export function namePlate(group: THREE.Object3D, entity: StationEntity, at: { y: number; z: number; scale: number } = { y: 0.99, z: 0.635, scale: 1 }): void {
-    const { canvas, texture } = canvasTexture(512, 80);
-    const c = canvas.getContext('2d');
-    if (c) {
-        const hermes = entity.station.kind === 'hermes';
-        c.fillStyle = '#16212d'; c.fillRect(0, 0, 512, 80);
-        c.fillStyle = hermes ? '#87cdb4' : '#8fb2d6'; c.beginPath(); c.arc(34, 40, 10, 0, Math.PI * 2); c.fill();
-        c.font = '600 34px sans-serif'; c.fillStyle = '#e7eef2'; c.textBaseline = 'middle';
-        c.fillText((entity.label ?? entity.station.name).slice(0, 24), 58, 41, entity.station.locked ? 330 : 430);
-        c.font = '20px monospace'; c.textAlign = 'right'; c.fillStyle = '#8ea5aa';
-        c.fillText(entity.station.locked ? 'LOCKED' : (entity.station.profile ?? entity.station.kind).slice(0, 18).toUpperCase(), 496, 42);
-        texture.needsUpdate = true;
-    }
+    const texture = paintNamePlate((entity.label ?? entity.station.name).slice(0, 24), entity.station.locked ? 'LOCKED' : (entity.station.profile ?? entity.station.kind).slice(0, 18).toUpperCase(), entity.station.kind === 'hermes', !!entity.station.locked);
     const k = at.scale;
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.96 * k, 0.15 * k), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.96 * k, 0.15 * k), lookPlate(texture));
     plate.position.set(0, at.y, at.z); plate.userData.ownsMap = true; plate.userData.namePlate = entity.id; group.add(plate);
-    box(group, [1.0 * k, 0.19 * k, 0.03], [0, at.y, at.z - 0.02], 0x2a3644);
+    slab(group, [1.0 * k, 0.19 * k, 0.03], [0, at.y, at.z - 0.02], 'metal.brass');
 }
 
 /** Video-wall look: one screen fitted 16:9 inside the wall, thin seams in a grid over it. */
 export function buildMonitorWall(entity: MonitorWallEntity, texture: THREE.Texture, standing: boolean): BuiltEntity {
     const W = entity.width, H = entity.height, cy = entity.elevation + H / 2;
     const group = rootFor(entity, entity.elevation + H + 0.3);
-    box(group, [W + 0.12, H + 0.12, 0.1], [0, cy, -0.05], 0x17222e);
-    const off = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ color: 0x0a1119 }));
+    slab(group, [W + 0.12, H + 0.12, 0.1], [0, cy, -0.05], 'bezel');
+    const off = new THREE.Mesh(new THREE.PlaneGeometry(W, H), lookMat('screen.off'));
     off.position.set(0, cy, 0.002); group.add(off);
     const sw = Math.min(W, H * 16 / 9), sh = sw * 9 / 16;
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), lookScreen(texture));
     screen.position.set(0, cy, 0.006); group.add(screen);
     const cols = Math.max(1, Math.min(6, Math.round(W / 1.1))), rows = Math.max(1, Math.min(4, Math.round(H / 0.7)));
-    const seam = new THREE.MeshBasicMaterial({ color: 0x0d151d });
+    const seam = lookMat('bezel');
     for (let i = 1; i < cols; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.022, H), seam); m.position.set(-W / 2 + i * W / cols, cy, 0.01); m.raycast = () => undefined; group.add(m); }
     for (let j = 1; j < rows; j++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(W, 0.022), seam); m.position.set(0, entity.elevation + j * H / rows, 0.01); m.raycast = () => undefined; group.add(m); }
-    if (entity.link) glow(group, [Math.min(0.6, W * 0.3), 0.025, 0.025], [0, entity.elevation - 0.02, 0.03], 0x87cdb4, 1.2);
+    if (entity.link) slab(group, [Math.min(0.6, W * 0.3), 0.025, 0.025], [0, entity.elevation - 0.02, 0.03], 'emissive.cool');
     if (standing) stand(group, W / 2 - 0.15, entity.elevation, -0.06);
     return { root: group, screen };
 }
@@ -109,8 +102,8 @@ export function buildWebWall(entity: WebWallEntity, texture: THREE.Texture, stan
     const W = entity.width, H = entity.height, cy = entity.elevation + H / 2;
     // v1: frame 4.12 x 2.6 around a 3.9 x 2.44 screen at y 1.9; label 3.43.
     const group = rootFor(entity, entity.elevation + H + 0.31);
-    box(group, [W + 0.22, H + 0.16, 0.14], [0, cy, 0], 0x17222e);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
+    slab(group, [W + 0.22, H + 0.16, 0.14], [0, cy, 0], 'bezel');
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(W, H), lookScreen(texture));
     screen.position.set(0, cy, 0.08); group.add(screen);
     if (standing) stand(group, W / 2 - 0.2, entity.elevation - 0.08, -0.02);
     return { root: group, screen };
@@ -118,8 +111,8 @@ export function buildWebWall(entity: WebWallEntity, texture: THREE.Texture, stan
 
 export function buildMirror(entity: MirrorEntity, texture: THREE.Texture, standing: boolean): BuiltEntity {
     const group = rootFor(entity, 3.25);
-    box(group, [2.55, 2.0, 0.14], [0, 1.75, 0], 0x17222e);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(2.36, 1.8), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
+    slab(group, [2.55, 2.0, 0.14], [0, 1.75, 0], 'bezel');
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(2.36, 1.8), lookScreen(texture));
     screen.position.set(0, 1.75, 0.08); group.add(screen);
     if (standing) stand(group, 1.0, 0.75, -0.02);
     return { root: group, screen };
@@ -127,12 +120,12 @@ export function buildMirror(entity: MirrorEntity, texture: THREE.Texture, standi
 
 export function buildReviewScreen(entity: ReviewScreenEntity, texture: THREE.Texture, standing: boolean): BuiltEntity {
     const group = rootFor(entity, 2.8);
-    box(group, [2.12, 1.22, 0.12], [0, 1.99, -0.08], 0x17222e);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.98, 1.08), new THREE.MeshBasicMaterial({ map: texture }));
+    slab(group, [2.12, 1.22, 0.12], [0, 1.99, -0.08], 'bezel');
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.98, 1.08), lookScreen(texture, true));
     screen.position.set(0, 1.99, 0); group.add(screen);
     if (standing) {
-        cylinder(group, 0.05, 1.4, [0, 0.7, -0.14], 0x2a3644, 0.05, 10);
-        cylinder(group, 0.38, 0.05, [0, 0.025, -0.14], 0x2a3644, 0.42, 16);
+        rod(group, 0.05, 1.4, [0, 0.7, -0.14], 'metal.graphite', 0.05, 10);
+        rod(group, 0.38, 0.05, [0, 0.025, -0.14], 'metal.graphite', 0.42, 24);
     }
     return { root: group, screen };
 }
@@ -148,13 +141,14 @@ export function buildDecorEntity(entity: DecorEntity, jungle: boolean, boardLine
     // promise:share: other whiteboards (data boards) print their note; onboarding's topic boards and stands draw their own.
     const look = buildDecor(entity.decor, entity.id, jungle, entity.decor === 'whiteboard' && !mind ? entity.label : undefined);
     if (mind && entity.id.startsWith('sign-')) {
-        look.children.filter(c => c instanceof THREE.Mesh && (c.material as THREE.Material) instanceof THREE.MeshBasicMaterial).forEach(c => look.remove(c));
+        const strokes: THREE.Object3D[] = []; look.traverse(n => { if (n.userData.part === 'stroke') strokes.push(n); });
+        for (const n of strokes) n.parent?.remove(n); // the plate replaces the marker doodles
         const { canvas, texture } = canvasTexture(BOARD_PX.w, BOARD_PX.h);
         const c = canvas.getContext('2d');
         const rows = c ? paintTopicBoard(c, entity.label!, boardLines, jungle) : [];
         texture.anisotropy = 8; texture.needsUpdate = true;
         // A 2 cm writing surface over the whole board face (no zero-thickness plane: promise:onboarding (5)).
-        const plate = new THREE.Mesh(new THREE.BoxGeometry(1.76, 1.0, 0.02), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(1.76, 1.0, 0.02), lookPlate(texture));
         plate.position.set(0, 1.3, 0.048); plate.userData.ownsMap = true; plate.userData.part = 'topic-board';
         // Test hook data: the text rows in board-local metres (y up from the board centre), for the on-screen glyph check.
         plate.userData.rows = rows.map(r => ({ text: r.text, title: r.title, top: 0.5 - r.top / BOARD_PX.h, bottom: 0.5 - r.bottom / BOARD_PX.h }));
@@ -162,19 +156,12 @@ export function buildDecorEntity(entity: DecorEntity, jungle: boolean, boardLine
     } else if (mind) {
         // A note: a reading stand (post + slanted card) with the chat title — the room's detail, not another board.
         for (const child of [...look.children]) { look.remove(child); (child as THREE.Mesh).geometry?.dispose(); }
-        const metal = new THREE.MeshStandardMaterial({ color: jungle ? 0x3d4c42 : 0x34404d, roughness: 0.5, metalness: 0.4 });
+        const metal = lookMat('metal.brass');
         const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.36), metal); foot.position.y = 0.02; look.add(foot);
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.98, 0.06), metal); post.position.y = 0.51; look.add(post);
-        const { canvas, texture } = canvasTexture(512, 320);
-        const c = canvas.getContext('2d');
-        if (c) {
-            c.fillStyle = '#f7f8f4'; c.fillRect(0, 0, 512, 320);
-            c.fillStyle = jungle ? '#6d9b71' : '#2fa3b5'; c.fillRect(32, 34, 56, 8);
-            c.fillStyle = '#13201b'; c.font = '600 46px sans-serif'; c.textBaseline = 'top';
-            wrapWords(c, entity.label!, 448).slice(0, 4).forEach((l, i) => c.fillText(l, 32, 64 + i * 58, 448));
-            texture.needsUpdate = true;
-        }
-        const card = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.45, 0.02), [metal, metal, metal, metal, new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }), metal]);
+        const texture = paintCard(entity.label!);
+        const face = texture ? lookPaper(texture) : lookMat('board');
+        const card = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.45, 0.02), [metal, metal, metal, metal, face, metal]);
         card.position.set(0, 1.1, 0.04); card.rotation.x = -0.55; card.userData.ownsMap = true; card.userData.part = 'note-stand'; look.add(card);
     }
     group.add(look);
@@ -182,19 +169,6 @@ export function buildDecorEntity(entity: DecorEntity, jungle: boolean, boardLine
 }
 
 const BOARD_PX = { w: 1024, h: 582 } as const;
-function wrapWords(c: CanvasRenderingContext2D, text: string, max: number): string[] {
-    const lines: string[] = []; let line = '';
-    for (const w of text.split(/\s+/).filter(Boolean)) { const next = line ? `${line} ${w}` : w; if (c.measureText(next).width > max && line) { lines.push(line); line = w; } else line = next; }
-    if (line) lines.push(line);
-    return lines;
-}
-/** One line, cut at a word with an ellipsis when it does not fit. */
-function fitLine(c: CanvasRenderingContext2D, text: string, max: number): string {
-    if (c.measureText(text).width <= max) return text;
-    const words = text.split(/\s+/); let out = '';
-    for (const w of words) { const next = out ? `${out} ${w}` : w; if (c.measureText(`${next}…`).width > max) break; out = next; }
-    return `${out || text.slice(0, 12)}…`;
-}
 /**
  * The note lines of a topic board, from existing entity fields only: the labels of the `note-*` boards standing in the
  * board's room (`sign-<slug>` belongs to `mind-<slug>`, else to the room whose doorway it stands by). Up to 4.
@@ -208,26 +182,8 @@ export function topicBoardLines(world: Pick<WorldSpec, 'entities'>, signId: stri
     const b = roomRect(room);
     return world.entities.filter(e => e.id.startsWith('note-') && e.label && e.transform.x > b.minX && e.transform.x < b.maxX && e.transform.z > b.minZ && e.transform.z < b.maxZ).map(e => e.label!).slice(0, 4);
 }
-function paintTopicBoard(c: CanvasRenderingContext2D, title: string, notes: readonly string[], jungle: boolean): Array<{ text: string; title: boolean; top: number; bottom: number }> {
-    const W = BOARD_PX.w, H = BOARD_PX.h, X = 48, MAX = W - 2 * X - 34, rows: Array<{ text: string; title: boolean; top: number; bottom: number }> = [];
-    c.fillStyle = '#f7f8f4'; c.fillRect(0, 0, W, H);
-    c.fillStyle = jungle ? '#4c7e62' : '#16324a'; c.fillRect(0, 0, W, 132);
-    c.textBaseline = 'alphabetic';
-    c.fillStyle = '#ffffff'; c.font = '700 76px sans-serif';
-    const t = fitLine(c, title, W - 2 * X);
-    c.fillText(t, X, 98); rows.push({ text: t, title: true, top: 98 - 58, bottom: 98 + 4 });
-    c.font = '500 50px sans-serif';
-    let lines = notes.slice(0, 4).map(n => fitLine(c, n, MAX));
-    if (notes.length && notes.length < 2) lines = wrapWords(c, notes[0], MAX).slice(0, 2).map(l => fitLine(c, l, MAX));
-    if (!lines.length) lines = ['No notes yet'];
-    const step = Math.min(102, (H - 170) / Math.max(1, lines.length));
-    lines.forEach((l, i) => {
-        const base = 132 + 30 + step * i + 50;
-        c.fillStyle = jungle ? '#6d9b71' : '#2fa3b5'; c.beginPath(); c.arc(X + 9, base - 17, 9, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#13201b'; c.fillText(l, X + 34, base, MAX);
-        rows.push({ text: l, title: false, top: base - 38, bottom: base + 2 });
-    });
-    return rows;
+function paintTopicBoard(c: CanvasRenderingContext2D, title: string, notes: readonly string[], _jungle: boolean): BoardRow[] {
+    return paintBoardFace(c, BOARD_PX.w, BOARD_PX.h, title, notes); // beauty:foundation — the one board type (world-look)
 }
 
 /** Human title of an entity, as its in-room label shows it (without the number). */

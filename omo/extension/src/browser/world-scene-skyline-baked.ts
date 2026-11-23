@@ -18,10 +18,11 @@ import type { StyleKit, StyleKitId } from '../common/world-style-kits';
 import { kitAssetUrl, propAssetUrl } from '../common/world-style-kits';
 import type { BuiltEntity } from './world-scene-entities';
 import { namePlate, rootFor } from './world-scene-entities';
-import { box, glow } from './world-scene-kit';
+import { mesh as addMesh } from './world-scene-kit';
+import { adoptKitMaterial, CITY_PANO_CENTRE, look, lookHitBox, lookCityBackdrop, lookScreen, lookScreenOff, lookStatusLamp, prepareCityTextures } from './world-look';
 
 /** Where the lab rendered the city panorama from (baked space). */
-const PANO_C = new THREE.Vector3(9.0, 1.65, -6.0);
+const PANO_C = new THREE.Vector3(CITY_PANO_CENTRE.x, CITY_PANO_CENTRE.y, CITY_PANO_CENTRE.z);
 
 interface KitTextures { lm: Record<string, THREE.Texture>; ao: Record<string, THREE.Texture> }
 interface LoadedKit { root: THREE.Group; env: THREE.Texture; backdrop: THREE.Mesh; triangles: number; ms: number }
@@ -40,37 +41,7 @@ function patchBaked(mat: THREE.MeshStandardMaterial): void {
 }
 /** City backdrop: the baked panorama re-projected through its depth panorama, so the city keeps parallax while walking. */
 function makeBackdrop(colorTex: THREE.Texture, depthTex: THREE.Texture, centre: THREE.Vector3): THREE.Mesh {
-    const mat = new THREE.ShaderMaterial({
-        uniforms: { cmap: { value: colorTex }, dmap: { value: depthTex }, C: { value: centre }, gain: { value: 0.9 }, haze: { value: 0.45 }, horizon: { value: 2 }, knee: { value: 0 } },
-        vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
-        fragmentShader: `
-            uniform sampler2D cmap, dmap; uniform vec3 C; uniform float gain, haze, horizon, knee; varying vec3 vW;
-            const float PI = 3.14159265359;
-            vec2 puv(vec3 d){ return vec2(fract(atan(d.z, d.x) / (2.0 * PI) + 0.75), asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5); }
-            float depthAt(vec3 d){ vec3 e = texture2D(dmap, puv(d)).rgb * 255.0; return exp((e.r * 256.0 + e.g) / 65535.0 * log(6000.0)); }
-            void main(){
-                vec3 r = normalize(vW - cameraPosition); vec3 m = cameraPosition - C; float b = dot(m, r), c0 = dot(m, m);
-                float t = 300.0; vec3 q = m + r * t; float dist = 300.0;
-                for (int i = 0; i < 6; i++) { q = m + r * t; dist = depthAt(normalize(q)); t = -b + sqrt(max(b * b - c0 + dist * dist, 0.0)); }
-                q = m + r * t; vec3 col = pow(texture2D(cmap, puv(normalize(q))).rgb, vec3(2.2)) * gain;
-                col = mix(col, vec3(0.055, 0.045, 0.06), haze * (1.0 - exp(-max(dist - 250.0, 0.0) / 2200.0)));
-                // world-ui r4/5 (overview): soft-knee the bright roofs (no white caps) and fade every view ray that passes
-                // above the floor plate's highest corner (horizon = its ray's y) into a calm dusk haze: no tower rises past the floor.
-                col = col * (1.0 + knee * 0.1) / (1.0 + knee * col);
-                float above = smoothstep(horizon - 0.05, horizon + 0.01, r.y);
-                vec3 sky = mix(vec3(0.085, 0.06, 0.075), vec3(0.035, 0.04, 0.07), smoothstep(horizon, horizon + 0.35, r.y));
-                col = mix(col, sky, above);
-                gl_FragColor = vec4(col, 1.0);
-                #include <tonemapping_fragment>
-                #include <colorspace_fragment>
-            }`,
-        side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: true
-    });
-    const m = new THREE.Mesh(new THREE.SphereGeometry(50, 64, 32), mat);
-    m.name = 'omo-kit-backdrop'; m.frustumCulled = false; m.renderOrder = -10; m.raycast = () => undefined;
-    // Follows the camera (like the open world's sky dome), so it never clips.
-    m.onBeforeRender = (_r, _s, camera) => { m.position.copy(camera.position); m.updateMatrix(); m.updateMatrixWorld(true); }; // works on a frozen tree too
-    return m;
+    return lookCityBackdrop(colorTex, depthTex, centre); // beauty:foundation — the one city backdrop (world-look)
 }
 
 /**
@@ -140,7 +111,7 @@ export class SkylineKitLoader {
         let p = this.props.get(id);
         if (!p) {
             p = load<{ scene: THREE.Group }>(this.gltf, this.base + propAssetUrl(this.kit.id, id)).then(g => {
-                g.scene.traverse(n => { const m = n as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; const mat = m.material as THREE.MeshStandardMaterial; mat.envMapIntensity = 0.85; } });
+                g.scene.traverse(n => { const m = n as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.userData.sharedGeometry = true; const mat = m.material as THREE.MeshStandardMaterial; mat.envMapIntensity = 0.85; adoptKitMaterial(mat, 'prop'); } });
                 return g.scene;
             });
             p.catch(() => this.props.delete(id));
@@ -174,8 +145,7 @@ export class SkylineKitLoader {
         }
         const pmrem = new THREE.PMREMGenerator(this.renderer);
         const env = pmrem.fromEquirectangular(probe).texture; pmrem.dispose(); probe.dispose();
-        city.colorSpace = THREE.NoColorSpace; city.generateMipmaps = false; city.minFilter = THREE.LinearFilter;
-        cityD.colorSpace = THREE.NoColorSpace; cityD.generateMipmaps = false; cityD.minFilter = cityD.magFilter = THREE.NearestFilter;
+        prepareCityTextures(city, cityD);
 
         const root = new THREE.Group(); root.name = 'omo-world-shell'; root.userData.styleKit = this.kit.id; root.userData.keep = true;
         const baked = new THREE.Group(); baked.name = 'omo-kit-baked'; baked.position.set(this.kit.offset.x, 0, this.kit.offset.z); root.add(baked);
@@ -185,7 +155,7 @@ export class SkylineKitLoader {
         const bu = (backdrop.material as THREE.ShaderMaterial).uniforms;
         root.userData.setOverview = (on: boolean): void => { bu.knee.value = on ? 2.6 : 0; if (!on) bu.horizon.value = 2; }; // world-ui r4/5
         root.userData.setHorizon = (y: number): void => { bu.horizon.value = y; };
-        const off = new THREE.MeshBasicMaterial({ color: 0x07090c });
+        const off = lookScreenOff();
         const cache = new Map<string, THREE.Material>();
         let triangles = 0;
         room.traverse(node => {
@@ -214,7 +184,7 @@ export class SkylineKitLoader {
                 if (/modern_ceiling_globe/.test(m.name)) m.emissiveIntensity = 0.6;
                 // The pale desk tops (and the ceramic) took the full lightmap plus a strong probe reflection: dimmer, rougher.
                 if (/metal_office_desk|Ceramic/.test(m.name)) { m.lightMapIntensity = Math.PI * 0.62; m.envMapIntensity = 0.35; m.roughness = Math.max(m.roughness, 0.6); m.color.multiplyScalar(0.82); }
-                cache.set(key, m);
+                cache.set(key, adoptKitMaterial(m, grp || 'baked'));
             }
             mesh.material = cache.get(key)!;
         });
@@ -225,8 +195,8 @@ export class SkylineKitLoader {
             pl.position.set(...L.pos); baked.add(pl);
         }
         // Glass: a faint dark tint plus an additive reflection layer (north and east glass of the baked floor).
-        const tint = new THREE.MeshBasicMaterial({ color: 0x0b1218, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide });
-        const refl = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.03, metalness: 0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, envMapIntensity: 0.55, side: THREE.DoubleSide });
+        const tint = look('glass.kit.tint').clone(), refl = look('glass.kit.reflect').clone(); // own copies: they get the kit's clipping plane
+        adoptKitMaterial(tint, 'glass'); adoptKitMaterial(refl, 'glass'); tint.userData.look = 'glass.kit.tint'; refl.userData.look = 'glass.kit.reflect';
         const W = this.kit.shell.width, D = this.kit.shell.depth, H = this.kit.shell.ceiling;
         const pane = (w: number, x: number, z: number, ry: number): void => {
             for (const mt of [tint, refl]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, H), mt); p.position.set(x, H / 2, z); p.rotation.y = ry; p.renderOrder = mt === tint ? 20 : 21; p.raycast = () => undefined; baked.add(p); }
@@ -255,7 +225,7 @@ export class SkylineKitLoader {
         baked.traverse(n => {
             const mesh = n as THREE.Mesh; if (!mesh.userData.pendant) return;
             const src = mesh.material as THREE.Material; let mt = pendantMats.get(src);
-            if (!mt) { mt = src.clone(); if ((mt as THREE.MeshStandardMaterial).lightMap) patchBaked(mt as THREE.MeshStandardMaterial); pendantMats.set(src, mt); }
+            if (!mt) { mt = adoptKitMaterial(src.clone(), 'pendant'); if ((mt as THREE.MeshStandardMaterial).lightMap) patchBaked(mt as THREE.MeshStandardMaterial); pendantMats.set(src, mt); }
             mesh.material = mt;
         });
         const pend = new Set(pendantMats.values());
@@ -272,13 +242,13 @@ export class SkylineKitLoader {
 export function buildKitStation(entity: StationEntity, kit: StyleKit, texture: THREE.Texture): BuiltEntity {
     const ds = kit.deskScreen;
     const group = rootFor(entity, ds.y + ds.height / 2 + 0.38);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(ds.width, ds.height), new THREE.MeshBasicMaterial({ map: texture }));
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(ds.width, ds.height), lookScreen(texture, true));
     screen.position.set(0, ds.y, ds.z + 0.008); group.add(screen);
     // Invisible hit box over the desk top so a click on the desk (not only the small screen) selects the station.
-    const hit = box(group, [1.9, 0.05, 0.9], [0, 0.8, 0], 0x000000); (hit.material as THREE.Material).visible = false; hit.castShadow = false; hit.receiveShadow = false;
+    const hit = addMesh(group, new THREE.BoxGeometry(1.9, 0.05, 0.9), lookHitBox(), [0, 0.8, 0], false); hit.userData.hitBox = true;
     // world-ui r4 fix 1: a thin status strip on the bezel's lower edge (was an 18 cm pale bar floating under the screen).
-    const lamp = glow(group, [0.08, 0.004, 0.004], [0, ds.y - ds.height / 2 - 0.006, ds.z + 0.01], 0x6d7c86, 0.6);
-    lamp.castShadow = false;
+    const lamp = addMesh(group, new THREE.BoxGeometry(0.08, 0.004, 0.004), lookStatusLamp(), [0, ds.y - ds.height / 2 - 0.006, ds.z + 0.01], false);
+    (lamp.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.6;
     namePlate(group, entity, { y: 0.66, z: 0.49, scale: 0.62 });
     return { root: group, screen, lamp };
 }

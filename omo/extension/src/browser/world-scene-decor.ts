@@ -1,13 +1,18 @@
 /**
- * w2:render — decor kinds as simple low-poly meshes. Each builder draws at the local origin, front
- * towards +z (the same convention as a desk: rotation 0 faces the back wall from the player's side).
- * Colours follow the room theme. Variety (book colours, leaf tilt) comes from the entity id, so the
- * same world always looks the same. No lights are added: glowing parts use emissive materials, so
- * adding decor never recompiles the room's shaders.
+ * w2:render — decor kinds. beauty:foundation — a decor kind is drawn with REAL CC0 kit furniture whenever the kit has
+ * a model for it (plant, sofa, lamp, bookshelf; any catalogue `prop`); the procedural shape below is only the stand-in
+ * while the model loads, and the final look for the kinds without a model (crystal, whiteboard, rug, window). Every
+ * stand-in uses world-look materials, so even the fallback matches the penthouse.
+ *
+ * Builders draw at the local origin, front towards +z (rotation 0 faces the back wall from the player's side).
+ * Variety (which plant, leaf tilt) comes from the entity id, so the same world always looks the same. No lights are
+ * added: glowing parts use emissive look materials and decals, so adding decor never recompiles the room's shaders.
  */
 import * as THREE from 'three';
 import type { DecorKind } from '../common/world-model';
-import { canvasTexture, facet, mesh } from './world-scene-kit';
+import { kitProp } from '../common/world-style-kits';
+import { mesh, part, rod, slab } from './world-scene-kit';
+import { aoDecal, lightPool, look, lookInk, lookPaper, lookPlate, paintNote, paintWindowView } from './world-look';
 
 /** Small deterministic PRNG from an id. */
 export function seeded(id: string): () => number {
@@ -16,182 +21,203 @@ export function seeded(id: string): () => number {
     return () => { h += 0x6d2b79f5; let t = h; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-interface Palette { wood: number; woodDark: number; fabric: number; fabricDark: number; metal: number; leaf: number[]; pot: number; glow: number; crystal: number; rug: number[] }
-function palette(jungle: boolean): Palette {
-    return jungle
-        ? { wood: 0xb08f62, woodDark: 0x6e5636, fabric: 0x7f9a6c, fabricDark: 0x5d7a52, metal: 0x3d4c42, leaf: [0x4c7e62, 0x6d9b71, 0x86b46f], pot: 0xc9a27a, glow: 0xffe1a0, crystal: 0xa8f0c0, rug: [0x6f5a3c, 0xd8c9a0, 0x9cae7a] }
-        : { wood: 0xa98d6c, woodDark: 0x5b4a3a, fabric: 0x5f7f96, fabricDark: 0x45627a, metal: 0x34404d, leaf: [0x4c7e62, 0x6d9b71, 0x5fa58a], pot: 0xd1c7af, glow: 0xffe6bf, crystal: 0x8fe3f0, rug: [0x2c3a52, 0x8ab6c8, 0xd7c6a3] };
+// ------------------------------------------------------------------------------------------------ kit plans
+/** One CC0 model placed in a decor group (decor-local metres; the model is centred on x/z and stands on y). */
+export interface KitPlace { id: string; at?: [number, number, number]; rotY?: number; scale?: number; /** fill each shelf of the previous model */ onShelves?: boolean }
+const PLANTS: readonly KitPlace[] = [
+    { id: 'potted_plant_01', scale: 1.2 }, { id: 'pachira_aquatica_01', scale: 0.95 }, { id: 'potted_plant_02', scale: 1.7 }, { id: 'calathea_orbifolia_01', scale: 2.2 }
+];
+/** Decor kinds with no kit model: their look-material shape is the approved final look. */
+export const APPROVED_FALLBACK: ReadonlySet<DecorKind> = new Set(['crystal', 'whiteboard', 'rug', 'window']);
+/**
+ * The kit models a decor entity is drawn with: its own catalogue `prop`, else the model(s) for its kind. Undefined:
+ * no model (an approved fallback kind, or note/sign boards that carry text).
+ */
+export function decorKitPlan(kind: DecorKind, id: string, prop?: string): KitPlace[] | undefined {
+    if (/^(note|sign)-/.test(id)) return undefined;
+    if (prop && kitProp(prop)) return [{ id: prop }];
+    const rnd = seeded(id);
+    switch (kind) {
+        case 'plant': { const p = PLANTS[Math.floor(rnd() * PLANTS.length) % PLANTS.length]; return [{ ...p, rotY: rnd() * Math.PI * 2 }]; }
+        case 'sofa': return [{ id: 'sofa_02', scale: 1.2 }];
+        case 'lamp': return [{ id: 'side_table_01', scale: 1.05 }, { id: 'desk_lamp_arm_01', at: [0.04, 0.58, -0.02], rotY: -0.5, scale: 1.1 }];
+        case 'bookshelf': return [{ id: 'steel_frame_shelves_03', scale: 0.9 }, { id: 'book_encyclopedia_set_01', onShelves: true }];
+        default: return undefined;
+    }
+}
+/**
+ * Put loaded kit models (same order as the plan) into a decor group: centred, standing on the floor, books on every
+ * shelf. Keeps the decals (contact shadow, light pool) and drops the procedural stand-in.
+ */
+export function fitKitDecor(group: THREE.Object3D, plan: readonly KitPlace[], models: readonly THREE.Object3D[]): void {
+    for (const child of [...group.children]) if (child.userData.fallback) group.remove(child);
+    const box = new THREE.Box3(), size = new THREE.Vector3(), centre = new THREE.Vector3();
+    let shelf: THREE.Object3D | undefined;
+    plan.forEach((p, i) => {
+        const model = models[i]; if (!model) return;
+        if (p.onShelves && shelf) { shelveBooks(group, shelf, model); return; }
+        const holder = new THREE.Group(); holder.name = `omo-kit-prop:${p.id}`; holder.userData.kitProp = p.id;
+        model.scale.setScalar(p.scale ?? 1); model.rotation.y = p.rotY ?? 0; model.position.set(0, 0, 0); model.updateMatrixWorld(true);
+        box.setFromObject(model); box.getCenter(centre);
+        model.position.set(-centre.x, -box.min.y, -centre.z);
+        holder.position.set(...(p.at ?? [0, 0, 0])); holder.add(model); group.add(holder);
+        box.getSize(size);
+        if (!p.at) group.add(aoDecal(size.x * 1.25, size.z * 1.25));
+        shelf = holder;
+    });
+    group.userData.kitProps = plan.map(p => p.id);
+}
+/** Book sets on every shelf board of a shelving unit (found by casting rays down through it). */
+function shelveBooks(group: THREE.Object3D, shelf: THREE.Object3D, books: THREE.Object3D): void {
+    group.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(group.matrixWorld).invert();
+    const b = new THREE.Box3().setFromObject(shelf).applyMatrix4(inv);
+    const ray = new THREE.Raycaster(), levels: number[] = [];
+    const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
+    for (const fx of [-0.3, 0, 0.3]) {
+        const o = new THREE.Vector3(cx + fx * (b.max.x - b.min.x), b.max.y + 0.2, cz).applyMatrix4(group.matrixWorld);
+        ray.set(o, new THREE.Vector3(0, -1, 0).transformDirection(group.matrixWorld));
+        for (const hit of ray.intersectObject(shelf, true)) {
+            const y = hit.point.clone().applyMatrix4(inv).y;
+            if (y > b.min.y + 0.15 && y < b.max.y - 0.25 && !levels.some(l => Math.abs(l - y) < 0.12)) levels.push(y);
+        }
+    }
+    levels.sort((a, c) => a - c);
+    const rnd = seeded(`${group.name}${levels.length}`);
+    const bb = new THREE.Box3().setFromObject(books), bc = new THREE.Vector3(); bb.getCenter(bc);
+    levels.forEach((y, i) => {
+        for (const side of i % 2 ? [-1] : [-1, 1]) {
+            const set = books.clone(true);
+            set.position.set(cx + side * (b.max.x - b.min.x) * (0.18 + rnd() * 0.08) - bc.x, y - bb.min.y + 0.005, cz - bc.z + 0.02);
+            set.userData.kitProp = 'book_encyclopedia_set_01';
+            group.add(set);
+        }
+    });
+    group.userData.shelfLevels = levels.length;
 }
 
+// ------------------------------------------------------------------------------------------------ stand-ins
 export function buildDecor(kind: DecorKind, id: string, jungle: boolean, note?: string): THREE.Group {
-    const g = new THREE.Group(); const p = palette(jungle); const rnd = seeded(id);
+    const g = new THREE.Group(); const rnd = seeded(id);
+    // The procedural shape lives in its own group (dropped when the kit model arrives); decals stay.
+    const f = new THREE.Group(); f.userData.fallback = !APPROVED_FALLBACK.has(kind); f.name = 'omo-decor-standin'; g.add(f);
     switch (kind) {
-        case 'plant': plant(g, p, rnd); break;
-        case 'lamp': lamp(g, p); break;
-        case 'crystal': crystal(g, p, rnd); break;
-        case 'sofa': sofa(g, p); break;
-        case 'bookshelf': bookshelf(g, p, rnd); break;
-        case 'whiteboard': whiteboard(g, p, rnd, note); break; // promise:share: a labelled board shows its note
-        case 'rug': rug(g, p); break;
-        case 'window': windowPane(g, jungle); break;
+        case 'plant': plant(f, rnd); g.add(aoDecal(1.0, 1.0)); break;
+        case 'lamp': lamp(f); g.add(lightPool(0.9)); break;
+        case 'crystal': crystal(f, rnd); g.add(aoDecal(1.1, 1.0)); break;
+        case 'sofa': sofa(f); g.add(aoDecal(2.8, 1.4)); break;
+        case 'bookshelf': bookshelf(f, rnd); g.add(aoDecal(2.0, 0.8)); break;
+        case 'whiteboard': whiteboard(f, rnd, note); g.add(aoDecal(2.2, 0.8)); break; // promise:share: a labelled board shows its note
+        case 'rug': rug(f); break;
+        case 'window': windowPane(f, jungle); break;
     }
+    g.userData.decorKind = kind; g.name = 'omo-decor-look';
     return g;
 }
 
-function plant(g: THREE.Group, p: Palette, rnd: () => number): void {
-    mesh(g, new THREE.CylinderGeometry(0.3, 0.22, 0.5, 8), facet(p.pot), [0, 0.25, 0]);
-    mesh(g, new THREE.CylinderGeometry(0.32, 0.32, 0.05, 8), facet(p.pot, 0.6), [0, 0.5, 0]);
-    mesh(g, new THREE.CylinderGeometry(0.27, 0.27, 0.02, 8), facet(0x4a3a2c, 0.95), [0, 0.52, 0], false);
-    // Leaves: tall facetted blades fanning out, plus a soft bush at the centre.
-    const blades = 9;
-    for (let i = 0; i < blades; i++) {
-        const a = i / blades * Math.PI * 2 + rnd() * 0.3, tilt = 0.35 + rnd() * 0.35, h = 0.7 + rnd() * 0.45;
-        const blade = new THREE.Mesh(new THREE.ConeGeometry(0.09, h, 4), facet(p.leaf[i % p.leaf.length]));
-        blade.position.set(Math.sin(a) * 0.12, 0.52 + h / 2 * Math.cos(tilt), Math.cos(a) * 0.12);
-        blade.rotation.set(Math.cos(a) * tilt, 0, -Math.sin(a) * tilt); blade.castShadow = true; g.add(blade);
+function plant(g: THREE.Group, rnd: () => number): void {
+    rod(g, 0.26, 0.48, [0, 0.24, 0], 'ceramic', 0.2, 20);
+    rod(g, 0.24, 0.02, [0, 0.47, 0], 'soil', 0.24, 20).castShadow = false;
+    const leaves: Array<'foliage' | 'foliage.light' | 'foliage.dark'> = ['foliage', 'foliage.light', 'foliage.dark'];
+    for (let i = 0; i < 11; i++) {
+        const a = i / 11 * Math.PI * 2 + rnd() * 0.3, tilt = 0.35 + rnd() * 0.45, h = 0.6 + rnd() * 0.5;
+        const leaf = new THREE.SphereGeometry(0.11, 8, 6); leaf.scale(0.7, h / 0.22, 0.25);
+        const blade = part(g, leaf, leaves[i % 3], [Math.sin(a) * (0.08 + h * 0.22), 0.5 + h / 2 * Math.cos(tilt), Math.cos(a) * (0.08 + h * 0.22)]);
+        blade.rotation.set(Math.cos(a) * tilt, a, -Math.sin(a) * tilt);
     }
-    mesh(g, new THREE.IcosahedronGeometry(0.22, 0), facet(p.leaf[1]), [0, 0.68, 0]).scale.set(1, 0.8, 1);
 }
 
-function lamp(g: THREE.Group, p: Palette): void {
-    // A floor lamp that reads from the overview: a weighted base, a real pole and a big drum shade.
-    mesh(g, new THREE.CylinderGeometry(0.2, 0.25, 0.06, 14), facet(p.metal, 0.4, 0.5), [0, 0.03, 0]);
-    mesh(g, new THREE.CylinderGeometry(0.032, 0.032, 1.42, 8), facet(p.metal, 0.4, 0.5), [0, 0.74, 0]);
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 0.42, 14, 1, true), new THREE.MeshStandardMaterial({ color: p.glow, roughness: 0.9, side: THREE.DoubleSide, emissive: p.glow, emissiveIntensity: 0.35, flatShading: true }));
-    shade.position.set(0, 1.6, 0); shade.castShadow = true; g.add(shade);
-    mesh(g, new THREE.CylinderGeometry(0.24, 0.24, 0.01, 14), facet(p.glow, 0.9, 0), [0, 1.81, 0]); // the shade's top
-    const bulb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), new THREE.MeshStandardMaterial({ color: p.glow, emissive: p.glow, emissiveIntensity: 2.2 }));
-    bulb.position.set(0, 1.5, 0); g.add(bulb);
-    // A warm pool of light on the floor (a flat emissive disc, no real light).
-    const pool = new THREE.Mesh(new THREE.CircleGeometry(0.7, 20), new THREE.MeshBasicMaterial({ color: p.glow, transparent: true, opacity: 0.12, depthWrite: false }));
-    pool.name = 'omo-lamp-pool'; pool.rotation.x = -Math.PI / 2; pool.position.y = 0.012; pool.raycast = () => undefined; g.add(pool);
+function lamp(g: THREE.Group): void {
+    rod(g, 0.18, 0.03, [0, 0.015, 0], 'metal.brass', 0.2, 24);
+    rod(g, 0.016, 1.45, [0, 0.74, 0], 'metal.brass', 0.016, 10);
+    const shade = part(g, new THREE.CylinderGeometry(0.2, 0.26, 0.34, 28, 1, true), 'fabric.linen', [0, 1.55, 0]);
+    shade.userData.part = 'lamp-shade';
+    part(g, new THREE.SphereGeometry(0.06, 12, 8), 'emissive.warm', [0, 1.48, 0], false);
 }
 
-function crystal(g: THREE.Group, p: Palette, rnd: () => number): void {
-    const rock = mesh(g, new THREE.DodecahedronGeometry(0.42, 0), facet(0x5b6470, 0.9), [0, 0.12, 0]);
-    rock.scale.set(1, 0.42, 0.9);
+function crystal(g: THREE.Group, rnd: () => number): void {
+    // A geode on a walnut plinth: a stone base and a cluster of glassy shards.
+    slab(g, [0.62, 0.36, 0.62], [0, 0.18, 0], 'wood.dark');
+    slab(g, [0.66, 0.025, 0.66], [0, 0.37, 0], 'metal.brass', false);
+    const rock = part(g, new THREE.DodecahedronGeometry(0.24, 1), 'stone.dark', [0, 0.46, 0]); rock.scale.set(1, 0.45, 0.9);
     const shard = (x: number, z: number, h: number, lean: number, turn: number): void => {
-        const m = new THREE.MeshStandardMaterial({ color: p.crystal, emissive: p.crystal, emissiveIntensity: 0.55, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.88, flatShading: true });
-        const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), m);
-        s.scale.set(0.7, h / 0.32, 0.7); s.position.set(x, 0.2 + h / 2, z); s.rotation.set(Math.cos(turn) * lean, turn, Math.sin(turn) * lean); s.castShadow = true; g.add(s);
+        const s = part(g, new THREE.OctahedronGeometry(0.09, 0), 'crystal', [x, 0.5 + h / 2, z]);
+        s.scale.set(0.7, h / 0.18, 0.7); s.rotation.set(Math.cos(turn) * lean, turn, Math.sin(turn) * lean);
     };
-    shard(0, 0, 0.95, 0, 0);
-    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2 + rnd(); shard(Math.sin(a) * 0.18, Math.cos(a) * 0.16, 0.35 + rnd() * 0.35, 0.35 + rnd() * 0.2, a); }
+    shard(0, 0, 0.55, 0, 0);
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2 + rnd(); shard(Math.sin(a) * 0.1, Math.cos(a) * 0.09, 0.2 + rnd() * 0.2, 0.35 + rnd() * 0.2, a); }
 }
 
-function sofa(g: THREE.Group, p: Palette): void {
-    const fabric = facet(p.fabric, 0.95), dark = facet(p.fabricDark, 0.95), wood = facet(p.woodDark, 0.7);
-    for (const x of [-1.05, 1.05]) for (const z of [-0.38, 0.38]) mesh(g, new THREE.CylinderGeometry(0.035, 0.025, 0.12, 6), wood, [x, 0.06, z]);
-    mesh(g, new THREE.BoxGeometry(2.4, 0.26, 1.0), dark, [0, 0.25, 0]);
-    for (const x of [-0.58, 0.58]) mesh(g, new THREE.BoxGeometry(1.1, 0.16, 0.8), fabric, [x, 0.46, 0.08]).scale.set(1, 1, 1);
-    mesh(g, new THREE.BoxGeometry(2.4, 0.6, 0.24), dark, [0, 0.66, -0.4]);
-    for (const x of [-0.58, 0.58]) { const c = mesh(g, new THREE.BoxGeometry(1.06, 0.46, 0.16), fabric, [x, 0.74, -0.24]); c.rotation.x = -0.12; }
-    for (const x of [-1.24, 1.24]) mesh(g, new THREE.BoxGeometry(0.2, 0.5, 1.0), dark, [x, 0.5, 0]);
-    // One accent cushion.
-    const pillow = mesh(g, new THREE.BoxGeometry(0.4, 0.34, 0.12), facet(p.rug[2], 0.95), [0.9, 0.7, -0.12]); pillow.rotation.set(-0.2, -0.3, 0.12);
+function sofa(g: THREE.Group): void {
+    for (const x of [-1.0, 1.0]) for (const z of [-0.36, 0.36]) rod(g, 0.025, 0.12, [x, 0.06, z], 'metal.brass', 0.018, 8);
+    slab(g, [2.3, 0.24, 0.95], [0, 0.24, 0], 'fabric');
+    for (const x of [-0.56, 0.56]) slab(g, [1.08, 0.16, 0.74], [x, 0.44, 0.08], 'fabric.linen');
+    slab(g, [2.3, 0.54, 0.22], [0, 0.63, -0.37], 'fabric');
+    for (const x of [-1.2, 1.2]) slab(g, [0.18, 0.46, 0.95], [x, 0.47, 0], 'fabric');
+    const pillow = slab(g, [0.4, 0.34, 0.12], [0.82, 0.66, -0.16], 'fabric.accent'); pillow.rotation.set(-0.2, -0.3, 0.12);
 }
 
-function bookshelf(g: THREE.Group, p: Palette, rnd: () => number): void {
-    const wood = facet(p.wood, 0.8), dark = facet(p.woodDark, 0.8);
-    const W = 1.6, H = 2.0, D = 0.42;
-    for (const x of [-W / 2, W / 2]) mesh(g, new THREE.BoxGeometry(0.05, H, D), wood, [x, H / 2, 0]);
-    mesh(g, new THREE.BoxGeometry(W + 0.05, 0.05, D), wood, [0, H, 0]);
-    mesh(g, new THREE.BoxGeometry(W, H, 0.03), dark, [0, H / 2, -D / 2 + 0.015]);
-    const books = [0x9a4f48, 0x4f7a9a, 0xd1b26f, 0x5e8a68, 0x7a5f9a, 0xc98a5a, 0x3f5163, 0xb8c4c8];
-    for (let s = 0; s < 4; s++) {
-        const y = 0.06 + s * 0.48;
-        mesh(g, new THREE.BoxGeometry(W, 0.04, D), wood, [0, y, 0]);
-        let x = -W / 2 + 0.06;
-        while (x < W / 2 - 0.12) {
-            const w = 0.04 + rnd() * 0.05, h = 0.26 + rnd() * 0.14;
-            if (rnd() < 0.12) { x += 0.1; continue; }
-            const book = mesh(g, new THREE.BoxGeometry(w, h, 0.26 + rnd() * 0.06), facet(books[Math.floor(rnd() * books.length)], 0.85), [x + w / 2, y + 0.02 + h / 2, 0.02]);
-            if (rnd() < 0.08) { book.rotation.z = 0.25; book.position.x += 0.03; }
-            x += w + 0.008;
+function bookshelf(g: THREE.Group, rnd: () => number): void {
+    const W = 1.5, H = 2.0, D = 0.38;
+    for (const x of [-W / 2, W / 2]) slab(g, [0.035, H, D], [x, H / 2, 0], 'metal.graphite');
+    const spines: Array<'fabric.accent' | 'fabric.sage' | 'fabric.linen' | 'leather' | 'fabric'> = ['fabric.accent', 'fabric.sage', 'fabric.linen', 'leather', 'fabric'];
+    for (let s = 0; s < 5; s++) {
+        const y = 0.08 + s * 0.46;
+        slab(g, [W, 0.03, D], [0, y, 0], 'wood');
+        if (s === 4) break;
+        let x = -W / 2 + 0.08;
+        while (x < W / 2 - 0.2) {
+            const w = 0.035 + rnd() * 0.04, h = 0.24 + rnd() * 0.12;
+            if (rnd() < 0.18) { x += 0.14; continue; }
+            slab(g, [w, h, 0.24], [x + w / 2, y + 0.015 + h / 2, 0.02], spines[Math.floor(rnd() * spines.length)]);
+            x += w + 0.006;
         }
     }
 }
 
-/** promise:share (L7) — the note on a data board: up to 3 wrapped lines of its label, dark ink on the white board. */
-function noteTexture(text: string): THREE.CanvasTexture | undefined {
-    if (typeof document === 'undefined') return undefined;
-    const { canvas, texture } = canvasTexture(704, 400);
-    const c = canvas.getContext('2d'); if (!c) return undefined;
-    c.fillStyle = '#f4f6f4'; c.fillRect(0, 0, 704, 400);
-    c.fillStyle = '#1f3d66'; c.font = '600 54px sans-serif'; c.textBaseline = 'top';
-    const words = text.split(/\s+/), lines: string[] = [];
-    let line = '';
-    for (const w of words) { const next = line ? `${line} ${w}` : w; if (c.measureText(next).width > 640 && line) { lines.push(line); line = w; } else line = next; }
-    if (line) lines.push(line);
-    const shown = lines.slice(0, 4); if (lines.length > 4) shown[3] = `${shown[3].slice(0, 18)}…`;
-    shown.forEach((l, i) => c.fillText(l, 32, 40 + i * 84, 640));
-    c.fillStyle = '#c0463e'; c.fillRect(32, 372, 120, 8);
-    texture.anisotropy = 4;
-    return texture;
-}
-
-function whiteboard(g: THREE.Group, p: Palette, rnd: () => number, note?: string): void {
-    const metal = facet(p.metal, 0.5, 0.4);
+function whiteboard(g: THREE.Group, rnd: () => number, note?: string): void {
+    // An easel board: brass-capped graphite legs, a thin frame and a warm paper face.
     for (const x of [-0.92, 0.92]) {
-        mesh(g, new THREE.BoxGeometry(0.05, 1.9, 0.05), metal, [x, 0.95, 0]);
-        mesh(g, new THREE.BoxGeometry(0.08, 0.04, 0.6), metal, [x, 0.03, 0]);
+        slab(g, [0.04, 1.9, 0.04], [x, 0.95, 0], 'metal.graphite');
+        slab(g, [0.06, 0.03, 0.56], [x, 0.015, 0], 'metal.graphite');
+        slab(g, [0.05, 0.02, 0.05], [x, 1.91, 0], 'metal.brass', false);
     }
-    mesh(g, new THREE.BoxGeometry(1.86, 1.1, 0.05), facet(0xc9d1d6, 0.4, 0.3), [0, 1.3, 0]);
+    slab(g, [1.86, 1.1, 0.04], [0, 1.3, 0], 'board.frame');
     // promise:onboarding (5): the writing surface has a real 2 cm thickness (a zero-thickness plane reads as a black line edge-on).
-    const board = mesh(g, new THREE.BoxGeometry(1.76, 1.0, 0.02), new THREE.MeshStandardMaterial({ color: 0xf4f6f4, roughness: 0.35 }), [0, 1.3, 0.035], false);
+    const map = note ? paintNote(note) : undefined;
+    const board = mesh(g, new THREE.BoxGeometry(1.76, 1.0, 0.02), map ? lookPaper(map) : look('board'), [0, 1.3, 0.03], false);
     board.receiveShadow = true;
-    const map = note ? noteTexture(note) : undefined;
-    if (map) {
-        (board.material as THREE.MeshStandardMaterial).map = map; board.userData.note = note; board.userData.ownsMap = true;
-        mesh(g, new THREE.BoxGeometry(1.2, 0.03, 0.08), metal, [0, 0.76, 0.05]);
-        return;
-    }
+    slab(g, [1.2, 0.025, 0.07], [0, 0.78, 0.05], 'metal.brass');
+    if (map) { board.userData.note = note; board.userData.ownsMap = true; return; }
     // A few marker strokes: a box diagram and two lines of "writing".
-    const ink = [0x2f6db5, 0xc0463e, 0x2e8a5a];
-    const stroke = (w: number, h: number, x: number, y: number, c: number): void => { mesh(g, new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c }), [x, y, 0.046], false); };
-    stroke(0.42, 0.012, -0.45, 1.6, ink[0]); stroke(0.42, 0.012, -0.45, 1.36, ink[0]); stroke(0.012, 0.24, -0.66, 1.48, ink[0]); stroke(0.012, 0.24, -0.24, 1.48, ink[0]);
-    stroke(0.28, 0.012, 0.0, 1.48, ink[1]);
-    stroke(0.42, 0.012, 0.38, 1.6, ink[0]); stroke(0.42, 0.012, 0.38, 1.36, ink[0]); stroke(0.012, 0.24, 0.17, 1.48, ink[0]); stroke(0.012, 0.24, 0.59, 1.48, ink[0]);
-    for (let i = 0; i < 3; i++) stroke(0.5 + rnd() * 0.7, 0.01, -0.85 + 0.3 + rnd() * 0.2 + 0.2, 1.1 - i * 0.12, ink[2]);
-    mesh(g, new THREE.BoxGeometry(1.2, 0.03, 0.08), metal, [0, 0.76, 0.05]);
-    for (let i = 0; i < 3; i++) { const m = mesh(g, new THREE.CylinderGeometry(0.012, 0.012, 0.12, 6), facet(ink[i]), [-0.2 + i * 0.16, 0.79, 0.06]); m.rotation.z = Math.PI / 2; }
+    const stroke = (w: number, h: number, x: number, y: number, ink: 'accent' | 'cool' | 'dark'): void => { mesh(g, new THREE.BoxGeometry(w, h, 0.002), lookInk(ink), [x, y, 0.041], false).userData.part = 'stroke'; };
+    stroke(0.42, 0.012, -0.45, 1.6, 'cool'); stroke(0.42, 0.012, -0.45, 1.36, 'cool'); stroke(0.012, 0.24, -0.66, 1.48, 'cool'); stroke(0.012, 0.24, -0.24, 1.48, 'cool');
+    stroke(0.28, 0.012, 0.0, 1.48, 'accent');
+    stroke(0.42, 0.012, 0.38, 1.6, 'cool'); stroke(0.42, 0.012, 0.38, 1.36, 'cool'); stroke(0.012, 0.24, 0.17, 1.48, 'cool'); stroke(0.012, 0.24, 0.59, 1.48, 'cool');
+    for (let i = 0; i < 3; i++) stroke(0.5 + rnd() * 0.7, 0.01, -0.15 + rnd() * 0.2, 1.1 - i * 0.12, 'dark');
 }
 
-function rug(g: THREE.Group, p: Palette): void {
-    const layer = (rx: number, rz: number, y: number, color: number): void => {
-        const m = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.012, 40), new THREE.MeshStandardMaterial({ color, roughness: 1 }));
-        m.scale.set(rx, 1, rz); m.position.y = y; m.receiveShadow = true; g.add(m);
-    };
-    layer(1.6, 1.05, 0.006, p.rug[0]); layer(1.42, 0.9, 0.012, p.rug[1]); layer(1.2, 0.72, 0.018, p.rug[0]); layer(0.55, 0.32, 0.024, p.rug[2]);
+function rug(g: THREE.Group): void {
+    // A woven rug: soft rounded rectangle, 1 cm proud of the floor.
+    const shape = new THREE.Shape(), w = 1.3, d = 0.9, r = 0.12;
+    shape.moveTo(-w + r, -d); shape.lineTo(w - r, -d); shape.quadraticCurveTo(w, -d, w, -d + r); shape.lineTo(w, d - r); shape.quadraticCurveTo(w, d, w - r, d);
+    shape.lineTo(-w + r, d); shape.quadraticCurveTo(-w, d, -w, d - r); shape.lineTo(-w, -d + r); shape.quadraticCurveTo(-w, -d, -w + r, -d);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.012, bevelEnabled: false, curveSegments: 4 });
+    geo.rotateX(-Math.PI / 2);
+    const uv = geo.getAttribute('uv'), pos = geo.getAttribute('position');
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + w) / (2 * w), (pos.getZ(i) + d) / (2 * d));
+    const m = mesh(g, geo, look('rug'), [0, 0.002, 0], false); m.receiveShadow = true; m.userData.part = 'rug';
 }
 
 function windowPane(g: THREE.Group, jungle: boolean): void {
     const W = 2.0, H = 1.5, y = 1.85;
-    const { canvas, texture } = canvasTexture(256, 192);
-    const c = canvas.getContext('2d');
-    if (c) {
-        const sky = c.createLinearGradient(0, 0, 0, 192);
-        if (jungle) { sky.addColorStop(0, '#f6c886'); sky.addColorStop(0.55, '#9fc7a2'); sky.addColorStop(1, '#2f5a46'); }
-        else { sky.addColorStop(0, '#0b1430'); sky.addColorStop(0.6, '#26407a'); sky.addColorStop(1, '#6a87b8'); }
-        c.fillStyle = sky; c.fillRect(0, 0, 256, 192);
-        if (jungle) {
-            c.fillStyle = '#ffe9b5'; c.beginPath(); c.arc(70, 70, 22, 0, Math.PI * 2); c.fill();
-            c.fillStyle = '#2f5a46'; for (let i = 0; i < 9; i++) { c.beginPath(); c.arc(i * 32, 192, 40 + (i % 3) * 14, Math.PI, 0); c.fill(); }
-        } else {
-            c.fillStyle = '#e8f1ff'; for (let i = 0; i < 40; i++) c.fillRect((i * 97) % 256, (i * 53) % 120, i % 5 ? 1 : 2, i % 5 ? 1 : 2);
-            c.fillStyle = '#d9e4ff'; c.beginPath(); c.arc(190, 52, 16, 0, Math.PI * 2); c.fill();
-            c.fillStyle = '#0b1430'; c.beginPath(); c.arc(198, 46, 14, 0, Math.PI * 2); c.fill();
-            c.fillStyle = '#1b2748'; for (let i = 0; i < 10; i++) c.fillRect(i * 26, 150 - (i * 37) % 40, 20, 60);
-        }
-        texture.needsUpdate = true;
-    }
-    const glass = mesh(g, new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }), [0, y, 0.0], false);
-    glass.userData.ownsMap = true;
-    const frame = facet(0xe7e2d6, 0.6);
-    mesh(g, new THREE.BoxGeometry(W + 0.16, 0.08, 0.1), frame, [0, y + H / 2 + 0.04, 0.02]);
-    mesh(g, new THREE.BoxGeometry(W + 0.16, 0.08, 0.1), frame, [0, y - H / 2 - 0.04, 0.02]);
-    for (const x of [-W / 2 - 0.04, W / 2 + 0.04]) mesh(g, new THREE.BoxGeometry(0.08, H + 0.16, 0.1), frame, [x, y, 0.02]);
-    mesh(g, new THREE.BoxGeometry(0.04, H, 0.06), frame, [0, y, 0.03]);
-    mesh(g, new THREE.BoxGeometry(W, 0.04, 0.06), frame, [0, y + 0.1, 0.03]);
-    mesh(g, new THREE.BoxGeometry(W + 0.3, 0.05, 0.22), frame, [0, y - H / 2 - 0.1, 0.1]);
+    const map = paintWindowView(jungle);
+    const view = mesh(g, new THREE.PlaneGeometry(W, H), lookPlate(map), [0, y, 0.0], false);
+    view.userData.ownsMap = true;
+    mesh(g, new THREE.PlaneGeometry(W, H), look('glass'), [0, y, 0.02], false).raycast = () => undefined;
+    slab(g, [W + 0.12, 0.06, 0.08], [0, y + H / 2 + 0.03, 0.02], 'metal.graphite');
+    slab(g, [W + 0.12, 0.06, 0.08], [0, y - H / 2 - 0.03, 0.02], 'metal.graphite');
+    for (const x of [-W / 2 - 0.03, W / 2 + 0.03]) slab(g, [0.06, H + 0.12, 0.08], [x, y, 0.02], 'metal.graphite');
+    slab(g, [0.03, H, 0.05], [0, y, 0.03], 'metal.graphite');
+    slab(g, [W + 0.3, 0.04, 0.2], [0, y - H / 2 - 0.08, 0.1], 'wood.dark');
 }

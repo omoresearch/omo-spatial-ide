@@ -20,6 +20,7 @@ import { sceneControls } from './focus-screen';
 import { entityTitle } from './world-store';
 import type { WorldSpec, WorldEntity } from '../common/world-model';
 import { activeKit, decorPropFor, kitProp } from '../common/world-style-kits';
+import { decorKitPlan } from './world-scene-decor'; // beauty:foundation
 import { shapeStore, SHAPE_TOGGLE_EVENT, setShapeKeyHandler } from './shape-store';
 import { ShapeTopButton, ShapeGlyph } from './shape-topbar';
 import { ShapePill, captionFor, composePrompt, expandIdea, refinePrompt, resolveScreens, spokenNames, suggestionsFor, whereOf } from './shape-logic';
@@ -519,8 +520,10 @@ function realModel(three: THREE.Scene, id: string): THREE.Object3D | undefined {
 /** Pending decor ids whose kit catalogue model is still on its way (set each frame from the preview world). */
 let waitsForProp = new Set<string>();
 function propsAwaited(world: WorldSpec | undefined, ids: string[]): Set<string> {
-    const kit = world ? activeKit(world) : undefined; if (!kit || !world) return new Set();
-    return new Set(world.entities.filter(e => ids.includes(e.id) && e.kind === 'decor' && !!decorPropFor(kit, e)).map(e => e.id));
+    if (!world) return new Set();
+    // beauty:foundation — decor waits for its CC0 kit model in every world (not only kit worlds).
+    const kit = activeKit(world);
+    return new Set(world.entities.filter(e => ids.includes(e.id) && e.kind === 'decor' && !!decorKitPlan(e.decor, e.id, e.prop ?? (kit ? decorPropFor(kit, e)?.id : undefined))).map(e => e.id));
 }
 let ghostMaterial: THREE.ShaderMaterial | undefined;
 function ghostGlass(): THREE.ShaderMaterial {

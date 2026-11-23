@@ -67,6 +67,18 @@ export const LIGHT_RIG = {
     skyline: { hemiSky: 0x8fa2d8, hemiGround: 0x2a2020, hemi: 1.4, key: 0xffb27a, keyIntensity: 2.0, fill: 0xffc68a, fillIntensity: 16, exposure: 1.0, env: 0.5 }
 } as const;
 
+/** Scene background / light colours of the classic (closed) shells. */
+export const SHELL_COLORS = {
+    station: { background: '#13151b', hemiSky: 0xdfe8f0, sun: 0xffe2bf, accent: 0xffc690 },
+    jungle: { background: '#111a16', hemiSky: 0xe6efd8, sun: 0xffe8b8, accent: 0xffd49a }
+} as const;
+/** The classic station room's orb (globe + ring) and the dark landing under a closed room. */
+export const SHELL_ORB = {
+    globe: (): THREE.Material => look('metal.bronze'),
+    ring: (): THREE.Material => look('metal.brass'),
+    landing: (): THREE.Material => look('ground.surround')
+};
+
 /** Penthouse proportions shared by architecture builders. */
 export const PROPORTIONS = { ceiling: 3.4, wall: 0.12, skirting: 0.12, trim: 0.06, cove: 0.28 } as const;
 
@@ -484,6 +496,8 @@ export function prepareCityTextures(city: THREE.Texture, depth: THREE.Texture): 
 }
 /** Where the lab rendered the city panorama from (kit baked space): world centre = this + the kit offset. */
 export const CITY_PANO_CENTRE = { x: 9.0, y: 1.65, z: -6.0 } as const;
+/** The skyline kit's baked-to-world offset (world-style-kits): the panorama's world centre is the floor centre. */
+const KIT_OFFSET = { x: -9, z: 6 } as const;
 /**
  * The kit city backdrop for any skyline world (the procedural speckled towers are gone). Starts loading at once; until
  * the panorama arrives the sphere draws the dusk haze. In Node (no DOM) returns undefined.
@@ -492,13 +506,25 @@ export function kitCityBackdrop(base = ''): THREE.Mesh | undefined {
     if (typeof document === 'undefined') return undefined;
     const loader = new THREE.TextureLoader(), url = (f: string): string => base + kitAssetUrl('skyline-penthouse', f);
     const blank = (): THREE.DataTexture => { const t = new THREE.DataTexture(new Uint8Array([22, 20, 34, 255]), 1, 1); t.needsUpdate = true; return t; };
-    const mesh = lookCityBackdrop(blank(), blank(), new THREE.Vector3(CITY_PANO_CENTRE.x, CITY_PANO_CENTRE.y, CITY_PANO_CENTRE.z));
+    const off = KIT_OFFSET, mesh = lookCityBackdrop(blank(), blank(), new THREE.Vector3(CITY_PANO_CENTRE.x + off.x, CITY_PANO_CENTRE.y, CITY_PANO_CENTRE.z + off.z));
     const u = (mesh.material as THREE.ShaderMaterial).uniforms;
     let city: THREE.Texture | undefined, depth: THREE.Texture | undefined;
     const ready = (): void => { if (city && depth) { prepareCityTextures(city, depth); u.cmap.value = city; u.dmap.value = depth; mesh.userData.cityReady = true; mesh.userData.onReady?.(); } };
-    city = undefined; depth = undefined;
     loader.load(url('city.jpg'), t => { city = t; ready(); }, undefined, () => { mesh.userData.cityMissing = true; });
     loader.load(url('city_depth.png'), t => { depth = t; ready(); }, undefined, () => { mesh.userData.cityMissing = true; });
     mesh.userData.ownsMap = true;
     return mesh;
 }
+
+/**
+ * The hand-made kit's own materials (baked shell, CC0 props) are part of the design system: they are adopted, tagged
+ * `kit:<group>` so the real-browser check can tell them from a stray material, and never disposed with an entity.
+ */
+export function adoptKitMaterial<T extends THREE.Material>(m: T, group: string): T {
+    m.userData.look = `kit:${group}`; m.userData.lookShared = true; return m;
+}
+/** An invisible hit box material (a click on a kit desk selects the station; the mesh stays visible to raycasts). */
+let hitMat: THREE.Material | undefined;
+export function lookHitBox(): THREE.Material { return hitMat ??= tag(new THREE.MeshBasicMaterial({ visible: false }), 'hit'); }
+/** A dark "off" screen inside the baked monitors (the IDE screen draws over it). */
+export function lookScreenOff(): THREE.Material { return look('screen.off'); }

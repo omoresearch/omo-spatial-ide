@@ -35,7 +35,10 @@ import { BEAM_CHEST_HEIGHT, POINT_MAX_REACH, pointerBeams, sharedPoint } from '.
 import type { SharedPoint } from '../common/shared-pointer';
 import { PRESENCE_COLOUR_HEX } from '../common/presence-protocol'; // promise:share
 import { SkylineKitLoader, buildKitStation } from './world-scene-skyline-baked'; // sky:merge M1
-import { activeKit, decorPropFor, kitDeskIndex } from '../common/world-style-kits'; // sky:merge M1
+import { activeKit, decorPropFor, kitDeskIndex, styleKit } from '../common/world-style-kits'; // sky:merge M1
+import { decorKitPlan, fitKitDecor } from './world-scene-decor'; // beauty:foundation
+import { LIGHT_RIG } from './world-look'; // beauty:foundation
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'; // beauty:foundation
 import type { StyleKit } from '../common/world-style-kits'; // sky:merge M1
 export type { CodeReviewFrame } from '../common/code-review-preview';
 
@@ -269,6 +272,10 @@ export class RoomScene {
     private neutralSky?: THREE.CanvasTexture;
     /** sky:merge M1 — the baked style-kit shell: loader per kit, its loaded shell, and kits whose assets are missing. */
     private kitLoaders = new Map<string, SkylineKitLoader>();
+    /** beauty:foundation — loads CC0 kit props for decor in EVERY world (not only kit worlds); never builds a shell. */
+    private propLoader?: SkylineKitLoader;
+    /** beauty:foundation — the one light rig's environment probe (reflections on brass, glass, oak) for non-kit worlds. */
+    private lookEnv?: THREE.Texture;
     private kitShells = new Map<string, { root: THREE.Group; env: THREE.Texture }>();
     private kitMissing = new Set<string>();
     /** Overview camera distance scale for shells larger than the v1 12 x 10 room. */
@@ -325,10 +332,11 @@ export class RoomScene {
         this.renderer.shadowMap.autoUpdate = false; this.renderer.shadowMap.needsUpdate = true;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.25;
+        this.renderer.toneMappingExposure = LIGHT_RIG.exposure; // beauty:foundation — one exposure
         const canvas = this.renderer.domElement;
         canvas.dataset.testid = 'omo-world-canvas';
         (canvas as HTMLCanvasElement & { omoThinMeshes?: () => ThinMesh[] }).omoThinMeshes = () => this.thinMeshes(); // promise:onboarding test hook
+        Object.assign(canvas, { omoLookAudit: () => this.lookAudit() }); // beauty:foundation test hook
         Object.assign(canvas, { omoSignRects: () => this.signRects(), omoBoardText: () => this.boardText(), omoStandAt: (p: PlayerPose) => this.standAt(p) }); // promise:onboarding (4)(6) test hooks
         canvas.setAttribute('aria-label', 'Interactive 3D room. Drag or use arrow keys to orbit. Scroll to zoom. Select a workstation to work.');
         canvas.tabIndex = 0;
@@ -649,6 +657,34 @@ export class RoomScene {
         });
         return out;
     }
+    /**
+     * beauty:foundation — test hook: every visible mesh/line of the world (shell, paths, entities) whose material is not
+     * from world-look (userData.look), and each decor entity's state: real kit props, an approved fallback, or a stand-in.
+     */
+    lookAudit(): { meshes: number; offLook: Array<{ owner: string; name: string; type: string }>; looks: Record<string, number>; decor: Array<{ id: string; kind: string; plan?: string[]; props: string[]; state: 'kit' | 'fallback' | 'standin' }> } {
+        const offLook: Array<{ owner: string; name: string; type: string }> = [], looks: Record<string, number> = {};
+        let meshes = 0;
+        this.worldRoot.traverseVisible(node => {
+            const mesh = node as THREE.Mesh & { isLine?: boolean };
+            if (!mesh.isMesh && !mesh.isLine) return;
+            let o: THREE.Object3D | null = mesh, owner = '', foreign = false;
+            while (o && o !== this.worldRoot) { if (!owner) owner = typeof o.userData.entity === 'string' ? o.userData.entity : /^(omo-|w3-)/.test(o.name) ? o.name : ''; if (o.userData.magicOverlay || o.userData.shapeOrig || /^omo-(build-layer|shape|agent|avatar|beam)/.test(o.name)) foreign = true; o = o.parent; }
+            if (foreign) return;
+            meshes++;
+            for (const m of (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as THREE.Material[]) {
+                const tag = m?.userData?.look as string | undefined;
+                if (tag) looks[tag] = (looks[tag] ?? 0) + 1;
+                else offLook.push({ owner, name: mesh.name, type: m?.type ?? 'none' });
+            }
+        });
+        const decor = [...this.entities.values()].filter(i => i.entity.kind === 'decor').map(i => {
+            const props: string[] = []; i.built.root.traverse(n => { if (typeof n.userData.kitProp === 'string') props.push(n.userData.kitProp); });
+            const plan = i.built.root.userData.kitPlan as string[] | undefined, kind = (i.entity as { decor: string }).decor;
+            const state: 'kit' | 'fallback' | 'standin' = plan ? (props.length ? 'kit' : 'standin') : 'fallback';
+            return { id: i.entity.id, kind, plan, props: [...new Set(props)], state };
+        });
+        return { meshes, offLook, looks, decor };
+    }
     /** Screen rect (canvas CSS px) of a world-space box's corners; undefined when any corner is behind the camera. */
     private screenRect(obj: THREE.Object3D, hx: number, hy: number, hz: number): { left: number; top: number; right: number; bottom: number } | undefined {
         const w = this.host.clientWidth, h = this.host.clientHeight, v = new THREE.Vector3();
@@ -700,12 +736,21 @@ export class RoomScene {
         if (on && !this.skyFx && this.renderer) {
             this.skyFx = new SkylineFx(this.renderer, this.scene, this.camera);
             this.renderer.toneMappingExposure = 1.0;
-        } else if (!on && this.skyFx) { this.skyFx.dispose(); this.skyFx = undefined; this.renderer.toneMappingExposure = 1.25; }
+        } else if (!on && this.skyFx) { this.skyFx.dispose(); this.skyFx = undefined; this.renderer.toneMappingExposure = LIGHT_RIG.exposure; }
+        // beauty:foundation — the one light rig (world-look LIGHT_RIG): every non-kit world gets the same probe, key, fill and exposure.
+        if (!on) this.useLookEnvironment();
+        const L = LIGHT_RIG;
         if (on && this.lights) {
-            this.lights.hemi.color.setHex(SKYLINE_COLORS.hemiSky); this.lights.hemi.groundColor.setHex(0x2a2020); this.lights.hemi.intensity = 1.5;
-            this.lights.sun.color.setHex(SKYLINE_COLORS.sun); this.lights.sun.intensity = 2.2;
-            this.lights.accent.color.setHex(SKYLINE_COLORS.accent); this.lights.accent.intensity = 18; this.lights.accent.position.y = 3.4;
-        } else if (this.lights && this.lights.hemi.intensity !== 2.3) { this.lights.hemi.intensity = 2.3; this.lights.hemi.groundColor.setHex(0x283136); this.lights.sun.intensity = 4; this.lights.accent.intensity = 25; this.lights.accent.position.y = 4; }
+            this.lights.hemi.color.setHex(L.skyline.hemiSky); this.lights.hemi.groundColor.setHex(L.skyline.hemiGround); this.lights.hemi.intensity = L.skyline.hemi;
+            this.lights.sun.color.setHex(L.skyline.key); this.lights.sun.intensity = L.skyline.keyIntensity;
+            this.lights.accent.color.setHex(L.skyline.fill); this.lights.accent.intensity = L.skyline.fillIntensity; this.lights.accent.position.y = 3.4;
+        } else if (this.lights && this.lights.hemi.intensity !== L.hemi.intensity) { this.lights.hemi.intensity = L.hemi.intensity; this.lights.hemi.groundColor.setHex(L.hemi.ground); this.lights.sun.intensity = L.key.intensity; this.lights.accent.intensity = L.fill.intensity; this.lights.accent.position.y = 4; }
+    }
+    /** beauty:foundation — a neutral room probe so PBR look materials (brass, glass, oak) reflect in every world. */
+    private useLookEnvironment(): void {
+        if (!this.renderer) return;
+        if (!this.lookEnv) { const pmrem = new THREE.PMREMGenerator(this.renderer), room = new RoomEnvironment(); this.lookEnv = pmrem.fromScene(room, 0.04).texture; room.dispose(); pmrem.dispose(); }
+        this.scene.environment = this.lookEnv; (this.scene as THREE.Scene & { environmentIntensity?: number }).environmentIntensity = LIGHT_RIG.env;
     }
     private applyTheme(jungle: boolean): void {
         const colors = shellColors(jungle);
@@ -753,6 +798,12 @@ export class RoomScene {
         }
         return undefined;
     }
+    /** beauty:foundation — the CC0 prop loader (the skyline kit's catalogue), shared by all worlds; undefined without kits/. */
+    private propsLoader(): SkylineKitLoader | undefined {
+        if (!this.renderer) return undefined;
+        const kit = styleKit('skyline-penthouse'); if (!kit || this.kitMissing.has(kit.id)) return undefined;
+        return this.propLoader ??= this.kitLoaders.get(kit.id) ?? new SkylineKitLoader(this.renderer, kit);
+    }
     /** sky:merge M1 — a station on a kit desk anchor (the baked desk + monitor body are in the shell). */
     private onKitAnchor(kit: StyleKit, entity: WorldEntity): boolean {
         return entity.kind === 'station' && kitDeskIndex(kit, entity.transform) >= 0;
@@ -776,13 +827,17 @@ export class RoomScene {
             case 'monitor-wall': return buildMonitorWall(entity, this.linkedSurface(entity.id).texture, standing);
             case 'decor': {
                 const built = buildDecorEntity(entity, jungle, boardLines);
-                // sky:merge M1 — in a kit world a decor entity is drawn with its CC0 catalogue model once it loads.
-                const prop = worldKit && !/^(note|sign)-/.test(entity.id) ? decorPropFor(worldKit, entity) : undefined, loader = worldKit && this.kitLoaders.get(worldKit.id);
-                if (prop && loader) loader.prop(prop.id).then(model => {
+                // beauty:foundation — in EVERY world a decor kind is drawn with real CC0 kit furniture once it loads (the
+                // look-material stand-in shows meanwhile). sky:merge M1 — a kit world's own catalogue choice still wins.
+                const kitChoice = worldKit && !/^(note|sign)-/.test(entity.id) ? decorPropFor(worldKit, entity)?.id : undefined;
+                const plan = decorKitPlan(entity.decor, entity.id, entity.prop ?? kitChoice), loader = plan && this.propsLoader();
+                built.root.userData.kitPlan = plan?.map(p => p.id);
+                if (plan && loader) Promise.all(plan.map(p => loader.prop(p.id))).then(models => {
                     if (this.disposed || this.entities.get(entity.id)?.built !== built) return;
-                    for (const child of [...built.root.children]) { built.root.remove(child); disposeTree(child); }
-                    model.traverse(n => { n.userData.entity = entity.id; });
-                    built.root.add(model); built.root.userData.prop = prop.id; refreezeNode(built.root); this.renderer.shadowMap.needsUpdate = true; this.invalidate();
+                    const target = built.root.getObjectByName('omo-decor-look') ?? built.root;
+                    fitKitDecor(target, plan, models);
+                    built.root.traverse(n => { n.userData.entity = entity.id; });
+                    built.root.userData.prop = plan[0].id; refreezeNode(built.root); this.renderer.shadowMap.needsUpdate = true; this.invalidate();
                 }, () => undefined);
                 return built;
             }
@@ -1598,6 +1653,7 @@ export class RoomScene {
         this.disposed=true;cancelAnimationFrame(this.focusFrame);for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         this.skyFx?.dispose();this.skyFx=undefined; // sky:render
+        this.lookEnv?.dispose();this.lookEnv=undefined; // beauty:foundation
         this.neutralSky?.dispose();this.neutralSky=undefined; // promise:onboarding
         for(const k of this.kitShells.values()){if(k.root.parent!==this.worldRoot)disposeTree(k.root);k.env.dispose();}this.kitShells.clear(); // sky:merge M1
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
