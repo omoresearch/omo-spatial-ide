@@ -627,7 +627,7 @@ if MID == 'library':
     pendant(0, RX, RY, 1.62, 0.22, 75)
     light('TablePool', 'SPOT', (RX, RY, H - 0.02), 22, (1.0, 0.66, 0.40), soft=0.05, cone=34, blend=0.6)
     # right wall: console + the room's one artwork
-    CY_ = 4.45
+    CY_ = 4.70
     box('Console', (IX1 - 0.22, CY_, 0.36), (0.40, 1.7, 0.66), 'Walnut', bevel=0.006)
     box('ConsoleKick', (IX1 - 0.22, CY_, 0.02), (0.34, 1.6, 0.04), 'BlackMetal')
     for q in range(2): box(f'ConsoleSlot{q}', (IX1 - 0.425, CY_ - 0.41 + 0.82 * q, 0.38), (0.006, 0.80, 0.56), 'StoneDark')
@@ -636,8 +636,7 @@ if MID == 'library':
     for q, m_ in enumerate(('BookB', 'BookD', 'BookG')): box(f'ConsoleBook{q}', (IX1 - 0.25, CY_ + 0.05, 0.69 + 0.02 + 0.036 * q), (0.26 - 0.02 * q, 0.20, 0.036), m_, bevel=0.002, seg=1)
     canvas_on_wall('CanvasA', 'right', CY_, 1.40, 1.00, 1.78, 'CanvasB'); WALL_ART = 'right'
     # plants: one planter type (stone), two plants framing the glass corners
-    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (7.42, 5.58, 0), 0.6, 1.0, POT(0.25, 0.48))
-    potted('calathea_c', 'calathea_orbifolia_01', ['calathea_orbifolia_01_c'], (6.75, 5.58, 0), 1.0, 1.25, POT(0.17, 0.38))
+    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (6.70, 5.55, 0), 0.6, 1.0, POT(0.25, 0.48))
     potted('calathea_b', 'calathea_orbifolia_01', ['calathea_orbifolia_01_b'], (7.45, 0.62, 0), 0.4, 1.6, POT(0.17, 0.48))
     for (x, y) in ((2.6, 1.5), (6.0, 1.3)): downlight(x, y, 3.0, 60)
 elif MID == 'lounge':
@@ -672,7 +671,8 @@ elif MID == 'lounge':
     # sofa ends: side table + lamp (left, under the artwork), floor lamp (right)
     cc0('side_table_01', (GX - 1.95, SY - 0.10, 0), math.pi / 2)
     table_lamp(1, GX - 1.95, SY - 0.10, 0.55, energy=40)
-    floor_lamp(0, GX + 1.92, SY + 0.12, energy=70)
+    cc0('side_table_01', (GX + 1.92, SY - 0.10, 0), math.pi / 2)
+    cc0('ceramic_vase_01', (GX + 1.92, SY - 0.10, 0.55), 0.0, 0.7)
     pendant(0, CTX, CTY, 2.30, 0.36, 75)
     canvas_on_wall('CanvasSofa', 'left', 4.80, 1.50, 1.10, 1.78, 'CanvasW'); WALL_ART = 'left'
     # right wall: a long low sideboard (media wall: the screen slot sits above it), one lamp, a vase, a book stack
@@ -814,7 +814,7 @@ for i, b in enumerate(anchors['boards']): empty(f'board_anchor_{i + 1}', (b['x']
 
 # collision blocks (room-local rectangles) from the furniture footprint on the floor (everything FURN taller than 0.3 m)
 BLOCKS = {
-    'library': [(IX0 + 0.2, 2.71, 0.2, 2.4), (4.85, 3.85, 1.0, 1.0), (1.75, 4.75, 0.8, 0.75), (IX1 - 0.22, 4.45, 0.22, 0.85), (7.42, 5.58, 0.28, 0.28), (6.75, 5.58, 0.2, 0.2), (7.45, 0.62, 0.2, 0.2)],
+    'library': [(IX0 + 0.2, 2.71, 0.2, 2.4), (4.85, 3.85, 1.0, 1.0), (1.75, 4.75, 0.8, 0.75), (IX1 - 0.22, 4.70, 0.22, 0.85), (6.70, 5.55, 0.28, 0.28), (7.45, 0.62, 0.2, 0.2)],
     'lounge': [(2.55, 5.11, 1.5, 0.5), (2.55, 3.95, 0.47, 0.47), (1.6, 3.15, 0.42, 0.42), (3.5, 3.15, 0.42, 0.42), (0.6, 5.01, 0.28, 0.28), (IX1 - 0.24, 2.75, 0.22, 1.2), (6.2, 4.45, 0.75, 0.7), (7.42, 5.42, 0.3, 0.3), (0.62, 5.45, 0.2, 0.2), (7.45, 0.62, 0.2, 0.2)],
     'studio': [(4.0, 3.45, 0.8, 1.4), (IX0 + 0.2, 3.65, 0.2, 1.55), (IX1 - 0.24, 2.55, 0.22, 1.2), (0.75, 5.5, 0.28, 0.28), (7.35, 1.0, 0.2, 0.2), (7.30, 5.55, 0.3, 0.3)],
 }[MID]

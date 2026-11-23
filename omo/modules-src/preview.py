@@ -17,7 +17,8 @@ sc.cycles.use_denoising = True
 cam = bpy.data.cameras.new('cam'); cam.lens = float(os.environ.get("LENS", "19")); cam.sensor_width = 36; cam.clip_start = 0.05; cam.clip_end = 20000
 co = bpy.data.objects.new('cam', cam); sc.collection.objects.link(co); sc.camera = co
 if view == 'door':
-    co.location = (4.0 + 0.6 * math.sin(math.radians(YAW)), 0.25, 1.55); co.rotation_euler = (math.radians(85), 0, math.radians(YAW))
+    CH = float(os.environ.get('CAM_H', {'lounge': '1.78', 'library': '1.70'}.get(MOD, '1.55')))   # r5e: a little higher over chair backs
+    co.location = (4.0 + 0.6 * math.sin(math.radians(YAW)), 0.25, CH); co.rotation_euler = (math.radians(85 - (CH - 1.55) * 12), 0, math.radians(YAW))
 else:
     co.location = (7.3, 0.6, 1.7); co.rotation_euler = (math.radians(82), 0, math.radians(38))
 sc.render.resolution_x, sc.render.resolution_y, sc.render.resolution_percentage = 1440, 900, 100
