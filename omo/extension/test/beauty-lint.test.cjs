@@ -113,3 +113,11 @@ test('beauty r2: skyline pendants hang only under the ceiling, clear of rooms an
   let ceilingInUpper = false; upper.traverse(n => { if (n.userData.part === 'ceiling') ceilingInUpper = true; });
   assert.ok(ceilingInUpper, 'the ceiling is in the group the overview hides');
 });
+
+// beauty r3 (2) — real-scale parquet and the penthouse oak colour.
+test('the herringbone is real scale (boards 7.5 x 45 cm) in the penthouse parquet colour, and walls are trowelled plaster', () => {
+  const src = fs.readFileSync(path.join(DIR, 'world-look.ts'), 'utf8');
+  assert.match(src, /const HERRING = \{ w: 0\.075, L: 0\.45 \}/, 'boards 7.5 x 45 cm');
+  assert.match(src, /OAK_ALBEDO = \{ r: 0x93 \/ 255, g: 0x70 \/ 255, b: 0x4d \/ 255/, 'albedo sampled from the penthouse parquet (#93704d)');
+  assert.match(src, /case 'wall': \{ const t = plaster\(\);/, 'walls use the plaster recipe (colour mottle + normal + roughness)');
+});

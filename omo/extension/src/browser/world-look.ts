@@ -23,7 +23,7 @@ import { kitAssetUrl } from '../common/world-style-kits';
 /** The one palette. Builders refer to these names; nobody writes a hex colour elsewhere. */
 export const PALETTE = {
     plaster: 0xebe5da, plasterShade: 0xd8d0c2, ceiling: 0xf1ece4,
-    oak: 0xb48c5e, oakLight: 0xc9a77a, oakFloor: 0x9a8a78, walnut: 0x4a3122, walnutDark: 0x2e1f16,
+    oak: 0xb48c5e, oakLight: 0xc9a77a, oakFloor: 0x93704d, walnut: 0x4a3122, walnutDark: 0x2e1f16,
     graphite: 0x232428, ink: 0x15161a, steel: 0x8d9096,
     brass: 0xb38f55, bronze: 0x6b5236,
     linen: 0xd6cbb6, sage: 0x7d8c74, fabric: 0x4f5b57, terracotta: 0xb4623e, cognac: 0x8a5232,
@@ -66,9 +66,9 @@ export const LIGHT_RIG = {
     fill: { color: 0xffc690, intensity: 16 },
     // beauty r3 (1): a warm key (the sun through the glass, soft shadows) against a cool, LOW-saturation sky fill, so a
     // wall facing the key and a wall facing away differ in brightness, not in hue; AgX tone mapping (filmic, no hue skew).
-    skyline: { hemiSky: 0xc4cddb, hemiGround: 0x4a3c30, hemi: 1.25, key: 0xffd6b0, keyIntensity: 2.4, fill: 0xffcf9e, fillIntensity: 14, exposure: 1.3, env: 0.5 },
+    skyline: { hemiSky: 0xc4cddb, hemiGround: 0x4a3c30, hemi: 1.25, key: 0xffd9b8, keyIntensity: 2.4, fill: 0xffe0c0, fillIntensity: 14, exposure: 1.3, env: 0.5 },
     /** beauty r3 (1): every lamp prop emits — a warm point light at its shade (candela, metres). */
-    lamp: { color: 0xffc483, intensity: 4.2, distance: 5.5, decay: 2, bulb: 6 },
+    lamp: { color: 0xffcf9a, intensity: 3.6, distance: 5.5, decay: 2, bulb: 6 },
     /** beauty r3 (1): one tone mapping for every runtime world. */
     toneMapping: THREE.AgXToneMapping
 } as const;
@@ -151,42 +151,81 @@ function grain(kind: 'fine' | 'coarse'): { rough: THREE.Texture; normal: THREE.T
     const normal = cachedTex(`grain-n-${kind}`, () => normalFrom(noise(size, kind === 'fine' ? 24 : 8, kind === 'fine' ? 5 : 9, 3), size, kind === 'fine' ? 1.2 : 2.2));
     return { rough, normal };
 }
-/** Oak planks (straight) or herringbone, as a colour multiplier (warm greys around 0.8) + a matching roughness map. */
+/**
+ * Oak planks (straight) or herringbone parquet: a colour map + a matching roughness map.
+ *
+ * beauty r3 (2) — the herringbone is REAL SCALE: boards 7.5 x 45 cm (1:6) laid at 45 degrees to the room, so the zigzag
+ * runs along the room axis like the penthouse parquet. In the 45-degree frame the boards form a lattice with periods
+ * (w, w) and (L, -L); in texture space that is w*sqrt2 along v and L*sqrt2 along u, so the texture tiles every
+ * 3 * L * sqrt2 = 1.909 m (HERRING_TILE; the material repeats it LOOK_TILE / HERRING_TILE times per 2 m of world UV).
+ * Colour: the penthouse parquet's mean (sampled from its herringbone_parquet_diff_2k: sRGB #93704d, a neutral honey
+ * oak, hue 30 deg) with a calm per-board spread (+-6 % value, +-2 deg hue) and grain; the map IS the albedo (material
+ * colour white), so no tint from a material colour can push it to salmon.
+ */
+const HERRING = { w: 0.075, L: 0.45 } as const;
+export const HERRING_TILE = 3 * HERRING.L * Math.SQRT2;
+/** The penthouse parquet's mean albedo (sRGB 0..1) and per-board spread. */
+export const OAK_ALBEDO = { r: 0x93 / 255, g: 0x70 / 255, b: 0x4d / 255, spread: 0.06 } as const;
 function woodFloor(pattern: 'oak' | 'herringbone'): { map: THREE.Texture; rough: THREE.Texture } {
-    const size = 512, grainN = noise(size, 64, pattern === 'oak' ? 3 : 7, 3);
+    const herring = pattern === 'herringbone';
+    const size = herring ? 1024 : 512, span = herring ? HERRING_TILE : 2, grainN = noise(size, herring ? 96 : 64, herring ? 7 : 3, 3);
     const tone = (id: number): number => 0.8 + h2(id, id * 7, 99) * 0.2;
-    // 1 texture = 2 x 2 m (world UVs are metres / LOOK_TILE).
+    const { w: HW, L: HL } = HERRING, det = -2 * HW * HL;
+    // texture metres (u, v) -> the board under it: id, distance along its grain, distance to its nearest edge (metres).
     const plankAt = (u: number, v: number): { id: number; along: number; edge: number } => {
-        if (pattern === 'oak') {
+        if (!herring) {
             const w = 0.18, row = Math.floor(v / w), len = 1.2 + h2(row, 3, 5) * 0.8, off = h2(row, 9, 1) * len;
             const col = Math.floor((u + off) / len);
             const eu = Math.min(((u + off) % len + len) % len, len - ((u + off) % len + len) % len), ev = Math.min(v - row * w, (row + 1) * w - v);
             return { id: row * 131 + col, along: u, edge: Math.min(eu * 4, ev) };
         }
-        const W = 0.25, L = 0.6, c = Math.floor(u / W), local = u / W - c, dir = c % 2 === 0 ? 1 : -1;
-        const vv = v + dir * local * W, k = Math.floor(vv / (L * 0.5));
-        const ev = Math.min(vv - k * L * 0.5, (k + 1) * L * 0.5 - vv), eu = Math.min(local, 1 - local) * W;
-        return { id: c * 977 + k, along: vv, edge: Math.min(eu, ev * 0.7) };
+        const a = (u + v) / Math.SQRT2, b = (v - u) / Math.SQRT2; // the 45-degree frame
+        const i0 = Math.floor((a * -HL - HL * b) / det), j0 = Math.floor((HW * b - HW * a) / det);
+        for (let i = i0 - 2; i <= i0 + 2; i++) for (let j = j0 - 2; j <= j0 + 2; j++) {
+            const x = a - (i * HW + j * HL), z = b - (i * HW - j * HL);
+            if (x >= 0 && x < HL && z >= 0 && z < HW) return { id: (i * 7919 + j * 104729) | 0, along: x, edge: Math.min(x, HL - x, z * 1.6, (HW - z) * 1.6) };
+            if (x >= 0 && x < HW && z >= HW && z < HW + HL) return { id: (i * 7919 + j * 104729 + 31) | 0, along: z, edge: Math.min(z - HW, HW + HL - z, x * 1.6, (HW - x) * 1.6) };
+        }
+        return { id: 0, along: a, edge: 1 };
     };
-    // beauty r2 (6): herringbone is calmer — softer seams, a narrower plank tone range and a near-neutral map, so the oak
-    // albedo (floorOak) reads like the penthouse's baked oak, not saturated orange.
-    const herring = pattern === 'herringbone';
     const map = cachedTex(`floor-${pattern}`, () => dataTexture(size, (x, y, px, i) => {
-        const u = x / size * 2, v = y / size * 2, p = plankAt(u, v);
-        const seam = herring ? (p.edge < 0.003 ? 0.72 : p.edge < 0.007 ? 0.9 : 1) : (p.edge < 0.004 ? 0.55 : p.edge < 0.008 ? 0.82 : 1);
-        const streak = 0.93 + 0.07 * Math.sin(p.along * 90 + grainN[y * size + x] * 9 + p.id);
-        const k = (herring ? 0.86 + (tone(p.id) - 0.8) * 0.6 : tone(p.id)) * streak * seam;
-        const g = herring ? 0.98 : 0.96, b = herring ? 0.95 : 0.9;
-        px[i] = Math.min(255, Math.round(k * 255)); px[i + 1] = Math.min(255, Math.round(k * g * 255)); px[i + 2] = Math.min(255, Math.round(k * b * 255));
+        const u = x / size * span, v = y / size * span, p = plankAt(u, v), gN = grainN[y * size + x];
+        if (herring) {
+            const seam = p.edge < 0.0012 ? 0.62 : p.edge < 0.0028 ? 0.84 : 1;
+            const val = 1 + (h2(p.id, 5, 17) - 0.5) * 2 * OAK_ALBEDO.spread, hue = (h2(p.id, 9, 23) - 0.5) * 0.06;
+            const streak = 0.95 + 0.05 * Math.sin(p.along * 140 + gN * 10 + p.id) + (gN - 0.5) * 0.06;
+            const k = val * streak * seam;
+            px[i] = Math.min(255, Math.round(OAK_ALBEDO.r * (1 + hue) * k * 255)); px[i + 1] = Math.min(255, Math.round(OAK_ALBEDO.g * k * 255)); px[i + 2] = Math.min(255, Math.round(OAK_ALBEDO.b * (1 - hue) * k * 255));
+            return;
+        }
+        const seam = p.edge < 0.004 ? 0.55 : p.edge < 0.008 ? 0.82 : 1;
+        const streak = 0.93 + 0.07 * Math.sin(p.along * 90 + gN * 9 + p.id);
+        const k = tone(p.id) * streak * seam;
+        px[i] = Math.min(255, Math.round(k * 255)); px[i + 1] = Math.min(255, Math.round(k * 0.96 * 255)); px[i + 2] = Math.min(255, Math.round(k * 0.9 * 255));
     }, true));
-    // Roughness: per plank (worn / waxed), along the grain, and the seams fully rough.
+    // Roughness: per board (worn / waxed), along the grain, and the seams fully rough.
     const rough = cachedTex(`floor-r-${pattern}`, () => dataTexture(size, (x, y, px, i) => {
-        const p = plankAt(x / size * 2, y / size * 2), gN = grainN[y * size + x];
-        const base = herring ? 0.5 + h2(p.id, 1, 2) * 0.32 + (gN - 0.5) * 0.16 : 0.7 + h2(p.id, 1, 2) * 0.2;
-        const v = Math.round(Math.max(0, Math.min(1, p.edge < 0.006 ? 1 : base)) * 255); px[i] = px[i + 1] = px[i + 2] = v;
+        const p = plankAt(x / size * span, y / size * span), gN = grainN[y * size + x];
+        const base = herring ? 0.52 + h2(p.id, 1, 2) * 0.24 + (gN - 0.5) * 0.14 : 0.7 + h2(p.id, 1, 2) * 0.2;
+        const v = Math.round(Math.max(0, Math.min(1, p.edge < (herring ? 0.002 : 0.006) ? 1 : base)) * 255); px[i] = px[i + 1] = px[i + 2] = v;
     }));
+    if (herring) for (const t of [map, rough]) t.repeat.set(LOOK_TILE / HERRING_TILE, LOOK_TILE / HERRING_TILE);
     return { map, rough };
 }
+/**
+ * beauty r3 (2) — trowelled plaster: a very low-contrast mottle in the colour (+-2.5 %), broad trowel strokes in the
+ * normal and a matching roughness spread (0.82..0.96). One texture = 2 m of wall (world UVs).
+ */
+function plaster(): { map: THREE.Texture; rough: THREE.Texture; normal: THREE.Texture } {
+    const size = 256;
+    const broad = noise(size, 3, 41, 3), mid = noise(size, 10, 43, 3), fine = noise(size, 40, 47, 2);
+    const map = cachedTex('plaster-c', () => dataTexture(size, (x, y, px, i) => { const n = broad[y * size + x] * 0.6 + mid[y * size + x] * 0.4, v = Math.round((0.975 + (n - 0.5) * 0.05) * 255); px[i] = px[i + 1] = px[i + 2] = v; }, true));
+    const rough = cachedTex('plaster-r', () => dataTexture(size, (x, y, px, i) => { const v = Math.round((0.82 + mid[y * size + x] * 0.1 + fine[y * size + x] * 0.04) * 255); px[i] = px[i + 1] = px[i + 2] = v; }));
+    const height = new Float32Array(size * size); for (let k = 0; k < height.length; k++) height[k] = mid[k] * 0.7 + fine[k] * 0.3 + broad[k] * 0.4;
+    const normal = cachedTex('plaster-n', () => normalFrom(height, size, 2.4));
+    return { map, rough, normal };
+}
+
 /** Square stone pavers with soft grout (2.4 m tile), or a lawn (4 m tile). */
 function groundTex(kind: 'pavers' | 'lawn' | 'travertine'): THREE.Texture {
     return cachedTex(`ground-${kind}`, () => {
@@ -253,7 +292,8 @@ function std(p: THREE.MeshStandardMaterialParameters, detail: 'fine' | 'coarse' 
 function make(name: LookName): THREE.Material {
     const P = PALETTE;
     switch (name) {
-        case 'wall': return std({ color: P.plaster, roughness: 0.92, metalness: 0 }, 'fine', 0.12);
+        // beauty r3 (2): trowelled plaster (colour mottle + broad normal + roughness spread), one shared instance for every wall.
+        case 'wall': { const t = plaster(); return new THREE.MeshStandardMaterial({ color: P.plaster, map: t.map, roughnessMap: t.rough, roughness: 1, normalMap: t.normal, normalScale: new THREE.Vector2(0.22, 0.22), metalness: 0 }); }
         case 'wall.outer': return std({ color: P.plasterShade, roughness: 0.9, metalness: 0 }, 'fine', 0.14);
         // FrontSide: ceilings face down (seen from inside only); from above (the overview) they are culled — never a lid.
         // beauty r2 (6): plaster grain like the walls, and a faint warm glow (the cove bounce): a down-facing face only sees
@@ -261,7 +301,8 @@ function make(name: LookName): THREE.Material {
         case 'ceiling': return std({ color: P.ceiling, emissive: P.warmBright, emissiveIntensity: 0.32, roughness: 0.95, metalness: 0, side: THREE.FrontSide }, 'fine', 0.14);
         case 'floor.oak': case 'floor.herringbone': {
             const t = woodFloor(name === 'floor.oak' ? 'oak' : 'herringbone');
-            const m = new THREE.MeshStandardMaterial({ color: name === 'floor.oak' ? P.oak : P.oakFloor, map: t.map, roughnessMap: t.rough, roughness: name === 'floor.oak' ? 0.62 : 1, metalness: 0 });
+            // beauty r3 (2): the herringbone map is the albedo (penthouse parquet colour), so its material colour is white.
+            const m = new THREE.MeshStandardMaterial({ color: name === 'floor.oak' ? P.oak : 0xffffff, map: t.map, roughnessMap: t.rough, roughness: name === 'floor.oak' ? 0.62 : 1, metalness: 0 });
             m.normalMap = grain('fine').normal; m.normalScale.set(0.08, 0.08); return m;
         }
         case 'floor.stone': return new THREE.MeshStandardMaterial({ color: P.stone, map: groundTex('pavers'), roughness: 0.82, metalness: 0, normalMap: grain('coarse').normal, normalScale: new THREE.Vector2(0.25, 0.25) });
