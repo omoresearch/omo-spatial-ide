@@ -9,12 +9,12 @@
     "px": 32.4
    },
    {
-    "text": "Write tests for the crater map",
+    "text": "Fix the oxygen meter so it drains…",
     "title": false,
     "px": 20.8
    },
    {
-    "text": "Fix the oxygen meter so it drains slower",
+    "text": "Write tests for the crater map",
     "title": false,
     "px": 20.7
    },
@@ -41,12 +41,12 @@
     "px": 32.4
    },
    {
-    "text": "Which tomatoes grow best in a small…",
+    "text": "Plan my vegetable garden beds for…",
     "title": false,
     "px": 20.8
    },
    {
-    "text": "Plan my vegetable garden beds for…",
+    "text": "Which tomatoes grow best in a small…",
     "title": false,
     "px": 20.7
    }
@@ -68,12 +68,12 @@
     "px": 17.3
    },
    {
-    "text": "Rewrite the novel opening so the…",
+    "text": "Outline chapter three of my novel…",
     "title": false,
     "px": 11.2
    },
    {
-    "text": "Outline chapter three of my novel…",
+    "text": "Rewrite the novel opening so the…",
     "title": false,
     "px": 11.2
    }
@@ -89,12 +89,12 @@
     "px": 17.3
    },
    {
-    "text": "Add a shopping list page that groups…",
+    "text": "Recipe search by ingredient",
     "title": false,
     "px": 11.2
    },
    {
-    "text": "Recipe search by ingredient",
+    "text": "Add a shopping list page that groups…",
     "title": false,
     "px": 11.2
    }

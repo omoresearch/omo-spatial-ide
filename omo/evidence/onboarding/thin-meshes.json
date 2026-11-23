@@ -5,81 +5,6 @@
   "line": false,
   "size": [
    58,
-   0,
-   48
-  ],
-  "at": [
-   0,
-   4.6,
-   0
-  ]
- },
- {
-  "owner": "omo-world-shell",
-  "name": "",
-  "line": false,
-  "size": [
-   55,
-   0,
-   0.12
-  ],
-  "at": [
-   0,
-   4.59,
-   -22.5
-  ]
- },
- {
-  "owner": "omo-world-shell",
-  "name": "",
-  "line": false,
-  "size": [
-   55,
-   0,
-   0.12
-  ],
-  "at": [
-   0,
-   4.59,
-   22.5
-  ]
- },
- {
-  "owner": "omo-world-shell",
-  "name": "",
-  "line": false,
-  "size": [
-   0.12,
-   0,
-   45
-  ],
-  "at": [
-   -27.5,
-   4.59,
-   0
-  ]
- },
- {
-  "owner": "omo-world-shell",
-  "name": "",
-  "line": false,
-  "size": [
-   0.12,
-   0,
-   45
-  ],
-  "at": [
-   27.5,
-   4.59,
-   0
-  ]
- },
- {
-  "owner": "omo-world-shell",
-  "name": "",
-  "line": false,
-  "size": [
-   58,
    4.6,
    0
   ],
@@ -131,36 +56,6 @@
   "at": [
    29,
    2.3,
-   0
-  ]
- },
- {
-  "owner": "omo-skyline-city",
-  "name": "",
-  "line": false,
-  "size": [
-   5000,
-   0,
-   5000
-  ],
-  "at": [
-   0,
-   -330,
-   0
-  ]
- },
- {
-  "owner": "omo-skyline-city",
-  "name": "",
-  "line": false,
-  "size": [
-   430,
-   0,
-   5000
-  ],
-  "at": [
-   -835,
-   -329.5,
    0
   ]
  },
@@ -421,7 +316,7 @@
   ]
  },
  {
-  "owner": "window",
+  "owner": "omo-decor-standin",
   "room": "home",
   "name": "",
   "line": false,
@@ -434,6 +329,22 @@
    -17.45,
    1.85,
    -3.8
+  ]
+ },
+ {
+  "owner": "omo-decor-standin",
+  "room": "home",
+  "name": "",
+  "line": false,
+  "size": [
+   2,
+   1.5,
+   0
+  ],
+  "at": [
+   -17.45,
+   1.85,
+   -3.78
   ]
  }
 ]

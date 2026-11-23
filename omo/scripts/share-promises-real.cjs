@@ -156,9 +156,11 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await A.shot('4-boards-close');
         // Contrast on the nearest board: dark ink pixels on a light board.
         if (close[0]) {
-            const [l, t, r, b] = close[0].box, clip = { x: Math.max(0, l), y: Math.max(0, t), width: Math.max(1, Math.min(1440, r) - Math.max(0, l)), height: Math.max(1, Math.min(900, b) - Math.max(0, t)) };
+            // beauty r3 (0): the board face only (inset 12%, the frame and plinth are dark too); ink = any dark pixel (the beauty
+            // palette's ink is near-black #1d2228 and the warm key light tints it, so 'bluer than red' no longer holds).
+            const [l0, t0, r0, b0] = close[0].box, ix = (r0 - l0) * 0.12, iy = (b0 - t0) * 0.12, [l, t, r, b] = [l0 + ix, t0 + iy, r0 - ix, b0 - iy], clip = { x: Math.max(0, l), y: Math.max(0, t), width: Math.max(1, Math.min(1440, r) - Math.max(0, l)), height: Math.max(1, Math.min(900, b) - Math.max(0, t)) };
             const img = await A.page.screenshot({ clip, encoding: 'base64' });
-            const ink = await A.page.evaluate(async data => { const i = new Image(); i.src = 'data:image/png;base64,' + data; await i.decode(); const c = document.createElement('canvas'); c.width = i.width; c.height = i.height; const x = c.getContext('2d'); x.drawImage(i, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let light = 0, dark = 0; for (let n = 0; n < d.length; n += 4) { const y = 0.2126 * d[n] + 0.7152 * d[n + 1] + 0.0722 * d[n + 2]; if (y > 170) light++; else if (y < 110 && d[n + 2] > d[n]) dark++; } const all = d.length / 4; return { light: +(light / all).toFixed(3), ink: +(dark / all).toFixed(3) }; }, img);
+            const ink = await A.page.evaluate(async data => { const i = new Image(); i.src = 'data:image/png;base64,' + data; await i.decode(); const c = document.createElement('canvas'); c.width = i.width; c.height = i.height; const x = c.getContext('2d'); x.drawImage(i, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let light = 0, dark = 0; for (let n = 0; n < d.length; n += 4) { const y = 0.2126 * d[n] + 0.7152 * d[n + 1] + 0.0722 * d[n + 2]; if (y > 170) light++; else if (y < 110) dark++; } const all = d.length / 4; return { light: +(light / all).toFixed(3), ink: +(dark / all).toFixed(3) }; }, img);
             check('The nearest board shows dark ink text on a light board (pixel check)', ink.light > 0.25 && ink.ink > 0.02, ink);
         } else check('The nearest board shows dark ink text on a light board (pixel check)', false, 'no board close enough');
 

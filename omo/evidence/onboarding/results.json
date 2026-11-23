@@ -87,7 +87,7 @@
    "name": "Reading made no request off this machine (every page request during the read is 127.0.0.1)",
    "pass": true,
    "detail": {
-    "during": 0,
+    "during": 48,
     "off": []
    }
   },
@@ -123,23 +123,23 @@
     "outline": "none",
     "lines": [
      {
-      "shown": "Write tests for the crater map · Fix the…",
-      "full": "Write tests for the crater map · Fix the oxygen meter so it drains slower · Add a docking bay to the moonbase game",
+      "shown": "Fix the oxygen meter so it drains slower…",
+      "full": "Fix the oxygen meter so it drains slower · Write tests for the crater map · Add a docking bay to the moonbase game",
       "color": "rgb(168, 173, 184)"
      },
      {
-      "shown": "Which tomatoes grow best in a small garden…",
-      "full": "Which tomatoes grow best in a small garden · Plan my vegetable garden beds for spring",
+      "shown": "Plan my vegetable garden beds for spring…",
+      "full": "Plan my vegetable garden beds for spring · Which tomatoes grow best in a small garden",
       "color": "rgb(168, 173, 184)"
      },
      {
-      "shown": "Rewrite the novel opening so the lighthouse…",
-      "full": "Rewrite the novel opening so the lighthouse feels · Outline chapter three of my novel about a",
+      "shown": "Outline chapter three of my novel about a…",
+      "full": "Outline chapter three of my novel about a · Rewrite the novel opening so the lighthouse feels",
       "color": "rgb(168, 173, 184)"
      },
      {
-      "shown": "Add a shopping list page that groups items…",
-      "full": "Add a shopping list page that groups items · Recipe search by ingredient",
+      "shown": "Recipe search by ingredient · Add a shopping…",
+      "full": "Recipe search by ingredient · Add a shopping list page that groups items",
       "color": "rgb(168, 173, 184)"
      },
      {
@@ -198,7 +198,7 @@
    "pass": true,
    "detail": {
     "backdrop": "world",
-    "city": 3
+    "city": 1
    }
   },
   {
@@ -217,14 +217,14 @@
    "name": "From the sentence to the world shown in under 60 s (wall clock of this run)",
    "pass": true,
    "detail": {
-    "ms": 10652
+    "ms": 13370
    }
   },
   {
    "name": "The app measured the same first minute itself (data-omo-first-minute-ms < 60000)",
    "pass": true,
    "detail": {
-    "appMs": 10618
+    "appMs": 13111
    }
   },
   {
@@ -232,7 +232,7 @@
    "pass": true,
    "detail": {
     "inRooms": 0,
-    "all": 28,
+    "all": 22,
     "sample": []
    }
   },
@@ -270,12 +270,12 @@
       "px": 32.4
      },
      {
-      "text": "Write tests for the crater map",
+      "text": "Fix the oxygen meter so it drains…",
       "title": false,
       "px": 20.8
      },
      {
-      "text": "Fix the oxygen meter so it drains slower",
+      "text": "Write tests for the crater map",
       "title": false,
       "px": 20.7
      },
@@ -293,7 +293,7 @@
    "pass": true,
    "detail": {
     "theme": "station",
-    "ms": 225
+    "ms": 1083
    }
   },
   {

@@ -647,6 +647,9 @@ export class RoomScene {
         this.worldRoot.traverseVisible(node => {
             const mesh = node as THREE.Mesh & { isLine?: boolean };
             if (!mesh.isMesh && !mesh.isLine) return;
+            // beauty r3 (0): flat floor decals (contact shadows, lamp light pools) lie in the floor plane — from above they
+            // read as soft areas, never as lines (their only thin side is the vertical one).
+            if (mesh.userData.decal) return;
             box.setFromObject(mesh); if (box.isEmpty()) return;
             box.getSize(size);
             const dims = [size.x, size.y, size.z].sort((a, b) => a - b);
