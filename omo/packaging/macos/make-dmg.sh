@@ -15,6 +15,9 @@ MOUNT=""
 # shellcheck disable=SC2015  # best-effort detach; `|| true` covers both failures on purpose
 cleanup() { [ -n "$MOUNT" ] && hdiutil detach "$MOUNT" -quiet -force >/dev/null 2>&1 || true; rm -rf "$WORK"; }
 trap cleanup EXIT INT TERM
+# hdiutil on hosted macOS runners intermittently fails with exit 16 ("Resource busy", often while
+# Spotlight/diskarbitrationd still holds a fresh image). Retry each hdiutil step a few times.
+retry() { n=0; until "$@"; do rc=$?; n=$((n + 1)); [ "$n" -ge 5 ] && { echo "make-dmg: '$1 $2' failed $n times (exit $rc)" >&2; return "$rc"; }; echo "make-dmg: '$1 $2' exit $rc, retry $n/4" >&2; sleep $((n * 5)); done; }
 
 SRC="$WORK/src"
 mkdir -p "$SRC"
@@ -24,7 +27,7 @@ ln -s /Applications "$SRC/Applications"
 
 # Read-write image first (so Finder can store the window layout), then compress to UDZO.
 SIZE_MB=$(( $(du -sm "$SRC" | cut -f1) + 200 ))
-hdiutil create -quiet -srcfolder "$SRC" -volname "$VOLNAME" -fs HFS+ -format UDRW -size "${SIZE_MB}m" "$WORK/rw.dmg"
+retry hdiutil create -quiet -srcfolder "$SRC" -volname "$VOLNAME" -fs HFS+ -format UDRW -size "${SIZE_MB}m" "$WORK/rw.dmg"
 MOUNT="$(hdiutil attach "$WORK/rw.dmg" -readwrite -noverify -noautoopen -nobrowse | awk -F'\t' '/\/Volumes\//{print $NF; exit}')"
 [ -n "$MOUNT" ] || { echo "make-dmg: could not mount the image" >&2; exit 1; }
 if [ "${CI:-}" != true ] && command -v osascript >/dev/null 2>&1; then
@@ -47,9 +50,9 @@ end tell
 EOF
 fi
 sync
-hdiutil detach "$MOUNT" -quiet -force
+retry hdiutil detach "$MOUNT" -quiet -force
 MOUNT=""
-rm -f "$DMG"
-hdiutil convert -quiet "$WORK/rw.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG"
-hdiutil verify -quiet "$DMG"
+convert_dmg() { rm -f "$DMG"; hdiutil convert -quiet "$WORK/rw.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG"; }
+retry convert_dmg
+retry hdiutil verify -quiet "$DMG"
 echo "$DMG"
