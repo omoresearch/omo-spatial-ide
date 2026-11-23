@@ -39,7 +39,7 @@ const chrome = chromeArg || process.env.CHROME_PATH || (process.platform === 'da
         const page = await browser.newPage();
         const errors = []; page.on('pageerror', e => errors.push(String(e)));
         await page.evaluateOnNewDocument(() => {
-            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.focus.clickAttach', 'false'); } catch {}
+            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.immersive', '0'); localStorage.setItem('omo.starter', 'classic') /* world-ui: new rooms start in the skyline penthouse; this walk path is the classic room's, like world-test-driver.cjs */; } catch {}
             // Theia's workspace-trust dialog can open late (after the room renders) and take keyboard focus,
             // so the walk keys never reach the canvas. Accept it whenever it appears.
             const trust = () => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click();
@@ -53,6 +53,12 @@ const chrome = chromeArg || process.env.CHROME_PATH || (process.platform === 'da
         await page.evaluate(() => document.querySelector('[data-testid="create-room"]').click());
         await page.waitForSelector(`${CANVAS}[data-navigation="walk"]`, { timeout: 30000 });
         console.log('PASS first-person room renders in a real browser');
+        // mac-kits: a release package carries the skyline style kit; the packaged server must serve it.
+        if (process.env.OMO_REQUIRE_KITS === '1') {
+            const kit = await page.evaluate(async () => { const r = await fetch('/omo-kits/skyline-penthouse/props.json'); const g = await fetch('/omo-kits/skyline-penthouse/room.glb', { method: 'HEAD' }); return { props: r.status, glb: g.status, len: Number(g.headers.get('content-length') || 0) }; });
+            if (kit.props !== 200 || kit.glb !== 200 || kit.len < 1e6) throw new Error('packaged style kit not served: ' + JSON.stringify(kit));
+            console.log(`PASS packaged skyline kit is served (room.glb ${(kit.len / 1e6).toFixed(1)} MB)`);
+        }
         // Walk to desk one (left desk): A then W, like the repo's world driver.
         // Hold <key> until dataset[field] passes goal. Re-focus the canvas when a dialog took focus (keys only reach a focused canvas).
         const axis = async (key, field, goal, dir) => {
