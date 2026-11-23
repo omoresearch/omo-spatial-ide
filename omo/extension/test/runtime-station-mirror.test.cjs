@@ -23,7 +23,7 @@ function rig() {
 
 test('desk and mirror attach use the same station id but keep requested dimensions', async () => {
   const r = rig(); await r.controller.bind({ stationId: 'desk-a', projectUri: 'file:///p', name: 'Room' });
-  assert.deepEqual(r.calls.find(c => c[0] === 'attach')[1], { workspaceId: 'ws-1', tabId: 'tab-1', cols: 80, rows: 22, stationId: 'desk-a' });
+  assert.deepEqual(r.calls.find(c => c[0] === 'attach')[1], { workspaceId: 'ws-1', tabId: 'tab-1', cols: 54, rows: 15, stationId: 'desk-a' });
   assert.equal(await r.controller.attachMirror('desk-a'), true);
   assert.deepEqual(r.calls.filter(c => c[0] === 'attach')[1][1], { workspaceId: 'ws-1', tabId: 'tab-1', cols: 120, rows: 40, stationId: 'desk-a' });
   assert.ok(r.calls.filter(c => c[0] === 'poll').length >= 2);

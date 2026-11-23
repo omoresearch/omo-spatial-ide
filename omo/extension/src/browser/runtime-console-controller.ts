@@ -9,8 +9,9 @@ export type { AgentTaskTarget } from './agent-task-draft';
  * explicit user action. It never starts, revives or closes a tab on its own.
  * Pure TypeScript (no Theia/DOM imports) so it can be tested against a fake service.
  */
-export const MONITOR_COLS = 80;
-export const MONITOR_ROWS = 22;
+/** demo-ready (2): was 80 x 22; fewer, larger cells on the in-world monitor. Must equal MONITOR_GRID in common/monitor-selection.ts (a unit test checks). */
+export const MONITOR_COLS = 54;
+export const MONITOR_ROWS = 15;
 /**
  * Grid limits for a view that follows its box (attached / full-window terminal). Narrow boxes keep
  * a sane minimum (they scroll); the top matches the host's own clamp (op_resize / termcore).
@@ -261,7 +262,7 @@ export class RuntimeConsoleController {
     private viewGen = 0;
     private pollInFlight = -1;
     private clipboardCheckedAt = 0;
-    /** Grid the attached view should have. The desk monitor is 80 x 22; a focus view may ask for its box size. */
+    /** Grid the attached view should have. The desk monitor is MONITOR_COLS x MONITOR_ROWS; a focus view may ask for its box size. */
     private size = { cols: MONITOR_COLS, rows: MONITOR_ROWS };
     /** Last size the current view really has (attach or a confirmed resize). */
     private sentSize?: { viewId: string; cols: number; rows: number };

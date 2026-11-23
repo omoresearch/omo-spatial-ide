@@ -4,7 +4,13 @@ export type SelectionUnit = 'char' | 'word' | 'line';
 // Same path/token characters as the vendored Minecraft bridge's termcore.WORD.
 // Continuations come from the terminal parser, never from guessed Unicode widths.
 const WORD = /[\p{L}\p{N}_\-./~:@%+#?=&,]/u;
-const COLS = 80, ROWS = 22;
+/**
+ * demo-ready (2) — the in-world desk monitor's grid and its layout on the 1024 x 576 screen canvas. Fewer, larger
+ * cells than a desktop terminal so the text is legible from the walking distance (30 px type: >= 12 px on screen at
+ * the spawn view). The focus / full-window view still asks for its own, larger grid.
+ */
+export const MONITOR_GRID = { cols: 54, rows: 15, left: 24, top: 53, rowPx: 34, fontPx: 30, canvasW: 1024, canvasH: 576 } as const;
+const COLS = MONITOR_GRID.cols, ROWS = MONITOR_GRID.rows;
 const bound = (n: number, max: number): number => Math.max(0, Math.min(max, Math.floor(Number.isFinite(n) ? n : 0)));
 const cell = (p: MonitorCell): MonitorCell => ({ row: bound(p.row, ROWS - 1), col: bound(p.col, COLS - 1) });
 export function visibleMonitorLines(lines: string[]): string[] { return lines.slice(-ROWS).map(line => Array.from(line).slice(0, COLS).join('')); }
@@ -27,7 +33,7 @@ export function monitorCellSpan(row: readonly string[], column: number): { from:
 /** Pick only the terminal text grid, never the monitor bezel or title. UV comes from the actual screen mesh. */
 export function monitorCell(u: number, v: number, width: number, clamp = false): MonitorCell | undefined {
     if (![u, v, width].every(Number.isFinite) || width <= 0 || u < 0 || u > 1 || v < 0 || v > 1) return undefined;
-    const col = Math.floor((u * 1024 - 24) / width), row = Math.floor(((1 - v) * 576 - 53) / 22);
+    const col = Math.floor((u * MONITOR_GRID.canvasW - MONITOR_GRID.left) / width), row = Math.floor(((1 - v) * MONITOR_GRID.canvasH - MONITOR_GRID.top) / MONITOR_GRID.rowPx);
     if (!clamp && (col < 0 || col >= COLS || row < 0 || row >= ROWS)) return undefined;
     return cell({ row, col });
 }

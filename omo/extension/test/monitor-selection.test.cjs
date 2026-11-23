@@ -9,7 +9,7 @@ test('word selection expands paths using the Minecraft bridge token rules and st
  const blank=new MonitorSelection(['a  b'],{row:0,col:1},'word');assert.equal(blank.text(),'');
 });
 test('whole-line selection includes leading spaces and supports reversed multi-row ranges',()=>{
- const{MonitorSelection}=api(),s=new MonitorSelection(['alpha first','  beta tail   '],{row:1,col:7},'line');assert.equal(s.text(),'  beta tail');s.extend({row:0,col:3});assert.equal(s.text(),'alpha first\n  beta tail');assert.deepEqual(s.spans(),[{row:0,from:0,to:80},{row:1,from:0,to:80}]);
+ const{MonitorSelection}=api(),s=new MonitorSelection(['alpha first','  beta tail   '],{row:1,col:7},'line');assert.equal(s.text(),'  beta tail');s.extend({row:0,col:3});assert.equal(s.text(),'alpha first\n  beta tail');assert.deepEqual(s.spans(),[{row:0,from:0,to:54},{row:1,from:0,to:54}]);
 });
 test('authoritative cells keep wide halves and combining glyphs aligned when selecting and copying',()=>{
  const{MonitorSelection}=api(),row=['A','界','','B','q\u0301','Z'];const lines=['A界Bq\u0301Z'];
@@ -24,12 +24,17 @@ test('word expansion does not include half of an adjacent wide non-word glyph',(
 test('provided malformed cell metadata fails closed while a missing matrix keeps legacy text',()=>{
  const{visibleMonitorCells}=api();assert.deepEqual(visibleMonitorCells(['safe']),[['s','a','f','e']]);assert.deepEqual(visibleMonitorCells(['safe'],[null]),[[]]);assert.deepEqual(visibleMonitorCells(['safe'],null),[[]]);
 });
-test('copies only the 80 by 22 visible viewport and trims terminal padding, not leading spaces',()=>{
- const{MonitorSelection}=api();const s=new MonitorSelection(['HIDDEN',...Array.from({length:22},(_,i)=>i===0?'  shown   ':'x'.repeat(80)+'HIDDEN')],{row:0,col:0});s.extend({row:30,col:999});const text=s.text();assert.ok(!text.includes('HIDDEN'));assert.equal(text.split('\n').length,22);assert.equal(text.split('\n')[0],'  shown');assert.equal(text.split('\n')[1].length,80);
+test('copies only the 54 by 15 visible viewport (demo-ready monitor grid) and trims terminal padding, not leading spaces',()=>{
+ const{MonitorSelection,MONITOR_GRID}=api();assert.deepEqual([MONITOR_GRID.cols,MONITOR_GRID.rows],[54,15]);const s=new MonitorSelection(['HIDDEN',...Array.from({length:15},(_,i)=>i===0?'  shown   ':'x'.repeat(54)+'HIDDEN')],{row:0,col:0});s.extend({row:30,col:999});const text=s.text();assert.ok(!text.includes('HIDDEN'));assert.equal(text.split('\n').length,15);assert.equal(text.split('\n')[0],'  shown');assert.equal(text.split('\n')[1].length,54);
 });
 test('new visible output invalidates a selection instead of copying stale text',()=>{
  const{MonitorSelection}=api(),s=new MonitorSelection(['ALPHA'],{row:0,col:0});s.extend({row:0,col:4});assert.equal(s.refresh(['ALPHA']),true);assert.equal(s.text(),'ALPHA');assert.equal(s.refresh(['BETA']),false);assert.equal(s.text(),'');assert.deepEqual(s.spans(),[]);
 });
 test('cell picking respects physical screen UV, text margins and measured glyph width',()=>{
- const{monitorCell}=api();assert.deepEqual(monitorCell((24+3.5*12)/1024,1-(53+2.5*22)/576,12),{row:2,col:3});assert.equal(monitorCell(.001,.99,12),undefined);assert.equal(monitorCell(NaN,.5,12),undefined);assert.deepEqual(monitorCell(.999,.001,12,true),{row:21,col:79});
+ const{monitorCell}=api();assert.deepEqual(monitorCell((24+3.5*18)/1024,1-(53+2.5*34)/576,18),{row:2,col:3});assert.equal(monitorCell(.001,.99,18),undefined);assert.equal(monitorCell(NaN,.5,18),undefined);assert.deepEqual(monitorCell(.999,.001,18,true),{row:14,col:53});
+});
+test('demo-ready (2): the controller monitor grid equals MONITOR_GRID, and its type is large',()=>{
+ const{MONITOR_GRID}=api();const src=fs.readFileSync(path.resolve(__dirname,'../src/browser/runtime-console-controller.ts'),'utf8');
+ assert.match(src,new RegExp(`MONITOR_COLS = ${MONITOR_GRID.cols};`));assert.match(src,new RegExp(`MONITOR_ROWS = ${MONITOR_GRID.rows};`));
+ assert.ok(MONITOR_GRID.fontPx>=28&&MONITOR_GRID.top+MONITOR_GRID.rows*MONITOR_GRID.rowPx<=576&&MONITOR_GRID.left*2+MONITOR_GRID.cols*MONITOR_GRID.fontPx*0.6<=1024+1);
 });

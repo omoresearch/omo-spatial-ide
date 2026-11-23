@@ -60,7 +60,7 @@ test('resizeView sends the clamped grid to the attached view, once per change', 
   assert.equal(service.named('resize')[0].arg.viewId, 'v1');
   // Walking away restores the monitor size.
   await controller.resizeView(MONITOR_COLS, MONITOR_ROWS);
-  assert.deepEqual(service.named('resize').at(-1).arg, { viewId: 'v1', cols: 80, rows: 22 });
+  assert.deepEqual(service.named('resize').at(-1).arg, { viewId: 'v1', cols: MONITOR_COLS, rows: MONITOR_ROWS });
   // No input, no tab start: the resize is only a size.
   assert.equal(service.named('input').length, 0);
   assert.equal(service.named('newTab').length, 0);
@@ -91,7 +91,7 @@ test('a failed resize does not break the view and is tried again', async () => {
 });
 
 // ---------------------------------------------------------------- in-world monitor tolerance
-test('the in-world monitor crops a larger grid to its 80 x 22 window and never crashes', () => {
+test('the in-world monitor crops a larger grid to its monitor window and never crashes', () => {
   const lines = Array.from({ length: 45 }, (_, i) => `row${i}`.padEnd(160, '.'));
   const cells = lines.map(line => Array.from(line));
   const fg = lines.map(() => '0'.repeat(160));
@@ -105,7 +105,7 @@ test('the in-world monitor crops a larger grid to its 80 x 22 window and never c
   assert.equal(out.lines[out.cursor.y].slice(0, 5), 'row30');
   assert.equal(out.cursor.visible, true);
   // No cursor: the last 22 rows. Cursor past column 80: hidden on the monitor.
-  assert.equal(monitorWindow({ lines }).lines[0].slice(0, 5), 'row23');
+  assert.equal(monitorWindow({ lines }).lines[0].slice(0, 5), `row${45 - MONITOR_ROWS}`);
   assert.equal(monitorWindow({ lines, cursor: { x: 120, y: 44, visible: true } }).cursor.visible, false);
   // A normal 80 x 22 frame is the same object (no extra repaint).
   const small = { lines: ['$ ls'] };

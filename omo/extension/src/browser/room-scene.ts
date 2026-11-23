@@ -4,7 +4,7 @@ import type { RoomState, RoomTheme } from '../common/room-state';
 import { FirstPersonControls } from './first-person-controls';
 import { cellRuns, dominantKey, MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
 import type { WebSurfaceFrame } from '../common/web-runtime-protocol';
-import { MonitorSelection, monitorCell, monitorCellSpan, visibleMonitorCells } from '../common/monitor-selection';
+import { MONITOR_GRID, MonitorSelection, monitorCell, monitorCellSpan, visibleMonitorCells } from '../common/monitor-selection';
 import type { SelectionUnit } from '../common/monitor-selection';
 import type { RoomMember } from '../common/presence-protocol';
 import { PLAYER_HOME, PlayerPose } from '../common/player-state';
@@ -50,7 +50,7 @@ function safeTruecolor(value: RuntimeColorMetadata | undefined): RuntimeColorMet
         : undefined;
 }
 /**
- * The physical monitor's 80 x 22 window of a frame. A desk attached in focus mode can have a larger
+ * The physical monitor's MONITOR_COLS x MONITOR_ROWS window of a frame (demo-ready: 54 x 15). A desk attached in focus mode can have a larger
  * real grid (e.g. 160 x 45); the monitor then shows the first 80 columns of the 22 rows around the
  * cursor (the last 22 when there is no cursor). A frame that already fits is returned as is.
  * Malformed metadata is dropped, never trusted: the monitor only crops, it never crashes.
@@ -490,6 +490,7 @@ export class RoomScene {
         const canvas = document.createElement('canvas'); canvas.width = SURFACE_W; canvas.height = SURFACE_H;
         const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
         texture.flipY = false; texture.repeat.set(1, -1); texture.offset.set(0, 1);
+        texture.anisotropy = 8; // demo-ready (2): crisp text on monitors seen at an angle (mipmaps are regenerated on every band upload)
         const source = new THREE.CanvasTexture(canvas); source.flipY = false;
         return { canvas, texture, source, ctx: canvas.getContext('2d') ?? undefined, hint };
     }
@@ -1136,49 +1137,51 @@ export class RoomScene {
             if (frame.status || frame.unreadBells) { c.fillStyle = frame.unreadBells ? '#ff9e4a' : '#7e9a9e'; c.textAlign = 'right'; c.fillText((frame.unreadBells ? `BELL (${frame.unreadBells})` : frame.status ?? '').slice(0,38),1000,29); c.textAlign = 'left'; }
             c.fillStyle = '#283e48'; c.fillRect(20,42,984,1);
         }
-        c.font = '20px monospace'; c.textBaseline = 'alphabetic';
+        // demo-ready (2): MONITOR_GRID layout (30 px type in 34 px rows). Baseline sits at 17/22 of the row, as before.
+        const G = MONITOR_GRID, R = G.rowPx, T = G.top, L = G.left, base0 = Math.round(R * 17 / 22), k = R / 22;
+        c.font = `${G.fontPx}px monospace`; c.textBaseline = 'alphabetic';
         if (!lines.length) {
             if (full && surface.card) { paintIdleCard(c, surface.card, frame.status); this.markDirty(surface, true, 0, 0); return true; } // world-ui (g)
             if (full) { c.fillStyle='#c7ded4';c.fillText((surface.hint ?? 'Click to use this desk.').slice(0,MONITOR_COLS),24,104); c.fillStyle='#7e9a9e';c.fillText((frame.status ?? '').slice(0,MONITOR_COLS),24,140); }
             this.markDirty(surface, full, 0, headerDirty ? 49 : 0);
             return true;
         }
-        const cell = Math.min(12.3, c.measureText('M').width || 12);
+        const cell = Math.min((SURFACE_W - 2 * L) / MONITOR_COLS, c.measureText('M').width || G.fontPx * 0.6);
         surface.cellWidth = cell;
-        // Rows tile in 22px bands from y=53. Glyphs reach 4px into the row above and 1px into the row below,
+        // Rows tile in R px bands from y=T. Glyphs reach a little into the row above and below,
         // so a changed band repaints its neighbours too, clipped to the band, in the full-paint order.
-        const top = full ? 49 : from === 0 ? 49 : 53 + from*22, bottom = full ? SURFACE_H : to === MONITOR_ROWS-1 ? SURFACE_H : 75 + to*22;
+        const top = full ? 49 : from === 0 ? 49 : T + from*R, bottom = full ? SURFACE_H : to === MONITOR_ROWS-1 ? SURFACE_H : T + (to+1)*R;
         if (from >= 0 || full) {
             const first = full ? 0 : Math.max(0, from-1), last = full ? lines.length-1 : Math.min(lines.length-1, to+1);
             c.save(); c.beginPath(); c.rect(0, top, SURFACE_W, bottom-top); c.clip();
             if (!full) { c.fillStyle = base; c.fillRect(0, top, SURFACE_W, bottom-top); }
             for (let i = first; i <= last; i++) {
-                const y = 70 + i*22, line = lines[i];
+                const y = T + base0 + i*R, line = lines[i];
                 const fallback = { fg: frame.foreground ? '#e0e8eb' : line.includes('$') ? '#b8e6ca' : '#e0e8eb', bg: base };
                 const direct = truecolor ? { fg: truecolor.foreground[offset+i], bg: truecolor.background[offset+i] } : undefined;
                 const runs = cellRuns(line, frame.foreground?.[offset+i], frame.background?.[offset+i], frame.palette, fallback, frame.cells === undefined ? undefined : rows[i], direct);
                 // Paint all cell backgrounds BEFORE glyphs, so a continuation does not erase its leading glyph.
                 for (const run of runs) {
-                    const x = 24 + run.x*cell;
-                    if (run.bg.toLowerCase() !== skip && run.bg !== base) { c.fillStyle = run.bg; c.fillRect(x, y-17, (run.columns ?? Array.from(run.text).length)*cell, 22); }
+                    const x = L + run.x*cell;
+                    if (run.bg.toLowerCase() !== skip && run.bg !== base) { c.fillStyle = run.bg; c.fillRect(x, y-base0, (run.columns ?? Array.from(run.text).length)*cell, R); }
                 }
                 for (const run of runs) {
                     if (!run.text.trim()) continue;
-                    const x = 24+run.x*cell, width = (run.glyphColumns ?? Array.from(run.text).length)*cell;
-                    c.save(); c.beginPath(); c.rect(x,y-21,width,27); c.clip();
+                    const x = L+run.x*cell, width = (run.glyphColumns ?? Array.from(run.text).length)*cell;
+                    c.save(); c.beginPath(); c.rect(x,y-base0-4*k,width,R+5*k); c.clip();
                     c.fillStyle = run.fg; c.fillText(run.text,x,y,width); c.restore();
                 }
             }
             if (cursor) {
                 const row = rows[cursor.y-offset] ?? [], span = monitorCellSpan(row,cursor.x);
-                const x = 24+span.from*cell, y = 70+(cursor.y-offset)*22, width = (span.to-span.from)*cell;
-                c.fillStyle = '#b8e6ca'; c.fillRect(x,y-17,width,22);
+                const x = L+span.from*cell, y = T+base0+(cursor.y-offset)*R, width = (span.to-span.from)*cell;
+                c.fillStyle = '#b8e6ca'; c.fillRect(x,y-base0,width,R);
                 const ch = row[span.from];
                 if (ch && ch !== ' ') { c.fillStyle = base; c.fillText(ch,x,y,width); }
             }
             if (spans.length) {
                 c.fillStyle = 'rgba(65,150,240,0.45)';
-                for (const span of spans) c.fillRect(24 + span.from*cell, 53 + span.row*22, (span.to-span.from)*cell, 22);
+                for (const span of spans) c.fillRect(L + span.from*cell, T + span.row*R, (span.to-span.from)*cell, R);
             }
             c.restore();
         }

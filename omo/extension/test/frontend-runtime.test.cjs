@@ -13,12 +13,12 @@ async function live(options) {
   return env;
 }
 
-test('binding opens the station workspace once, attaches the active tab at 80x22 and polls frames by sequence', async () => {
+test('binding opens the station workspace once, attaches the active tab at the monitor grid (54x15) and polls frames by sequence', async () => {
   const service = new H.FakeRuntime();
   service.pollQueue.push(frame(3, ['$ ls', 'README.md'], { foreground: ['7777', '777777777'], background: ['0000', '000000000'], palette: { '7': 'e8e1d5', '0': '1a1511' }, cursor: { x: 2, y: 0, visible: true } }));
   const { controller, timers } = await live({ service });
   assert.deepEqual(service.named('openWorkspace').map(c => c.arg), [{ stationId: 'terminal-1', projectUri: 'file:///p/a', name: 'Room A' }]);
-  assert.deepEqual(service.named('attach').map(c => c.arg), [{ workspaceId: 'ws-1', tabId: 't1', cols: 80, rows: 22, stationId: 'terminal-1' }]);
+  assert.deepEqual(service.named('attach').map(c => c.arg), [{ workspaceId: 'ws-1', tabId: 't1', cols: 54, rows: 15, stationId: 'terminal-1' }]);
   assert.deepEqual(service.named('poll')[0].arg, { viewId: 'v1', afterSequence: 0 });
   const s = controller.state;
   assert.equal(s.phase, 'live');
