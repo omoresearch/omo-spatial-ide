@@ -199,7 +199,7 @@ def face_rot(d):
     return math.atan2(d[0], -d[1])
 
 REALTIME = []
-RETEX = {'side_table_01': {'side_table_01': 'side_table_01_walnut.jpg'}, 'modern_arm_chair_01': {'modern_arm_chair_01_legs': 'arm_chair_legs_walnut.jpg'},
+RETEX = {'side_table_01': {'side_table_01': 'side_table_01_walnut.jpg'}, 'modern_arm_chair_01': {'modern_arm_chair_01_legs': 'arm_chair_legs_walnut.jpg', 'modern_arm_chair_01_pillow': 'gen_linen_rust.png'},
          'mid_century_lounge_chair': {'mid_century_lounge_chair': 'lounge_chair_walnut.jpg'}, 'desk_lamp_arm_01': {'desk_lamp_arm_01': 'desk_lamp_black.jpg'}}
 def _retex(new, aid):
     for o in new:
@@ -550,10 +550,13 @@ box('CurtainTrack', (W / 2, D - T - 0.16, H - 0.02), (IX1 - IX0, 0.04, 0.025), '
 sheer_curtain('SheerL', IX0 + 0.04, IX0 + 0.95, D - T - 0.16, 0.015, H - 0.035, folds=7)
 sheer_curtain('SheerR', IX1 - 0.95, IX1 - 0.04, D - T - 0.16, 0.015, H - 0.035, folds=7)
 # Cool dusk fill through the glass (the shadows get a blue cast; warm pools read against it)
-light('SkyFill', 'AREA', (W / 2, D + 0.8, 1.9), 85, (0.42, 0.52, 1.0), sx=IX1 - IX0, sy=2.8, rot=(math.radians(90), 0, 0))
-light('CeilBounce', 'AREA', (W / 2, D / 2, 0.9), float(os.environ.get('BOUNCE_E', {'library': '55', 'lounge': '48', 'studio': '30'}[MID])), (1.0, 0.70, 0.45), sx=W - 1.5, sy=D - 1.5, rot=(math.radians(180), 0, 0))
+# r5c fix: area lights emit along local -Z; Rx(+90) aimed SkyFill OUT of the room (+y) and DoorSpill out of the door (-y).
+light('SkyFill', 'AREA', (W / 2, D + 0.8, 1.9), float(os.environ.get('SKY_E', '70')), (0.42, 0.52, 1.0), sx=IX1 - IX0, sy=2.8, rot=(math.radians(-90), 0, 0))
+light('CeilBounce', 'AREA', (W / 2, D / 2, 0.9), float(os.environ.get('BOUNCE_E', '24')), (1.0, 0.70, 0.45), sx=W - 1.5, sy=D - 1.5, rot=(math.radians(180), 0, 0))
 # Faint warm bounce from the doorway (the plaza outside is lit)
-light('DoorSpill', 'AREA', (W / 2, -0.6, 1.2), 18, (1.0, 0.78, 0.55), sx=1.4, sy=2.0, rot=(math.radians(-90), 0, 0))
+light('DoorSpill', 'AREA', (W / 2, -0.6, 1.2), 30, (1.0, 0.78, 0.55), sx=1.4, sy=2.0, rot=(math.radians(90), 0, 0))
+# soft warm front fill high on the door wall, aimed into the room and down 30 deg (lifts the faces seen from the door)
+light('FrontFill', 'AREA', (W / 2, IY0 + 0.12, 2.75), float(os.environ.get('FRONT_E', {'library': '110', 'lounge': '110', 'studio': '70'}[MID])), (1.0, 0.74, 0.50), sx=6.0, sy=0.5, rot=(math.radians(60), 0, 0))
 
 # ================================================================ module layouts (r2 redesign)
 DESKS = []; SCREEN_Y = 1.65
@@ -607,7 +610,7 @@ if MID == 'library':
     rbox('Throw', (NX - 0.05, NY + 0.08, 0.47), (0.55, 0.45, 0.03), 0.4, 'Boucle', bevel=0.012, seg=2)
     # round table + 3 chairs on a round rug, the pendant right over the table centre
     RX, RY = 5.05, 3.75
-    principled('RugRound', diff=round_rug_tex('gen_rug_round', (0.40, 0.36, 0.31), (0.24, 0.20, 0.16), 44), rough=1.0)
+    principled('RugRound', diff=round_rug_tex('gen_rug_round', (0.56, 0.51, 0.44), (0.30, 0.24, 0.18), 44), rough=1.0)
     rug_round('RugTable', RX, RY, 1.22, 'RugRound')
     cyl('TableTop', (RX, RY, 0.745), 0.55, 0.04, 'Walnut', seg=64)
     cc0('brass_vase_01', (RX - 0.05, RY + 0.12, 0.765), 0.0, 0.4)
@@ -670,7 +673,7 @@ elif MID == 'lounge':
     cc0('side_table_01', (GX - 1.95, SY - 0.10, 0), math.pi / 2)
     table_lamp(1, GX - 1.95, SY - 0.10, 0.55, energy=40)
     floor_lamp(0, GX + 1.92, SY + 0.12, energy=70)
-    pendant(0, CTX, CTY, 2.0, 0.28, 60)
+    pendant(0, CTX, CTY, 2.22, 0.34, 70)
     canvas_on_wall('CanvasSofa', 'left', 4.80, 1.50, 1.10, 1.78, 'CanvasW'); WALL_ART = 'left'
     # right wall: a long low sideboard (media wall: the screen slot sits above it), one lamp, a vase, a book stack
     SBX = IX1 - 0.24
