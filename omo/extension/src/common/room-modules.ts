@@ -180,6 +180,20 @@ export function groundFor(rects: ReadonlyArray<{ minX: number; maxX: number; min
     return { width: even(2 * (hx + margin)), depth: even(2 * (hz + margin)) };
 }
 
+// ------------------------------------------------------------------------------------------------ HQ floors
+/** HQ floors (HQ-FLOORS.md): x of the first floor and the step between floors (60 m: no floor ever sees another). */
+export const FLOOR_X0 = 200, FLOOR_PITCH = 60;
+/** Where floor `i` (0-based) of an HQ world stands: x = 200 + 60 i, z = 0, door facing +z (rotation 0). */
+export function floorSpot(i: number): Transform { return { x: FLOOR_X0 + FLOOR_PITCH * Math.max(0, Math.floor(i)), z: 0, rotation: 0 }; }
+/**
+ * The spawn on a floor at `at`: just inside the door (1.2 m in from the front wall, on the door centre line), facing
+ * the glass (the back wall, -z local) — the Blender render's camera.
+ */
+export function floorSpawn(at: Transform): { x: number; z: number; yaw: number } {
+    const p = toWorld(at, { x: 0, z: MODULE_DEPTH / 2 - 1.2, rotation: 0 });
+    return { x: p.x, z: p.z, yaw: p.rotation };
+}
+
 /** Room-local -> world for a room at `at` (rotation in 90° steps). */
 export function toWorld(at: Transform, local: Transform): Transform {
     const c = Math.cos(at.rotation), s = Math.sin(at.rotation);

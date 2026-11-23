@@ -148,10 +148,13 @@ export function styleKit(id: string | undefined): StyleKit | undefined { return 
 /** The kit a theme is drawn with (undefined: the theme's procedural look only). */
 export function kitForTheme(theme: RoomTheme | undefined): StyleKit | undefined { return STYLE_KITS.find(k => k.theme === theme); }
 export function kitProp(id: string | undefined): StyleKitProp | undefined { return KIT_PROPS.find(p => p.id === id); }
-/** True when the baked shell of `kit` draws this world: a closed shell of exactly the baked floor size, no rooms inside. */
+/**
+ * True when the baked shell of `kit` draws this world: a closed shell of exactly the baked floor size, no rooms inside.
+ * HQ floors: floor rooms (RoomEntity.floor) stand far away above the city, not inside the shell, so they do not count.
+ */
 export function kitShellFits(kit: StyleKit, world: Pick<WorldSpec, 'shell'> & { entities?: readonly WorldEntity[] }): boolean {
     return !world.shell.open && Math.abs(world.shell.width - kit.shell.width) < 0.01 && Math.abs(world.shell.depth - kit.shell.depth) < 0.01
-        && !(world.entities ?? []).some(e => e.kind === 'room');
+        && !(world.entities ?? []).some(e => e.kind === 'room' && !e.floor);
 }
 /** The kit that draws this world's shell (theme kit + exact fit), if any. */
 export function activeKit(world: Pick<WorldSpec, 'shell'> & { entities?: readonly WorldEntity[] }): StyleKit | undefined {

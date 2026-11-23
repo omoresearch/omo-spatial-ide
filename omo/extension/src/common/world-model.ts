@@ -65,6 +65,12 @@ export interface RoomEntity extends EntityBase {
     kind: 'room'; width: number; depth: number; theme?: RoomTheme; doors?: WallSide[];
     /** room modules — the baked room this room shows ('library' | 'lounge' | 'studio', common/room-modules.ts). Optional: old worlds stay valid; unknown ids are ignored by the renderer. */
     module?: string;
+    /**
+     * HQ floors — this room is its OWN FLOOR above the city (HQ-FLOORS.md): it stands at floorSpot(i) (x = 200 + 60 i,
+     * z = 0, common/room-modules.ts), far outside the shell, with only the skyline behind its glass. Things inside it may
+     * stand outside the shell too. Absent = a room on the shell's ground (old worlds unchanged).
+     */
+    floor?: boolean;
 }
 export type WorldEntity = StationEntity | MonitorWallEntity | WebWallEntity | MirrorEntity | ReviewScreenEntity | DecorEntity | RoomEntity;
 
@@ -130,9 +136,11 @@ export function validStation(s: unknown): s is StationConfig {
         && Array.isArray(v.tabs) && v.tabs.length >= 1 && v.tabs.length <= 8
         && v.tabs.every(t => !!t && text(t.name, 40) && ['shell', 'hermes', 'claude', 'codex', 'dsh'].includes(t.kind)); // w2:agents
 }
-export function validEntity(e: unknown, shell: WorldShell): e is WorldEntity {
+export function validEntity(e: unknown, shell: WorldShell, floors: readonly Rect[] = []): e is WorldEntity {
     const v = e as WorldEntity;
-    if (!v || typeof v.id !== 'string' || !WORLD_ID_RE.test(v.id) || !validTransform(v.transform, shell)) return false;
+    // HQ floors: a floor room (and anything standing inside one) may stand anywhere within SHELL_MAX of the origin.
+    const onFloor = !!v && ((v.kind === 'room' && v.floor === true) || (!!v.transform && floors.some(r => v.transform.x >= r.minX - 1e-6 && v.transform.x <= r.maxX + 1e-6 && v.transform.z >= r.minZ - 1e-6 && v.transform.z <= r.maxZ + 1e-6)));
+    if (!v || typeof v.id !== 'string' || !WORLD_ID_RE.test(v.id) || !validTransform(v.transform, onFloor ? FLOOR_REACH : shell)) return false;
     if (v.label !== undefined && !text(v.label, 60)) return false;
     switch (v.kind) {
         case 'station': return validStation(v.station);
@@ -150,7 +158,16 @@ export function validRoom(v: RoomEntity): boolean {
     const quarter = Math.abs(Math.round(v.transform.rotation / (Math.PI / 2)) * (Math.PI / 2) - v.transform.rotation) < 1e-6;
     const doors = v.doors === undefined || (Array.isArray(v.doors) && v.doors.length <= 4 && new Set(v.doors).size === v.doors.length && v.doors.every(d => WALL_SIDES.includes(d)));
     return finite(v.width, ROOM_MIN, ROOM_MAX) && finite(v.depth, ROOM_MIN, ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle' || v.theme === 'skyline')
-        && (v.module === undefined || (typeof v.module === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(v.module)));
+        && (v.module === undefined || (typeof v.module === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(v.module)))
+        && (v.floor === undefined || typeof v.floor === 'boolean');
+}
+/** HQ floors: the reach a floor room (or a thing inside one) may stand at: anywhere within SHELL_MAX / 2 of the origin. */
+const FLOOR_REACH: WorldShell = { theme: 'station', width: SHELL_MAX, depth: SHELL_MAX };
+/** HQ floors — the rooms of a world that are their own floor (RoomEntity.floor), in entity order. */
+export function floorRooms(world: Pick<WorldSpec, 'entities'>): RoomEntity[] { return (world.entities ?? []).filter((e): e is RoomEntity => e.kind === 'room' && e.floor === true); }
+/** The floor room a point stands in (undefined: the HQ / the shell's own ground). */
+export function floorAt(world: Pick<WorldSpec, 'entities'>, p: { x: number; z: number }): RoomEntity | undefined {
+    return floorRooms(world).find(r => { const b = roomRect(r); return p.x >= b.minX - 1e-6 && p.x <= b.maxX + 1e-6 && p.z >= b.minZ - 1e-6 && p.z <= b.maxZ + 1e-6; });
 }
 
 export function validateWorld(w: unknown): WorldResult {
@@ -160,12 +177,13 @@ export function validateWorld(w: unknown): WorldResult {
         || (v.shell.open !== undefined && typeof v.shell.open !== 'boolean')) return { ok: false, error: 'The room shell is invalid.' };
     if (!Array.isArray(v.entities) || v.entities.length > WORLD_MAX_ENTITIES) return { ok: false, error: `A world holds at most ${WORLD_MAX_ENTITIES} things.` };
     const ids = new Set<string>();
+    const floors = v.entities.filter(e => !!e && e.kind === 'room' && e.floor === true && !!e.transform && Number.isFinite(e.width) && Number.isFinite(e.depth)).map(e => roomRect(e as RoomEntity));
     for (const e of v.entities) {
-        if (!validEntity(e, v.shell)) return { ok: false, error: `Entity ${String((e as WorldEntity)?.id)} is invalid.` };
+        if (!validEntity(e, v.shell, floors)) return { ok: false, error: `Entity ${String((e as WorldEntity)?.id)} is invalid.` };
         if (ids.has(e.id)) return { ok: false, error: `Duplicate id ${e.id}.` };
         ids.add(e.id);
     }
-    for (const e of v.entities) if (e.kind === 'room') {
+    for (const e of v.entities) if (e.kind === 'room' && !e.floor) {
         const r = roomRect(e);
         if (r.minX < -v.shell.width / 2 - 1e-6 || r.maxX > v.shell.width / 2 + 1e-6 || r.minZ < -v.shell.depth / 2 - 1e-6 || r.maxZ > v.shell.depth / 2 + 1e-6) return { ok: false, error: `Room ${e.id} does not fit inside the world.` };
     }
