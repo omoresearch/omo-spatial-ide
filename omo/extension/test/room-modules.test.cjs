@@ -44,7 +44,7 @@ test('pickModule: purpose words -> library / lounge / studio, else desks -> stud
     ['Library', [], false, 'library'], ['Notes', [], false, 'library'], ['Trip ideas', ['read later', 'notes'], false, 'library'],
     ['Chats', [], false, 'lounge'], ['Lounge', [], false, 'lounge'], ['Social', [], false, 'lounge'], ['Talks', [], false, 'lounge'], ['Friends', [], false, 'lounge'],
     ['Desks', [], false, 'studio'], ['Code', [], false, 'studio'], ['Work', [], false, 'studio'], ['Build', [], false, 'studio'], ['Dev', [], false, 'studio'],
-    ['Research wing', [], true, 'library'], ['Agent wing', [], true, 'studio'], ['Ops', [], false, 'studio'],
+    ['Research wing', [], true, 'studio'], ['Research wing', [], false, 'lounge'], ['Agent wing', [], true, 'studio'], ['Ops', [], false, 'studio'],
     ['Room 2', [], true, 'studio'], ['Room 2', [], false, 'lounge'], ['', [], false, 'lounge'], [undefined, undefined, false, 'lounge'],
     ['Q3 plans', 'chat with friends', false, 'lounge'], ['Q3 plans', 'code reviews', false, 'studio']
   ];
@@ -64,6 +64,19 @@ test('the purpose words are shared with the set-dressing presets (re-exported fr
   assert.deepEqual(rm.PURPOSE_WORDS.map(([k]) => k), ['library', 'observatory', 'dining', 'garden', 'lounge', 'work']);
 });
 
+test('module anchors: desks, decor spots and boards keep the doorway clear and miss the baked furniture', () => {
+  const hit = (p, r, b) => Math.abs(p.x - b.x) < r + b.hx && Math.abs(p.z - b.z) < r + b.hz;
+  const inDoor = (p, r) => p.x + r > rm.DOOR_CLEAR.minX && p.x - r < rm.DOOR_CLEAR.maxX && p.z + r > rm.DOOR_CLEAR.minZ;
+  for (const m of Object.values(rm.MODULES)) {
+    for (const d of rm.MODULE_DECOR_SPOTS) {
+      assert.ok(!inDoor(d, 0.45), `${m.id} decor spot ${d.x},${d.z} clear of the doorway`);
+      for (const b of m.blocks) assert.ok(!hit(d, 0.45, b), `${m.id} decor spot ${d.x},${d.z} misses furniture ${b.x},${b.z}`);
+    }
+    for (const d of m.desks) assert.ok(!inDoor(d, 0.3), `${m.id} desk clear of the doorway`);
+    for (const b of m.boards) assert.ok(Math.abs(b.x) - 0.6 >= rm.DOOR_CLEAR.maxX, `${m.id} board beside the door, not over it`);
+  }
+});
+
 test('studioSplit caps desks at 3 per studio; extra desks go to another studio', () => {
   assert.deepEqual(rm.studioSplit(0), []);
   assert.deepEqual(rm.studioSplit(2), [2]);
@@ -72,7 +85,7 @@ test('studioSplit caps desks at 3 per studio; extra desks go to another studio',
   assert.deepEqual(rm.studioSplit(7), [3, 3, 1]);
 });
 
-test('moduleGrid: even spacing, 2 m gaps, two rows facing a central path, no overlaps', () => {
+test('moduleGrid: even spacing, 2 m gaps, one row (<= 3) or two rows facing a central path, no overlaps', () => {
   for (let n = 1; n <= 12; n++) {
     const g = rm.moduleGrid(n);
     assert.equal(g.length, n);
@@ -85,7 +98,7 @@ test('moduleGrid: even spacing, 2 m gaps, two rows facing a central path, no ove
       assert.equal(s.rotation, s.row ? Math.PI : 0);
       // the doorway (local front, +z) faces the path at z = 0
       const door = rm.toWorld(s, { x: 0, z: rm.MODULE_DEPTH / 2, rotation: 0 });
-      assert.equal(Math.abs(door.z), rm.GRID_PATH / 2, `n=${n} door on the path edge`);
+      assert.equal(Math.abs(door.z), n > 3 ? rm.GRID_PATH / 2 : 0, `n=${n} door on the path edge`);
     }
     const rect = s => ({ minX: s.x - 4, maxX: s.x + 4, minZ: s.z - 3, maxZ: s.z + 3 });
     for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
