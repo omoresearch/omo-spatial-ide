@@ -512,7 +512,7 @@ box('SkirtF1', ((DX1 + J + IX1) / 2, IY0 + 0.01, SK / 2), (IX1 - DX1 - J, 0.02, 
 SOF = 0.45
 # r2 cove: a dropped perimeter band (slab H-0.26..H-0.12) with an open LED slot at its inner edge (0.14 deep, 0.12 tall);
 # a lip hides the strip from below, the strip is a real AREA light aimed inward + up, washing the central ceiling.
-COVE_E = float(os.environ.get('COVE_E', '9'))
+COVE_E = float(os.environ.get('COVE_E', {'library': '7', 'lounge': '6.5', 'studio': '4.5'}[MID]))   # r5: tamer coves
 SL = 0.14
 SYE = IY1 - 0.42                 # side soffits stop short of the glass: the sheer track runs full width there
 SYC, SYL = (IY0 + SYE) / 2, SYE - IY0
@@ -606,142 +606,162 @@ if MID == 'library':
     box('NookBook', (2.42, 5.30, 0.565), (0.22, 0.16, 0.03), 'BookC', bevel=0.002, seg=1)
     rbox('Throw', (NX - 0.05, NY + 0.08, 0.47), (0.55, 0.45, 0.03), 0.4, 'Boucle', bevel=0.012, seg=2)
     # round table + 3 chairs on a round rug, the pendant right over the table centre
-    RX, RY = 5.0, 2.9
+    RX, RY = 4.95, 3.35
     principled('RugRound', diff=round_rug_tex('gen_rug_round', (0.40, 0.36, 0.31), (0.24, 0.20, 0.16), 44), rough=1.0)
-    rug_round('RugTable', RX, RY, 1.55, 'RugRound')
-    cyl('TableTop', (RX, RY, 0.745), 0.60, 0.04, 'Walnut', seg=64)
+    rug_round('RugTable', RX, RY, 1.32, 'RugRound')
+    cyl('TableTop', (RX, RY, 0.745), 0.55, 0.04, 'Walnut', seg=64)
+    cc0('brass_vase_01', (RX - 0.05, RY + 0.12, 0.765), 0.0, 0.4)
     cyl('TableStem', (RX, RY, 0.37), 0.05, 0.70, 'BlackMetal', seg=24)
     cyl('TableFoot', (RX, RY, 0.015), 0.30, 0.03, 'BlackMetal', seg=48)
-    for i, a_deg in enumerate((150, 270, 30)):
+    for i, a_deg in enumerate((0, 90, 180)):
         a_ = math.radians(a_deg); cx_, cy_ = RX + 0.80 * math.cos(a_), RY + 0.80 * math.sin(a_)
         d = (RX - cx_, RY - cy_); n = math.hypot(*d); d = (d[0] / n, d[1] / n)
-        cc0('dining_chair_02', (cx_, cy_, 0), face_rot(d) + math.radians(rnd.uniform(-5, 5))); seat(cx_ + d[0] * 0.03, cy_ + d[1] * 0.03, 0.45, d, 'chair', 'table')
+        cc0('dining_chair_02', (cx_, cy_, 0), face_rot(d)); seat(cx_ + d[0] * 0.03, cy_ + d[1] * 0.03, 0.45, d, 'chair', 'table')
     for j, (dx, dy, h, m) in enumerate(((-0.22, 0.12, 0.035, 'BookB'), (-0.20, 0.14, 0.03, 'BookD'), (-0.23, 0.11, 0.028, 'BookG'))):
         box(f'TableBook{j}', (RX + dx, RY + dy, 0.765 + 0.032 * j + h / 2), (0.24 - 0.02 * j, 0.17, h), m, bevel=0.002, seg=1)
     box('OpenBook', (RX + 0.12, RY - 0.18, 0.772), (0.34, 0.24, 0.012), 'BookD', bevel=0.003)
     cyl('TableCup', (RX + 0.28, RY + 0.14, 0.81), 0.04, 0.09, 'Ceramic', seg=24)
-    pendant(0, RX, RY, 1.62, 0.26, 45)
+    pendant(0, RX, RY, 1.70, 0.22, 55)
     # right wall: console + the room's one artwork
-    box('Console', (IX1 - 0.22, 3.0, 0.36), (0.40, 2.0, 0.66), 'Walnut', bevel=0.006)
-    box('ConsoleKick', (IX1 - 0.22, 3.0, 0.02), (0.34, 1.9, 0.04), 'BlackMetal')
-    for q in range(2): box(f'ConsoleSlot{q}', (IX1 - 0.425, 3.0 - 0.5 + 1.0 * q, 0.38), (0.006, 0.96, 0.56), 'StoneDark')
-    table_lamp(0, IX1 - 0.24, 2.25, 0.69)
-    cc0('ceramic_vase_01', (IX1 - 0.24, 3.65, 0.69), 0.0, 0.85)
-    for q, m_ in enumerate(('BookB', 'BookD', 'BookG')): box(f'ConsoleBook{q}', (IX1 - 0.25, 3.15, 0.69 + 0.02 + 0.036 * q), (0.26 - 0.02 * q, 0.20, 0.036), m_, bevel=0.002, seg=1)
-    canvas_on_wall('CanvasA', 'right', 3.0, 1.30, 0.95, 1.72, 'CanvasB'); WALL_ART = 'right'
+    CY_ = 4.45
+    box('Console', (IX1 - 0.22, CY_, 0.36), (0.40, 1.7, 0.66), 'Walnut', bevel=0.006)
+    box('ConsoleKick', (IX1 - 0.22, CY_, 0.02), (0.34, 1.6, 0.04), 'BlackMetal')
+    for q in range(2): box(f'ConsoleSlot{q}', (IX1 - 0.425, CY_ - 0.41 + 0.82 * q, 0.38), (0.006, 0.80, 0.56), 'StoneDark')
+    table_lamp(0, IX1 - 0.24, CY_ - 0.55, 0.69, energy=36)
+    cc0('ceramic_vase_01', (IX1 - 0.24, CY_ + 0.55, 0.69), 0.0, 0.85)
+    for q, m_ in enumerate(('BookB', 'BookD', 'BookG')): box(f'ConsoleBook{q}', (IX1 - 0.25, CY_ + 0.05, 0.69 + 0.02 + 0.036 * q), (0.26 - 0.02 * q, 0.20, 0.036), m_, bevel=0.002, seg=1)
+    canvas_on_wall('CanvasA', 'right', CY_, 1.40, 1.00, 1.78, 'CanvasB'); WALL_ART = 'right'
     # plants: one planter type (stone), two plants framing the glass corners
-    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (7.3, 5.3, 0), 0.6, 1.1, POT(0.27, 0.50))
-    potted('calathea_c', 'calathea_orbifolia_01', ['calathea_orbifolia_01_c'], (6.55, 5.5, 0), 1.0, 1.4, POT(0.18, 0.40))
+    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (7.42, 5.58, 0), 0.6, 1.0, POT(0.25, 0.48))
+    potted('calathea_c', 'calathea_orbifolia_01', ['calathea_orbifolia_01_c'], (6.75, 5.58, 0), 1.0, 1.25, POT(0.17, 0.38))
     potted('calathea_b', 'calathea_orbifolia_01', ['calathea_orbifolia_01_b'], (7.45, 0.62, 0), 0.4, 1.6, POT(0.17, 0.48))
     for (x, y) in ((2.6, 1.5), (6.0, 1.3)): downlight(x, y, 3.0, 60)
 elif MID == 'lounge':
-    # ONE conversation group on ONE large rug: the sofa on the left wall faces two armchairs across the coffee table;
-    # a side table + lamp at the sofa's glass end, a floor lamp at its door end; the one artwork above the sofa.
-    rug('RugLounge', 2.2, 3.45, 3.9, 3.9, 'RugPit')
-    SY = 3.45
-    sofa('Sofa', 0.66, SY, (1, 0), 3, 'VelvetTeal', ['Boucle', 'VelvetMustard'], 'lounge', seat_w=0.84, throw=False, plinth='BlackMetal')
-    canvas_on_wall('CanvasSofa', 'left', SY, 1.55, 1.05, 1.80, 'CanvasW'); WALL_ART = 'left'
-    CTX, CTY = 2.2, SY
+    # r5: ONE conversation group on ONE rug, its axis along the view: the sofa floats with its back to the glass and
+    # faces the door; two identical armchairs face it across the coffee table (side by side, toed in to the table);
+    # the pendant hangs right over the coffee table. Secondary zone on the right: a reading chair + ottoman + floor lamp
+    # + side table on a small round rug by the glass. ONE large artwork on the left wall over a side table + lamp.
+    GX, GY = 2.45, 3.45                       # group centre = coffee table
+    rug('RugLounge', GX, GY + 0.05, 3.7, 3.5, 'RugPit')
+    SY = GY + 1.42
+    sofa('Sofa', GX, SY, (0, -1), 3, 'Boucle', ['VelvetRust', 'VelvetTeal'], 'lounge', seat_w=0.84, throw=False, plinth='BlackMetal')
+    # extra cushions + a throw over the right arm (styled, not symmetric)
+    FS = Frame(GX, SY, (0, -1)); a_ = FS.ang
+    rbox('SofaPillow2', FS.p(-0.62, -0.05, 0.62), (0.40, 0.12, 0.38), a_ - 0.10, 'Linen', bevel=0.06, seg=3)
+    rbox('SofaPillow3', FS.p(0.70, -0.07, 0.60), (0.36, 0.12, 0.34), a_ + 0.12, 'VelvetMustard', bevel=0.06, seg=3)
+    rbox('SofaThrowArm', FS.p(1.45, 0.05, 0.62), (0.30, 0.62, 0.035), a_, 'Linen', bevel=0.014, seg=2)
+    rbox('SofaThrowFall', FS.p(1.61, 0.05, 0.40), (0.035, 0.62, 0.44), a_, 'Linen', bevel=0.014, seg=2)
+    rbox('SofaThrowSeat', FS.p(1.12, 0.15, 0.475), (0.42, 0.60, 0.03), a_ + 0.05, 'Linen', bevel=0.012, seg=2)
+    CTX, CTY = GX, GY
     cc0('coffee_table_round_01', (CTX, CTY, 0), 0.0, 0.85)
     ctop = 0.49 * 0.85
     for j, (h, m) in enumerate(((0.035, 'BookD'), (0.03, 'BookA'), (0.025, 'BookG'))):
-        box(f'CoffeeBook{j}', (CTX - 0.12, CTY + 0.18, ctop + 0.005 + 0.033 * j + h / 2), (0.24 - 0.02 * j, 0.30 - 0.03 * j, h), m, bevel=0.002, seg=1)
-    cyl('CoffeeBowl', (CTX + 0.18, CTY - 0.15, ctop + 0.04), 0.12, 0.07, 'Ceramic', seg=32, r2=0.07)
-    # two armchairs facing the sofa, each turned 18 deg toward the table centre
-    for k, (y, ang) in enumerate(((SY - 0.78, 0.31), (SY + 0.78, -0.31))):
-        d = (-math.cos(ang), math.sin(ang))
-        cc0('modern_arm_chair_01', (3.62, y, 0), face_rot(d)); seat(3.62 + d[0] * 0.05, y + d[1] * 0.05, 0.53, d, 'chair', 'lounge')
-    # a small drink table between the armchairs (part of the group)
-    cyl('DrinkTop', (3.85, SY, 0.50), 0.20, 0.025, 'StoneDark', seg=48); cyl('DrinkStem', (3.85, SY, 0.25), 0.025, 0.48, 'BlackMetal', seg=16)
-    cyl('DrinkFoot', (3.85, SY, 0.01), 0.15, 0.02, 'BlackMetal', seg=32)
-    cyl('DrinkGlass', (3.80, SY + 0.05, 0.56), 0.035, 0.09, 'Ceramic', seg=24)
-    # sofa ends: side table + lamp (glass end), floor lamp (door end)
-    cc0('side_table_01', (0.62, SY + 1.82, 0), math.pi / 2)
-    table_lamp(1, 0.62, SY + 1.82, 0.55)
-    floor_lamp(0, 0.55, SY - 1.85, energy=55)
-    pendant(0, CTX, CTY, 2.15, 0.36, 40)
+        box(f'CoffeeBook{j}', (CTX - 0.14, CTY + 0.12, ctop + 0.005 + 0.033 * j + h / 2), (0.24 - 0.02 * j, 0.30 - 0.03 * j, h), m, bevel=0.002, seg=1)
+    cyl('CoffeeBowl', (CTX + 0.18, CTY - 0.10, ctop + 0.04), 0.12, 0.07, 'Ceramic', seg=32, r2=0.07)
+    cc0('brass_vase_01', (CTX + 0.05, CTY + 0.22, ctop), 0.0, 0.32)
+    # two identical armchairs facing the sofa across the table, each toed in 14 deg toward the table centre
+    for k, sx_ in enumerate((-1, 1)):
+        cx_, cy_ = GX + sx_ * 0.80, GY - 1.30
+        d = (-sx_ * math.sin(math.radians(14)), math.cos(math.radians(14)))
+        cc0('modern_arm_chair_01', (cx_, cy_, 0), face_rot(d)); seat(cx_ + d[0] * 0.05, cy_ + d[1] * 0.05, 0.53, d, 'chair', 'lounge')
+    # sofa ends: side table + lamp (left, under the artwork), floor lamp (right)
+    cc0('side_table_01', (GX - 1.95, SY - 0.10, 0), math.pi / 2)
+    table_lamp(1, GX - 1.95, SY - 0.10, 0.55, energy=40)
+    floor_lamp(0, GX + 1.92, SY + 0.12, energy=70)
+    pendant(0, CTX, CTY, 2.05, 0.30, 55)
+    canvas_on_wall('CanvasSofa', 'left', 4.80, 1.50, 1.10, 1.78, 'CanvasW'); WALL_ART = 'left'
     # right wall: a long low sideboard (media wall: the screen slot sits above it), one lamp, a vase, a book stack
     SBX = IX1 - 0.24
-    box('Sideboard', (SBX, 3.0, 0.36), (0.44, 2.6, 0.64), 'Walnut', bevel=0.006)
-    box('SideboardKick', (SBX, 3.0, 0.02), (0.38, 2.5, 0.04), 'BlackMetal')
-    for q in range(3): box(f'SideboardSlot{q}', (SBX - 0.225, 3.0 - 0.84 + 0.84 * q, 0.38), (0.006, 0.80, 0.54), 'StoneDark')
-    table_lamp(2, SBX, 2.05, 0.68)
-    cc0('brass_vase_01', (SBX, 3.85, 0.68), 0.0, 0.55)
-    for q, m_ in enumerate(('BookB', 'BookA', 'BookG')): box(f'SideBook{q}', (SBX, 3.25, 0.68 + 0.02 + 0.04 * q), (0.26, 0.20, 0.04), m_, bevel=0.002, seg=1)
-    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (7.3, 5.3, 0), 1.2, 1.1, POT(0.27, 0.50))
-    potted('calathea_c', 'calathea_orbifolia_01', ['calathea_orbifolia_01_c'], (6.6, 5.5, 0), 1.0, 1.4, POT(0.18, 0.40))
+    box('Sideboard', (SBX, 2.75, 0.36), (0.44, 2.4, 0.64), 'Walnut', bevel=0.006)
+    box('SideboardKick', (SBX, 2.75, 0.02), (0.38, 2.3, 0.04), 'BlackMetal')
+    for q in range(3): box(f'SideboardSlot{q}', (SBX - 0.225, 2.75 - 0.78 + 0.78 * q, 0.38), (0.006, 0.74, 0.54), 'StoneDark')
+    table_lamp(2, SBX, 1.85, 0.68)
+    cc0('ceramic_vase_01', (SBX, 3.55, 0.68), 0.0, 0.8)
+    for q, m_ in enumerate(('BookB', 'BookA', 'BookG')): box(f'SideBook{q}', (SBX, 3.0, 0.68 + 0.02 + 0.04 * q), (0.26, 0.20, 0.04), m_, bevel=0.002, seg=1)
+    # secondary zone (right, by the glass): reading chair + ottoman on a small round rug, floor lamp behind, side table
+    principled('RugRoundL', diff=round_rug_tex('gen_rug_round_l', (0.30, 0.27, 0.23), (0.55, 0.45, 0.32), 45), rough=1.0)
+    rd = (-0.62, -0.78); RCX, RCY = 6.25, 4.75
+    rug_round('RugRead', RCX - 0.25, RCY - 0.35, 1.05, 'RugRoundL')
+    cc0('mid_century_lounge_chair', (RCX, RCY, 0), face_rot(rd)); seat(RCX + rd[0] * 0.12, RCY + rd[1] * 0.12, 0.46, rd, 'chair', 'reading')
+    cc0('Ottoman_01', (RCX + rd[0] * 0.95, RCY + rd[1] * 0.95, 0), face_rot(rd) + math.pi / 2, 0.8)
+    floor_lamp(1, RCX + 0.62, RCY + 0.10, h=1.5, energy=60)
+    cc0('side_table_01', (RCX - 0.70, RCY + 0.45, 0), 0.4)
+    cyl('ReadMug', (RCX - 0.74, RCY + 0.40, 0.565), 0.04, 0.09, 'Ceramic', seg=24)
+    box('ReadBook', (RCX - 0.62, RCY + 0.50, 0.565), (0.22, 0.16, 0.03), 'BookC', bevel=0.002, seg=1)
+    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (7.42, 5.42, 0), 1.2, 1.1, POT(0.27, 0.50))
+    potted('calathea_c', 'calathea_orbifolia_01', ['calathea_orbifolia_01_c'], (0.62, 5.45, 0), 1.0, 1.3, POT(0.18, 0.40))
     potted('calathea_b', 'calathea_orbifolia_01', ['calathea_orbifolia_01_b'], (7.45, 0.62, 0), 2.0, 1.6, POT(0.17, 0.48))
-    for (x, y) in ((5.6, 1.6), (5.6, 4.4)): downlight(x, y, 3.0, 60)
+    for (x, y) in ((5.6, 1.6),): downlight(x, y, 3.0, 60)
 elif MID == 'studio':
-    # ONE double-sided bench desk PERPENDICULAR to the glass (screens face along x: never backlit by the view):
-    # two slots on its left side, one on its right; task chairs; a linear pendant (a real light) right over the bench;
-    # walnut slats above it; built-in shelving on the left wall; credenza + the one artwork on the right wall.
-    BX, BY0, BY1, BD = 4.0, 1.85, 5.05, 1.5
+    # r5: ONE double-sided bench desk PERPENDICULAR to the glass (screens face along x: never backlit by the view).
+    # Four identical task chairs, two per side, mirrored at equal spacing; NO desk lamps: the bench is lit by a brighter
+    # linear pendant right over it + an integrated LED strip under the cable-spine shelf. The desk has a walnut modesty
+    # panel and a black cable tray under the top. Left wall: built-in shelving. Right wall: credenza + ONE artwork + an
+    # acoustic slat panel field behind the art (the wall feature).
+    BX, BY0, BY1, BD = 4.0, 2.05, 4.85, 1.6
     BYC, BL = (BY0 + BY1) / 2, BY1 - BY0
-    rug('RugStudio', BX, BYC, 4.0, 4.3, 'RugCharcoal')
+    rug('RugStudio', BX, BYC, 4.0, 4.0, 'RugCharcoal')
     top = 0.74
-    box('BenchTop', (BX, BYC, top - 0.015), (BD, BL, 0.03), 'Walnut', bevel=0.004)
-    for y in (BY0 + 0.08, BYC, BY1 - 0.08):   # black trestle legs
-        for s_ in (-1, 1): box(f'BenchLeg{y:.2f}{s_}', (BX + s_ * (BD / 2 - 0.10), y, (top - 0.03) / 2), (0.04, 0.04, top - 0.03), 'BlackMetal')
-        box(f'BenchFoot{y:.2f}', (BX, y, 0.015), (BD - 0.14, 0.05, 0.03), 'BlackMetal')
-        box(f'BenchRail{y:.2f}', (BX, y, top - 0.05), (BD - 0.14, 0.04, 0.04), 'BlackMetal')
-    box('BenchSpine', (BX, BYC, top + 0.06), (0.03, BL - 0.3, 0.12), 'BlackMetal')   # cable spine / privacy rail
-    PROPS_BY = [['lamp', 'books', 'mug', 'plant'], ['lamp', 'notebook', 'headphones', 'mug'], ['lamp', 'laptop', 'books', 'cup']]
-    def slot(k, cy, side):
-        """side=-1: person on the bench's left (x < BX) facing +x; side=+1: on the right facing -x."""
-        f = (-side, 0)   # facing of the seated person
-        sx = BX + side * BD / 2      # bench edge
-        mx = BX + side * 0.16; mz = top + 0.40
-        box(f'MonBezel{k}', (mx, cy, mz), (0.03, 0.72, 0.43), 'Plastic', bevel=0.006)
-        xs = mx + side * 0.016
-        so = quad(f'Screen{k}', [(xs, cy - 0.345, mz - 0.2), (xs, cy + 0.345, mz - 0.2), (xs, cy + 0.345, mz + 0.2), (xs, cy - 0.345, mz + 0.2)] if side > 0 else
-                  [(xs, cy + 0.345, mz - 0.2), (xs, cy - 0.345, mz - 0.2), (xs, cy - 0.345, mz + 0.2), (xs, cy + 0.345, mz + 0.2)], f'EmitScreen{k}', 'EMIT')
-        uv_fit(so, cy - 0.345 if side > 0 else cy + 0.345, cy + 0.345 if side > 0 else cy - 0.345, mz - 0.2, mz + 0.2, axes=(1, 2))
-        box(f'MonNeck{k}', (mx - side * 0.05, cy, top + 0.15), (0.03, 0.05, 0.3), 'BlackMetal')
-        box(f'MonBase{k}', (mx - side * 0.02, cy, top + 0.006), (0.18, 0.25, 0.012), 'BlackMetal', bevel=0.003)
-        kx = BX + side * 0.50
-        box(f'Keyb{k}', (kx, cy + 0.03, top + 0.01), (0.14, 0.44, 0.02), 'Plastic', bevel=0.004)
-        box(f'Mouse{k}', (kx, cy - 0.30 * side, top + 0.012), (0.1, 0.06, 0.025), 'Plastic', bevel=0.01)
-        for it in PROPS_BY[k]:
-            if it == 'lamp': cc0('desk_lamp_arm_01', (BX + side * 0.25, cy + 0.55 * side, top), math.radians(90 if side < 0 else -90))
-            elif it == 'books':
-                for q in range(3): box(f'DeskBook{k}{q}', (BX + side * 0.35, cy - 0.55 * side, top + 0.015 + 0.03 * q), (0.24, 0.17, 0.028), BOOKS[(k * 3 + q) % 8], bevel=0.002, seg=1)
-            elif it == 'mug': cyl(f'Mug{k}', (kx + side * 0.05, cy + 0.42 * side, top + 0.05), 0.04, 0.1, 'Ceramic', seg=24)
-            elif it == 'cup': cyl(f'Cup{k}', (kx, cy + 0.42 * side, top + 0.045), 0.035, 0.09, 'StoneDark', seg=24)
-            elif it == 'notebook': box(f'Notebook{k}', (kx - side * 0.05, cy - 0.45 * side, top + 0.008), (0.29, 0.21, 0.016), 'BookG', bevel=0.002)
-            elif it == 'headphones':
-                cyl(f'Phones{k}a', (BX + side * 0.30, cy - 0.58 * side, top + 0.03), 0.05, 0.05, 'Plastic', seg=24)
-                cyl(f'Phones{k}b', (BX + side * 0.30, cy - 0.45 * side, top + 0.03), 0.05, 0.05, 'Plastic', seg=24)
-            elif it == 'laptop':
-                rbox(f'Laptop{k}', (BX + side * 0.42, cy - 0.52 * side, top + 0.01), (0.24, 0.33, 0.016), 0.0, 'BlackMetal', bevel=0.003)
-            elif it == 'plant':
-                potted(f'desk_plant', 'calathea_orbifolia_01', ['calathea_orbifolia_01_c'], (BX + side * 0.30, cy - 0.58 * side, top), 0.3, 0.55, POT(0.08, 0.13))
-        cxh = BX + side * (BD / 2 + 0.38)
-        task_chair(k, cxh, cy + rnd.uniform(-0.05, 0.05), (f[0], rnd.uniform(-0.12, 0.12)))
+    box('BenchTop', (BX, BYC, top - 0.02), (BD, BL, 0.04), 'Walnut', bevel=0.006)
+    box('BenchApron', (BX, BYC, top - 0.065), (BD - 0.10, BL - 0.10, 0.05), 'BlackMetal')
+    for y in (BY0 + 0.12, BY1 - 0.12):   # two closed walnut panel legs (sled ends)
+        box(f'BenchEnd{y:.2f}', (BX, y, (top - 0.09) / 2), (BD - 0.06, 0.05, top - 0.09), 'Walnut', bevel=0.004)
+    box('Modesty', (BX, BYC, 0.43), (0.03, BL - 0.30, 0.46), 'Walnut', bevel=0.003)
+    box('CableTray', (BX, BYC, top - 0.16), (0.26, BL - 0.40, 0.08), 'BlackMetal')
+    # cable spine: a low walnut shelf on black posts down the middle, with an LED strip under it lighting both work zones
+    box('SpineShelf', (BX, BYC, top + 0.32), (0.30, BL - 0.20, 0.025), 'Walnut', bevel=0.003)
+    for y in (BY0 + 0.18, BYC, BY1 - 0.18): box(f'SpinePost{y:.2f}', (BX, y, top + 0.16), (0.03, 0.03, 0.32), 'BlackMetal')
+    box('SpineLED', (BX, BYC, top + 0.305), (0.22, BL - 0.30, 0.004), 'EmitStrip', 'EMIT')
+    light('SpineLight', 'AREA', (BX, BYC, top + 0.30), float(os.environ.get('SPINE_E', '40')), (1.0, 0.70, 0.46), sx=0.22, sy=BL - 0.30, rot=(math.radians(180), 0, 0))
+    for q, (yy, m_) in enumerate(((BY0 + 0.45, 'BookB'), (BY0 + 0.52, 'BookA'), (BY0 + 0.58, 'BookF'))):
+        box(f'SpineBook{q}', (BX, yy, top + 0.333 + 0.11), (0.20, 0.045, 0.22), m_, bevel=0.002, seg=1)
+    cc0('ceramic_vase_01', (BX, BY1 - 0.55, top + 0.333), 0.0, 0.55)
+    SLOTS = [(BYC - 0.72, -1), (BYC + 0.72, -1), (BYC - 0.72, 1), (BYC + 0.72, 1)]
+    for k, (cy, side) in enumerate(SLOTS):
+        f = (-side, 0)
+        mx = BX + side * 0.30; mz = top + 0.36
+        box(f'MonBezel{k}', (mx, cy, mz), (0.025, 0.62, 0.37), 'Plastic', bevel=0.006)
+        xs = mx + side * 0.0135
+        so = quad(f'Screen{k}', [(xs, cy - 0.295, mz - 0.17), (xs, cy + 0.295, mz - 0.17), (xs, cy + 0.295, mz + 0.17), (xs, cy - 0.295, mz + 0.17)] if side > 0 else
+                  [(xs, cy + 0.295, mz - 0.17), (xs, cy - 0.295, mz - 0.17), (xs, cy - 0.295, mz + 0.17), (xs, cy + 0.295, mz + 0.17)], f'EmitScreen{k % 3}', 'EMIT')
+        uv_fit(so, cy - 0.295 if side > 0 else cy + 0.295, cy + 0.295 if side > 0 else cy - 0.295, mz - 0.17, mz + 0.17, axes=(1, 2))
+        box(f'MonNeck{k}', (mx - side * 0.04, cy, top + 0.12), (0.025, 0.05, 0.24), 'BlackMetal')
+        box(f'MonBase{k}', (mx - side * 0.02, cy, top + 0.006), (0.16, 0.22, 0.012), 'BlackMetal', bevel=0.003)
+        kx = BX + side * 0.58
+        box(f'Keyb{k}', (kx, cy, top + 0.01), (0.13, 0.42, 0.018), 'Plastic', bevel=0.004)
+        box(f'Mouse{k}', (kx, cy - 0.30 * side, top + 0.012), (0.1, 0.06, 0.024), 'Plastic', bevel=0.01)
+        box(f'DeskPad{k}', (kx - side * 0.02, cy + 0.02, top + 0.002), (0.34, 0.80, 0.003), 'FabricCharcoal')
+        # one styled object per seat, alternating, never a lamp
+        if k in (0, 3): cyl(f'Mug{k}', (kx + side * 0.04, cy + 0.36 * side, top + 0.05), 0.04, 0.1, 'Ceramic', seg=24)
+        else: box(f'Notebook{k}', (kx + side * 0.02, cy + 0.38 * side, top + 0.008), (0.21, 0.29, 0.016), 'BookG', bevel=0.002)
+        cxh = BX + side * (BD / 2 + 0.36)
+        task_chair(k, cxh, cy, f)
         seat(cxh, cy, 0.47, f, 'desk', 'studio')
-        DESKS.append({'x': BX + side * 0.45, 'y': cy, 'face': (side, 0), 'screen': {'x': xs, 'y': cy, 'z': mz}})
-    slot(0, 2.65, -1); slot(1, 4.25, -1); slot(2, 3.45, 1)
-    linear_pendant(0, BX, BYC, BL - 0.5, 2.15, 'y', energy=55)
+        DESKS.append({'x': BX + side * 0.55, 'y': cy, 'face': (side, 0), 'screen': {'x': xs, 'y': cy, 'z': mz}})
+    linear_pendant(0, BX, BYC, BL - 0.4, 1.95, 'y', energy=float(os.environ.get('LIN_E', '120')))
     # walnut slats above the bench
     x = BX - 1.3
     while x <= BX + 1.3 + 1e-6:
-        box(f'CeilSlat{x:.2f}', (x, BYC, H - 0.045), (0.045, BL + 0.6, 0.07), 'Walnut', 'CEIL'); x += 0.11
-    box('CeilSlatBack', (BX, BYC, H - 0.005), (2.75, BL + 0.6, 0.01), 'StoneDark', 'CEIL')
-    # left wall: a shorter built-in (shelves with objects, binders, fewer books)
-    builtin_wall('ShelfL', 0.55, 3.75, bays=3, n_shelves=5, density=0.62)
-    # right wall: low credenza + the one artwork above it
-    box('Credenza', (IX1 - 0.24, 3.0, 0.31), (0.44, 2.6, 0.56), 'Walnut', bevel=0.006)
-    box('CredenzaKick', (IX1 - 0.24, 3.0, 0.02), (0.38, 2.5, 0.04), 'BlackMetal')
-    for q in range(3): box(f'CredSlot{q}', (IX1 - 0.465, 3.0 - 0.84 + 0.84 * q, 0.33), (0.006, 0.80, 0.48), 'StoneDark')
-    cc0('ceramic_vase_01', (IX1 - 0.24, 2.0, 0.59), 0.0, 0.8)
-    for q, m_ in enumerate(('BookF', 'BookD', 'BookA')): box(f'CredBook{q}', (IX1 - 0.25, 3.5, 0.59 + 0.02 + 0.036 * q), (0.26 - 0.02 * q, 0.20, 0.036), m_, bevel=0.002, seg=1)
-    table_lamp(0, IX1 - 0.24, 4.0, 0.59)
-    canvas_on_wall('CanvasStudio', 'right', 3.0, 1.2, 0.85, 1.72, 'CanvasE'); WALL_ART = 'right'
-    # one plant cluster (back-left corner, odd number, varied heights) + one at the front-right; one planter type
-    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (0.72, 5.3, 0), 0.6, 1.15, POT(0.27, 0.50))
-    potted('calathea_b', 'calathea_orbifolia_01', ['calathea_orbifolia_01_b'], (0.60, 4.50, 0), 0.4, 1.5, POT(0.17, 0.46))
-    potted('calathea_c', 'calathea_orbifolia_01', ['calathea_orbifolia_01_c'], (1.45, 5.5, 0), 1.0, 1.3, POT(0.18, 0.36))
-    potted('money_tree_shrub', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_c', 'pachira_aquatica_01_leaves_c'], (7.35, 5.35, 0), 0.4, 1.05, POT(0.30, 0.46))
+        box(f'CeilSlat{x:.2f}', (x, BYC, H - 0.045), (0.045, BL + 1.2, 0.07), 'Walnut', 'CEIL'); x += 0.11
+    box('CeilSlatBack', (BX, BYC, H - 0.005), (2.75, BL + 1.2, 0.01), 'StoneDark', 'CEIL')
+    # left wall: a shorter built-in (shelves with objects, binders, fewer books), it runs back toward the glass so it reads
+    builtin_wall('ShelfL', 2.10, 5.20, bays=3, n_shelves=5, density=0.62)
+    # right wall: low credenza (front half) + the acoustic slat field with the ONE artwork (back half, in view)
+    box('Credenza', (IX1 - 0.24, 2.55, 0.31), (0.44, 2.4, 0.56), 'Walnut', bevel=0.006)
+    box('CredenzaKick', (IX1 - 0.24, 2.55, 0.02), (0.38, 2.3, 0.04), 'BlackMetal')
+    for q in range(3): box(f'CredSlot{q}', (IX1 - 0.465, 2.55 - 0.78 + 0.78 * q, 0.33), (0.006, 0.74, 0.48), 'StoneDark')
+    cc0('ceramic_vase_01', (IX1 - 0.24, 1.65, 0.59), 0.0, 0.8)
+    for q, m_ in enumerate(('BookF', 'BookD', 'BookA')): box(f'CredBook{q}', (IX1 - 0.25, 3.0, 0.59 + 0.02 + 0.036 * q), (0.26 - 0.02 * q, 0.20, 0.036), m_, bevel=0.002, seg=1)
+    table_lamp(0, IX1 - 0.24, 3.45, 0.59, energy=34)
+    AY0, AY1 = 3.95, 5.45
+    box('AcuBack', (IX1 - 0.012, (AY0 + AY1) / 2, 1.55), (0.02, AY1 - AY0, 2.5), 'FabricCharcoal')
+    yy = AY0 + 0.03
+    while yy < AY1 - 0.02:
+        box(f'AcuSlat{yy:.2f}', (IX1 - 0.035, yy, 1.55), (0.025, 0.028, 2.5), 'Walnut'); yy += 0.055
+    canvas_on_wall('CanvasStudio', 'right', 4.70, 0.95, 1.25, 1.62, 'CanvasE'); WALL_ART = 'right'
+    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (0.75, 5.50, 0), 0.6, 1.15, POT(0.27, 0.50))
+    potted('calathea_c', 'calathea_orbifolia_01', ['calathea_orbifolia_01_c'], (7.35, 1.0, 0), 1.0, 1.3, POT(0.18, 0.36))
+    potted('money_tree_shrub', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_c', 'pachira_aquatica_01_leaves_c'], (7.30, 5.55, 0), 0.4, 1.0, POT(0.30, 0.46))
     for (x, y) in ((2.0, 1.4), (6.0, 1.4)): downlight(x, y, 3.0, 60)
 
 # ================================================================ desk-lamp emitters (CC0 desk lamps, build.py)
@@ -789,9 +809,9 @@ for i, b in enumerate(anchors['boards']): empty(f'board_anchor_{i + 1}', (b['x']
 
 # collision blocks (room-local rectangles) from the furniture footprint on the floor (everything FURN taller than 0.3 m)
 BLOCKS = {
-    'library': [(IX0 + 0.2, 2.71, 0.2, 2.4), (5.0, 2.9, 1.0, 1.0), (1.75, 4.75, 0.8, 0.75), (IX1 - 0.22, 3.0, 0.22, 1.0), (7.3, 5.3, 0.3, 0.3), (6.55, 5.5, 0.2, 0.2), (7.45, 0.62, 0.2, 0.2)],
-    'lounge': [(0.66, 3.45, 0.5, 1.5), (2.2, 3.45, 0.56, 0.56), (3.62, 2.67, 0.45, 0.45), (3.62, 4.23, 0.45, 0.45), (0.62, 5.27, 0.25, 0.25), (IX1 - 0.24, 3.0, 0.22, 1.3), (7.3, 5.3, 0.3, 0.3), (7.45, 0.62, 0.2, 0.2)],
-    'studio': [(4.0, 3.45, 0.75, 1.6), (IX0 + 0.2, 2.15, 0.2, 1.6), (IX1 - 0.24, 3.0, 0.22, 1.3), (0.9, 5.0, 0.55, 0.6), (7.35, 5.35, 0.32, 0.32)],
+    'library': [(IX0 + 0.2, 2.71, 0.2, 2.4), (4.95, 3.35, 1.05, 1.05), (1.75, 4.75, 0.8, 0.75), (IX1 - 0.22, 4.45, 0.22, 0.85), (7.42, 5.58, 0.28, 0.28), (6.75, 5.58, 0.2, 0.2), (7.45, 0.62, 0.2, 0.2)],
+    'lounge': [(2.45, 4.87, 1.5, 0.5), (2.45, 3.45, 0.56, 0.56), (1.65, 2.15, 0.42, 0.42), (3.25, 2.15, 0.42, 0.42), (0.5, 4.77, 0.28, 0.28), (IX1 - 0.24, 2.75, 0.22, 1.2), (6.0, 4.5, 0.75, 0.7), (7.42, 5.42, 0.3, 0.3), (0.62, 5.45, 0.2, 0.2), (7.45, 0.62, 0.2, 0.2)],
+    'studio': [(4.0, 3.45, 0.8, 1.4), (IX0 + 0.2, 3.65, 0.2, 1.55), (IX1 - 0.24, 2.55, 0.22, 1.2), (0.75, 5.5, 0.28, 0.28), (7.35, 1.0, 0.2, 0.2), (7.30, 5.55, 0.3, 0.3)],
 }[MID]
 blocks = [{**{k: v for k, v in L(x, y).items() if k != 'y'}, 'hx': hx, 'hz': hz} for (x, y, hx, hz) in BLOCKS]
 LABEL = {'library': 'Library', 'lounge': 'Lounge', 'studio': 'Studio'}[MID]
