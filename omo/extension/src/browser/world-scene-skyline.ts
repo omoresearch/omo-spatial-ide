@@ -28,7 +28,7 @@ export interface SkylineCamera { position: THREE.Vector3 }
 
 // ------------------------------------------------------------------------------------------- interior
 export function buildSkylineShell(shell: WorldShell, blocks: readonly Footprint[], camera: SkylineCamera): THREE.Group {
-    void blocks; void camera;
+    void camera;
     const root = new THREE.Group(); root.name = 'omo-world-shell';
     const W = shell.width, D = shell.depth, hw = W / 2, hd = D / 2, H = SKYLINE_CEILING;
     const add = (parent: THREE.Object3D, size: [number, number, number], name: Parameters<typeof slab>[3], x: number, y: number, z: number, shadows = true): THREE.Mesh => slab(parent, size, [x, y, z], name, shadows);
@@ -49,12 +49,13 @@ export function buildSkylineShell(shell: WorldShell, blocks: readonly Footprint[
         const strip = part(pendants, new THREE.PlaneGeometry(w, d), 'emissive.cove', [x, H - 0.01, z], false); strip.rotation.x = Math.PI / 2; noRay(strip);
     }
     const rows = Math.max(1, Math.round(D / 6));
-    for (let r = 0; r < rows; r++) {
-        const z = -hd + (r + 0.5) * (D / rows);
-        const len = Math.min(W - 6, 7);
-        add(pendants, [len, 0.06, 0.12], 'metal.graphite', 0, H - 0.9, z, false);
-        add(pendants, [len - 0.1, 0.02, 0.08], 'emissive.warm', 0, H - 0.94, z, false);
-        for (const x of [-len / 2 + 0.3, len / 2 - 0.3]) part(pendants, new THREE.CylinderGeometry(0.006, 0.006, 0.9, 4), 'metal.graphite', [x, H - 0.45, z], false);
+    // beauty round 2 — a pendant bar hangs only under this ceiling and only where it is clear of every built thing
+    // (rooms with their wall-top signs, desks, boards): never over a room's roof line or in front of a sign.
+    for (const { x, z, len } of pendantSpots(W, D, rows, blocks)) {
+        const pg = new THREE.Group(); pg.position.x = x; pg.userData.part = 'pendant'; pendants.add(pg);
+        add(pg, [len, 0.06, 0.12], 'metal.graphite', 0, H - 0.9, z, false);
+        add(pg, [len - 0.1, 0.02, 0.08], 'emissive.warm', 0, H - 0.94, z, false);
+        for (const wx of [-len / 2 + 0.3, len / 2 - 0.3]) part(pg, new THREE.CylinderGeometry(0.006, 0.006, 0.9, 4), 'metal.graphite', [wx, H - 0.45, z], false);
     }
     // Glass curtain wall: panes face inwards only (visible from inside; transparent from the overview).
     const sides: Array<{ len: number; at: (s: number) => [number, number]; rot: number }> = [
@@ -86,6 +87,37 @@ export function buildSkylineShell(shell: WorldShell, blocks: readonly Footprint[
     const city = kitCityBackdrop(); if (city) root.add(city);
     root.userData.cityBackdrop = city;
     return root;
+}
+
+/** World-space AABB of a footprint (rotated rect). */
+function footprintBox(f: Footprint): { minX: number; maxX: number; minZ: number; maxZ: number } {
+    const c = Math.cos(f.rotation), s = Math.sin(f.rotation), xs: number[] = [], zs: number[] = [];
+    for (const lx of [f.rect.left, f.rect.right]) for (const lz of [f.rect.front, f.rect.back]) { xs.push(f.x + c * lx + s * lz); zs.push(f.z - s * lx + c * lz); }
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+}
+/** Clearance (m) between a pendant bar and any built thing: a room's wall-top sign is read from the path up to ~6 m in front of it. */
+export const PENDANT_CLEARANCE = 6;
+/**
+ * beauty round 2 — where the penthouse's linear pendants may hang: one per row at most, the first candidate (centre, then
+ * outwards, then a shorter bar) whose bar, grown by PENDANT_CLEARANCE, touches no footprint. Deterministic.
+ */
+export function pendantSpots(W: number, D: number, rows: number, blocks: readonly Footprint[]): Array<{ x: number; z: number; len: number }> {
+    const boxes = blocks.map(footprintBox), out: Array<{ x: number; z: number; len: number }> = [], pad = PENDANT_CLEARANCE;
+    for (let r = 0; r < rows; r++) {
+        const z = -D / 2 + (r + 0.5) * (D / rows), full = Math.min(W - 6, 7);
+        if (full < 2) continue;
+        let spot: { x: number; z: number; len: number } | undefined;
+        for (const len of [full, Math.min(full, 4)]) {
+            for (const x of [0, -W / 4, W / 4, -W / 3, W / 3]) {
+                if (Math.abs(x) + len / 2 > W / 2 - 1.5) continue;
+                const clear = boxes.every(b => x + len / 2 + pad < b.minX || x - len / 2 - pad > b.maxX || z + pad < b.minZ || z - pad > b.maxZ);
+                if (clear) { spot = { x, z, len }; break; }
+            }
+            if (spot) break;
+        }
+        if (spot) out.push(spot);
+    }
+    return out;
 }
 
 /**

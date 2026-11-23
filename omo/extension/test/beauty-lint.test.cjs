@@ -99,3 +99,17 @@ test('every mesh of a built room, every decor kind, the paths, the open ground a
   const failing = Object.entries(bad).filter(([, v]) => v.length).map(([k, v]) => `${k}: ${v.length} off-look meshes, e.g. ${v.slice(0, 3).join(', ')}`);
   assert.deepEqual(failing, [], failing.join('\n'));
 });
+
+test('beauty r2: skyline pendants hang only under the ceiling, clear of rooms and their signs', () => {
+  const skyline = loadBrowser('world-scene-skyline.ts');
+  const roomFp = { id: 'r', x: 0, z: 0, rotation: 0, rect: { left: -6, right: 6, front: -4.5, back: 4.5 } };
+  assert.equal(skyline.pendantSpots(30, 24, 4, []).length, 4, 'an empty floor keeps its pendants');
+  for (const s of skyline.pendantSpots(30, 24, 4, [roomFp])) {
+    const clear = s.x + s.len / 2 + skyline.PENDANT_CLEARANCE <= -6 || s.x - s.len / 2 - skyline.PENDANT_CLEARANCE >= 6 || s.z + skyline.PENDANT_CLEARANCE <= -4.5 || s.z - skyline.PENDANT_CLEARANCE >= 4.5;
+    assert.ok(clear, `pendant ${JSON.stringify(s)} is too close to the room`);
+  }
+  const g = skyline.buildSkylineShell({ theme: 'skyline', width: 30, depth: 24 }, [roomFp], { position: { x: 0, y: 1.6, z: 0 } });
+  const upper = g.getObjectByName('omo-skyline-upper');
+  let ceilingInUpper = false; upper.traverse(n => { if (n.userData.part === 'ceiling') ceilingInUpper = true; });
+  assert.ok(ceilingInUpper, 'the ceiling is in the group the overview hides');
+});
