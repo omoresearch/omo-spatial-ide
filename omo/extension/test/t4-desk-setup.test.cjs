@@ -105,13 +105,13 @@ test('(1) the first explicit open of a desk offers its setup once, and nothing s
   assert.equal(r.offer(added), false, 'opening the same workspace again does not ask again');
 });
 
-test('(1) the widget arms setup only from an explicit open, never from a world change or a state poll', () => {
+test('(1) the widget never arms setup from a world change, a state poll or a plain open (demo-ready: only picking an agent offers it)', () => {
   const widget = fs.readFileSync(path.join(SRC, 'omo-world-widget.tsx'), 'utf8');
   const consoleChanged = widget.slice(widget.indexOf('private consoleChanged('), widget.indexOf('private save('));
   assert.ok(consoleChanged.length > 0);
   assert.doesNotMatch(consoleChanged, /armSetup/, 'a state change never arms the setup offer');
   const openTerminal = widget.slice(widget.indexOf('private async openTerminal('), widget.indexOf('private async openReviewSnapshot('));
-  assert.match(openTerminal, /armSetup\(/, 'opening a desk (monitor click / desk switcher) arms the offer');
+  assert.doesNotMatch(openTerminal, /[^s]armSetup\(/, 'demo-ready (1): opening a desk shows its shell; the setup is offered only when the user picks an agent');
   const readWorld = widget.slice(widget.indexOf('private readWorld('), widget.indexOf('private stationsChanged('));
   assert.doesNotMatch(readWorld, /armSetup|maybeOfferSetup|requestRecipeApply/, 'a world change never offers setup');
 });

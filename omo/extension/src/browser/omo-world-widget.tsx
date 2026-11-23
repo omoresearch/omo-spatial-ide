@@ -677,6 +677,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.initialized = true; this.update();
         // Reconnect a workspace this room already opened. Never starts anything new.
         if (this.room) this.stations.reconnectSaved(this.bindingContext());
+        this.openIdleDesks(); // demo-ready (1)
         if (this.room) { this.readReturnBase(); this.settleSince(); this.reopenOwnPage(); } // promise-agent
     }
     // --- w2:runtime: world-driven stations ---
@@ -700,8 +701,18 @@ export class OmoWorldWidget extends ReactWidget {
         this.syncMirrorLink();
         for (const info of this.stationList) if (!this.monitors[info.id]) this.monitors = { ...this.monitors, [info.id]: { lines: [] } };
         if (reconnect && this.room && added.length) this.stations.reconnectSaved(this.bindingContext());
+        if (added.length) this.openIdleDesks(); // demo-ready (1): a new desk shows a live shell too
         if (stored && world && !this.configuring) this.worldScene?.setWorld(world); // w2:integrate — keep the 3D room in sync with world changes
         this.pushLinkedFrames(); this.rankDesks(); /* w3:perf */ this.update();
+    }
+    /**
+     * demo-ready (1) — every idle desk of a loaded world shows a real live shell on its monitor (a plain shell at the
+     * project folder; agents only on the user's click). Opt out (legacy drivers): localStorage 'omo.desks.liveShell' = '0'.
+     */
+    private openIdleDesks(): void {
+        if (!this.room || this.configuring || !this.project) return;
+        try { if (localStorage.getItem('omo.desks.liveShell') === '0') return; } catch { /* storage optional */ }
+        void this.stations.openIdleDesks(this.bindingContext());
     }
     private stationsChanged(removed: string[]): void {
         if (removed.length) {
@@ -747,6 +758,7 @@ export class OmoWorldWidget extends ReactWidget {
         if(this.personalRoom&&(old?.roomId!==this.personalRoom.roomId||old?.clientId!==this.personalRoom.clientId)){
             this.worldScene?.releaseTyping();
             this.stations.reconnectSaved(this.bindingContext()); // w2:runtime
+            this.openIdleDesks(); // demo-ready (1)
         }
         this.update();
     }
@@ -780,6 +792,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.readWorld(false); // w2:runtime
         this.stations.forEach((controller, id) => { const binding = this.binding(id); if (binding) void controller.reconnect(binding); else controller.release(); });
         if (this.room) this.stations.reconnectSaved(this.bindingContext());
+        this.openIdleDesks(); // demo-ready (1)
         this.update();
     }
     private readStationSettings(): void {
@@ -869,6 +882,7 @@ export class OmoWorldWidget extends ReactWidget {
         this.room = next; this.configuring = false; this.feedback = world ? 'Room and world saved on this device. No agent was started.' : 'Room saved on this device.';
         if (!world && previous) this.syncSavedWorldToRoom(previous, next); // t2:regress
         if (world) this.refreshDesksIfChanged(); // final:fix — desk switcher, stations and mentions follow the world just saved (onboarding / template), not the old two desks
+        this.openIdleDesks(); // demo-ready (1): the new room's desks show live shells
         this.update();
     };
     /**
@@ -996,7 +1010,7 @@ export class OmoWorldWidget extends ReactWidget {
         const binding = this.binding(station);
         if (!binding) throw new Error('Choose a project folder first.');
         const controller = this.stations.controller(station);
-        if (!this.stations.hasSavedBinding(binding)) this.stations.armSetup(station); // t4:polish: the first explicit open of this desk may offer its setup (confirm first)
+        // demo-ready (1): opening a desk never offers its setup any more; the configured agent tabs are offered only when the user picks that agent.
         try { await controller?.bind(binding); } catch (error) { this.stations.disarmSetup(station); throw error; }
         if (controller?.state.phase !== 'live') this.stations.disarmSetup(station); // t4:polish: a failed first open must not offer setup later on a reconnect
         if (this.activeMode === station) { this.feedback = controller?.state.phase === 'live' ? 'Live terminal on this monitor · Type here. Esc to walk away.' : controller?.state.error || controller?.state.statusText || ''; this.update(); }

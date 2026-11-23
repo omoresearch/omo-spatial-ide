@@ -232,7 +232,8 @@ export class WorldStations {
                 preferredProfile: () => this.info(id)?.config.profile,
                 onChange: state => { this.states.set(id, state); this.options.onChange(state, id); },
                 pollInterval: () => deskActivity.pollMs(id), // w3:perf: active 200 ms, near 500 ms, far/hidden 3 s
-                onMirrorFrame: frame => this.options.onMirrorFrame?.(frame, id), onMirrorError: m => this.options.onMirrorError?.(m) });
+                onMirrorFrame: frame => this.options.onMirrorFrame?.(frame, id), onMirrorError: m => this.options.onMirrorError?.(m),
+                setupFor: (kind, ws, profile) => this.agentSetup(id, kind, ws, profile) }); // demo-ready (1)
             this.controllers.set(id, c);
             c.setStationLocked(this.locked(id));
         }
@@ -261,6 +262,39 @@ export class WorldStations {
             else if (binding) { const c = this.peek(id); if (c) void c.reconnect(binding); }
             else this.peek(id)?.release();
         }
+    }
+    /**
+     * demo-ready (1) — a world loaded: every desk not yet connected opens (or reattaches) its plain shell tab at the
+     * project folder, so its monitor mirrors a live prompt. The host's open only ever makes a shell; agent tabs stay
+     * configured but unstarted. Views are capped by the host's view limit (less `reserve` for mirrors / the focus view):
+     * desks past the cap keep their idle card. Returns the desks asked to open and the ones held back by the cap.
+     */
+    async openIdleDesks(ctx: BindingContext | undefined, reserve = IDLE_VIEW_RESERVE): Promise<{ opened: StationId[]; capped: StationId[] }> {
+        const opened: StationId[] = [], capped: StationId[] = [];
+        if (this.disposed || !ctx) return { opened, capped };
+        let cap = Number.POSITIVE_INFINITY;
+        try { const host = await this.options.service.status(); if (host.limits?.views) cap = Math.max(0, host.limits.views - reserve); } catch { /* each open reports its own error */ }
+        if (this.disposed) return { opened, capped };
+        const busy = (id: StationId): boolean => IDLE_BUSY.includes(this.state(id).phase);
+        let used = this.ids().filter(busy).length;
+        for (const id of this.ids()) {
+            const binding = this.binding(id, ctx);
+            if (!binding || busy(id)) continue;
+            if (used >= cap) { capped.push(id); continue; }
+            used++; opened.push(id);
+            void this.controller(id)?.openIdle(binding);
+        }
+        return { opened, capped };
+    }
+    /** demo-ready (1) — the desk's configured tabs of this agent kind that are not started yet (a setup recipe; confirm first). */
+    agentSetup(id: StationId, kind: string, ws: SessionWorkspace, profile: string): StationRecipe | undefined {
+        const info = this.info(id);
+        if (!this.stored || !info || kind === 'shell') return undefined;
+        const all = setupRecipe(info, profile, ws.tabs);
+        const tabs = all?.tabs.filter(t => t.kind === kind) ?? [];
+        if (!all || !tabs.length) return undefined;
+        const recipe: StationRecipe = { ...all, tabs };
+        return validateStationRecipe(recipe) ? recipe : undefined;
     }
     /** Station whose runtime binding id is `stationId` (agent task panel "continue at desk"). */
     stationForRuntimeId(stationId: string, ctx: BindingContext | undefined): StationId | undefined {
@@ -323,4 +357,7 @@ export class WorldStations {
 }
 
 const INITIAL: RuntimeConsoleState = RuntimeConsoleController.initial();
+/** demo-ready (1) — views kept free for the mirror, the focus view and a linked wall when idle desks open. */
+export const IDLE_VIEW_RESERVE = 4;
+const IDLE_BUSY: ReadonlyArray<RuntimeConsoleState['phase']> = ['checking', 'opening', 'attaching', 'live', 'reconnecting', 'interrupted'];
 export const isStationId = (value: unknown): value is StationId => typeof value === 'string' && WORLD_ID_RE.test(value);

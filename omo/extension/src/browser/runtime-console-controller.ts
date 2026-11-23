@@ -96,6 +96,12 @@ export interface RuntimeConsoleOptions {
     pollInterval?: () => number;
     /** w3:perf — clock for the poll budget (tests). */
     now?: () => number;
+    /**
+     * demo-ready (1) — the desk's configured (StationConfig) tabs of this agent kind that are not started yet, as a setup
+     * recipe. When the user picks that agent, the 'Start station tabs' confirmation is shown instead of the plain one.
+     * Nothing starts until the user confirms.
+     */
+    setupFor?: (kind: AgentKind, workspace: SessionWorkspace, profile: string) => StationRecipe | undefined;
 }
 
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
@@ -454,6 +460,15 @@ export class RuntimeConsoleController {
         if (this.sameBinding(binding) && ACTIVE_PHASES.includes(this.current.phase)) return;
         await this.open(binding, this.readStored(binding)?.tabId);
     }
+    /**
+     * demo-ready (1) — a world loaded: open (or reattach) this desk's plain shell so its monitor shows a live prompt.
+     * The host's open only ever makes a shell tab; agents never start here. A running shell tab is preferred.
+     */
+    async openIdle(binding: StationBinding): Promise<void> {
+        if (this.disposed) return;
+        if (this.sameBinding(binding) && ACTIVE_PHASES.includes(this.current.phase)) return;
+        await this.open(binding, undefined, true);
+    }
     /** Refresh/project switch: reconnect only a binding the user opened before. */
     async reconnect(binding: StationBinding): Promise<void> {
         if (this.disposed) return;
@@ -468,7 +483,7 @@ export class RuntimeConsoleController {
         await this.open(binding, stored.tabId);
     }
 
-    private async open(binding: StationBinding, preferredTab: string | undefined): Promise<void> {
+    private async open(binding: StationBinding, preferredTab: string | undefined, preferShell = false): Promise<void> {
         const epoch = ++this.epoch;
         this.releaseView();
         this.binding = binding;
@@ -496,7 +511,7 @@ export class RuntimeConsoleController {
         }
         if (epoch !== this.epoch) return;
         const tabs = workspace.tabs;
-        const active = tabs.find(t => t.id === preferredTab) ?? tabs.find(t => t.state === 'running') ?? tabs[0];
+        const active = tabs.find(t => t.id === preferredTab) ?? (preferShell ? tabs.find(t => t.kind === 'shell' && t.state === 'running') : undefined) ?? tabs.find(t => t.state === 'running') ?? tabs[0];
         const profile = host.profiles.includes(this.current.profile) ? this.current.profile
             : createProfile ? createProfile // w2:runtime
             : host.profiles.includes(workspace.profile) ? workspace.profile : host.profiles[0] ?? '';
@@ -706,6 +721,8 @@ export class RuntimeConsoleController {
             return;
         }
         if (kind === 'shell') { await this.run({ type: 'new', kind, message: '', confirmLabel: '' }); return; }
+        const setup = this.options.setupFor?.(kind, this.current.workspace, this.current.profile); // demo-ready (1): the desk's configured tab, confirm first
+        if (setup) { this.requestRecipeApply(setup, { setup: true }); return; }
         const profile = kind === 'hermes' ? ` with profile “${this.current.profile}”` : '';
         const extra = kind === 'dsh' ? ` ${DSH_START_NOTE}` : ''; // w2:agents
         this.set({ error: '', notice: '', pending: { type: 'new', kind, confirmLabel: `Start ${option.label}`,
