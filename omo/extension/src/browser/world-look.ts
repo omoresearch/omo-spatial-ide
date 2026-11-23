@@ -23,7 +23,7 @@ import { kitAssetUrl } from '../common/world-style-kits';
 /** The one palette. Builders refer to these names; nobody writes a hex colour elsewhere. */
 export const PALETTE = {
     plaster: 0xebe5da, plasterShade: 0xd8d0c2, ceiling: 0xf1ece4,
-    oak: 0xb48c5e, oakLight: 0xc9a77a, walnut: 0x4a3122, walnutDark: 0x2e1f16,
+    oak: 0xb48c5e, oakLight: 0xc9a77a, oakFloor: 0x9a8a78, walnut: 0x4a3122, walnutDark: 0x2e1f16,
     graphite: 0x232428, ink: 0x15161a, steel: 0x8d9096,
     brass: 0xb38f55, bronze: 0x6b5236,
     linen: 0xd6cbb6, sage: 0x7d8c74, fabric: 0x4f5b57, terracotta: 0xb4623e, cognac: 0x8a5232,
@@ -152,15 +152,22 @@ function woodFloor(pattern: 'oak' | 'herringbone'): { map: THREE.Texture; rough:
         const ev = Math.min(vv - k * L * 0.5, (k + 1) * L * 0.5 - vv), eu = Math.min(local, 1 - local) * W;
         return { id: c * 977 + k, along: vv, edge: Math.min(eu, ev * 0.7) };
     };
+    // beauty r2 (6): herringbone is calmer — softer seams, a narrower plank tone range and a near-neutral map, so the oak
+    // albedo (floorOak) reads like the penthouse's baked oak, not saturated orange.
+    const herring = pattern === 'herringbone';
     const map = cachedTex(`floor-${pattern}`, () => dataTexture(size, (x, y, px, i) => {
         const u = x / size * 2, v = y / size * 2, p = plankAt(u, v);
-        const seam = p.edge < 0.004 ? 0.55 : p.edge < 0.008 ? 0.82 : 1;
-        const streak = 0.92 + 0.08 * Math.sin(p.along * 90 + grainN[y * size + x] * 9 + p.id);
-        const k = tone(p.id) * streak * seam;
-        px[i] = Math.min(255, Math.round(k * 255)); px[i + 1] = Math.min(255, Math.round(k * 0.96 * 255)); px[i + 2] = Math.min(255, Math.round(k * 0.9 * 255));
+        const seam = herring ? (p.edge < 0.003 ? 0.72 : p.edge < 0.007 ? 0.9 : 1) : (p.edge < 0.004 ? 0.55 : p.edge < 0.008 ? 0.82 : 1);
+        const streak = 0.93 + 0.07 * Math.sin(p.along * 90 + grainN[y * size + x] * 9 + p.id);
+        const k = (herring ? 0.86 + (tone(p.id) - 0.8) * 0.6 : tone(p.id)) * streak * seam;
+        const g = herring ? 0.98 : 0.96, b = herring ? 0.95 : 0.9;
+        px[i] = Math.min(255, Math.round(k * 255)); px[i + 1] = Math.min(255, Math.round(k * g * 255)); px[i + 2] = Math.min(255, Math.round(k * b * 255));
     }, true));
+    // Roughness: per plank (worn / waxed), along the grain, and the seams fully rough.
     const rough = cachedTex(`floor-r-${pattern}`, () => dataTexture(size, (x, y, px, i) => {
-        const p = plankAt(x / size * 2, y / size * 2), v = Math.round((p.edge < 0.006 ? 1 : 0.7 + h2(p.id, 1, 2) * 0.2) * 255); px[i] = px[i + 1] = px[i + 2] = v;
+        const p = plankAt(x / size * 2, y / size * 2), gN = grainN[y * size + x];
+        const base = herring ? 0.5 + h2(p.id, 1, 2) * 0.32 + (gN - 0.5) * 0.16 : 0.7 + h2(p.id, 1, 2) * 0.2;
+        const v = Math.round(Math.max(0, Math.min(1, p.edge < 0.006 ? 1 : base)) * 255); px[i] = px[i + 1] = px[i + 2] = v;
     }));
     return { map, rough };
 }
@@ -233,10 +240,12 @@ function make(name: LookName): THREE.Material {
         case 'wall': return std({ color: P.plaster, roughness: 0.92, metalness: 0 }, 'fine', 0.12);
         case 'wall.outer': return std({ color: P.plasterShade, roughness: 0.9, metalness: 0 }, 'fine', 0.14);
         // FrontSide: ceilings face down (seen from inside only); from above (the overview) they are culled — never a lid.
-        case 'ceiling': return std({ color: P.ceiling, roughness: 0.95, metalness: 0, side: THREE.FrontSide }, 'fine', 0.08);
+        // beauty r2 (6): plaster grain like the walls, and a faint warm glow (the cove bounce): a down-facing face only sees
+        // the hemisphere's dark ground colour, which read as flat purple-brown.
+        case 'ceiling': return std({ color: P.ceiling, emissive: P.warmBright, emissiveIntensity: 0.32, roughness: 0.95, metalness: 0, side: THREE.FrontSide }, 'fine', 0.14);
         case 'floor.oak': case 'floor.herringbone': {
             const t = woodFloor(name === 'floor.oak' ? 'oak' : 'herringbone');
-            const m = new THREE.MeshStandardMaterial({ color: P.oak, map: t.map, roughnessMap: t.rough, roughness: 0.62, metalness: 0 });
+            const m = new THREE.MeshStandardMaterial({ color: name === 'floor.oak' ? P.oak : P.oakFloor, map: t.map, roughnessMap: t.rough, roughness: name === 'floor.oak' ? 0.62 : 1, metalness: 0 });
             m.normalMap = grain('fine').normal; m.normalScale.set(0.08, 0.08); return m;
         }
         case 'floor.stone': return new THREE.MeshStandardMaterial({ color: P.stone, map: groundTex('pavers'), roughness: 0.82, metalness: 0, normalMap: grain('coarse').normal, normalScale: new THREE.Vector2(0.25, 0.25) });
@@ -278,7 +287,7 @@ function make(name: LookName): THREE.Material {
         case 'bezel': return std({ color: P.bezel, roughness: 0.3, metalness: 0.5 }, 'fine', 0.03);
         // Decals: lit by nothing, never shadowed, never picked.
         case 'ao.blob': return new THREE.MeshBasicMaterial({ map: aoTex('blob'), transparent: true, depthWrite: false, opacity: 0.55, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1 });
-        case 'ao.edge': return new THREE.MeshBasicMaterial({ map: aoTex('edge'), transparent: true, depthWrite: false, opacity: 0.4, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1 });
+        case 'ao.edge': return new THREE.MeshBasicMaterial({ map: aoTex('edge'), transparent: true, depthWrite: false, opacity: 0.46, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1 });
         case 'light.pool': return new THREE.MeshBasicMaterial({ color: P.warm, map: aoTex('blob'), transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending });
         case 'grid': return new THREE.LineBasicMaterial({ color: P.stone, transparent: true, opacity: 0.08, depthWrite: false });
         case 'beacon': return new THREE.MeshBasicMaterial({ color: 0xff3322 });

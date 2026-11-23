@@ -177,9 +177,12 @@ function bookshelf(g: THREE.Group, rnd: () => number): void {
 
 function whiteboard(g: THREE.Group, rnd: () => number, note?: string): void {
     // An easel board: brass-capped graphite legs, a thin frame and a warm paper face.
+    // beauty r2 (6): the posts stand on a base — a dark stone plinth with a brass edge joining both feet.
+    slab(g, [2.02, 0.05, 0.6], [0, 0.025, 0], 'stone.dark');
+    slab(g, [2.04, 0.012, 0.012], [0, 0.05, 0.3], 'metal.brass', false);
     for (const x of [-0.92, 0.92]) {
-        slab(g, [0.04, 1.9, 0.04], [x, 0.95, 0], 'metal.graphite');
-        slab(g, [0.06, 0.03, 0.56], [x, 0.015, 0], 'metal.graphite');
+        slab(g, [0.04, 1.86, 0.04], [x, 0.98, 0], 'metal.graphite');
+        slab(g, [0.1, 0.05, 0.4], [x, 0.075, 0], 'metal.graphite');
         slab(g, [0.05, 0.02, 0.05], [x, 1.91, 0], 'metal.brass', false);
     }
     slab(g, [1.86, 1.1, 0.04], [0, 1.3, 0], 'board.frame');

@@ -80,7 +80,7 @@ const INWARD: Record<WallSide, [number, number]> = { back: [0, 1], front: [0, -1
  * beauty:foundation — a soft contact shadow along a wall base (dark side against the wall), on the room floor.
  * `nx, nz` = the inward normal of that wall face.
  */
-function edgeShadow(parent: THREE.Object3D, len: number, x: number, z: number, nx: number, nz: number, y: number, width = 0.55): void {
+function edgeShadow(parent: THREE.Object3D, len: number, x: number, z: number, nx: number, nz: number, y: number, width = 0.42): void {
     const d = aoDecal(len, width, 'edge');
     d.rotation.set(-Math.PI / 2, 0, 0); d.rotation.order = 'YXZ'; d.rotation.y = Math.atan2(-nx, -nz);
     d.position.set(x + nx * width / 2, y, z + nz * width / 2); parent.add(d);
@@ -119,16 +119,29 @@ export function buildRoom(entity: RoomEntity, shellJungle: boolean): BuiltEntity
         const [nx, nz] = INWARD[seg.side], along = seg.sx > seg.sz, len = along ? seg.sx : seg.sz;
         add(walls, [seg.sx, H, seg.sz], [seg.x, H / 2, seg.z], 'wall', true, 'wall');
         add(walls, [seg.sx + 0.03, CAP, seg.sz + 0.03], [seg.x, H + CAP / 2, seg.z], 'trim', false, 'cap');
+        // beauty r2 (6) — every inner-face run (skirting, soffit, cove, rail, cove strip) is MITRED at the room corners: the
+        // back/front run owns the corner up to its own inner edge and the side run stops at the back/front run's room-side
+        // face (no overshoot, no crossing strips). `o` = the run's centre distance from the wall face, `dd` its depth.
+        const span = (o: number, dd: number): { len: number; c: number } => {
+            const lim = along ? (W - t) / 2 : (D - t) / 2, c0 = along ? seg.x : seg.z;
+            let a = Math.max(-lim, c0 - len / 2), b = Math.min(lim, c0 + len / 2);
+            const trim = along ? Math.max(0, o - dd / 2) : o + dd / 2;
+            if (Math.abs(a + lim) < 1e-6) a += trim; if (Math.abs(b - lim) < 1e-6) b -= trim;
+            return { len: Math.max(0.02, b - a), c: (a + b) / 2 };
+        };
+        const run = (parent: THREE.Object3D, o: number, dd: number, hgt: number, y: number, name: LookName, tag: string): void => {
+            const r = span(o, dd), cx = along ? r.c : seg.x + nx * (t / 2 + o), cz = along ? seg.z + nz * (t / 2 + o) : r.c;
+            add(parent, [along ? r.len : dd, hgt, along ? dd : r.len], [cx, y, cz], name, false, tag);
+        };
         // Inner face: walnut skirting + contact shadow on the floor.
-        const ix = nx * (t / 2 + SKD / 2), iz = nz * (t / 2 + SKD / 2), inner = Math.max(0.05, len - (seg.side === 'left' || seg.side === 'right' ? 0 : 2 * t));
-        add(walls, [along ? inner : SKD, SK, along ? SKD : inner], [seg.x + ix, FY + SK / 2, seg.z + iz], 'trim', false, 'skirting');
-        edgeShadow(root, inner, seg.x + nx * t / 2, seg.z + nz * t / 2, nx, nz, FY + 0.003);
+        run(walls, SKD / 2, SKD, SK, FY + SK / 2, 'trim', 'skirting');
+        { const r = span(0, 0); edgeShadow(root, r.len, along ? r.c : seg.x + nx * t / 2, along ? seg.z + nz * t / 2 : r.c, nx, nz, FY + 0.003); }
         // Ceiling band: a plaster soffit along the inner top edge with a warm cove strip under its edge (walking view only).
-        add(lintels, [along ? inner : SOFFIT, 0.1, along ? SOFFIT : inner], [seg.x + nx * (t / 2 + SOFFIT / 2), H - 0.05, seg.z + nz * (t / 2 + SOFFIT / 2)], 'wall', false, 'soffit');
-        add(lintels, [along ? inner : 0.03, 0.025, along ? 0.03 : inner], [seg.x + nx * (t / 2 + SOFFIT - 0.03), H - 0.11, seg.z + nz * (t / 2 + SOFFIT - 0.03)], 'emissive.cove', false, 'cove');
+        run(lintels, SOFFIT / 2, SOFFIT, 0.1, H - 0.05, 'wall', 'soffit');
+        run(lintels, SOFFIT - 0.03, 0.03, 0.025, H - 0.11, 'emissive.cove', 'cove');
         // A slim walnut picture rail with its own cove glow on the wall (also seen in the cutaway's walls).
-        add(walls, [along ? inner : 0.03, 0.03, along ? 0.03 : inner], [seg.x + nx * (t / 2 + 0.015), COVE_Y, seg.z + nz * (t / 2 + 0.015)], 'trim', false, 'rail');
-        add(walls, [along ? inner : 0.02, 0.02, along ? 0.02 : inner], [seg.x + nx * (t / 2 + 0.035), COVE_Y + 0.025, seg.z + nz * (t / 2 + 0.035)], 'emissive.cove', false, 'cove-strip');
+        run(walls, 0.015, 0.03, 0.03, COVE_Y, 'trim', 'rail');
+        run(walls, 0.035, 0.02, 0.02, COVE_Y + 0.025, 'emissive.cove', 'cove-strip');
         // Outer face: a stone base plinth and framed glass windows on long pieces.
         const ox = -nx * (t / 2 + 0.012), oz = -nz * (t / 2 + 0.012);
         add(walls, [along ? seg.sx : 0.024, 0.28, along ? 0.024 : seg.sz], [seg.x + ox, 0.14, seg.z + oz], 'stone.dark', false, 'base-trim');

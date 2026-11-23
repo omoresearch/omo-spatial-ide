@@ -174,11 +174,12 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await pause(1500);
         await subject(SHOTS[2], 'signs', 2, x => dataRooms.some(r => r.id === x.id));
         await shot(SHOTS[2]);
-        // Inside the first region room, facing its boards on the back wall (share-promises 4-boards-close).
+        // Inside the first region room from its front-right corner: its boards on the back wall and its furnishings in one
+        // three-quarter view (share-promises 4-boards-close).
         const near = dataRooms.slice().sort((a, b) => Math.abs(a.transform.x) - Math.abs(b.transform.x))[0];
-        await page.$eval(CANVAS, (c, pose) => c.omoStandAt(pose), { x: near.transform.x, z: near.transform.z + near.depth / 2 - 1.1, yaw: 0, pitch: -0.06 });
+        await page.$eval(CANVAS, (c, pose) => c.omoStandAt(pose), { x: near.transform.x + near.width / 2 - 1.3, z: near.transform.z + near.depth / 2 - 0.9, yaw: 0.42, pitch: -0.1 });
         await pause(1500);
-        await subject(SHOTS[3], 'boards', 2, x => x.id.startsWith(`${near.id}-board-`), 200);
+        await subject(SHOTS[3], 'boards', 2, x => x.id.startsWith(`${near.id}-board-`), 150);
         await shot(SHOTS[3]);
         check('no page errors', errors.length === 0, errors.slice(0, 3));
 
