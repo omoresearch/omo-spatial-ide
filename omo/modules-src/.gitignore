@@ -1,0 +1,5 @@
+work/
+logs/
+__pycache__/
+assets/city.exr
+*.blend1
