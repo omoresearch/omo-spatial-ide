@@ -143,8 +143,8 @@ G = lambda n: os.path.join(GEN, n)
 principled('Sheer', color=(0.88, 0.86, 0.82), rough=0.95)
 _sb = MATS['Sheer'].node_tree.nodes['Principled BSDF']; _sb.inputs['Alpha'].default_value = 0.5
 MATS['Sheer'].surface_render_method = 'BLENDED'; MATS['Sheer'].use_backface_culling = False
-principled('RugPit', diff=G(rug_texture(GEN, 'gen_rug_pit', (0.58, 0.50, 0.40), (0.30, 0.16, 0.10), (0.72, 0.60, 0.42), 36, bw=0.06)), rough=1.0)
-principled('RugNook', diff=G(rug_texture(GEN, 'gen_rug_nook', (0.28, 0.12, 0.20), (0.18, 0.08, 0.13), (0.70, 0.52, 0.30), 37, bw=0.08)), rough=1.0)
+principled('RugPit', diff=G(rug_texture(GEN, 'gen_rug_pit', (0.58, 0.51, 0.42), (0.50, 0.43, 0.35), (0.62, 0.55, 0.46), 36, bw=0.05)), rough=1.0)   # r5f: tone-on-tone border
+principled('RugNook', diff=G(rug_texture(GEN, 'gen_rug_nook', (0.36, 0.30, 0.26), (0.30, 0.25, 0.21), (0.40, 0.34, 0.29), 37, bw=0.06)), rough=1.0)
 principled('RugCharcoal', diff=G(rug_texture(GEN, 'gen_rug_charcoal', (0.36, 0.31, 0.25), (0.22, 0.17, 0.13), (0.62, 0.52, 0.36), 2, bw=0.04)), rough=1.0)
 principled('RugSlate', diff=G(rug_texture(GEN, 'gen_rug_slate', (0.46, 0.40, 0.33), (0.30, 0.20, 0.14), (0.72, 0.62, 0.44), 3, bw=0.05)), rough=1.0)
 principled('CanvasB', diff=G(canvas_texture(GEN, 'gen_canvas_b', (0.80, 0.76, 0.66),
@@ -556,7 +556,7 @@ light('CeilBounce', 'AREA', (W / 2, D / 2, 0.9), float(os.environ.get('BOUNCE_E'
 # Faint warm bounce from the doorway (the plaza outside is lit)
 light('DoorSpill', 'AREA', (W / 2, -0.6, 1.2), 30, (1.0, 0.78, 0.55), sx=1.4, sy=2.0, rot=(math.radians(90), 0, 0))
 # soft warm front fill high on the door wall, aimed into the room and down 30 deg (lifts the faces seen from the door)
-light('FrontFill', 'AREA', (W / 2, IY0 + 0.12, 2.75), float(os.environ.get('FRONT_E', {'library': '110', 'lounge': '110', 'studio': '70'}[MID])), (1.0, 0.74, 0.50), sx=6.0, sy=0.5, rot=(math.radians(60), 0, 0))
+light('FrontFill', 'AREA', (W / 2, IY0 + 0.12, 2.75), float(os.environ.get('FRONT_E', {'library': '80', 'lounge': '75', 'studio': '70'}[MID])), (1.0, 0.74, 0.50), sx=6.0, sy=0.5, rot=(math.radians(60), 0, 0))
 
 # ================================================================ module layouts (r2 redesign)
 DESKS = []; SCREEN_Y = 1.65
@@ -609,8 +609,8 @@ if MID == 'library':
     box('NookBook', (2.42, 5.30, 0.565), (0.22, 0.16, 0.03), 'BookC', bevel=0.002, seg=1)
     rbox('Throw', (NX - 0.05, NY + 0.08, 0.47), (0.55, 0.45, 0.03), 0.4, 'Boucle', bevel=0.012, seg=2)
     # round table + 3 chairs on a round rug, the pendant right over the table centre
-    RX, RY = 4.85, 3.85
-    principled('RugRound', diff=round_rug_tex('gen_rug_round', (0.56, 0.51, 0.44), (0.30, 0.24, 0.18), 44), rough=1.0)
+    RX, RY = 5.35, 3.85
+    principled('RugRound', diff=round_rug_tex('gen_rug_round', (0.52, 0.47, 0.41), (0.46, 0.41, 0.35), 44), rough=1.0)
     rug_round('RugTable', RX, RY, 1.22, 'RugRound')
     cyl('TableTop', (RX, RY, 0.745), 0.55, 0.04, 'Walnut', seg=64)
     cc0('brass_vase_01', (RX - 0.05, RY + 0.12, 0.765), 0.0, 0.4)
@@ -645,7 +645,7 @@ elif MID == 'lounge':
     # the pendant hangs right over the coffee table. Secondary zone on the right: a reading chair + ottoman + floor lamp
     # + side table on a small round rug by the glass. ONE large artwork on the left wall over a side table + lamp.
     # r5b: the whole group sits back from the door so the armchairs are in full view (not cropped by the lens)
-    GX, GY = 2.55, 3.95                       # group centre = coffee table
+    GX, GY = 3.55, 3.95                       # group centre = coffee table (r5f: on the camera axis)
     rug('RugLounge', GX, GY + 0.08, 3.8, 2.9, 'RugPit')
     SY = GY + 1.16
     sofa('Sofa', GX, SY, (0, -1), 3, 'Boucle', ['VelvetRust', 'FabricCharcoal'], 'lounge', seat_w=0.84, throw=False, plinth='BlackMetal')
@@ -665,8 +665,9 @@ elif MID == 'lounge':
     cc0('brass_vase_01', (CTX + 0.10, CTY + 0.20, ctop), 0.0, 0.30)
     # two identical armchairs facing the sofa across the table, each toed in toward the group centre (between table and sofa)
     for k, sx_ in enumerate((-1, 1)):
-        cx_, cy_ = GX + sx_ * 0.95, GY - 0.80
-        d = (GX - cx_, (GY + 0.35) - cy_); n_ = math.hypot(*d); d = (d[0] / n_, d[1] / n_)
+        # r5f: a U: each chair at a front corner of the table, turned 50 deg in toward the sofa (3/4 view from the door)
+        cx_, cy_ = GX + sx_ * 1.30, GY - 0.55
+        d = (-sx_ * math.sin(math.radians(50)), math.cos(math.radians(50)))
         cc0('modern_arm_chair_01', (cx_, cy_, 0), face_rot(d)); seat(cx_ + d[0] * 0.05, cy_ + d[1] * 0.05, 0.53, d, 'chair', 'lounge')
     # sofa ends: side table + lamp (left, under the artwork), floor lamp (right)
     cc0('side_table_01', (GX - 1.95, SY - 0.10, 0), math.pi / 2)
@@ -674,7 +675,11 @@ elif MID == 'lounge':
     cc0('side_table_01', (GX + 1.92, SY - 0.10, 0), math.pi / 2)
     cc0('ceramic_vase_01', (GX + 1.92, SY - 0.10, 0.55), 0.0, 0.7)
     pendant(0, CTX, CTY, 2.30, 0.36, 75)
-    canvas_on_wall('CanvasSofa', 'left', 4.80, 1.50, 1.10, 1.78, 'CanvasW'); WALL_ART = 'left'
+    canvas_on_wall('CanvasSofa', 'left', 3.60, 1.60, 1.15, 1.70, 'CanvasW'); WALL_ART = 'left'
+    # a slim walnut bench under the artwork (grounds it on the wall) with a stack of books
+    box('ArtBench', (IX0 + 0.22, 3.60, 0.22), (0.36, 1.6, 0.04), 'Walnut', bevel=0.004)
+    for s_ in (-1, 1): box(f'ArtBenchLeg{s_}', (IX0 + 0.22, 3.60 + s_ * 0.72, 0.10), (0.30, 0.04, 0.20), 'BlackMetal')
+    for q, m_ in enumerate(('BookA', 'BookD')): box(f'ArtBenchBook{q}', (IX0 + 0.22, 3.25, 0.24 + 0.02 + 0.04 * q), (0.24, 0.30, 0.04), m_, bevel=0.002, seg=1)
     # right wall: a long low sideboard (media wall: the screen slot sits above it), one lamp, a vase, a book stack
     SBX = IX1 - 0.24
     box('Sideboard', (SBX, 2.75, 0.36), (0.44, 2.4, 0.64), 'Walnut', bevel=0.006)
@@ -684,17 +689,16 @@ elif MID == 'lounge':
     cc0('ceramic_vase_01', (SBX, 3.55, 0.68), 0.0, 0.8)
     for q, m_ in enumerate(('BookB', 'BookA', 'BookG')): box(f'SideBook{q}', (SBX, 3.0, 0.68 + 0.02 + 0.04 * q), (0.26, 0.20, 0.04), m_, bevel=0.002, seg=1)
     # secondary zone (right, by the glass): reading chair + ottoman on a small round rug, floor lamp behind, side table
-    principled('RugRoundL', diff=round_rug_tex('gen_rug_round_l', (0.30, 0.27, 0.23), (0.55, 0.45, 0.32), 45), rough=1.0)
-    rd = (-0.55, -0.83); RCX, RCY = 6.45, 4.70
+    principled('RugRoundL', diff=round_rug_tex('gen_rug_round_l', (0.40, 0.36, 0.31), (0.35, 0.31, 0.27), 45), rough=1.0)
+    rd = (-0.55, -0.83); RCX, RCY = 6.85, 4.60
     rug_round('RugRead', RCX - 0.25, RCY - 0.38, 1.0, 'RugRoundL')
     cc0('mid_century_lounge_chair', (RCX, RCY, 0), face_rot(rd)); seat(RCX + rd[0] * 0.12, RCY + rd[1] * 0.12, 0.46, rd, 'chair', 'reading')
     cc0('Ottoman_01', (RCX + rd[0] * 0.95, RCY + rd[1] * 0.95, 0), face_rot(rd) + math.pi / 2, 0.8)
-    floor_lamp(1, RCX + 0.62, RCY + 0.10, h=1.5, energy=60)
-    cc0('side_table_01', (RCX - 0.70, RCY + 0.45, 0), 0.4)
-    cyl('ReadMug', (RCX - 0.74, RCY + 0.40, 0.565), 0.04, 0.09, 'Ceramic', seg=24)
-    box('ReadBook', (RCX - 0.62, RCY + 0.50, 0.565), (0.22, 0.16, 0.03), 'BookC', bevel=0.002, seg=1)
-    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (7.42, 5.42, 0), 1.2, 1.1, POT(0.27, 0.50))
-    potted('calathea_c', 'calathea_orbifolia_01', ['calathea_orbifolia_01_c'], (0.62, 5.45, 0), 1.0, 1.3, POT(0.18, 0.40))
+    floor_lamp(1, RCX + 0.50, RCY + 0.30, h=1.5, energy=60)
+    cc0('side_table_01', (RCX - 0.75, RCY + 0.25, 0), 0.4)
+    cyl('ReadMug', (RCX - 0.79, RCY + 0.20, 0.565), 0.04, 0.09, 'Ceramic', seg=24)
+    box('ReadBook', (RCX - 0.67, RCY + 0.30, 0.565), (0.22, 0.16, 0.03), 'BookC', bevel=0.002, seg=1)
+    potted('money_tree', 'pachira_aquatica_01', ['pachira_aquatica_01_bark_d', 'pachira_aquatica_01_leaves_d'], (0.75, 5.40, 0), 1.2, 1.1, POT(0.27, 0.50))
     potted('calathea_b', 'calathea_orbifolia_01', ['calathea_orbifolia_01_b'], (7.45, 0.62, 0), 2.0, 1.6, POT(0.17, 0.48))
     for (x, y) in ((5.6, 1.6),): downlight(x, y, 3.0, 60)
 elif MID == 'studio':
@@ -788,7 +792,7 @@ for o in list(ROOM.objects):
 wd = bpy.data.worlds.new('City'); scene.world = wd; wd.use_nodes = True; nt = wd.node_tree; nt.nodes.clear()
 tc = nt.nodes.new('ShaderNodeTexCoord'); mp = nt.nodes.new('ShaderNodeMapping'); mp.inputs['Rotation'].default_value = (0, 0, math.radians(float(os.environ.get('CITY_ROT', '200'))))
 et = nt.nodes.new('ShaderNodeTexEnvironment'); _cp = os.path.join(GEN, 'city_clean.exr'); et.image = bpy.data.images.load(_cp if os.path.exists(_cp) else os.path.join(A, 'city.exr')); et.image.colorspace_settings.name = 'Linear Rec.709'
-bg = nt.nodes.new('ShaderNodeBackground'); bg.inputs['Strength'].default_value = float(os.environ.get('CITY_GAIN', '1.25'))
+bg = nt.nodes.new('ShaderNodeBackground'); bg.inputs['Strength'].default_value = float(os.environ.get('CITY_GAIN', '1.0'))
 out = nt.nodes.new('ShaderNodeOutputWorld')
 nt.links.new(tc.outputs['Generated'], mp.inputs['Vector']); nt.links.new(mp.outputs[0], et.inputs[0]); nt.links.new(et.outputs[0], bg.inputs[0]); nt.links.new(bg.outputs[0], out.inputs[0])
 
@@ -814,8 +818,8 @@ for i, b in enumerate(anchors['boards']): empty(f'board_anchor_{i + 1}', (b['x']
 
 # collision blocks (room-local rectangles) from the furniture footprint on the floor (everything FURN taller than 0.3 m)
 BLOCKS = {
-    'library': [(IX0 + 0.2, 2.71, 0.2, 2.4), (4.85, 3.85, 1.0, 1.0), (1.75, 4.75, 0.8, 0.75), (IX1 - 0.22, 4.70, 0.22, 0.85), (6.70, 5.55, 0.28, 0.28), (7.45, 0.62, 0.2, 0.2)],
-    'lounge': [(2.55, 5.11, 1.5, 0.5), (2.55, 3.95, 0.47, 0.47), (1.6, 3.15, 0.42, 0.42), (3.5, 3.15, 0.42, 0.42), (0.6, 5.01, 0.28, 0.28), (IX1 - 0.24, 2.75, 0.22, 1.2), (6.2, 4.45, 0.75, 0.7), (7.42, 5.42, 0.3, 0.3), (0.62, 5.45, 0.2, 0.2), (7.45, 0.62, 0.2, 0.2)],
+    'library': [(IX0 + 0.2, 2.71, 0.2, 2.4), (5.35, 3.85, 1.0, 1.0), (1.75, 4.75, 0.8, 0.75), (IX1 - 0.22, 4.70, 0.22, 0.85), (6.70, 5.55, 0.28, 0.28), (7.45, 0.62, 0.2, 0.2)],
+    'lounge': [(3.55, 5.11, 1.5, 0.5), (3.55, 3.95, 0.47, 0.47), (2.25, 3.4, 0.42, 0.42), (4.85, 3.4, 0.42, 0.42), (1.6, 5.01, 0.28, 0.28), (IX1 - 0.24, 2.75, 0.22, 1.2), (6.6, 4.35, 0.75, 0.7), (0.75, 5.40, 0.3, 0.3), (7.45, 0.62, 0.2, 0.2)],
     'studio': [(4.0, 3.45, 0.8, 1.4), (IX0 + 0.2, 3.65, 0.2, 1.55), (IX1 - 0.24, 2.55, 0.22, 1.2), (0.75, 5.5, 0.28, 0.28), (7.35, 1.0, 0.2, 0.2), (7.30, 5.55, 0.3, 0.3)],
 }[MID]
 blocks = [{**{k: v for k, v in L(x, y).items() if k != 'y'}, 'hx': hx, 'hz': hz} for (x, y, hx, hz) in BLOCKS]

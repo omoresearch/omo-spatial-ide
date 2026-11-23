@@ -10,7 +10,7 @@ a = sys.argv[sys.argv.index('--') + 1:]
 out = a[0]; S = int(a[1]) if len(a) > 1 else 128; view = a[2] if len(a) > 2 else 'door'
 MOD = os.path.basename(os.path.dirname(os.path.abspath(bpy.data.filepath)))
 # r5d: 'auto' (default) = per-module yaw: the lounge turns 6 deg left to centre its conversation group
-YAW = float(a[3]) if len(a) > 3 and a[3] != 'auto' else {'lounge': 6.0}.get(MOD, 0.0)
+YAW = float(a[3]) if len(a) > 3 and a[3] != 'auto' else {}.get(MOD, 0.0)
 sc = bpy.context.scene; gpu_setup(sc, S)
 sc.cycles.max_bounces = 8; sc.cycles.diffuse_bounces = 5; sc.cycles.glossy_bounces = 3; sc.cycles.sample_clamp_indirect = 8.0
 sc.cycles.use_denoising = True
