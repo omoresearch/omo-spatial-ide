@@ -163,3 +163,28 @@ body.omo-shape-open .omo-scene-label { opacity: 0 !important; pointer-events: no
 /* Redo after a dot took changes back: a quiet text button at the end of the strip. */
 .omo-shape-redo { margin-left: 6px; height: 22px; padding: 0 9px; border-radius: 8px; border: 1px solid var(--sh-line); background: rgba(255, 255, 255, .06); color: var(--sh-text-2) !important; font-weight: 500; font-size: 12px; line-height: 20px; font-family: inherit; pointer-events: auto; }
 .omo-shape-redo:hover { background: rgba(255, 255, 255, .12); color: var(--sh-text) !important; }
+
+/* ---- promise-agent: Omo's one-line answer, the mic, listening ---- */
+.omo-shape-answer {
+    display: inline-flex; align-items: center; gap: 10px; max-width: 100%; min-height: 34px; padding: 6px 6px 6px 14px; border-radius: 17px;
+    background: rgba(16, 21, 29, .82); border: 1px solid rgba(127, 224, 255, .28); box-shadow: var(--sh-shadow);
+    backdrop-filter: var(--sh-blur); -webkit-backdrop-filter: var(--sh-blur); font-size: 14px; line-height: 20px; color: var(--sh-text);
+    animation: omo-shape-pop 180ms var(--sh-ease) both;
+}
+.omo-shape-answer.is-note { border-color: rgba(243, 211, 160, .35); color: #f3d3a0; }
+.omo-shape-answer-mark { color: #7fe0ff; font-size: 13px; }
+.omo-shape-answer button { width: 22px; height: 22px; border: 0; border-radius: 11px; background: transparent; color: var(--sh-text-3); font-size: 15px; line-height: 1; padding: 0; flex: 0 0 auto; }
+.omo-shape-answer button:hover { background: rgba(255, 255, 255, .1); color: var(--sh-text); }
+.omo-shape-mic { flex: 0 0 auto; width: 32px; height: 32px; border: 0; border-radius: 16px; background: transparent; color: var(--sh-text-3) !important; display: grid; place-items: center; padding: 0; transition: color 180ms, background 180ms; }
+.omo-shape-mic:hover { color: var(--sh-text) !important; background: rgba(255, 255, 255, .07); }
+.omo-shape-mic[aria-disabled="true"] { opacity: .45; }
+.omo-shape-mic.is-on { color: #06231a !important; background: var(--sh-accent); }
+.omo-shape-rec { width: 9px; height: 9px; border-radius: 50%; background: #ff6b6b; animation: omo-shape-pulse 1s ease-in-out infinite; }
+/* the quiet return card */
+.omo-since { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); z-index: 9; display: inline-flex; align-items: center; gap: 10px; padding: 7px 8px 7px 16px; border-radius: 18px;
+    background: rgba(16, 21, 29, .78); border: 1px solid rgba(255, 255, 255, .12); color: #e8eef2; font: 400 14px/20px Inter, -apple-system, 'Segoe UI', sans-serif;
+    backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%); box-shadow: 0 12px 32px rgba(0, 0, 0, .3); animation: omo-since-in 260ms cubic-bezier(.2, .8, .2, 1) both; }
+.omo-since b { font-weight: 600; color: #8fe3c4; }
+.omo-since button { width: 22px; height: 22px; border: 0; border-radius: 11px; background: transparent; color: #8f9ba4; font-size: 15px; line-height: 1; cursor: pointer; padding: 0; }
+.omo-since button:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+@keyframes omo-since-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }

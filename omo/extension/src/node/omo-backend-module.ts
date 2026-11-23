@@ -19,6 +19,8 @@ import { StandaloneSecurityContribution } from './standalone-security';
 import { WsRequestValidatorContribution } from '@theia/core/lib/node/ws-request-validators';
 import { OMO_WORLD_ADMIN_PATH } from '../common/world-admin-protocol'; // w2:admin
 import { WorldAdminBackend, worldAdminConnection } from './world-admin-service'; // w2:admin
+import { OMO_MIND_IMPORT_PATH } from '../common/mind-import-protocol'; // promise:onboarding
+import { MindImportBackend, mindImportConnection } from './mind-import'; // promise:onboarding
 import { EnvVariablesServer } from '@theia/core/lib/common/env-variables'; // w2:mp-client
 import { FileUri } from '@theia/core/lib/common/file-uri'; // w2:mp-client
 import * as nodePath from 'path'; // w2:mp-client
@@ -30,6 +32,10 @@ import { OMO_VOICE_SETTINGS_PATH } from '../common/voice-settings-protocol';
 import { VoiceSettingsStore } from './voice-settings-store';
 import { OMO_AGENT_SIGNALS_PATH } from '../common/agent-signals-protocol'; // w2:agents
 import { AgentSignalsBackend } from './agent-signals'; // w2:agents
+import { WorkspaceServer } from '@theia/workspace/lib/common/workspace-protocol'; // promise-agent
+import { OMO_PAGES_PATH } from '../common/omo-pages-protocol'; // promise-agent
+import { OmoPagesStore } from './omo-pages-store'; // promise-agent
+import type { Application } from 'express'; // promise-agent
 
 export const OmoRuntimeHost = Symbol('OmoRuntimeHost');
 export const OmoManagedWeb = Symbol('OmoManagedWeb');
@@ -39,6 +45,14 @@ const OmoStandaloneSecurity = Symbol('OmoStandaloneSecurity');
 const OmoRemoteRoomTokens = Symbol('OmoRemoteRoomTokens'); // w2:mp-client
 const OmoVoiceSettingsStore = Symbol('OmoVoiceSettingsStore'); // w2:voice
 const OmoAgentSignals = Symbol('OmoAgentSignals'); // w2:agents
+const OmoPages = Symbol('OmoPages'); // promise-agent
+
+/** promise-agent — serves pages made on demand at /omo-pages/<slug>.html (after the loopback guard). */
+@injectable()
+export class OmoPagesRoute implements BackendApplicationContribution {
+    @inject(OmoPages) protected readonly pages!: OmoPagesStore;
+    configure(app: Application): void { this.pages.route(app); }
+}
 
 /** Stops the runtime host with the backend. The tmux server and every tab keep running. */
 @injectable()
@@ -82,6 +96,8 @@ export default new ContainerModule(bind => {
         return new RpcConnectionHandler<object>(OMO_WORLD_ADMIN_PATH, () => worldAdminConnection(admin));
     }).inSingletonScope();
     // end w2:admin
+    // promise:onboarding — "Bring your mind with you": reads local chats only, no network (node/mind-import.ts).
+    bind(ConnectionHandler).toDynamicValue(() => new RpcConnectionHandler<object>(OMO_MIND_IMPORT_PATH, () => mindImportConnection(new MindImportBackend()))).inSingletonScope();
     // --- w2:mp-client: remote rooms. Backend connects out over WSS; member tokens in <config dir>/omo/remote-rooms.json (0600). ---
     bind(OmoRemoteRoomTokens).toDynamicValue(ctx => {
         // Resolved lazily: only a real remote-room action needs the config dir.
@@ -110,6 +126,17 @@ export default new ContainerModule(bind => {
     bind(ConnectionHandler).toDynamicValue(ctx => {
         const signals = ctx.container.get<AgentSignalsBackend>(OmoAgentSignals);
         return new RpcConnectionHandler<object>(OMO_AGENT_SIGNALS_PATH, () => signals);
+    }).inSingletonScope();
+    // promise-agent: pages made on demand, kept in <workspace>/.omo/pages and served on the same loopback server.
+    bind(OmoPages).toDynamicValue(ctx => new OmoPagesStore(async () => {
+        const uri = await ctx.container.get<WorkspaceServer>(WorkspaceServer).getMostRecentlyUsedWorkspace();
+        return uri ? FileUri.fsPath(uri) : undefined;
+    })).inSingletonScope();
+    bind(OmoPagesRoute).toSelf().inSingletonScope();
+    bind(BackendApplicationContribution).toService(OmoPagesRoute);
+    bind(ConnectionHandler).toDynamicValue(ctx => {
+        const pages = ctx.container.get<OmoPagesStore>(OmoPages);
+        return new RpcConnectionHandler<object>(OMO_PAGES_PATH, () => ({ save: (i: never) => pages.save(i), publishState: (s: never) => pages.publishState(s), list: () => pages.list() }));
     }).inSingletonScope();
     bind(StyleKitAssets).toSelf().inSingletonScope(); // sky:merge — /omo-kits static assets
     bind(BackendApplicationContribution).toService(StyleKitAssets);

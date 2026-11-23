@@ -11,6 +11,7 @@
  * leave, saved rooms, invite links, and agent status summaries. Terminals stay local per person:
  * nothing here opens, reads or types into a terminal, and nothing starts an agent.
  */
+import { normaliseRoomCode } from '../common/room-code'; // promise:share
 import type { PlayerPose } from '../common/player-state';
 import type { ChatMessage, ChatSay, OmoPresenceService, PresenceColour, PresenceJoin, RoomSnapshot, VoiceSignal, VoiceSignalEnvelope, VoiceStatus } from '../common/presence-protocol';
 import type { OmoRemoteRoomService, RemoteRoomStatus, SavedRemoteRoom } from '../common/remote-room-protocol';
@@ -187,7 +188,7 @@ export interface RemoteRoomView {
     busy: boolean;
     error: string;
     saved: SavedRemoteRoom[];
-    invite?: { link: string; expiresAt: number; role?: RoomInviteRole };
+    invite?: { link: string; expiresAt: number; role?: RoomInviteRole; /** promise:share — short room code for the same invite. */ code?: string };
     /** Seconds until the next automatic retry (reconnecting only). */
     retryIn?: number;
 }
@@ -236,6 +237,13 @@ export class RemoteRoomController {
     /** Paste an invite link. */
     joinInvite(link: string, name: string): Promise<void> {
         return this.connect(name, () => this.service.joinInvite(link, { name: name.trim() }));
+    }
+    /** promise:share — join with a short room code on a room server. Bad format = a readable error, no network call. */
+    joinCode(server: string, code: string, name: string): Promise<void> {
+        let clean: string;
+        try { clean = normaliseRoomCode(code); } catch (error) { this.emit({ error: (error as Error).message }); return Promise.resolve(); }
+        if (!server.trim()) { this.emit({ error: 'Type the room server address too, like https://rooms.example.com.' }); return Promise.resolve(); }
+        return this.connect(name, () => this.service.joinCode(server.trim(), clean, { name: name.trim() }));
     }
     /** Server URL + owner token. The owner token goes to the IDE backend once and is not stored. */
     hostRoom(input: { server: string; ownerToken: string; roomId: string; roomName?: string; seedCurrent: boolean }, name: string): Promise<void> {

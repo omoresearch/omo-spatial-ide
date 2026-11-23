@@ -1,5 +1,6 @@
 import type { RoomTheme } from './room-state';
 import type { PlayerPose, RoomLayoutId } from './player-state';
+import { withPoint } from './shared-pointer'; // promise:share
 export const OMO_PRESENCE_PATH = '/services/omo-presence';
 export const OmoPresenceService = Symbol('OmoPresenceService');
 export interface PresenceJoin { roomId: string; name: string; clientId: string; projectUri: string; theme: RoomTheme; layout?: RoomLayoutId }
@@ -95,7 +96,8 @@ export function presenceJoin(input: PresenceJoin): PresenceJoin {
 }
 export function presencePose(pose: PlayerPose): PlayerPose {
     if (!pose || ![pose.x,pose.z,pose.yaw,pose.pitch].every(n=>typeof n==='number' && Number.isFinite(n)) || Math.abs(pose.x)>5.5 || pose.z< -3.8 || pose.z>4.45 || Math.abs(pose.yaw)>Math.PI || Math.abs(pose.pitch)>1.2) throw new Error('Invalid room position.');
-    return { x:pose.x,z:pose.z,yaw:pose.yaw,pitch:pose.pitch };
+    // promise:share (L10): an optional pointer spot rides on the pose (position only; see shared-pointer.ts).
+    return withPoint({ x:pose.x,z:pose.z,yaw:pose.yaw,pitch:pose.pitch }, (pose as { point?: unknown }).point);
 }
 /** Default binding separation, NOT authorization. Existing workspace tools remain OS-user shared. */
 export function presenceStation(input: PresenceJoin, station: string): string {

@@ -8,8 +8,12 @@ import type { PlayerPose } from '../common/player-state';
  * (x right, y up, z towards the door); a pose with yaw 0 faces -z.
  */
 export const EAR_HEIGHT = 1.6;
-/** Full volume within NEAR metres, fading linearly to FLOOR at FAR metres. A room is small; never fully silent. */
-export const PROXIMITY = { near: 2.5, far: 10, floor: 0.12 };
+/**
+ * promise:share (L5) — proximity voice: full volume within NEAR metres, a smooth (smoothstep) fade to FLOOR
+ * at FAR metres. Voices are clear when you stand together and gone when you walk away (open worlds are
+ * up to 200 m; a far voice must not follow you). FLOOR is 0: beyond FAR metres a voice is silent.
+ */
+export const PROXIMITY = { near: 2, far: 12, floor: 0 };
 /** A voice facing away is quieter (but never silent): cone in degrees and the outside gain. */
 export const VOICE_CONE = { inner: 180, outer: 330, outerGain: 0.55 };
 
@@ -17,7 +21,8 @@ export function proximityVolume(distance: number): number {
     if (!Number.isFinite(distance) || distance <= PROXIMITY.near) return 1;
     if (distance >= PROXIMITY.far) return PROXIMITY.floor;
     const t = (distance - PROXIMITY.near) / (PROXIMITY.far - PROXIMITY.near);
-    return Math.round((1 - t * (1 - PROXIMITY.floor)) * 100) / 100;
+    const fade = 1 - t * t * (3 - 2 * t); // smoothstep: no sudden drop at either end
+    return Math.round((PROXIMITY.floor + fade * (1 - PROXIMITY.floor)) * 100) / 100;
 }
 
 export interface Vec3 { x: number; y: number; z: number }
@@ -50,6 +55,8 @@ export function relativeAzimuth(listener: PlayerPose, source: Pick<PlayerPose, '
 export interface PeerAudio {
     /** Linear gain (0 = silent). */
     setGain(gain: number): void;
+    /** promise:share — the gain node's current value and whether the voice goes through the HRTF panner (inspection/tests). */
+    inspect?(): { gain: number; spatial: boolean; panning: string };
     /** Speaker pose (their head position and facing). */
     setPose(pose: PlayerPose): void;
     remove(): void;
@@ -151,6 +158,7 @@ export function browserVoiceOutput(): VoiceAudioOut {
             void ctx.resume().catch(() => undefined);
             return {
                 setGain: g => setParam(gain.gain, Math.max(0, Math.min(4, g)), ctx),
+                inspect: () => ({ gain: Math.round(gain.gain.value * 1000) / 1000, spatial, panning: panner.panningModel }),
                 setPose: pose => { speakerPose = { ...pose }; place(); },
                 remove: () => { peers.delete(entry); try { source.disconnect(); gain.disconnect(); panner.disconnect(); } catch { /* gone */ } holder.srcObject = null; holder.remove(); }
             };

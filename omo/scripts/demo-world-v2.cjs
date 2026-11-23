@@ -43,7 +43,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const page = await browser.newPage();
         page.on('pageerror', e => errors.push(String(e.message || e)));
         await page.evaluateOnNewDocument(() => {
-            try { localStorage.setItem('omo.coach.v1', 'seen'); } catch {}
+            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.firstMinute', 'off') /* promise:onboarding: these drive the 3-step planner */; } catch {}
             const trust = () => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click();
             new MutationObserver(trust).observe(document, { childList: true, subtree: true });
             // Demo overlay: caption pill (top) + cursor dot. Pointer-events none, so it never steals clicks.

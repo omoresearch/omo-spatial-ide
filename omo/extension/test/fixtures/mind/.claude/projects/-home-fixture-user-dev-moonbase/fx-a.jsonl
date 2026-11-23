@@ -1,0 +1,6 @@
+{"type": "permission-mode", "permissionMode": "default", "sessionId": "fx-a"}
+{"type": "user", "cwd": "/home/fixture-user/dev/moonbase", "isSidechain": false, "message": {"role": "user", "content": "Add a docking bay scene to the moonbase game"}, "sessionId": "fx-a"}
+{"type": "assistant", "cwd": "/home/fixture-user/dev/moonbase", "message": {"role": "assistant", "content": [{"type": "text", "text": "Done."}]}, "sessionId": "fx-a"}
+{"type": "user", "cwd": "/home/fixture-user/dev/moonbase", "isSidechain": false, "message": {"role": "user", "content": "<command-name>/clear</command-name>"}, "sessionId": "fx-a"}
+{"type": "assistant", "cwd": "/home/fixture-user/dev/moonbase", "message": {"role": "assistant", "content": [{"type": "text", "text": "Done."}]}, "sessionId": "fx-a"}
+{"type": "ai-title", "aiTitle": "Add a docking bay to the moonbase game", "sessionId": "fx-a"}

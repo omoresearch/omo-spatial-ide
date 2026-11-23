@@ -39,3 +39,7 @@
 .omo-remote-saved > div { display: flex; gap: 6px; }
 .omo-remote-saved > div > button:first-child { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .omo-remote-saved > div > button:first-child small { display: inline; margin: 0 0 0 6px; }
+/* promise:share — short room codes */
+.omo-remote-or { display: block; margin: 10px 0 2px; font-size: 12px; opacity: .85; }
+.omo-room-code { margin: 6px 0; font-size: 12px; }
+.omo-room-code b { font: 600 16px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; padding: 1px 6px; border-radius: 6px; background: rgba(120, 220, 200, .14); }

@@ -1,0 +1,17 @@
+{
+ "session_id": "fx1",
+ "messages": [
+  {
+   "role": "system",
+   "content": "You are Hermes."
+  },
+  {
+   "role": "user",
+   "content": "Plan my vegetable garden beds for spring. My key is sk-FAKEfixtureKEY1234567890abcdef and email me at ada.lovelace@example.com"
+  },
+  {
+   "role": "assistant",
+   "content": "Sure."
+  }
+ ]
+}

@@ -40,7 +40,7 @@ const check = (name, pass, detail) => { if (!pass) failed++; console.log(`${pass
         page.on('pageerror', e => errors.push(String(e.message || e)));
         page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
         await page.evaluateOnNewDocument(() => {
-            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.focus.clickAttach', 'false'); } catch {}
+            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.firstMinute', 'off') /* promise:onboarding: these drive the 3-step planner */; localStorage.setItem('omo.focus.clickAttach', 'false'); } catch {}
             new MutationObserver(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click()).observe(document, { childList: true, subtree: true });
         });
         const ds = () => page.$eval(CANVAS, c => ({ ...c.dataset }));

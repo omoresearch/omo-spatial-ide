@@ -27,7 +27,7 @@ export class RoomPresence {
         const snapshot=():RoomSnapshot=>{
             const room=roomId&&this.rooms.get(roomId);
             if(!room||!room.members.has(selfId))throw new Error('Join a room first. Presence expired or disconnected.');
-            const result: RoomSnapshot = {roomId:roomId!,theme:room.theme,selfId,members:[...room.members.values()].map(m=>{const out:RoomMember={id:m.id,name:m.name,pose:{...m.pose}};if(m.voice)out.voice={...m.voice};if(m.colour)out.colour=m.colour;return out;})};
+            const result: RoomSnapshot = {roomId:roomId!,theme:room.theme,selfId,members:[...room.members.values()].map(m=>{const out:RoomMember={id:m.id,name:m.name,pose:{...m.pose,...((m.pose as unknown as {point?:object}).point?{point:{...(m.pose as unknown as {point:object}).point}}:{})}};if(m.voice)out.voice={...m.voice};if(m.colour)out.colour=m.colour;return out;})};
             if (room.layout === 'wide') result.layout = 'wide';
             return result;
         };

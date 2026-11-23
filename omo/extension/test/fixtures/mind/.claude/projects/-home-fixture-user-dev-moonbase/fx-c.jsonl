@@ -1,0 +1,4 @@
+{"type": "permission-mode", "permissionMode": "default", "sessionId": "fx-c"}
+{"type": "user", "cwd": "/home/fixture-user/dev/moonbase", "isSidechain": false, "message": {"role": "user", "content": "Write unit tests for the crater map loader"}, "sessionId": "fx-c"}
+{"type": "assistant", "cwd": "/home/fixture-user/dev/moonbase", "message": {"role": "assistant", "content": [{"type": "text", "text": "Done."}]}, "sessionId": "fx-c"}
+{"type": "ai-title", "aiTitle": "Write tests for the crater map", "sessionId": "fx-c"}

@@ -35,6 +35,8 @@ export interface RulePlanOptions {
     /** Proposal id factory (tests pass a fixed one). */
     makeId?: () => string;
     source?: WorldProposal['source'];
+    /** promise-agent fix 2: a chosen wall spot for a new web wall (used when it fits, else the free-spot search). */
+    wallSpot?: { x: number; z: number; rotation: number; elevation: number };
 }
 
 export const ADMIN_EXAMPLES: readonly string[] = [
@@ -339,6 +341,8 @@ class Planner {
     targetRoom: string | undefined;
     /** w3:admin — preferred desk spots (a new room's desk grid), used before the free-spot search. */
     slots: Transform[] = [];
+    /** promise-agent fix 2: the wall spot Omo chose for a page (one web wall uses it). */
+    wallSpot: RulePlanOptions['wallSpot'];
     private quotes: string[] = [];
 
     constructor(readonly world: WorldSpec) { this.draft = world; }
@@ -746,6 +750,13 @@ class Planner {
             const label = this.labelOr(label0(given, home ? `Web · ${new URL(home).hostname}` : 'Web wall'));
             const entity: WorldEntity = { id: this.uniqueId(label), kind: 'web-wall', label, width: clamp(width, 0.8, 8), height: clamp(height, 0.6, 4), elevation: round(clamp(3 - clamp(height, 0.6, 4) - 0.15, 0.3, 1.0)), transform: { x: 0, z: 0, rotation: 0 } };
             if (home) entity.home = home;
+            // promise-agent fix 2: a page Omo made hangs where Omo chose (a solid wall, eye height), when it fits there.
+            const spot = this.wallSpot;
+            const chosen: Transform | undefined = spot && !dims && size === 1 ? { x: round(spot.x), z: round(spot.z), rotation: spot.rotation } : undefined;
+            if (chosen && spot && fits(this.draft, { ...entity, elevation: round(clamp(spot.elevation, 0.3, 1.6)), transform: chosen }, chosen, new Set())) {
+                this.wallSpot = undefined; entity.elevation = round(clamp(spot.elevation, 0.3, 1.6)); entity.transform = chosen;
+                return this.push({ op: 'add', entity }) ? entity.id : undefined;
+            }
             const t = this.place(entity, 'wall', this.nearRef(lower)); if (!t) return undefined;
             entity.transform = t;
             return this.push({ op: 'add', entity }) ? entity.id : undefined;
@@ -1467,6 +1478,8 @@ export function planWithRules(world: WorldSpec, prompt: string, options: RulePla
     const valid = validateWorld(world);
     if (!valid.ok) return { ops: [], steps: [], notes: [valid.error], summary: '', explanation: `This world could not be read: ${valid.error}`, proposal: null };
     const p = new Planner(world);
+    const s = options.wallSpot;
+    if (s && [s.x, s.z, s.rotation, s.elevation].every(Number.isFinite)) p.wallSpot = { x: s.x, z: s.z, rotation: s.rotation, elevation: s.elevation };
     p.run(String(prompt ?? '').slice(0, 2000));
     const final = p.ops.length ? applyWorldOps(world, p.ops) : undefined;
     if (final && !final.ok) {
@@ -1488,4 +1501,36 @@ export function summarize(steps: string[]): string {
     const short = steps.map(s => s.replace(/\s+at x [-\d.]+ m, z [-\d.]+ m(?:, turned -?\d+°)?/, '').replace(/\s+\((?!size ×).*?\)/, '')); // shape: the size stays for every thing ("big" in the caption)
     const text = short.slice(0, 4).join('; ') + (short.length > 4 ? `; and ${short.length - 4} more` : '');
     return text.length > 240 ? `${text.slice(0, 237)}…` : text;
+}
+
+/**
+ * promise:share (L7) — plan "replace this world with that one" (a data world or an opened world file) as ONE
+ * proposal through the same planner contract: every op is described, the whole list is checked with
+ * applyWorldOps, locked desks refuse, and nothing changes until the user presses Apply.
+ */
+export function planDataWorld(world: WorldSpec, target: WorldSpec, prompt: string, options: RulePlanOptions = {}): RulePlanResult {
+    const none = (explanation: string): RulePlanResult => ({ ops: [], steps: [], notes: [explanation], summary: '', explanation, proposal: null });
+    const validNow = validateWorld(world), validTarget = validateWorld(target);
+    if (!validNow.ok) return none(`This world could not be read: ${validNow.error}`);
+    if (!validTarget.ok) return none(`The new world is not valid: ${validTarget.error}`);
+    const locked = world.entities.filter((e): e is StationEntity => e.kind === 'station' && e.station.locked);
+    if (locked.length) return none(`${locked.map(e => `“${entityName(e)}”`).join(', ')} ${locked.length === 1 ? 'is' : 'are'} locked. Unlock ${locked.length === 1 ? 'it' : 'them'} in Station Setup first. Nothing was changed.`);
+    const ops: WorldOp[] = [];
+    if (world.name !== target.name) ops.push({ op: 'name', name: target.name });
+    ops.push({ op: 'shell', shell: { theme: target.shell.theme, width: target.shell.width, depth: target.shell.depth, open: !!target.shell.open } });
+    // Mirrors go first (removing a desk would take its mirrors with it), then everything else.
+    const order = [...world.entities.filter(e => e.kind === 'mirror'), ...world.entities.filter(e => e.kind !== 'mirror')];
+    for (const e of order) ops.push({ op: 'remove', id: e.id });
+    for (const e of target.entities) ops.push({ op: 'add', entity: JSON.parse(JSON.stringify(e)) as WorldEntity });
+    const result = applyWorldOps(world, ops);
+    if (!result.ok) return none(`That world does not fit: ${result.error} Nothing was changed.`);
+    const steps: string[] = [];
+    let draft = world;
+    for (const op of ops) { steps.push(describeOp(draft, op)); const next = applyWorldOps(draft, [op]); if (next.ok) draft = next.world; }
+    const rooms = target.entities.filter(e => e.kind === 'room').length;
+    const summary = `Build “${target.name}”: ${rooms} room${rooms === 1 ? '' : 's'}, ${target.entities.length - rooms} things`;
+    const proposal: WorldProposal = { id: (options.makeId ?? (() => newProposalId()))(), source: options.source ?? 'admin', summary, ops, baseRevision: world.revision };
+    const notes = ops.length > 64 ? ['A shared room takes at most 64 changes at once: build this in your own room, then share it.'] : [];
+    const explanation = `Here is my plan for “${String(prompt).slice(0, 120)}”: ${ops.length} changes that replace this world. Nothing changes until you press Apply.${notes.length ? ` Note: ${notes[0]}` : ''}`;
+    return { ops, steps, notes, summary, explanation, proposal };
 }

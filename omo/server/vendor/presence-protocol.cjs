@@ -1,4 +1,4 @@
-// GENERATED from omo/extension/src/common/presence-protocol.ts (sha256 b8662bb3f2293dc1dc3b3a0802100313732a0ea83578aa43fee78666a1f9cc5f). Do not edit.
+// GENERATED from omo/extension/src/common/presence-protocol.ts (sha256 1ab0168ecea693b303f94374d74c8bad6cdce737df36d50cc7bb3809d009b768). Do not edit.
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VOICE_INBOX_MAX = exports.VOICE_SIGNAL_MAX_CHARS = exports.CHAT_RATE_WINDOW_MS = exports.CHAT_RATE_COUNT = exports.CHAT_INBOX_MAX = exports.CHAT_TEXT_MAX = exports.CHAT_EMOTES = exports.PRESENCE_COLOUR_HEX = exports.PRESENCE_COLOURS = exports.OmoPresenceService = exports.OMO_PRESENCE_PATH = void 0;
@@ -10,6 +10,7 @@ exports.presenceLayout = presenceLayout;
 exports.presenceJoin = presenceJoin;
 exports.presencePose = presencePose;
 exports.presenceStation = presenceStation;
+const shared_pointer_1 = require("./shared-pointer.cjs"); // promise:share
 exports.OMO_PRESENCE_PATH = '/services/omo-presence';
 exports.OmoPresenceService = Symbol('OmoPresenceService');
 /** A small fixed palette. Colours are never free text, so a tag cannot carry markup or tracking. */
@@ -94,7 +95,8 @@ function presenceJoin(input) {
 function presencePose(pose) {
     if (!pose || ![pose.x, pose.z, pose.yaw, pose.pitch].every(n => typeof n === 'number' && Number.isFinite(n)) || Math.abs(pose.x) > 5.5 || pose.z < -3.8 || pose.z > 4.45 || Math.abs(pose.yaw) > Math.PI || Math.abs(pose.pitch) > 1.2)
         throw new Error('Invalid room position.');
-    return { x: pose.x, z: pose.z, yaw: pose.yaw, pitch: pose.pitch };
+    // promise:share (L10): an optional pointer spot rides on the pose (position only; see shared-pointer.ts).
+    return (0, shared_pointer_1.withPoint)({ x: pose.x, z: pose.z, yaw: pose.yaw, pitch: pose.pitch }, pose.point);
 }
 /** Default binding separation, NOT authorization. Existing workspace tools remain OS-user shared. */
 function presenceStation(input, station) {

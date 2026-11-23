@@ -2,6 +2,7 @@
 // Wire protocol of the Omo room server (JSON text frames over WSS). Bump PROTOCOL_VERSION on breaking change.
 // Clients: see README.md "Protocol". Every client message is checked here before the hub touches it.
 const P = require('../vendor/presence-protocol.cjs');
+const SP = require('../vendor/shared-pointer.cjs'); // promise:share
 const U = require('./util.cjs');
 
 const PROTOCOL_VERSION = 1;
@@ -32,7 +33,8 @@ const reqId = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(v) ? v
 function pose(input, shell) {
     if (!isObj(input) || ![input.x, input.z, input.yaw, input.pitch].every(n => typeof n === 'number' && Number.isFinite(n))) throw new Error('Invalid room position.');
     if (Math.abs(input.x) > shell.width / 2 || Math.abs(input.z) > shell.depth / 2 || Math.abs(input.yaw) > Math.PI * 4 || Math.abs(input.pitch) > 1.6) throw new Error('Invalid room position.');
-    return { x: input.x, z: input.z, yaw: input.yaw, pitch: input.pitch };
+    // promise:share (L10): an optional pointer spot (position only), validated by the shared module.
+    return SP.withPoint({ x: input.x, z: input.z, yaw: input.yaw, pitch: input.pitch }, input.point);
 }
 /** Agent status: an enum per desk plus a short label. Never terminal contents, prompts, paths or secrets. */
 function agentStatus(input) {

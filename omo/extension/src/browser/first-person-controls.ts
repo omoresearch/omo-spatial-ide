@@ -60,7 +60,7 @@ export class FirstPersonControls {
     private pointer?: { x: number; y: number; startX: number; startY: number; dragged: boolean };
     private listeners: Array<() => void> = [];
     private focusState: FocusState = { phase: 'walk', full: false };
-    private flight?: { from: View; start: number };
+    private flight?: { from: View; start: number; ms?: number };
     private focusListeners = new Set<(state: FocusState) => void>();
     /** Eased WASD velocity (fraction of walking speed, local frame). */
     private readonly velocity = new WalkVelocity();
@@ -326,6 +326,19 @@ export class FirstPersonControls {
         this.focusTerminal();
         return true;
     }
+    /**
+     * promise-agent — "take me to …" / "where was I": ease the walking camera to a new standing pose (a soft
+     * walk, not a jump). Stays in walk mode; keys held during the glide are dropped.
+     */
+    walkTo(pose: PlayerPose, ms = 900): boolean {
+        if (!this.enabled || this.focusState.phase !== 'walk') return false;
+        this.keys.clear(); this.pointer = undefined; this.velocity.stop(); this.typing = false;
+        this.flight = { from: this.currentView(), start: performance.now() - (reducedMotion() ? ms : 0), ms };
+        this.pose = { ...pose };
+        this.canvas.dataset.walkTo = `${pose.x.toFixed(2)},${pose.z.toFixed(2)}`;
+        this.apply();
+        return true;
+    }
     /** Ease back to the exact walking pose. */
     detach(): void {
         if (!this.attached) return;
@@ -385,9 +398,9 @@ export class FirstPersonControls {
         const { phase, screen } = this.focusState;
         const view = (phase === 'attaching' || phase === 'attached') && screen ? this.screenView(screen) : this.walkView();
         if (this.flight) {
-            const t = Math.min(1, (performance.now() - this.flight.start)/EASE_MS), e = ease(t), a = this.flight.from;
+            const t = Math.min(1, (performance.now() - this.flight.start)/(this.flight.ms ?? EASE_MS)), e = ease(t), a = this.flight.from;
             view.x = a.x + (view.x - a.x)*e; view.y = a.y + (view.y - a.y)*e; view.z = a.z + (view.z - a.z)*e;
-            view.yaw = a.yaw + (view.yaw - a.yaw)*e; view.pitch = a.pitch + (view.pitch - a.pitch)*e;
+            view.yaw = a.yaw + (this.flight.ms ? wrapAngle(view.yaw - a.yaw) : view.yaw - a.yaw)*e; /* promise-agent: a walk turns the short way */ view.pitch = a.pitch + (view.pitch - a.pitch)*e;
             if (t >= 1) { this.flight = undefined; if (phase === 'attaching') this.setFocus({ ...this.focusState, phase: 'attached' }); else if (phase === 'returning') this.setFocus({ phase: 'walk', full: false }); }
         }
         this.camera.position.set(view.x,view.y,view.z);

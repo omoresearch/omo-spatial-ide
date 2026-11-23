@@ -263,7 +263,7 @@ export function buildSkylineShell(shell: WorldShell, blocks: readonly Footprint[
     add(root, new THREE.BoxGeometry(W + 0.6, 0.9, D + 0.6), std(0x0d0e12, 0.6, 0.2), 0, -0.65, 0, false);
     const towerH = SKYLINE_ALTITUDE - 1.1;
     const tower = new THREE.BoxGeometry(W + 2, towerH, D + 2); tower.translate(0, -towerH / 2 - 1.1, 0);
-    root.add(noRay(new THREE.Mesh(tower, facadeMaterial(camera, 0.4))));
+    const facade = new THREE.Mesh(tower, facadeMaterial(camera, 0.4)); facade.name = 'omo-skyline-tower'; root.add(noRay(facade));
     // Ceiling (faces down only, so the overview sees in from above) with warm coves.
     const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(W, D), std(0x3a3833, 0.85, 0.0));
     ceiling.rotation.x = Math.PI / 2; ceiling.position.y = H; ceiling.receiveShadow = true; root.add(ceiling);
@@ -276,12 +276,16 @@ export function buildSkylineShell(shell: WorldShell, blocks: readonly Footprint[
     const pendant = emissive(0xffe2b8, 1.8);
     const bodyMat = std(0x141416, 0.4, 0.8);
     const rows = Math.max(1, Math.round(D / 6));
+    // promise:onboarding (5) — everything that hangs or stands above head height (the dark 7 m pendant bars and their
+    // wires, the bronze mullions and the top rail of the glass) lives in one group that RoomScene hides in the overview:
+    // seen from above, these floated over the rooms and paths as stray thin black lines.
+    const pendants = new THREE.Group(); pendants.name = 'omo-skyline-upper'; root.add(pendants);
     for (let r = 0; r < rows; r++) {
         const z = -hd + (r + 0.5) * (D / rows);
         const len = Math.min(W - 6, 7);
-        add(root, new THREE.BoxGeometry(len, 0.06, 0.12), bodyMat, 0, H - 0.9, z, false);
-        add(root, new THREE.BoxGeometry(len - 0.1, 0.02, 0.08), pendant, 0, H - 0.94, z, false);
-        for (const x of [-len / 2 + 0.3, len / 2 - 0.3]) add(root, new THREE.CylinderGeometry(0.006, 0.006, 0.9, 4), bodyMat, x, H - 0.45, z, false);
+        add(pendants, new THREE.BoxGeometry(len, 0.06, 0.12), bodyMat, 0, H - 0.9, z, false);
+        add(pendants, new THREE.BoxGeometry(len - 0.1, 0.02, 0.08), pendant, 0, H - 0.94, z, false);
+        for (const x of [-len / 2 + 0.3, len / 2 - 0.3]) add(pendants, new THREE.CylinderGeometry(0.006, 0.006, 0.9, 4), bodyMat, x, H - 0.45, z, false);
     }
     // Glass curtain wall: panes face inwards only (visible from inside; transparent from the overview).
     const glass = new THREE.MeshPhysicalMaterial({ color: 0x9fb6c8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.16, envMapIntensity: 1.6, side: THREE.FrontSide, depthWrite: false });
@@ -298,11 +302,11 @@ export function buildSkylineShell(shell: WorldShell, blocks: readonly Footprint[
         for (let b = 0; b <= bays; b++) {
             const s = -side.len / 2 + b * side.len / bays;
             const [x, z] = side.at(s);
-            add(root, new THREE.BoxGeometry(0.035, H, 0.08), bronze, x, H / 2, z, false).rotation.y = side.rot;
+            add(pendants, new THREE.BoxGeometry(0.035, H, 0.08), bronze, x, H / 2, z, false).rotation.y = side.rot;
         }
         const rail = new THREE.BoxGeometry(side.len, 0.08, 0.14);
         add(root, rail, bronze, cx, 0.04, cz, false).rotation.y = side.rot;
-        add(root, rail, bronze, cx, H - 0.04, cz, false).rotation.y = side.rot;
+        add(pendants, rail, bronze, cx, H - 0.04, cz, false).rotation.y = side.rot;
         // Perimeter uplight strip just inside the glass.
         const ux = cx - Math.sign(cx) * 0.35, uz = cz - Math.sign(cz) * 0.35;
         const up = add(root, new THREE.BoxGeometry(side.len - 0.8, 0.02, 0.05), emissive(0xffb070, 2.0), ux, 0.012, uz, false); up.rotation.y = side.rot;

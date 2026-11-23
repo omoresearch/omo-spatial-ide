@@ -108,14 +108,25 @@ test('every doorway is framed: two coloured jamb posts and a threshold strip per
   assert.equal(all.filter(m => m.userData.part === 'threshold').length, 2);
 });
 
-test('a room shows its name on a floor plate just outside its doorway', () => {
+test('a room shows its name on ONE sign standing on the wall right above its doorway (promise:onboarding 6)', () => {
   const R = loadRooms();
-  const built = R.buildRoom({ ...room('r', 0, 0, 14, 10), label: 'Research wing' }, false);
-  const plate = meshes(built.root).find(m => m.userData.part === 'name-plate');
-  assert.ok(plate, 'name plate exists');
-  assert.equal(plate.userData.roomName, 'Research wing');
-  assert.ok(plate.position.z > 5 && plate.position.z < 7.5, `outside the front door (z ${plate.position.z})`);
-  assert.ok(Math.abs(plate.position.y) < 0.1, 'lies on the floor');
+  for (const doors of [['front'], ['left'], ['back', 'right']]) {
+    const built = R.buildRoom({ ...room('r', 0, 0, 14, 10), label: 'Research wing', doors }, false);
+    const signs = meshes(built.root).filter(m => m.userData.part === 'room-sign');
+    assert.equal(signs.length, 1, `one sign (${doors})`);
+    const sign = signs[0], [w, h] = sign.userData.size;
+    assert.equal(sign.userData.roomName, 'Research wing');
+    assert.equal(meshes(built.root).filter(m => /name-plate|room-title/.test(m.userData.part ?? '')).length, 0, 'no floor plate or floating title any more');
+    const main = doors.includes('front') ? 'front' : doors[0];
+    const at = { front: [0, 5], back: [0, -5], left: [-7, 0], right: [7, 0] }[main];
+    assert.ok(Math.abs(sign.position.x - at[0]) < 1e-6 && Math.abs(sign.position.z - at[1]) < 1e-6, `centred on the ${main} doorway wall (${sign.position.x}, ${sign.position.z})`);
+    assert.ok(sign.position.y - h / 2 >= R.ROOM_WALL_HEIGHT, 'sits on top of the doorway wall, never in front of it');
+    assert.ok(w <= 6 && w >= 4, `sign width ${w}`);
+    R.setRoomCutaway(built.root, true, false);
+    assert.ok(Math.abs(sign.position.y - h / 2 - R.ROOM_WALL_HEIGHT * R.ROOM_CUTAWAY_SCALE) < 0.1, 'overview: it moves down with the lowered wall (stays in front of the desk markers)');
+    R.setRoomCutaway(built.root, false, false);
+    assert.ok(sign.position.y - h / 2 >= R.ROOM_WALL_HEIGHT, 'walking: back on the full wall');
+  }
 });
 
 test('overview cutaway keeps walls tall enough to read (>= 1 m) but below desk tops (<= 1.3 m)', () => {
@@ -143,6 +154,15 @@ test('room labels are placed before desk chips (priority 0 wins over a chip at t
   const out = labels.declutterLabels([{ id: 'chip', x: 200, y: 210, w: 30, h: 20, priority: 1 }, { id: 'room', x: 205, y: 200, w: 120, h: 24, priority: 0 }]);
   assert.equal(out.find(i => i.id === 'room').hidden, false);
   assert.equal(out.find(i => i.id === 'chip').hidden, true);
+});
+
+test('a desk marker that would touch a room sign moves up just clear of it; others keep their spot (promise:onboarding 6)', () => {
+  const sign = { left: 100, top: 200, right: 200, bottom: 250 };
+  const a = labels.avoidRects({ x: 150, y: 205, w: 28, h: 19 }, [sign], 6);
+  assert.ok(a.y + a.h / 2 <= sign.top - 6 + 1e-9, `moved above the sign (${a.y})`);
+  assert.equal(a.x, 150, 'only moves up');
+  const b = labels.avoidRects({ x: 400, y: 205, w: 28, h: 19 }, [sign], 6);
+  assert.equal(b.y, 205, 'a marker clear of every sign stays put');
 });
 
 test('overview chip text is the desk number; full titles stay for walking and classic rooms', () => {

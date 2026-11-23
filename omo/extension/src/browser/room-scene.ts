@@ -12,14 +12,14 @@ import type { RoomLayoutId, RoomKitId } from '../common/player-state';
 import type { RuntimeColorMetadata } from '../common/runtime-protocol';
 import { terminalLinks } from '../common/terminal-links';
 import { CodeReviewFrame, codeReviewPreview } from '../common/code-review-preview';
-import { workstationLabelVisible, layoutLabels, declutterLabels, chipText } from './workstation-label-visibility'; // t3:polish2 layoutLabels; w3:look declutter + chips
+import { workstationLabelVisible, layoutLabels, declutterLabels, chipText, avoidRects } from './workstation-label-visibility'; // t3:polish2 layoutLabels; w3:look declutter + chips
 import { PoseSmoother } from './movement-smoothing';
 // w2:render — the room is built from a WorldSpec (shared contract) by the world scene builders.
-import type { WorldEntity, WorldSpec } from '../common/world-model';
-import { validateWorld } from '../common/world-model';
+import type { RoomEntity, WorldEntity, WorldSpec } from '../common/world-model';
+import { roomRect, validateWorld } from '../common/world-model';
 import { buildShell, nearWall, shellColors } from './world-scene-shell';
 import type { OrbSpot } from './world-scene-shell';
-import { BuiltEntity, placeRoot, buildDecorEntity, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
+import { BuiltEntity, placeRoot, buildDecorEntity, topicBoardLines, buildMirror, buildMonitorWall, buildReviewScreen, buildStation, buildWebWall, entityTitle, legacyRoomWorld } from './world-scene-entities';
 import { disposeTree, freeze as freezeTree, refreeze } from './world-scene-kit';
 import { footprints, roomFootprints, worldHome, worldMover } from './world-scene-collision';
 import { buildRoom, setRoomCutaway } from './world-scene-rooms'; // w3:render
@@ -30,6 +30,10 @@ import { MonitorPaintBudget } from './monitor-paint-budget'; // w3:perf
 import { buildPaths, pathsKey } from './world-scene-paths'; // w3:look (7)
 import { buildSkylineShell, restyleForSkyline, SKYLINE_COLORS, SKYLINE_FOG } from './world-scene-skyline'; // sky:render
 import { SkylineFx } from './world-scene-skyline-fx'; // sky:render
+import { PointerBeams } from './shared-pointer-view'; // promise:share
+import { BEAM_CHEST_HEIGHT, POINT_MAX_REACH, pointerBeams, sharedPoint } from '../common/shared-pointer'; // promise:share
+import type { SharedPoint } from '../common/shared-pointer';
+import { PRESENCE_COLOUR_HEX } from '../common/presence-protocol'; // promise:share
 import { SkylineKitLoader, buildKitStation } from './world-scene-skyline-baked'; // sky:merge M1
 import { activeKit, decorPropFor, kitDeskIndex } from '../common/world-style-kits'; // sky:merge M1
 import type { StyleKit } from '../common/world-style-kits'; // sky:merge M1
@@ -148,6 +152,8 @@ function paintIdleCard(c: CanvasRenderingContext2D, card: { name: string; tabs: 
  * it changes only this constant (the shell builder applies it to any shell size).
  */
 /** world-ui r4/5 — the kit overview: cut-away height (m) and the tilt factor on the user's overview elevation. */
+/** promise:onboarding — one stray-line candidate (see RoomScene.thinMeshes). */
+export interface ThinMesh { owner: string; room?: string; name: string; part?: string; line: boolean; size: number[]; at: number[] }
 const KIT_CUT = 2.3, KIT_WALL_CUT = 0.9, KIT_OVERVIEW_TILT = 0.8;
 const ORB: OrbSpot = { x: -2.9, y: 2.2, z: -4.2, ringZ: -4.1, scale: 0.62 }; // w2:polish — clear of the web wall
 /** Cap fill-rate cost on HiDPI screens. The room is mostly flat colour, so 1.5x is visually equal. */
@@ -258,6 +264,9 @@ export class RoomScene {
     private stationNumbers = new Map<string, number>();
     private lights?: { hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight; accent: THREE.PointLight };
     private skyFx?: SkylineFx; // sky:render — bloom + environment, skyline theme only
+    /** promise:onboarding — 'neutral' while the first minute is open: no city, sky or tower behind the sentence, a dim gradient instead. */
+    private backdrop: 'world' | 'neutral' = 'world';
+    private neutralSky?: THREE.CanvasTexture;
     /** sky:merge M1 — the baked style-kit shell: loader per kit, its loaded shell, and kits whose assets are missing. */
     private kitLoaders = new Map<string, SkylineKitLoader>();
     private kitShells = new Map<string, { root: THREE.Group; env: THREE.Texture }>();
@@ -319,6 +328,8 @@ export class RoomScene {
         this.renderer.toneMappingExposure = 1.25;
         const canvas = this.renderer.domElement;
         canvas.dataset.testid = 'omo-world-canvas';
+        (canvas as HTMLCanvasElement & { omoThinMeshes?: () => ThinMesh[] }).omoThinMeshes = () => this.thinMeshes(); // promise:onboarding test hook
+        Object.assign(canvas, { omoSignRects: () => this.signRects(), omoBoardText: () => this.boardText(), omoStandAt: (p: PlayerPose) => this.standAt(p) }); // promise:onboarding (4)(6) test hooks
         canvas.setAttribute('aria-label', 'Interactive 3D room. Drag or use arrow keys to orbit. Scroll to zoom. Select a workstation to work.');
         canvas.tabIndex = 0;
         this.host.appendChild(canvas);
@@ -384,6 +395,36 @@ export class RoomScene {
         this.data.set(key, value); this.renderer.domElement.dataset[key] = value;
     }
     getPlayerPose():PlayerPose { return {...(this.walker?.pose ?? PLAYER_HOME)}; }
+    // --- promise:share (L10): shared pointer. Only a spot (x, y, z) is shared; nothing is read from a screen. ---
+    private pointerView?: PointerBeams;
+    private myPoint?: SharedPoint;
+    private myColour = '#7fe3d0';
+    private pointerSig = '';
+    /** The spot under the crosshair (walking): the frontmost hit on any surface, within reach. */
+    aimPoint(): SharedPoint | undefined {
+        if (!this.renderer || this.navigation !== 'walk') return undefined;
+        const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(0, 0), this.camera); ray.far = POINT_MAX_REACH;
+        const targets = [...(this.shellRoot ? [this.shellRoot] : []), ...this.roots, ...this.screens.values()];
+        const hit = ray.intersectObjects(targets, true).find(h => h.object.visible && !(h.object.parent?.name === 'omo-shared-pointer'));
+        const p = hit ? hit.point : ray.ray.at(6, new THREE.Vector3());
+        return sharedPoint({ x: p.x, y: Math.max(0, Math.min(8, p.y)), z: p.z });
+    }
+    /** Show (spot) or hide (undefined) your own beam, in your colour. */
+    setMyPointer(point: SharedPoint | undefined, colour?: string): void {
+        this.myPoint = point; if (colour) this.myColour = colour;
+        this.drawPointers();
+    }
+    private drawPointers(): void {
+        if (!this.renderer) return;
+        this.pointerView ??= new PointerBeams(this.scene);
+        const me = this.getPlayerPose();
+        const specs = pointerBeams([...this.peerAvatars.values()].map(a => ({ id: a.member.id, name: a.member.name, colour: a.member.colour, pose: a.member.pose })))
+            .map(b => ({ id: b.id, colour: b.colour ? PRESENCE_COLOUR_HEX[b.colour as keyof typeof PRESENCE_COLOUR_HEX] ?? '#ff56c8' : '#ff56c8', from: b.from, to: b.to }));
+        if (this.myPoint) specs.push({ id: '__self', colour: this.myColour, from: { x: me.x, y: BEAM_CHEST_HEIGHT, z: me.z }, to: this.myPoint });
+        if (this.pointerView.set(specs)) this.invalidate();
+        const sig = JSON.stringify(specs.map(s => ({ id: s.id === '__self' ? 'self' : s.id, colour: s.colour, to: s.to })));
+        if (sig !== this.pointerSig) { this.pointerSig = sig; this.setData('pointers', sig); }
+    }
     // --- omo focus lane: the one public read focus mode needs (walker + a station's screen mesh). ---
     focusTarget(station?: Workstation): { controls?: FirstPersonControls; screen?: THREE.Mesh } { return { controls: this.walker, screen: station ? this.screens.get(station) : undefined }; }
     setPeers(members:RoomMember[]):void {
@@ -410,6 +451,7 @@ export class RoomScene {
             avatar.member=member;avatar.root.position.set(member.pose.x,0,member.pose.z);avatar.root.rotation.y=member.pose.yaw;
         }
         this.peerVersion++;
+        this.drawPointers(); // promise:share
         if (this.renderer) { this.renderer.shadowMap.needsUpdate = true; this.invalidate(); }
     }
     private material(color: THREE.ColorRepresentation, metalness = 0.1): THREE.MeshStandardMaterial {
@@ -484,6 +526,7 @@ export class RoomScene {
         }
         if (this.skyFx) this.skyFx.useEnvironment(kitShell?.env); // sky:merge M1 — the kit's baked reflection probe replaces the generic room environment
         this.applyKitView(); // world-ui (1, 3)
+        this.applyBackdrop(); // promise:onboarding
         const pk = pathsKey(world.shell, world.entities); // w3:look (7) — plaza, paths, lamps (open worlds)
         if (pk !== this.pathsKey) {
             if (this.pathsRoot) { this.worldRoot.remove(this.pathsRoot); disposeTree(this.pathsRoot); this.pathsRoot = undefined; }
@@ -496,7 +539,8 @@ export class RoomScene {
         for (const entity of world.entities) {
             const standing = entity.kind !== 'station' && entity.kind !== 'decor' && !nearWall(world.shell, entity.transform.x, entity.transform.z, 0.8);
             const onKit = !!kitShell && this.onKitAnchor(kit!, entity); // sky:merge M1 — kit desks draw only the live screen
-            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing, onKit, kitShell && entity.kind === 'decor' ? kit!.id : '']);
+            const lines = entity.kind === 'decor' && entity.id.startsWith('sign-') ? topicBoardLines(world, entity.id) : undefined; // promise:onboarding (4)
+            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing, onKit, kitShell && entity.kind === 'decor' ? kit!.id : '', lines]);
             const item = this.entities.get(entity.id);
             if (item && item.key === key) {
                 if (JSON.stringify(item.entity.transform) !== JSON.stringify(entity.transform)) { placeRoot(item.built.root, entity); refreeze(item.built.root); }
@@ -504,7 +548,7 @@ export class RoomScene {
                 continue;
             }
             if (item) { this.worldRoot.remove(item.built.root); disposeTree(item.built.root); this.screens.delete(entity.id); this.lamps.delete(entity.id); }
-            const built = this.buildEntity(entity, jungle, standing, onKit ? kit : undefined, kitShell ? kit : undefined);
+            const built = this.buildEntity(entity, jungle, standing, onKit ? kit : undefined, kitShell ? kit : undefined, lines);
             if (world.shell.theme === 'skyline' && !onKit) restyleForSkyline(built.root); // sky:render
             this.worldRoot.add(built.root); freezeTree(built.root);
             this.entities.set(entity.id, { entity, key, built, label: item?.label });
@@ -547,7 +591,109 @@ export class RoomScene {
     /** w3:render — background + fog colour: the classic room backdrop, or the open world's sky. */
     private applySky(world: WorldSpec): void {
         const jungle = world.shell.theme === 'jungle', color = world.shell.theme === 'skyline' ? SKYLINE_COLORS.background : world.shell.open ? openSky(jungle) : shellColors(jungle).background; // sky:render
+        if (this.backdrop === 'neutral') { this.scene.background = this.neutralGradient(); (this.scene.fog as THREE.Fog).color.set('#0e1015'); return; } // promise:onboarding
+        if (!(this.scene.background instanceof THREE.Color)) this.scene.background = new THREE.Color(color);
         (this.scene.background as THREE.Color).set(color); (this.scene.fog as THREE.Fog).color.set(color);
+    }
+    /**
+     * promise:onboarding — the backdrop behind the first minute. 'neutral' hides the planned city, the dusk sky dome, our
+     * tower's facade and a style kit's city panorama, and paints a dim neutral gradient (with matching fog), so the
+     * sentence ("a lighthouse library at the edge of the sea") never sits in front of Manhattan. 'world' = as planned.
+     */
+    setBackdrop(mode: 'world' | 'neutral'): void {
+        if (this.disposed || mode === this.backdrop) return;
+        this.backdrop = mode;
+        if (this.world) { this.applySky(this.world); this.applyBackdrop(); }
+    }
+    private applyBackdrop(): void {
+        if (!this.renderer) return;
+        const neutral = this.backdrop === 'neutral';
+        let shown = 0;
+        this.shellRoot?.traverse(node => {
+            if (!/^omo-(skyline-(city|sky|tower)|kit-backdrop)$/.test(node.name)) return;
+            node.visible = !neutral; if (node.visible) shown++;
+        });
+        const canvas = this.renderer.domElement;
+        canvas.dataset.backdrop = this.backdrop; canvas.dataset.backdropCity = String(shown); // test hooks
+        this.invalidate();
+    }
+    private neutralGradient(): THREE.CanvasTexture {
+        if (this.neutralSky) return this.neutralSky;
+        const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+        const g = c.getContext('2d')!, grad = g.createLinearGradient(0, 0, 0, 256);
+        grad.addColorStop(0, '#07080b'); grad.addColorStop(0.55, '#0e1015'); grad.addColorStop(1, '#16181d');
+        g.fillStyle = grad; g.fillRect(0, 0, 4, 256);
+        const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; this.neutralSky = t;
+        return t;
+    }
+    /**
+     * promise:onboarding — test hook: every visible mesh or line in the world that reads as a stray thin line from the
+     * overview: its world bounding box has a side under 1 cm and a side over 0.5 m. `owner` = the entity id (or the
+     * shell / paths group) it belongs to; `room` = the room entity it stands in, when any.
+     */
+    thinMeshes(): ThinMesh[] {
+        const out: ThinMesh[] = [], box = new THREE.Box3(), size = new THREE.Vector3();
+        const rooms = (this.world?.entities ?? []).filter(e => e.kind === 'room').map(e => ({ id: e.id, r: roomRect(e as RoomEntity) }));
+        this.worldRoot.traverseVisible(node => {
+            const mesh = node as THREE.Mesh & { isLine?: boolean };
+            if (!mesh.isMesh && !mesh.isLine) return;
+            box.setFromObject(mesh); if (box.isEmpty()) return;
+            box.getSize(size);
+            const dims = [size.x, size.y, size.z].sort((a, b) => a - b);
+            if (!(dims[0] < 0.01 && dims[2] > 0.5)) return;
+            let owner = '', o: THREE.Object3D | null = mesh;
+            while (o && !owner) { owner = typeof o.userData.entity === 'string' ? o.userData.entity : /^(omo-|w3-)/.test(o.name) && o !== this.worldRoot ? o.name : ''; o = o.parent; }
+            const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
+            const room = rooms.find(({ r }) => cx >= r.minX && cx <= r.maxX && cz >= r.minZ && cz <= r.maxZ)?.id;
+            out.push({ owner, room, name: mesh.name, part: mesh.userData.part, line: !!mesh.isLine, size: [size.x, size.y, size.z].map(v => +v.toFixed(3)), at: [+cx.toFixed(2), +((box.min.y + box.max.y) / 2).toFixed(2), +cz.toFixed(2)] });
+        });
+        return out;
+    }
+    /** Screen rect (canvas CSS px) of a world-space box's corners; undefined when any corner is behind the camera. */
+    private screenRect(obj: THREE.Object3D, hx: number, hy: number, hz: number): { left: number; top: number; right: number; bottom: number } | undefined {
+        const w = this.host.clientWidth, h = this.host.clientHeight, v = new THREE.Vector3();
+        let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+        obj.updateWorldMatrix(true, false);
+        for (const x of [-hx, hx]) for (const y of [-hy, hy]) for (const z of [-hz, hz]) {
+            v.set(x, y, z).applyMatrix4(obj.matrixWorld).project(this.camera);
+            if (v.z > 1 || v.z < -1) return undefined;
+            const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h;
+            left = Math.min(left, sx); right = Math.max(right, sx); top = Math.min(top, sy); bottom = Math.max(bottom, sy);
+        }
+        return { left: +left.toFixed(1), top: +top.toFixed(1), right: +right.toFixed(1), bottom: +bottom.toFixed(1) };
+    }
+    /** promise:onboarding (6) — test hook: every room's doorway sign, as drawn now (screen rect in canvas CSS px). */
+    signRects(): Array<{ room: string; name: string; rect?: { left: number; top: number; right: number; bottom: number } }> {
+        const out: Array<{ room: string; name: string; rect?: { left: number; top: number; right: number; bottom: number } }> = [];
+        for (const [id, item] of this.entities) {
+            if (item.entity.kind !== 'room') continue;
+            const signs: THREE.Mesh[] = []; item.built.root.traverse(n => { if (n.userData.part === 'room-sign') signs.push(n as THREE.Mesh); });
+            for (const sign of signs) { const [sw, sh] = sign.userData.size as [number, number]; out.push({ room: id, name: String(sign.userData.roomName), rect: sign.visible ? this.screenRect(sign, sw / 2, sh / 2, 0.02) : undefined }); }
+        }
+        return out;
+    }
+    /** promise:onboarding (4) — test hook: every topic board's text rows on screen now (glyph box height in CSS px). */
+    boardText(): Array<{ id: string; distance: number; rows: Array<{ text: string; title: boolean; px: number }>; rect?: { left: number; top: number; right: number; bottom: number } }> {
+        const out: Array<{ id: string; distance: number; rows: Array<{ text: string; title: boolean; px: number }>; rect?: { left: number; top: number; right: number; bottom: number } }> = [];
+        const h = this.host.clientHeight, a = new THREE.Vector3(), b = new THREE.Vector3();
+        for (const [id, item] of this.entities) {
+            let plate: THREE.Mesh | undefined; item.built.root.traverse(n => { if (n.userData.part === 'topic-board') plate = n as THREE.Mesh; });
+            if (!plate) continue;
+            const p = plate as THREE.Mesh; p.updateWorldMatrix(true, false);
+            const rows = (p.userData.rows as Array<{ text: string; title: boolean; top: number; bottom: number }>).map(r => {
+                a.set(0, r.top, 0.011).applyMatrix4(p.matrixWorld).project(this.camera); b.set(0, r.bottom, 0.011).applyMatrix4(p.matrixWorld).project(this.camera);
+                return { text: r.text, title: r.title, px: +(Math.abs(a.y - b.y) * 0.5 * h).toFixed(1) };
+            });
+            out.push({ id, distance: +this.camera.position.distanceTo(p.getWorldPosition(a)).toFixed(2), rows, rect: this.screenRect(p, 0.88, 0.5, 0.01) });
+        }
+        return out;
+    }
+    /** Test hook: stand the walker at a pose (walk mode) and draw it at once. */
+    standAt(pose: PlayerPose): void {
+        if (!this.walker) return;
+        this.walker.pose = { ...pose }; this.smoother.snap(this.walker.pose);
+        this.camera.position.set(pose.x, this.walker.eye ?? 1.75, pose.z); this.camera.rotation.set(pose.pitch, pose.yaw, 0, 'YXZ');
+        this.invalidate();
     }
     /** sky:render — skyline theme on/off: dusk lights, far haze, bloom + environment. */
     private applySkyline(on: boolean): void {
@@ -563,13 +709,14 @@ export class RoomScene {
     }
     private applyTheme(jungle: boolean): void {
         const colors = shellColors(jungle);
+        if (!(this.scene.background instanceof THREE.Color)) this.scene.background = new THREE.Color(colors.background); // promise:onboarding (neutral gradient)
         (this.scene.background as THREE.Color).set(colors.background); (this.scene.fog as THREE.Fog).color.set(colors.background);
         if (this.lights) { this.lights.hemi.color.setHex(colors.hemiSky); this.lights.sun.color.setHex(colors.sun); this.lights.accent.color.setHex(colors.accent); }
     }
     /** world-ui (1, 3) — kit view: the kit's clamped bloom + exposure; in the overview the baked ceiling/roof is cut away (dollhouse). */
     private applyKitView(): void {
         if (!this.renderer || !this.world) return;
-        const kit = activeKit(this.world), shell = kit ? this.kitShells.get(kit.id) : undefined, overview = this.navigation !== 'walk';
+        const kit = activeKit(this.world), shell = kit ? this.kitShells.get(kit.id) : undefined, overview = this.navigation !== 'walk' && !this.solidView;
         this.renderer.localClippingEnabled = !!shell;
         const cut = shell?.root.userData.cutPlane as THREE.Plane | undefined;
         if (cut) { const c = overview ? KIT_CUT : 1e4; if (cut.constant !== c) { cut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
@@ -577,6 +724,7 @@ export class RoomScene {
         const pendantCut = shell?.root.userData.pendantCutPlane as THREE.Plane | undefined; // world-ui r4 fix 1: no floating pendant shades
         if (pendantCut) pendantCut.constant = overview ? -1 : 1e4;
         if (wallCut) { const c = overview ? KIT_WALL_CUT : 1e4; if (wallCut.constant !== c) { wallCut.constant = c; this.renderer.shadowMap.needsUpdate = true; } }
+        this.shellRoot?.getObjectByName('omo-skyline-upper')?.traverse(n => { n.visible = !overview; }); // promise:onboarding (5): no floating pendant bars (black lines) from above
         shell?.root.userData.setOverview?.(overview); // world-ui r4/5: city backdrop below the floor only, highlights compressed
         if (this.skyFx) {
             this.skyFx.setBloom(kit ? (overview ? kit.render.overviewBloom : kit.render.bloom) : { strength: 0.3, radius: 0.4, threshold: 1.8 });
@@ -609,7 +757,7 @@ export class RoomScene {
     private onKitAnchor(kit: StyleKit, entity: WorldEntity): boolean {
         return entity.kind === 'station' && kitDeskIndex(kit, entity.transform) >= 0;
     }
-    private buildEntity(entity: WorldEntity, jungle: boolean, standing: boolean, deskKit?: StyleKit, worldKit?: StyleKit): BuiltEntity {
+    private buildEntity(entity: WorldEntity, jungle: boolean, standing: boolean, deskKit?: StyleKit, worldKit?: StyleKit, boardLines?: readonly string[]): BuiltEntity {
         switch (entity.kind) {
             case 'station': {
                 let surface = this.terminalSurfaces.get(entity.id);
@@ -627,9 +775,9 @@ export class RoomScene {
             case 'mirror': return buildMirror(entity, entity.id === 'mirror' ? this.mirrorTexture! : this.linkedSurface(entity.id).texture, standing);
             case 'monitor-wall': return buildMonitorWall(entity, this.linkedSurface(entity.id).texture, standing);
             case 'decor': {
-                const built = buildDecorEntity(entity, jungle);
+                const built = buildDecorEntity(entity, jungle, boardLines);
                 // sky:merge M1 — in a kit world a decor entity is drawn with its CC0 catalogue model once it loads.
-                const prop = worldKit ? decorPropFor(worldKit, entity) : undefined, loader = worldKit && this.kitLoaders.get(worldKit.id);
+                const prop = worldKit && !/^(note|sign)-/.test(entity.id) ? decorPropFor(worldKit, entity) : undefined, loader = worldKit && this.kitLoaders.get(worldKit.id);
                 if (prop && loader) loader.prop(prop.id).then(model => {
                     if (this.disposed || this.entities.get(entity.id)?.built !== built) return;
                     for (const child of [...built.root.children]) { built.root.remove(child); disposeTree(child); }
@@ -1172,9 +1320,21 @@ export class RoomScene {
      * shape — public camera API: ease the overview to centre and zoom on a world-space box (a proposed change) over
      * `ms`, keeping the orbit angle; `undefined` eases back to the plain overview. Drag/zoom still work on top.
      */
-    frameFocus(box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | undefined, ms = 500): void {
-        const from = this.focusWeight, to = box ? 1 : 0;
-        if (box) {
+    frameFocus(box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | undefined, ms = 500,
+        view?: { azimuth: number; elevation: number; distance: number; target?: { x: number; y: number; z: number }; solid?: boolean }): void {
+        const from = this.focusWeight, to = box || view ? 1 : 0;
+        // A solid view (a wall seen face on) draws the kit's walls and ceiling: no dollhouse cut while framed.
+        const solid = !!view?.solid; if (solid !== this.solidView) { this.solidView = solid; this.applyKitView(); this.setData('solidView', String(solid)); }
+        if (view) {
+            // promise-agent: a set view (a wall seen face on, a thing seen past what blocks it): the camera turns to it.
+            const t = view.target ?? (box ? { x: (box.min.x + box.max.x) / 2, y: (box.min.y + box.max.y) / 2, z: (box.min.z + box.max.z) / 2 } : { x: 0, y: 0.7, z: 0 });
+            const dir = new THREE.Vector3(Math.sin(view.azimuth) * Math.cos(view.elevation), Math.sin(view.elevation), Math.cos(view.azimuth) * Math.cos(view.elevation));
+            const next = { target: new THREE.Vector3(t.x, t.y, t.z), distance: view.distance, dir };
+            // From the current view direction (a framed change is already eased in): the turn glides too.
+            const prev = this.focus && from > 0 ? { target: this.focus.target.clone(), distance: this.focus.distance, dir: this.camera.position.clone().sub(this.focus.target).normalize() } : undefined;
+            this.focus = { target: (prev?.target ?? next.target).clone(), distance: prev?.distance ?? next.distance, dir: (prev?.dir ?? dir).clone() };
+            this.focusGlide = prev ? { from: prev, to: next } : undefined;
+        } else if (box) {
             const c = { x: (box.min.x + box.max.x) / 2, y: Math.max(0.3, (box.min.y + box.max.y) / 2 * 0.6), z: (box.min.z + box.max.z) / 2 };
             const radius = Math.max(1.2, Math.hypot(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) / 2);
             // Fit the change to ~45% of the view height (and width), never closer than 2.8 m or farther than the overview.
@@ -1191,7 +1351,7 @@ export class RoomScene {
             if (this.disposed) return;
             const u = Math.min(1, (performance.now() - start) / span), ease = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
             const g = this.focusGlide;
-            if (g && this.focus) { this.focus.target.lerpVectors(g.from.target, g.to.target, ease); this.focus.distance = THREE.MathUtils.lerp(g.from.distance, g.to.distance, ease); }
+            if (g && this.focus) { this.focus.target.lerpVectors(g.from.target, g.to.target, ease); this.focus.distance = THREE.MathUtils.lerp(g.from.distance, g.to.distance, ease); if (g.from.dir && g.to.dir) this.focus.dir = g.from.dir.clone().lerp(g.to.dir, ease).normalize(); }
             this.focusWeight = from + (to - from) * ease; this.positionCamera();
             if (u < 1) this.focusFrame = requestAnimationFrame(step); else if (!to) this.focus = undefined;
         };
@@ -1199,16 +1359,18 @@ export class RoomScene {
     }
     /** How far the overview has eased to the focus (0 = plain overview, 1 = framed on the change). */
     get focusAmount(): number { return this.focusWeight; }
-    private focus?: { target: THREE.Vector3; distance: number };
+    private focus?: { target: THREE.Vector3; distance: number; dir?: THREE.Vector3 };
+    private solidView = false;
     private focusWeight = 0;
     private focusFrame = 0;
-    private focusGlide?: { from: { target: THREE.Vector3; distance: number }; to: { target: THREE.Vector3; distance: number } };
+    private focusGlide?: { from: { target: THREE.Vector3; distance: number; dir?: THREE.Vector3 }; to: { target: THREE.Vector3; distance: number; dir?: THREE.Vector3 } };
     private applyFocus(t: { x: number; y: number; z: number }): void {
         const f = this.focus, w = this.focusWeight;
         if (!f || w <= 0 || this.navigation === 'walk') return;
         const base = new THREE.Vector3(t.x, t.y, t.z), off = this.camera.position.clone().sub(base), dist = off.length() || 1;
-        const target = base.lerp(f.target, w), d = THREE.MathUtils.lerp(dist, Math.min(dist, f.distance), w);
-        this.camera.position.copy(target).addScaledVector(off.normalize(), d);
+        const target = base.lerp(f.target, w), d = THREE.MathUtils.lerp(dist, f.dir ? f.distance : Math.min(dist, f.distance), w);
+        const dir = off.normalize(); if (f.dir) dir.lerp(f.dir, w).normalize();
+        this.camera.position.copy(target).addScaledVector(dir, d);
         this.camera.lookAt(target);
     }
     private viewInset = 0; /** Public camera API: keep the overview centred in the area left of a right-side panel (px; 0 = full view). */ setViewInset(px: number): void { const v = Math.max(0, Math.round(px)); if (v !== this.viewInset) { this.viewInset = v; this.positionCamera(); } } private applyViewInset(): void { const w = this.host.clientWidth, h = this.host.clientHeight; if (!w || !h) return; const vis = this.navigation === 'overview' && this.viewInset > 0 && this.viewInset < w * 0.7 ? w - this.viewInset : w; if (vis < w) this.camera.setViewOffset(vis, h, 0, 0, w, h); else this.camera.clearViewOffset(); this.camera.aspect = vis / h; this.camera.updateProjectionMatrix(); this.lastView[0] = NaN; } // world-ui
@@ -1316,7 +1478,7 @@ export class RoomScene {
     private emitPose(pose:PlayerPose,now:number,moving:boolean):void{
         const l=this.lastPose;
         if(pose.x!==l.x||pose.z!==l.z||pose.yaw!==l.yaw||pose.pitch!==l.pitch){l.x=pose.x;l.z=pose.z;l.yaw=pose.yaw;l.pitch=pose.pitch;l.pending=true;}
-        if(l.pending&&(!moving||now-l.at>=POSE_INTERVAL_MS)){l.pending=false;l.at=now;this.options.onPose?.(pose);}
+        if(l.pending&&(!moving||now-l.at>=POSE_INTERVAL_MS)){l.pending=false;l.at=now;this.setData('playerPose',`${pose.x.toFixed(2)},${pose.z.toFixed(2)},${pose.yaw.toFixed(2)}`);this.options.onPose?.(pose);}
     }
     /**
      * Screen-space labels follow the view every rendered frame (transform only: no layout). Test/inspection
@@ -1376,6 +1538,9 @@ export class RoomScene {
             items.push({label,x,y,w:size.w,h:size.h,priority:kind==='station'?1:2});
         }
         if(chips){
+            // promise:onboarding (6) — a desk marker never sits on a room's doorway sign: it moves up just clear of it.
+            const signs=this.signRects().map(s=>s.rect).filter((r):r is NonNullable<typeof r>=>!!r);
+            if(signs.length)for(const item of items)avoidRects(item,signs,6);
             for(const item of declutterLabels(items)){
                 if(!item.hidden){this.applyLabel(item.label,item.x,item.y);continue;}
                 if(this.labelPos.get(item.label)!==-1){this.labelPos.set(item.label,-1);item.label.style.visibility='hidden';}
@@ -1418,13 +1583,22 @@ export class RoomScene {
         this.setData('terminalQuads',JSON.stringify(Object.fromEntries(of('station').map(item=>[item.entity.id,quad(item.built.screen!,...half(item.built.screen!))]))));
         const code=this.screens.get('code')??of('review-screen')[0]?.built.screen;if(code)this.setData('codeReviewQuad',JSON.stringify(quad(code,...half(code))));
         const web=this.screens.get('web')??of('web-wall')[0]?.built.screen;if(web)this.setData('webQuad',JSON.stringify(quad(web,...half(web))));
+        // promise:share (L7) — data boards: the note each board prints and where it is on screen (inspection for the real-browser check).
+        const boards:Array<{id:string;note:string;box:number[];visible:boolean}>=[];
+        for(const item of this.entities.values()){if(item.entity.kind!=='decor')continue;let board:THREE.Mesh|undefined;item.built.root.traverse(n=>{if(!board&&(n as THREE.Mesh).isMesh&&typeof n.userData.note==='string')board=n as THREE.Mesh;});if(!board)continue;
+            const front=board.getWorldPosition(a).project(this.camera).z;const pts=quad(board,...half(board));const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);const box=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)].map(Math.round);
+            boards.push({id:item.entity.id,note:board.userData.note as string,box,visible:front>=-1&&front<=1&&box[2]>0&&box[0]<w&&box[3]>0&&box[1]<h});}
+        this.setData('boardNotes',JSON.stringify(boards));
+        this.setData('webQuads',JSON.stringify(Object.fromEntries(of('web-wall').map(item=>[item.entity.id,quad(item.built.screen!,...half(item.built.screen!))])))); // promise-agent: every web wall's screen on the page
     }
     resetCamera():void{if(this.navigation==='walk'){this.walker?.reset();this.invalidate();return;}cancelAnimationFrame(this.focusFrame);this.focus=undefined;this.focusWeight=0;this.state={azimuth:0.56,elevation:0.61,distance:24};this.positionCamera();this.options.onCameraChange({...this.state});}
     dispose():void{
         this.setPeers([]);
+        this.pointerView?.dispose();this.pointerView=undefined; // promise:share
         this.disposed=true;cancelAnimationFrame(this.focusFrame);for(const s of [...this.terminalSurfaces.values(),...this.linkedSurfaces.values()])s.source?.dispose();this.walker?.dispose();cancelAnimationFrame(this.frame);if(this.sharpTimer!==undefined)window.clearTimeout(this.sharpTimer);this.scheduled=false;this.observer?.disconnect();this.cleanup.forEach(fn=>fn());this.labels.forEach(label=>label.remove());
         this.scene.traverse(node=>{if(node instanceof THREE.Mesh){node.geometry.dispose();const ms=Array.isArray(node.material)?node.material:[node.material];ms.forEach(m=>{(m as THREE.MeshStandardMaterial).map?.dispose();m.dispose();});}});
         this.skyFx?.dispose();this.skyFx=undefined; // sky:render
+        this.neutralSky?.dispose();this.neutralSky=undefined; // promise:onboarding
         for(const k of this.kitShells.values()){if(k.root.parent!==this.worldRoot)disposeTree(k.root);k.env.dispose();}this.kitShells.clear(); // sky:merge M1
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
     }

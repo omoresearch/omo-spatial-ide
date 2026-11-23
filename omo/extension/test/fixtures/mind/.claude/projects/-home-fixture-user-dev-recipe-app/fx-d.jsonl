@@ -1,0 +1,4 @@
+{"type": "permission-mode", "permissionMode": "default", "sessionId": "fx-d"}
+{"type": "user", "cwd": "/home/fixture-user/dev/recipe-app", "isSidechain": false, "message": {"role": "user", "content": "Make recipe search work by ingredient, ask grace.hopper@example.org if stuck"}, "sessionId": "fx-d"}
+{"type": "assistant", "cwd": "/home/fixture-user/dev/recipe-app", "message": {"role": "assistant", "content": [{"type": "text", "text": "Done."}]}, "sessionId": "fx-d"}
+{"type": "ai-title", "aiTitle": "Recipe search by ingredient", "sessionId": "fx-d"}

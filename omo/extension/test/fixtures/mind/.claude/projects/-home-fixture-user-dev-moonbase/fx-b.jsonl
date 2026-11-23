@@ -1,0 +1,3 @@
+{"type": "permission-mode", "permissionMode": "default", "sessionId": "fx-b"}
+{"type": "user", "cwd": "/home/fixture-user/dev/moonbase", "isSidechain": false, "message": {"role": "user", "content": "Fix the oxygen meter so it drains slower. Use OPENAI_API_KEY=sk-proj-FAKEfixture0000000000000000 for the test"}, "sessionId": "fx-b"}
+{"type": "assistant", "cwd": "/home/fixture-user/dev/moonbase", "message": {"role": "assistant", "content": [{"type": "text", "text": "Done."}]}, "sessionId": "fx-b"}
