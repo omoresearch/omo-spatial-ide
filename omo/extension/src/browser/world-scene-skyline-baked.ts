@@ -24,20 +24,53 @@ import { adoptKitMaterial, CITY_PANO_CENTRE, look, lookHitBox, lookCityBackdrop,
 /** Where the lab rendered the city panorama from (baked space). */
 const PANO_C = new THREE.Vector3(CITY_PANO_CENTRE.x, CITY_PANO_CENTRE.y, CITY_PANO_CENTRE.z);
 
-interface KitTextures { lm: Record<string, THREE.Texture>; ao: Record<string, THREE.Texture> }
+export interface KitTextures { lm: Record<string, THREE.Texture>; ao: Record<string, THREE.Texture> }
 interface LoadedKit { root: THREE.Group; env: THREE.Texture; backdrop: THREE.Mesh; triangles: number; ms: number }
 
-function load<T>(loader: { load(url: string, ok: (v: T) => void, progress?: undefined, fail?: (e: unknown) => void): unknown }, url: string): Promise<T> {
+export function load<T>(loader: { load(url: string, ok: (v: T) => void, progress?: undefined, fail?: (e: unknown) => void): unknown }, url: string): Promise<T> {
     return new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
 }
 /** Remove the probe's diffuse IBL (the lightmap already holds all diffuse light) and keep AO for reflections only. */
-function patchBaked(mat: THREE.MeshStandardMaterial): void {
+export function patchBaked(mat: THREE.MeshStandardMaterial): void {
     mat.onBeforeCompile = sh => {
         sh.fragmentShader = sh.fragmentShader
             .replace('#include <lights_fragment_maps>', THREE.ShaderChunk.lights_fragment_maps.replace('iblIrradiance += getIBLIrradiance( geometryNormal );', ''))
             .replace('#include <aomap_fragment>', THREE.ShaderChunk.aomap_fragment.replace('reflectedLight.indirectDiffuse *= ambientOcclusion;', ''));
     };
     mat.customProgramCacheKey = () => 'omo-baked1';
+}
+/** EXR rows come bottom-first; glTF UVs expect top-first: flip V through the texture transform. Lightmaps + AO on UV channel 1. */
+export function bakedTextures(lm: readonly [THREE.Texture, THREE.Texture, THREE.Texture], ao: readonly [THREE.Texture, THREE.Texture, THREE.Texture]): KitTextures {
+    for (const t of lm) { t.channel = 1; t.repeat.set(1, -1); t.offset.set(0, 1); t.anisotropy = 4; t.colorSpace = THREE.LinearSRGBColorSpace; t.needsUpdate = true; }
+    for (const t of ao) { t.channel = 1; t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true; }
+    return { lm: { LM_FLOOR: lm[0], LM_ARCH: lm[1], LM_FURN: lm[2] }, ao: { LM_FLOOR: ao[0], LM_ARCH: ao[1], LM_FURN: ao[2] } };
+}
+/** The baked HDR reflection probe as a PMREM environment. Blender equirect has +X at u=0.75, three expects u=0.5: roll the rows by a quarter turn. */
+export function bakedEnvironment(renderer: THREE.WebGLRenderer, probe: THREE.DataTexture): THREE.Texture {
+    const img = probe.image as unknown as { width: number; height: number; data: Uint16Array | Float32Array };
+    const w = img.width, h = img.height, ch = img.data.length / (w * h), src = img.data, dst = new (src.constructor as { new(n: number): typeof src })(src.length), s = w / 4;
+    for (let y = 0; y < h; y++) { const o = y * w * ch; dst.set(src.subarray(o + s * ch, o + w * ch), o); dst.set(src.subarray(o, o + s * ch), o + (w - s) * ch); }
+    img.data = dst; probe.mapping = THREE.EquirectangularReflectionMapping; probe.needsUpdate = true;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const env = pmrem.fromEquirectangular(probe).texture; pmrem.dispose(); probe.dispose();
+    return env;
+}
+/** The one baked material path (penthouse kit + room modules): a clone of the glTF material with its group's lightmap + AO. */
+export function bakedMaterial(m0: THREE.MeshStandardMaterial, grp: string, maps: KitTextures): THREE.MeshStandardMaterial {
+    const m = m0.clone();
+    if (maps.lm[grp]) { m.lightMap = maps.lm[grp]; m.lightMapIntensity = Math.PI; m.aoMap = maps.ao[grp]; m.aoMapIntensity = 1; patchBaked(m); }
+    if (m.map) m.map.anisotropy = 8;
+    m.envMapIntensity = /Parquet/.test(m.name) ? 0.32 : 1;
+    if (/Parquet/.test(m.name)) { m.roughnessMap = null; m.roughness = 0.55; if (m.normalScale) m.normalScale.set(0.22, 0.22); }
+    // world-ui (1): emitters lowered so nothing clips to white under the clamped bloom (were 1.6 / 4 / 12 / 2.2).
+    if (/desk_lamp_arm_01_light/.test(m.name)) m.emissiveIntensity = 0.9;
+    if (/EmitStrip/.test(m.name)) m.emissiveIntensity = 2.2;
+    if (/EmitDown/.test(m.name)) m.emissiveIntensity = 4.5;
+    if (/EmitShade/.test(m.name)) m.emissiveIntensity = 1.3;
+    if (/modern_ceiling_globe/.test(m.name)) m.emissiveIntensity = 0.6;
+    // The pale desk tops (and the ceramic) took the full lightmap plus a strong probe reflection: dimmer, rougher.
+    if (/metal_office_desk|Ceramic/.test(m.name)) { m.lightMapIntensity = Math.PI * 0.62; m.envMapIntensity = 0.35; m.roughness = Math.max(m.roughness, 0.6); m.color.multiplyScalar(0.82); }
+    return adoptKitMaterial(m, grp || 'baked');
 }
 /** City backdrop: the baked panorama re-projected through its depth panorama, so the city keeps parallax while walking. */
 function makeBackdrop(colorTex: THREE.Texture, depthTex: THREE.Texture, centre: THREE.Vector3): THREE.Mesh {
@@ -132,19 +165,8 @@ export class SkylineKitLoader {
             fetch(this.url('lamps.json')).then(r => r.ok ? r.json() as Promise<Array<{ pos: [number, number, number]; color: [number, number, number]; intensity: number; distance: number }>> : []),
             fetch(this.url('props.json')).then(r => r.ok ? r.json() as Promise<Array<{ id: string; pos: [number, number, number]; rotY: number; scale: number }>> : [])
         ]);
-        // EXR rows come bottom-first; glTF UVs expect top-first: flip V through the texture transform.
-        for (const t of [lmF, lmA, lmU]) { t.channel = 1; t.repeat.set(1, -1); t.offset.set(0, 1); t.anisotropy = 4; t.colorSpace = THREE.LinearSRGBColorSpace; t.needsUpdate = true; }
-        for (const t of [aoF, aoA, aoU]) { t.channel = 1; t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true; }
-        const maps: KitTextures = { lm: { LM_FLOOR: lmF, LM_ARCH: lmA, LM_FURN: lmU }, ao: { LM_FLOOR: aoF, LM_ARCH: aoA, LM_FURN: aoU } };
-        // Probe: Blender equirect has +X at u=0.75, three expects u=0.5: roll the rows by a quarter turn.
-        {
-            const img = probe.image as unknown as { width: number; height: number; data: Uint16Array | Float32Array };
-            const w = img.width, h = img.height, ch = img.data.length / (w * h), src = img.data, dst = new (src.constructor as { new(n: number): typeof src })(src.length), s = w / 4;
-            for (let y = 0; y < h; y++) { const o = y * w * ch; dst.set(src.subarray(o + s * ch, o + w * ch), o); dst.set(src.subarray(o, o + s * ch), o + (w - s) * ch); }
-            img.data = dst; probe.mapping = THREE.EquirectangularReflectionMapping; probe.needsUpdate = true;
-        }
-        const pmrem = new THREE.PMREMGenerator(this.renderer);
-        const env = pmrem.fromEquirectangular(probe).texture; pmrem.dispose(); probe.dispose();
+        const maps = bakedTextures([lmF, lmA, lmU], [aoF, aoA, aoU]);
+        const env = bakedEnvironment(this.renderer, probe);
         prepareCityTextures(city, cityD);
 
         const root = new THREE.Group(); root.name = 'omo-world-shell'; root.userData.styleKit = this.kit.id; root.userData.keep = true;
@@ -170,22 +192,7 @@ export class SkylineKitLoader {
             if (/^EmitScreen/.test(m0.name)) { mesh.material = off; return; } // the IDE station screen draws the live terminal
             if (m0.name === 'modern_wooden_cabinet') dropStrayCabinet(mesh, room); // world-ui r4/5: one cabinet copy sits at the corner, half outside the shell
             const key = `${grp}/${m0.name}`;
-            if (!cache.has(key)) {
-                const m = m0.clone();
-                if (maps.lm[grp]) { m.lightMap = maps.lm[grp]; m.lightMapIntensity = Math.PI; m.aoMap = maps.ao[grp]; m.aoMapIntensity = 1; patchBaked(m); }
-                if (m.map) m.map.anisotropy = 8;
-                m.envMapIntensity = /Parquet/.test(m.name) ? 0.32 : 1;
-                if (/Parquet/.test(m.name)) { m.roughnessMap = null; m.roughness = 0.55; if (m.normalScale) m.normalScale.set(0.22, 0.22); }
-                // world-ui (1): emitters lowered so nothing clips to white under the clamped bloom (were 1.6 / 4 / 12 / 2.2).
-                if (/desk_lamp_arm_01_light/.test(m.name)) m.emissiveIntensity = 0.9;
-                if (/EmitStrip/.test(m.name)) m.emissiveIntensity = 2.2;
-                if (/EmitDown/.test(m.name)) m.emissiveIntensity = 4.5;
-                if (/EmitShade/.test(m.name)) m.emissiveIntensity = 1.3;
-                if (/modern_ceiling_globe/.test(m.name)) m.emissiveIntensity = 0.6;
-                // The pale desk tops (and the ceramic) took the full lightmap plus a strong probe reflection: dimmer, rougher.
-                if (/metal_office_desk|Ceramic/.test(m.name)) { m.lightMapIntensity = Math.PI * 0.62; m.envMapIntensity = 0.35; m.roughness = Math.max(m.roughness, 0.6); m.color.multiplyScalar(0.82); }
-                cache.set(key, adoptKitMaterial(m, grp || 'baked'));
-            }
+            if (!cache.has(key)) cache.set(key, bakedMaterial(m0, grp, maps));
             mesh.material = cache.get(key)!;
         });
         const hanging: THREE.Mesh[] = []; room.traverse(n => { const mesh = n as THREE.Mesh; if (mesh.isMesh && !mesh.userData.pendant) hanging.push(mesh); });
@@ -239,7 +246,7 @@ export class SkylineKitLoader {
  * so the IDE draws only what is live — the terminal screen exactly over the baked monitor, the status lamp under it
  * and the name plate on the desk's front edge. Raycasts, focus framing and terminal input use this screen mesh.
  */
-export function buildKitStation(entity: StationEntity, kit: StyleKit, texture: THREE.Texture): BuiltEntity {
+export function buildKitStation(entity: StationEntity, kit: Pick<StyleKit, 'deskScreen'>, texture: THREE.Texture): BuiltEntity {
     const ds = kit.deskScreen;
     const group = rootFor(entity, ds.y + ds.height / 2 + 0.38);
     const screen = new THREE.Mesh(new THREE.PlaneGeometry(ds.width, ds.height), lookScreen(texture, true));
