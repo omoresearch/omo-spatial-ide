@@ -337,7 +337,7 @@ export class RoomScene {
         canvas.dataset.testid = 'omo-world-canvas';
         (canvas as HTMLCanvasElement & { omoThinMeshes?: () => ThinMesh[] }).omoThinMeshes = () => this.thinMeshes(); // promise:onboarding test hook
         Object.assign(canvas, { omoLookAudit: () => this.lookAudit() }); // beauty:foundation test hook
-        Object.assign(canvas, { omoSignRects: () => this.signRects(), omoBoardText: () => this.boardText(), omoStandAt: (p: PlayerPose) => this.standAt(p) }); // promise:onboarding (4)(6) test hooks
+        Object.assign(canvas, { omoSignRects: () => this.signRects(), omoBoardText: () => this.boardText(), omoStandAt: (p: PlayerPose) => this.standAt(p), omoSubjectView: (k: 'signs' | 'boards') => this.subjectView(k) }); // promise:onboarding (4)(6) test hooks
         canvas.setAttribute('aria-label', 'Interactive 3D room. Drag or use arrow keys to orbit. Scroll to zoom. Select a workstation to work.');
         canvas.tabIndex = 0;
         this.host.appendChild(canvas);
@@ -721,6 +721,41 @@ export class RoomScene {
                 return { text: r.text, title: r.title, px: +(Math.abs(a.y - b.y) * 0.5 * h).toFixed(1) };
             });
             out.push({ id, distance: +this.camera.position.distanceTo(p.getWorldPosition(a)).toFixed(2), rows, rect: this.screenRect(p, 0.88, 0.5, 0.01) });
+        }
+        return out;
+    }
+    /**
+     * beauty round 2 — test hook: is the shot's subject on screen? For every room sign ('signs') or board ('boards'): its
+     * screen rect (canvas CSS px), whether the rect overlaps the viewport, and whether a big opaque mesh sits between the
+     * camera and its centre (occluded). A desk monitor filling the frame makes every board occluded.
+     */
+    subjectView(kind: 'signs' | 'boards'): Array<{ id: string; rect?: { left: number; top: number; right: number; bottom: number }; onScreen: boolean; occluded: boolean; hit?: string; distance: number }> {
+        const w = this.host.clientWidth, h = this.host.clientHeight, out: ReturnType<RoomScene['subjectView']> = [];
+        const subjects: Array<{ id: string; mesh: THREE.Mesh; owner: THREE.Object3D; hx: number; hy: number }> = [];
+        for (const [id, item] of this.entities) item.built.root.traverse(n => {
+            const m = n as THREE.Mesh; if (!m.isMesh || !m.visible) return;
+            if (kind === 'signs' && n.userData.part === 'room-sign') { const [sw, sh] = n.userData.size as [number, number]; subjects.push({ id, mesh: m, owner: item.built.root, hx: sw / 2, hy: sh / 2 }); }
+            if (kind === 'boards' && (typeof n.userData.note === 'string' || n.userData.part === 'topic-board')) { const g = (m.geometry as THREE.PlaneGeometry).parameters ?? { width: 1.76, height: 1 }; subjects.push({ id, mesh: m, owner: item.built.root, hx: (g.width ?? 1.76) / 2, hy: (g.height ?? 1) / 2 }); }
+        });
+        const ray = new THREE.Raycaster(), c = new THREE.Vector3(), dir = new THREE.Vector3();
+        const shown = (o: THREE.Object3D): boolean => { for (let n: THREE.Object3D | null = o; n; n = n.parent) if (!n.visible) return false; return true; };
+        const within = (o: THREE.Object3D, owner: THREE.Object3D): boolean => { for (let n: THREE.Object3D | null = o; n; n = n.parent) if (n === owner) return true; return false; };
+        this.worldRoot.updateMatrixWorld(true);
+        for (const s of subjects) {
+            const rect = this.screenRect(s.mesh, s.hx, s.hy, 0.01);
+            const onScreen = !!rect && rect.right > 0 && rect.left < w && rect.bottom > 0 && rect.top < h;
+            s.mesh.getWorldPosition(c); dir.copy(c).sub(this.camera.position); const distance = dir.length(); dir.normalize();
+            ray.set(this.camera.position, dir); ray.near = 0.05; ray.far = distance - 0.3;
+            let occluded = false, hit: string | undefined;
+            for (const x of ray.intersectObjects(this.worldRoot.children, true)) {
+                const m = x.object as THREE.Mesh; if (!m.isMesh || !shown(m) || m === s.mesh || (kind === 'boards' && within(m, s.owner))) continue;
+                const mats = (Array.isArray(m.material) ? m.material : [m.material]) as THREE.Material[];
+                if (mats.every(mt => !mt || !mt.visible || (mt.transparent && mt.opacity < 0.5) || mt.blending === THREE.AdditiveBlending)) continue;
+                const size = new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3());
+                if (Math.max(size.x, size.y, size.z) < 0.5) continue;
+                occluded = true; hit = m.name || (m.material as THREE.Material)?.name || m.parent?.name || m.type; break;
+            }
+            out.push({ id: s.id, rect, onScreen, occluded, hit, distance: +distance.toFixed(2) });
         }
         return out;
     }

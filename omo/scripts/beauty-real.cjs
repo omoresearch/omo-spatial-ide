@@ -68,6 +68,14 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
                 { standin: stand.map(d => d.id), oddFallback: fb.filter(d => !approved.has(d.kind) && !/^(note|sign)-/.test(d.id)).map(d => `${d.id}:${d.kind}`), kit: kit.map(d => `${d.kind}:${d.props.join('+')}`).slice(0, 8) });
             return a;
         };
+        /** beauty r2 — the shot's subject (room signs / boards) is on screen and not hidden behind a big opaque mesh. */
+        const subject = async (shotName, kind, min, filter = () => true, minPx = 0) => {
+            const all = (await page.$eval(CANVAS, (c, k) => c.omoSubjectView(k), kind)).filter(filter);
+            const good = all.filter(s => s.onScreen && !s.occluded && s.rect && (s.rect.right - s.rect.left) >= minPx);
+            check(`${shotName}: its subject is framed (${good.length}/${all.length} ${kind} on screen, unoccluded${minPx ? `, >= ${minPx} px wide` : ''}; need ${min})`, good.length >= min,
+                all.slice(0, 8).map(s => ({ id: s.id, on: s.onScreen, occ: s.occluded, hit: s.hit, w: s.rect ? Math.round(s.rect.right - s.rect.left) : 0, d: s.distance })));
+            return good;
+        };
         const overview = async () => { await click('[data-testid="overview-mode"]').catch(() => page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Overview')?.click())); await pause(1800); };
         const walk = async () => { await click('[data-testid="walk-mode"]').catch(() => page.evaluate(() => [...document.querySelectorAll('button')].find(b => /^(Walk|Explore)$/.test(b.textContent.trim()))?.click())); await page.waitForSelector(`${CANVAS}[data-navigation="walk"]`, { timeout: 15000 }); };
         /** rAF frame rate while walking forward and turning (the world draws on demand: it draws every frame while moving). */
@@ -107,12 +115,14 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         check(`Walking view keeps 50+ fps in the onboarding world (${perf.onboarding.fps} fps, p90 ${perf.onboarding.p90} ms)`, perf.onboarding.fps >= 50, perf.onboarding);
         await settledAudit('onboarding');
         await overview(); await settledAudit('onboarding-overview');
+        await subject(SHOTS[0], 'signs', 4);
         await shot(SHOTS[0]);
         // The topic room from the path (the same pose as onboarding-real's 9-topic-room).
         const bRoom = mindRooms.find(r => r.id === 'mind-moonbase') ?? mindRooms[0];
         await walk();
         await page.$eval(CANVAS, (c, pose) => c.omoStandAt(pose), { x: bRoom.transform.x + Math.sin(bRoom.transform.rotation) * 9.5, z: bRoom.transform.z + Math.cos(bRoom.transform.rotation) * 9.5, yaw: bRoom.transform.rotation + 0.12, pitch: -0.08 });
         await pause(1500);
+        await subject(SHOTS[1], 'signs', 1, x => x.id === bRoom.id, 300);
         await shot(SHOTS[1]);
         // Inside the topic room, looking at its decor (evidence, not one of the 4 scored shots).
         await page.$eval(CANVAS, (c, pose) => c.omoStandAt(pose), { x: bRoom.transform.x + Math.sin(bRoom.transform.rotation) * 1.5, z: bRoom.transform.z + Math.cos(bRoom.transform.rotation) * 1.5, yaw: bRoom.transform.rotation + 0.5, pitch: -0.12 });
@@ -155,18 +165,22 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         perf.csv = await walkFps();
         check(`Walking view keeps 50+ fps in the CSV world (${perf.csv.fps} fps, p90 ${perf.csv.p90} ms)`, perf.csv.fps >= 50, perf.csv);
         await settledAudit('csv');
-        // The data world at eye level from its spawn (the share-promises 3-data-world view).
-        await page.$eval(CANVAS, c => c.omoStandAt(JSON.parse(c.dataset.playerHome || 'null') ?? { x: 0, z: 8, yaw: 0, pitch: 0 })).catch(() => {});
-        const home = await page.$eval(CANVAS, c => c.dataset.playerPose ?? '');
-        await pause(1200);
+        // beauty r2 — the data world at eye level from the plaza, framed on its region rooms (not from the desk spawn, where
+        // the desk monitor filled the frame): a three-quarter view of the room row from ~12 m in front of it.
+        const dataRooms = (w3?.entities ?? []).filter(e => e.kind === 'room');
+        const front = Math.max(...dataRooms.map(r => r.transform.z + r.depth / 2));
+        const minX = Math.min(...dataRooms.map(r => r.transform.x)), maxX = Math.max(...dataRooms.map(r => r.transform.x));
+        await page.$eval(CANVAS, (c, pose) => c.omoStandAt(pose), { x: minX + (maxX - minX) * 0.3, z: front + 12, yaw: -0.35, pitch: -0.04 });
+        await pause(1500);
+        await subject(SHOTS[2], 'signs', 2, x => dataRooms.some(r => r.id === x.id));
         await shot(SHOTS[2]);
-        // Walk into the nearest room until its boards fill part of the view (share-promises 4-boards-close).
-        await page.focus(CANVAS); await page.keyboard.down('w');
-        await page.waitForFunction(() => { const b = JSON.parse(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.boardNotes || '[]'); return b.some(n => n.visible && n.box[2] - n.box[0] > 260); }, { timeout: 15000 }).catch(() => {});
-        await page.keyboard.up('w'); await pause(1500);
+        // Inside the first region room, facing its boards on the back wall (share-promises 4-boards-close).
+        const near = dataRooms.slice().sort((a, b) => Math.abs(a.transform.x) - Math.abs(b.transform.x))[0];
+        await page.$eval(CANVAS, (c, pose) => c.omoStandAt(pose), { x: near.transform.x, z: near.transform.z + near.depth / 2 - 1.1, yaw: 0, pitch: -0.06 });
+        await pause(1500);
+        await subject(SHOTS[3], 'boards', 2, x => x.id.startsWith(`${near.id}-board-`), 200);
         await shot(SHOTS[3]);
         check('no page errors', errors.length === 0, errors.slice(0, 3));
-        void home;
 
         // ---------------------------------------------------------------- the before | after sheet
         const py = `
