@@ -37,6 +37,7 @@ import { PRESENCE_COLOUR_HEX } from '../common/presence-protocol'; // promise:sh
 import { SkylineKitLoader, buildKitStation } from './world-scene-skyline-baked'; // sky:merge M1
 import { activeKit, decorPropFor, kitDeskIndex, styleKit } from '../common/world-style-kits'; // sky:merge M1
 import { decorKitPlan, fitKitDecor } from './world-scene-decor'; // beauty:foundation
+import { dressingBlocks, dressRoom, roomDressing } from './world-scene-dressing'; // beauty r2 (5): set-dressed rooms
 import { LIGHT_RIG } from './world-look'; // beauty:foundation
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'; // beauty:foundation
 import type { StyleKit } from '../common/world-style-kits'; // sky:merge M1
@@ -548,7 +549,8 @@ export class RoomScene {
             const standing = entity.kind !== 'station' && entity.kind !== 'decor' && !nearWall(world.shell, entity.transform.x, entity.transform.z, 0.8);
             const onKit = !!kitShell && this.onKitAnchor(kit!, entity); // sky:merge M1 — kit desks draw only the live screen
             const lines = entity.kind === 'decor' && entity.id.startsWith('sign-') ? topicBoardLines(world, entity.id) : undefined; // promise:onboarding (4)
-            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing, onKit, kitShell && entity.kind === 'decor' ? kit!.id : '', lines]);
+            const dress = entity.kind === 'room' ? roomDressing(entity, world).pieces.map(p => [p.key, p.x, p.z, p.rotY]) : undefined; // beauty r2 (5): contents move -> re-dress
+            const key = JSON.stringify([{ ...entity, transform: undefined }, world.shell.theme, standing, onKit, kitShell && entity.kind === 'decor' ? kit!.id : '', lines, dress]);
             const item = this.entities.get(entity.id);
             if (item && item.key === key) {
                 if (JSON.stringify(item.entity.transform) !== JSON.stringify(entity.transform)) { placeRoot(item.built.root, entity); refreeze(item.built.root); }
@@ -574,7 +576,7 @@ export class RoomScene {
         // Walking: footprint collision, bounds and reset spot of this world.
         if (this.walker) {
             const firstOpen = world.shell.open && (!previous || !previous.shell.open || this.homeKey !== world.name); // w3:look (6): a newly loaded open world starts in its plaza
-            this.walker.mover = worldMover(world, kitShell ? kit!.blocks.map((b, i) => ({ id: `kit-${i}`, x: b.x, z: b.z, rotation: 0, rect: { left: -b.hx, right: b.hx, front: -b.hz, back: b.hz } })) : []); // sky:merge M1 — baked furniture collides
+            this.walker.mover = worldMover(world, [...(kitShell ? kit!.blocks.map((b, i) => ({ id: `kit-${i}`, x: b.x, z: b.z, rotation: 0, rect: { left: -b.hx, right: b.hx, front: -b.hz, back: b.hz } })) : []), ...dressingBlocks(world)]); // sky:merge M1 — baked furniture collides
             this.walker.eye = kitShell ? kit!.render.eye : undefined; // world-ui r4/2: the kit's eye height
             this.walker.home = kitShell ? { x: kit!.spawn.x, z: kit!.spawn.z, yaw: kit!.spawn.yaw, pitch: kit!.spawn.pitch ?? 0 } : worldHome(world.shell, world.entities);
             const firstKit = !!kitShell && this.homeKey !== `kit:${world.name}`; // world-ui (2): a kit world starts at the kit's desk view once
@@ -661,7 +663,7 @@ export class RoomScene {
      * beauty:foundation — test hook: every visible mesh/line of the world (shell, paths, entities) whose material is not
      * from world-look (userData.look), and each decor entity's state: real kit props, an approved fallback, or a stand-in.
      */
-    lookAudit(): { meshes: number; offLook: Array<{ owner: string; name: string; type: string }>; looks: Record<string, number>; decor: Array<{ id: string; kind: string; plan?: string[]; props: string[]; state: 'kit' | 'fallback' | 'standin' }> } {
+    lookAudit(): { meshes: number; offLook: Array<{ owner: string; name: string; type: string }>; looks: Record<string, number>; decor: Array<{ id: string; kind: string; plan?: string[]; props: string[]; state: 'kit' | 'fallback' | 'standin' }>; rooms: Array<{ id: string; label: string; preset?: string; planned: number; kinds: string[]; props: number }> } {
         const offLook: Array<{ owner: string; name: string; type: string }> = [], looks: Record<string, number> = {};
         let meshes = 0;
         this.worldRoot.traverseVisible(node => {
@@ -683,7 +685,11 @@ export class RoomScene {
             const state: 'kit' | 'fallback' | 'standin' = plan ? (props.length ? 'kit' : 'standin') : 'fallback';
             return { id: i.entity.id, kind, plan, props: [...new Set(props)], state };
         });
-        return { meshes, offLook, looks, decor };
+        const rooms = [...this.entities.values()].filter(i => i.entity.kind === 'room').map(i => {
+            const props: string[] = []; (i.built.root.userData.dressing as THREE.Object3D | undefined)?.traverse(n => { if (typeof n.userData.kitProp === 'string') props.push(n.userData.kitProp); });
+            return { id: i.entity.id, label: i.entity.label ?? '', preset: i.built.root.userData.dressPreset as string | undefined, planned: (i.built.root.userData.dressPlanned as number) ?? 0, kinds: [...new Set(props)], props: props.length };
+        });
+        return { meshes, offLook, looks, decor, rooms };
     }
     /** Screen rect (canvas CSS px) of a world-space box's corners; undefined when any corner is behind the camera. */
     private screenRect(obj: THREE.Object3D, hx: number, hy: number, hz: number): { left: number; top: number; right: number; bottom: number } | undefined {
@@ -876,7 +882,23 @@ export class RoomScene {
                 }, () => undefined);
                 return built;
             }
-            case 'room': { const built = buildRoom(entity, jungle); setRoomCutaway(built.root, this.navigation !== 'walk', false); return built; } // w3:render — real rooms (world-scene-rooms.ts)
+            case 'room': {
+                const built = buildRoom(entity, jungle); setRoomCutaway(built.root, this.navigation !== 'walk', false); // w3:render — real rooms (world-scene-rooms.ts)
+                // beauty r2 (5): every room is set-dressed from the CC0 kit by its deterministic preset (async, like decor).
+                const loader = this.propsLoader(), dressing = this.world ? roomDressing(entity, this.world) : undefined;
+                built.root.userData.dressPreset = dressing?.preset; built.root.userData.dressPlanned = dressing?.pieces.length ?? 0;
+                if (loader && dressing?.pieces.length) {
+                    const alive = (): boolean => !this.disposed && this.entities.get(entity.id)?.built === built;
+                    dressRoom(built.root, dressing, loader, jungle, alive).then(n => {
+                        if (!alive()) return;
+                        built.root.userData.dressProps = n;
+                        const cut = this.navigation !== 'walk';
+                        built.root.traverse(o => { if (o.userData.part === 'wall-art') o.visible = !cut; });
+                        refreezeNode(built.root); this.renderer.shadowMap.needsUpdate = true; this.invalidate();
+                    }, () => undefined);
+                }
+                return built;
+            }
         }
     }
     private linkedSurface(id: string): ScreenSurface {

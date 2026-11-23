@@ -202,7 +202,7 @@ export function setRoomCutaway(root: THREE.Object3D, cut: boolean, frozen = true
     if (lintels) lintels.visible = !cut; // the soffit, its cove, the lintels and door heads: no lid from above
     // beauty round 2 — the ceiling-height parts that ride on the wall (picture rail + cove strip) and any ceiling/pendant
     // that a dressing preset adds are hidden too, so the overview sees the furnished floor like the penthouse dollhouse.
-    root.traverse(n => { const p = n.userData.part; if (p === 'rail' || p === 'cove-strip' || p === 'ceiling' || p === 'pendant') n.visible = !cut; });
+    root.traverse(n => { const p = n.userData.part; if (p === 'rail' || p === 'cove-strip' || p === 'ceiling' || p === 'pendant' || p === 'wall-art') n.visible = !cut; });
     const sign = root.userData.roomSign as THREE.Object3D | undefined;
     if (sign) { placeRoomSign(sign, cut); if (frozen) refreeze(sign); }
     return true;
