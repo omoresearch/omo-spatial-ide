@@ -109,6 +109,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         await page.waitForFunction(() => !document.querySelector('.theia-preload'), { timeout: 10000 }).catch(() => {});
         await pause(2500);
         const w1 = await savedWorld();
+        fs.writeFileSync(path.join(OUT, 'world-onboarding.json'), JSON.stringify(w1, null, 1)); // beauty r3: the world under test (layout checks offline)
         const mindRooms = (w1?.entities ?? []).filter(e => e.kind === 'room' && e.id.startsWith('mind-'));
         check('Onboarding built the lighthouse library with imported topic rooms', w1?.name === 'Lighthouse library' && mindRooms.length >= 4, { name: w1?.name, rooms: mindRooms.length });
         perf.onboarding = await walkFps();
@@ -139,6 +140,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
             await page.focus('[data-testid="shape-input"]').catch(() => {}); await page.keyboard.press('Escape'); await pause(800);
         }
         const w2 = await savedWorld();
+        fs.writeFileSync(path.join(OUT, 'world-planner.json'), JSON.stringify(w2, null, 1)); // beauty r3: the world under test (layout checks offline)
         const added = (w2?.entities ?? []).filter(e => e.kind === 'room' && !(w1?.entities ?? []).some(b => b.id === e.id));
         check('The planner kept "add 3 rooms" (3 new rooms in the saved world)', shapeOpen && added.length === 3, { shapeOpen, added: added.map(r => r.label) });
         await overview(); await settledAudit('planner-rooms');
@@ -159,6 +161,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         if (await page.$('[data-testid="build-exit"]')) { await click('[data-testid="build-exit"]').catch(() => {}); await pause(600); }
         await page.waitForFunction(() => JSON.parse(document.querySelector('canvas[data-testid="omo-world-canvas"]').dataset.worldRooms || '[]').length >= 4, { timeout: 20000 }).catch(() => {});
         const w3 = await savedWorld();
+        fs.writeFileSync(path.join(OUT, 'world-csv.json'), JSON.stringify(w3, null, 1)); // beauty r3: the world under test (layout checks offline)
         check('The CSV world has the 4 region rooms', (w3?.entities ?? []).filter(e => e.kind === 'room').length >= 4, (w3?.entities ?? []).filter(e => e.kind === 'room').map(e => e.label));
         await walk().catch(() => {});
         await pause(1500);
