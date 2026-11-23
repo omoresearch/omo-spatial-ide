@@ -38,16 +38,17 @@ export function buildSkylineShell(shell: WorldShell, blocks: readonly Footprint[
         add(root, [w, 0.012, d], 'metal.brass', x, 0.006, z, false);
     // Building slab below the floor (seen when looking down through the glass).
     add(root, [W + 0.6, 0.9, D + 0.6], 'stone.dark', 0, -0.65, 0, false);
-    // Ceiling (faces down only, so the overview sees in from above) with warm coves.
-    const ceiling = part(root, new THREE.PlaneGeometry(W, D), 'ceiling', [0, H, 0], false);
-    ceiling.rotation.x = Math.PI / 2; ceiling.receiveShadow = true;
+    // promise:onboarding (5) — everything that hangs or stands above head height (the ceiling and its coves, pendant bars,
+    // wires, mullions, the top rail of the glass) lives in one group that RoomScene hides in the overview (beauty round 2:
+    // the overview never sees a lid over the rooms, whichever side the ceiling faces).
+    const pendants = new THREE.Group(); pendants.name = 'omo-skyline-upper'; root.add(pendants);
+    // Ceiling (faces down only) with warm coves.
+    const ceiling = part(pendants, new THREE.PlaneGeometry(W, D), 'ceiling', [0, H, 0], false);
+    ceiling.rotation.x = Math.PI / 2; ceiling.receiveShadow = true; ceiling.userData.part = 'ceiling';
     for (const [w, d, x, z] of [[W - 3, 0.12, 0, -hd + 1.5], [W - 3, 0.12, 0, hd - 1.5], [0.12, D - 3, -hw + 1.5, 0], [0.12, D - 3, hw - 1.5, 0]] as const) {
-        const strip = part(root, new THREE.PlaneGeometry(w, d), 'emissive.cove', [x, H - 0.01, z], false); strip.rotation.x = Math.PI / 2; noRay(strip);
+        const strip = part(pendants, new THREE.PlaneGeometry(w, d), 'emissive.cove', [x, H - 0.01, z], false); strip.rotation.x = Math.PI / 2; noRay(strip);
     }
     const rows = Math.max(1, Math.round(D / 6));
-    // promise:onboarding (5) — everything that hangs or stands above head height (pendant bars, wires, mullions, the top
-    // rail of the glass) lives in one group that RoomScene hides in the overview (no stray thin lines from above).
-    const pendants = new THREE.Group(); pendants.name = 'omo-skyline-upper'; root.add(pendants);
     for (let r = 0; r < rows; r++) {
         const z = -hd + (r + 0.5) * (D / rows);
         const len = Math.min(W - 6, 7);

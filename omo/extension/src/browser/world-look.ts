@@ -232,7 +232,8 @@ function make(name: LookName): THREE.Material {
     switch (name) {
         case 'wall': return std({ color: P.plaster, roughness: 0.92, metalness: 0 }, 'fine', 0.12);
         case 'wall.outer': return std({ color: P.plasterShade, roughness: 0.9, metalness: 0 }, 'fine', 0.14);
-        case 'ceiling': return std({ color: P.ceiling, roughness: 0.95, metalness: 0, side: THREE.BackSide }, 'fine', 0.08);
+        // FrontSide: ceilings face down (seen from inside only); from above (the overview) they are culled — never a lid.
+        case 'ceiling': return std({ color: P.ceiling, roughness: 0.95, metalness: 0, side: THREE.FrontSide }, 'fine', 0.08);
         case 'floor.oak': case 'floor.herringbone': {
             const t = woodFloor(name === 'floor.oak' ? 'oak' : 'herringbone');
             const m = new THREE.MeshStandardMaterial({ color: P.oak, map: t.map, roughnessMap: t.rough, roughness: 0.62, metalness: 0 });
