@@ -102,8 +102,8 @@ RPC reply, log line or frame contains it.
 
 ```
 cd omo
-npx --yes --package=node@22.23.4 --call 'npm run compile'
-npx --yes --package=node@22.23.4 --call 'node --test --test-concurrency=1 extension/test/runtime-backend.test.cjs extension/test/runtime-integration.test.cjs'
+npx --yes --package=node@24.22.3 --call 'npm run compile'
+npx --yes --package=node@24.22.3 --call 'node --test --test-concurrency=1 extension/test/runtime-backend.test.cjs extension/test/runtime-integration.test.cjs'
 bash extension/test/runtime-mutation-check.sh     # optional: proves the tests catch broken guards
 ```
 

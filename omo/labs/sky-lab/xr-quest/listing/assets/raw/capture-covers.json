@@ -1,0 +1,22 @@
+[
+  {
+    "file": "listing/assets/raw/cover-landscape.png",
+    "note": "clean 2560x1440 render for the landscape cover"
+  },
+  {
+    "file": "listing/assets/raw/cover-hero.png",
+    "note": "clean 3000x900 render for the hero cover"
+  },
+  {
+    "file": "listing/assets/raw/cover-square.png",
+    "note": "clean 1440x1440 render for the square cover"
+  },
+  {
+    "file": "listing/assets/raw/cover-portrait.png",
+    "note": "clean 1008x1440 render for the portrait cover"
+  },
+  {
+    "file": "listing/assets/raw/cover-mini.png",
+    "note": "clean 1080x360 render for the mini cover"
+  }
+]

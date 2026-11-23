@@ -1,0 +1,227 @@
+[
+ {
+  "name": "TableLamp0",
+  "pos": [
+   4.1,
+   0.91,
+   -3.25
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 0.8,
+  "distance": 2.6
+ },
+ {
+  "name": "TableLamp1",
+  "pos": [
+   4.1,
+   0.91,
+   -8.75
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 0.8,
+  "distance": 2.6
+ },
+ {
+  "name": "TableLamp3",
+  "pos": [
+   4.8,
+   1.1,
+   -7.05
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 0.8,
+  "distance": 2.6
+ },
+ {
+  "name": "TableLamp4",
+  "pos": [
+   4.8,
+   1.1,
+   -4.95
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 0.8,
+  "distance": 2.6
+ },
+ {
+  "name": "FloorLamp0",
+  "pos": [
+   0.85,
+   1.56,
+   -2.8
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 1.4,
+  "distance": 3.2
+ },
+ {
+  "name": "FloorLamp1",
+  "pos": [
+   1.08,
+   1.49,
+   -11.22
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 1.8,
+  "distance": 3.4
+ },
+ {
+  "name": "BarPendLight0",
+  "pos": [
+   11.2,
+   1.9,
+   -5.22
+  ],
+  "color": [
+   1.0,
+   0.52,
+   0.2
+  ],
+  "intensity": 1.0,
+  "distance": 2.8
+ },
+ {
+  "name": "BarPendLight1",
+  "pos": [
+   11.2,
+   1.9,
+   -6.78
+  ],
+  "color": [
+   1.0,
+   0.52,
+   0.2
+  ],
+  "intensity": 1.0,
+  "distance": 2.8
+ },
+ {
+  "name": "FloorLamp2",
+  "pos": [
+   5.35,
+   1.44,
+   -6.0
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 1.2,
+  "distance": 3.0
+ },
+ {
+  "name": "TableLamp5",
+  "pos": [
+   11.66,
+   1.08,
+   -0.27
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 0.7,
+  "distance": 2.4
+ },
+ {
+  "name": "DinePendLight",
+  "pos": [
+   16.0,
+   1.62,
+   -8.8
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 0.9,
+  "distance": 2.6
+ },
+ {
+  "name": "TableLamp2",
+  "pos": [
+   17.2,
+   0.91,
+   -5.45
+  ],
+  "color": [
+   1.0,
+   0.5,
+   0.18
+  ],
+  "intensity": 0.8,
+  "distance": 2.6
+ },
+ {
+  "name": "DeskLamp0",
+  "pos": [
+   5.321957588195801,
+   1.3429465532302856,
+   -9.8355131149292
+  ],
+  "color": [
+   1.0,
+   0.46,
+   0.15
+  ],
+  "intensity": 1.0,
+  "distance": 1.6
+ },
+ {
+  "name": "DeskLamp1",
+  "pos": [
+   6.92196798324585,
+   1.3429465532302856,
+   -9.8355131149292
+  ],
+  "color": [
+   1.0,
+   0.46,
+   0.15
+  ],
+  "intensity": 1.0,
+  "distance": 1.6
+ },
+ {
+  "name": "DeskLamp2",
+  "pos": [
+   8.52195930480957,
+   1.3429465532302856,
+   -9.8355131149292
+  ],
+  "color": [
+   1.0,
+   0.46,
+   0.15
+  ],
+  "intensity": 1.0,
+  "distance": 1.6
+ }
+]

@@ -19,8 +19,8 @@ xcode-select --install
 # Homebrew: https://brew.sh  (follow its "Next steps" to add brew to your shell PATH)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-brew install node@22 tmux python bash git
-brew link --overwrite --force node@22     # node@22 is keg-only; or add its bin dir to PATH
+brew install node@24 tmux python bash git
+brew link --overwrite --force node@24     # node@24 is keg-only; or add its bin dir to PATH
 
 # Optional: the in-world web wall needs Chrome or Chromium.
 brew install --cask google-chrome         # or: brew install --cask chromium
@@ -31,7 +31,7 @@ Why each one:
 | Tool | Why | Note |
 | --- | --- | --- |
 | Xcode Command Line Tools | builds native npm modules | also gives `/usr/bin/git` and `/usr/bin/python3` (3.9) |
-| node@22 | runs the Theia app | Node 22 or newer |
+| node@24 | runs the Theia app | Node 24 or newer |
 | tmux | keeps every tab's shell alive | Omo uses its own socket `omo-spatial-ide` |
 | python | runtime host | **3.11 or newer is required.** Apple's `/usr/bin/python3` is 3.9 and cannot start owned agents |
 | bash | tab shells | macOS ships bash 3.2 (2007). The shell profile works on it, but Homebrew bash is preferred |

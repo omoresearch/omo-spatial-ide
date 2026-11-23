@@ -1,0 +1,170 @@
+{
+ "hdri": {
+  "sunset_jhbcentral_2k": {
+   "path": "assets/hdri/sunset_jhbcentral_2k.hdr",
+   "src": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/sunset_jhbcentral_2k.hdr"
+  },
+  "sunset_jhbcentral_8k": {
+   "path": "assets/hdri/sunset_jhbcentral_8k.hdr",
+   "src": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/8k/sunset_jhbcentral_8k.hdr"
+  }
+ },
+ "models": {
+  "metal_office_desk": {
+   "path": "assets/models/metal_office_desk/metal_office_desk.gltf",
+   "src": "https://polyhaven.com/a/metal_office_desk"
+  },
+  "modern_arm_chair_01": {
+   "path": "assets/models/modern_arm_chair_01/modern_arm_chair_01.gltf",
+   "src": "https://polyhaven.com/a/modern_arm_chair_01"
+  },
+  "sofa_02": {
+   "path": "assets/models/sofa_02/sofa_02.gltf",
+   "src": "https://polyhaven.com/a/sofa_02"
+  },
+  "mid_century_lounge_chair": {
+   "path": "assets/models/mid_century_lounge_chair/mid_century_lounge_chair.gltf",
+   "src": "https://polyhaven.com/a/mid_century_lounge_chair"
+  },
+  "modern_coffee_table_01": {
+   "path": "assets/models/modern_coffee_table_01/modern_coffee_table_01.gltf",
+   "src": "https://polyhaven.com/a/modern_coffee_table_01"
+  },
+  "side_table_01": {
+   "path": "assets/models/side_table_01/side_table_01.gltf",
+   "src": "https://polyhaven.com/a/side_table_01"
+  },
+  "modern_ceiling_lamp_01": {
+   "path": "assets/models/modern_ceiling_lamp_01/modern_ceiling_lamp_01.gltf",
+   "src": "https://polyhaven.com/a/modern_ceiling_lamp_01"
+  },
+  "potted_plant_04": {
+   "path": "assets/models/potted_plant_04/potted_plant_04.gltf",
+   "src": "https://polyhaven.com/a/potted_plant_04"
+  },
+  "calathea_orbifolia_01": {
+   "path": "assets/models/calathea_orbifolia_01/calathea_orbifolia_01.gltf",
+   "src": "https://polyhaven.com/a/calathea_orbifolia_01"
+  },
+  "potted_plant_02": {
+   "path": "assets/models/potted_plant_02/potted_plant_02.gltf",
+   "src": "https://polyhaven.com/a/potted_plant_02"
+  },
+  "pachira_aquatica_01": {
+   "path": "assets/models/pachira_aquatica_01/pachira_aquatica_01.gltf",
+   "src": "https://polyhaven.com/a/pachira_aquatica_01"
+  },
+  "modern_wooden_cabinet": {
+   "path": "assets/models/modern_wooden_cabinet/modern_wooden_cabinet.gltf",
+   "src": "https://polyhaven.com/a/modern_wooden_cabinet"
+  },
+  "ceramic_vase_01": {
+   "path": "assets/models/ceramic_vase_01/ceramic_vase_01.gltf",
+   "src": "https://polyhaven.com/a/ceramic_vase_01"
+  },
+  "Ottoman_01": {
+   "path": "assets/models/Ottoman_01/Ottoman_01.gltf",
+   "src": "https://polyhaven.com/a/Ottoman_01"
+  },
+  "desk_lamp_arm_01": {
+   "path": "assets/models/desk_lamp_arm_01/desk_lamp_arm_01.gltf",
+   "src": "https://polyhaven.com/a/desk_lamp_arm_01"
+  },
+  "potted_plant_01": {
+   "path": "assets/models/potted_plant_01/potted_plant_01.gltf",
+   "src": "https://polyhaven.com/a/potted_plant_01"
+  },
+  "steel_frame_shelves_03": {
+   "path": "assets/models/steel_frame_shelves_03/steel_frame_shelves_03.gltf",
+   "src": "https://polyhaven.com/a/steel_frame_shelves_03"
+  },
+  "hanging_picture_frame_02": {
+   "path": "assets/models/hanging_picture_frame_02/hanging_picture_frame_02.gltf",
+   "src": "https://polyhaven.com/a/hanging_picture_frame_02"
+  },
+  "standing_picture_frame_01": {
+   "path": "assets/models/standing_picture_frame_01/standing_picture_frame_01.gltf",
+   "src": "https://polyhaven.com/a/standing_picture_frame_01"
+  },
+  "book_encyclopedia_set_01": {
+   "path": "assets/models/book_encyclopedia_set_01/book_encyclopedia_set_01.gltf",
+   "src": "https://polyhaven.com/a/book_encyclopedia_set_01"
+  },
+  "brass_vase_01": {
+   "path": "assets/models/brass_vase_01/brass_vase_01.gltf",
+   "src": "https://polyhaven.com/a/brass_vase_01"
+  },
+  "round_wooden_table_01": {
+   "path": "assets/models/round_wooden_table_01/round_wooden_table_01.gltf",
+   "src": "https://polyhaven.com/a/round_wooden_table_01"
+  },
+  "dining_chair_02": {
+   "path": "assets/models/dining_chair_02/dining_chair_02.gltf",
+   "src": "https://polyhaven.com/a/dining_chair_02"
+  },
+  "bar_chair_round_01": {
+   "path": "assets/models/bar_chair_round_01/bar_chair_round_01.gltf",
+   "src": "https://polyhaven.com/a/bar_chair_round_01"
+  },
+  "coffee_table_round_01": {
+   "path": "assets/models/coffee_table_round_01/coffee_table_round_01.gltf",
+   "src": "https://polyhaven.com/a/coffee_table_round_01"
+  }
+ },
+ "textures": {
+  "herringbone_parquet": {
+   "src": "https://polyhaven.com/a/herringbone_parquet",
+   "maps": {
+    "Diffuse": "assets/tex/herringbone_parquet/herringbone_parquet_diff_1k.jpg",
+    "nor_gl": "assets/tex/herringbone_parquet/herringbone_parquet_nor_gl_1k.jpg",
+    "arm": "assets/tex/herringbone_parquet/herringbone_parquet_arm_1k.jpg",
+    "Rough": "assets/tex/herringbone_parquet/herringbone_parquet_rough_1k.jpg"
+   }
+  },
+  "marble_01": {
+   "src": "https://polyhaven.com/a/marble_01",
+   "maps": {
+    "Diffuse": "assets/tex/marble_01/marble_01_diff_1k.jpg",
+    "nor_gl": "assets/tex/marble_01/marble_01_nor_gl_1k.jpg",
+    "arm": "assets/tex/marble_01/marble_01_arm_1k.jpg",
+    "Rough": "assets/tex/marble_01/marble_01_rough_1k.jpg"
+   }
+  },
+  "white_plaster_02": {
+   "src": "https://polyhaven.com/a/white_plaster_02",
+   "maps": {
+    "Diffuse": "assets/tex/white_plaster_02/white_plaster_02_diff_1k.jpg",
+    "nor_gl": "assets/tex/white_plaster_02/white_plaster_02_nor_gl_1k.jpg",
+    "arm": "assets/tex/white_plaster_02/white_plaster_02_arm_1k.jpg",
+    "Rough": "assets/tex/white_plaster_02/white_plaster_02_rough_1k.jpg"
+   }
+  },
+  "wool_boucle": {
+   "src": "https://polyhaven.com/a/wool_boucle",
+   "maps": {
+    "Diffuse": "assets/tex/wool_boucle/wool_boucle_diff_1k.jpg",
+    "nor_gl": "assets/tex/wool_boucle/wool_boucle_nor_gl_1k.jpg",
+    "arm": "assets/tex/wool_boucle/wool_boucle_arm_1k.jpg",
+    "Rough": "assets/tex/wool_boucle/wool_boucle_rough_1k.jpg"
+   }
+  },
+  "grey_cartago_01": {
+   "src": "https://polyhaven.com/a/grey_cartago_01",
+   "maps": {
+    "Diffuse": "assets/tex/grey_cartago_01/grey_cartago_01_diff_1k.jpg",
+    "nor_gl": "assets/tex/grey_cartago_01/grey_cartago_01_nor_gl_1k.jpg",
+    "arm": "assets/tex/grey_cartago_01/grey_cartago_01_arm_1k.jpg",
+    "Rough": "assets/tex/grey_cartago_01/grey_cartago_01_rough_1k.jpg"
+   }
+  },
+  "walnut_veneer": {
+   "src": "https://polyhaven.com/a/walnut_veneer",
+   "maps": {
+    "Diffuse": "assets/tex/walnut_veneer/walnut_veneer_diff_1k.jpg",
+    "nor_gl": "assets/tex/walnut_veneer/walnut_veneer_nor_gl_1k.jpg",
+    "arm": "assets/tex/walnut_veneer/walnut_veneer_arm_1k.jpg",
+    "Rough": "assets/tex/walnut_veneer/walnut_veneer_rough_1k.jpg"
+   }
+  }
+ }
+}

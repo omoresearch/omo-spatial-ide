@@ -1,0 +1,105 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<style>html,body{margin:0;height:100%;background:#15161a;overflow:hidden}
+#lab{position:fixed;left:0;right:0;top:18px;display:flex;justify-content:space-around;font:500 13px/1.3 "Inter","DejaVu Sans",sans-serif;color:rgba(240,238,234,.82);letter-spacing:.04em;pointer-events:none}
+#lab span{display:block;text-align:center}#lab small{display:block;color:rgba(240,238,234,.5);font-size:11px;letter-spacing:.02em}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body><div id="lab"></div>
+<script type="module">
+// Avatars v2 lineup (smoke page for avatars/smoke-v2.cjs). ?dir=all|A|B|C. Penthouse light: the baked room probe
+// (baked/probe.exr) as the environment, a warm late-sun key from the west glass, AgX tone mapping as index.html.
+import * as THREE from 'three';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { createAvatar, attachAvatars } from './avatars-v2.js';
+window.__errors = []; addEventListener('error', e => window.__errors.push(String(e.message)));
+const Q = new URLSearchParams(location.search), DIR = (Q.get('dir') || 'all').toUpperCase();
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 1.0; renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.append(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#2a2826');
+const pmrem = new THREE.PMREMGenerator(renderer);
+try {
+  const probe = await new EXRLoader().loadAsync('../baked/probe.exr');
+  { const img = probe.image, w = img.width, h = img.height, ch = img.data.length / (w * h), src = img.data, dst = new src.constructor(src.length), s = w / 4;
+    for (let y = 0; y < h; y++) { const o = y * w * ch; dst.set(src.subarray(o + s * ch, o + w * ch), o); dst.set(src.subarray(o, o + s * ch), o + (w - s) * ch); }
+    img.data = dst; }
+  probe.mapping = THREE.EquirectangularReflectionMapping; probe.needsUpdate = true;
+  scene.environment = pmrem.fromEquirectangular(probe).texture; scene.environmentIntensity = 0.9;
+} catch (e) { scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.5; }
+const key = new THREE.DirectionalLight('#ffe2c4', 1.9); key.position.set(-3.5, 7.5, 5.5); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -6, right: 6, top: 4, bottom: -2, near: 0.5, far: 20 }); key.shadow.radius = 10; key.shadow.blurSamples = 24; key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; scene.add(key);
+const fill = new THREE.DirectionalLight('#c9d8ff', 0.5); fill.position.set(5, 2.5, 2); scene.add(fill);
+scene.add(new THREE.HemisphereLight('#efeae2', '#5a4a3e', 0.55));
+const back = new THREE.DirectionalLight('#ffffff', 0.9); back.position.set(1.5, 3.5, -5); scene.add(back);
+// floor: warm oak boards, soft back wall
+const boards = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 512; const g = c.getContext('2d');
+  for (let i = 0; i < 8; i++) { const l = 44 + Math.sin(i * 2.3) * 4; g.fillStyle = `hsl(28,32%,${l}%)`; g.fillRect(0, i * 64, 512, 64); g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, i * 64, 512, 1.5);
+    for (let k = 0; k < 40; k++) { g.fillStyle = `rgba(60,35,20,${0.03 + Math.random() * 0.04})`; g.fillRect(0, i * 64 + Math.random() * 64, 512, 1); } }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 4); t.anisotropy = 8; return t; })();
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), new THREE.MeshStandardMaterial({ map: boards, color: '#c9b39c', roughness: 0.6, envMapIntensity: 0.6 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const wall = new THREE.Mesh(new THREE.PlaneGeometry(24, 8), new THREE.MeshStandardMaterial({ color: '#77716b', roughness: 0.95 })); wall.position.set(0, 4, -3.2); wall.receiveShadow = true; scene.add(wall);
+
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+// same post chain as index.html (render -> bloom 0.12 / 0.35 / threshold 2.4 -> output) but a lower threshold so the glow reads
+const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, cam));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.35, 0.5, 0.9)); composer.addPass(new OutputPass()); composer.__omoCam = cam;
+await attachAvatars({ scene, camera: cam, renderer, composer });
+const ALL = [['A', 'porcelain', 'A · Porcelain'], ['B', 'light', 'B · Light form'], ['C', 'human', 'C · Refined human']];
+const GROUPS = DIR === 'ALL' ? ALL : ALL.filter(g => g[0] === DIR);
+const PEOPLE = [{ name: 'Harry', colour: '#5fb4ff', body: 'm' }, { name: 'Maya', colour: '#ff8a6b', body: 'f' }];
+const GAPG = 3.0, GAPP = 0.9;
+const av = [], home = [];
+GROUPS.forEach(([L, style, label], gi) => {
+  const cx = (gi - (GROUPS.length - 1) / 2) * GAPG;
+  PEOPLE.forEach((p, i) => {
+    const a = createAvatar({ id: L + p.name, name: p.name, colour: p.colour, body: p.body, style }); scene.add(a.root);
+    const x = cx + (i - 0.5) * GAPP; a.setPose({ x, y: 0, z: 0, yaw: Math.PI + (i ? -0.18 : 0.18) }); av.push(a); home.push({ x, z: 0, yaw: Math.PI + (i ? -0.18 : 0.18) });
+  });
+});
+document.getElementById('lab').innerHTML = DIR === 'ALL' ? GROUPS.map(g => `<span>${g[2]}<small>speaking · muted</small></span>`).join('') : '';
+if (DIR === 'ALL') { cam.position.set(0, 1.45, 10.2); cam.lookAt(0, 0.95, 0); }
+else if (Q.get('cam') === 'close') { cam.position.set(0, 1.55, 1.9); cam.lookAt(0, 1.45, 0); }
+else { cam.position.set(0, 1.42, 4.6); cam.lookAt(0, 1.0, 0); }
+// a quiet modern stool per avatar (seat top = a.sitHeight)
+const wood = new THREE.MeshStandardMaterial({ color: '#8a6142', roughness: 0.45 }), steel = new THREE.MeshStandardMaterial({ color: '#2b2b2e', roughness: 0.35, metalness: 0.8 });
+const stools = av.map((a, i) => { const g = new THREE.Group(), h = a.sitHeight;
+  const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.04, 40), wood); seat.position.y = h - 0.02; seat.castShadow = true; g.add(seat);
+  for (let k = 0; k < 4; k++) { const an = k / 4 * Math.PI * 2 + 0.78; const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, h - 0.04, 8), steel); leg.position.set(Math.cos(an) * 0.14, (h - 0.04) / 2, Math.sin(an) * 0.14); leg.rotation.set(Math.sin(an) * 0.08, 0, -Math.cos(an) * 0.08); g.add(leg); }
+  g.position.set(home[i].x, 0, home[i].z + 0.06); g.visible = false; scene.add(g); return g; });
+const S = { speak: true, walk: null, t: 0 };
+window.__setStates = (list) => list.forEach((s, i) => { if (!av[i]) return; av[i].setState(s); stools[i].visible = s === 'sit'; if (s !== 'walk') av[i].setPose({ ...home[i] }); });
+window.__speak = (on) => { S.speak = on; };
+window.__walk = (on) => { S.walk = on ? S.t : null; };
+av.forEach((a, i) => { if (i % 2 === 1) a.setMuted(true); });
+// timeline for the video: idle (speaking) -> walk a short loop -> sit -> wave -> nod
+const TL = [[0, 'idle'], [3.2, 'walk'], [8.2, 'sit'], [11.4, 'emote:wave'], [14.4, 'emote:nod'], [16.4, 'idle']];
+let tl = null; window.__timeline = () => { tl = 0; }; window.__TL_LEN = 17.2;
+function frame(dt) {
+  S.t += dt;
+  if (tl !== null) { tl += dt; let st = 'idle'; for (const [t0, s] of TL) if (tl >= t0) st = s; if (st !== S.last) { S.last = st; window.__setStates(av.map(() => st)); if (st === 'walk') S.walk = S.t; else S.walk = null; } }
+  av.forEach((a, i) => {
+    if (S.walk !== null) { // a small slow ellipse in front of the home spot
+      const w = (S.t - S.walk) * 0.42, ph = w * 1.0 - Math.PI / 2, rx = 0.32, rz = 0.42, h = home[i];
+      const x = h.x + Math.cos(ph) * rx * (i % 2 ? -1 : 1), z = h.z + 0.42 + Math.sin(ph) * rz;
+      const dx = -Math.sin(ph) * rx * (i % 2 ? -1 : 1), dz = Math.cos(ph) * rz; a.setPose({ x, y: 0, z, yaw: Math.atan2(-dx, -dz) });
+    }
+    a.setSpeaking(S.speak && i % 2 === 0 ? 0.45 + 0.4 * Math.abs(Math.sin(S.t * 6.3) * Math.sin(S.t * 2.1 + i)) : 0);
+    a.lookAt(cam.position); a.update(dt, cam);
+  });
+  composer.render(dt);
+}
+window.__frame = (dt) => frame(dt);
+let manual = Q.get('manual') === '1'; window.__manual = (m) => { manual = m; };
+const clock = new THREE.Clock();
+(function loop() { const dt = Math.min(0.05, clock.getDelta()); if (!manual) frame(dt); requestAnimationFrame(loop); })();
+window.__av = av; window.__cam = cam; window.__THREE = THREE; window.__scene = scene;
+window.__ready = true;
+</script></body></html>

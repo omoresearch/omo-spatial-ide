@@ -1,0 +1,2207 @@
+{
+ "note": "Big lab binaries kept out of git. Fetch with: node scripts/fetch-lab-assets.cjs --lab sky-lab --from <dir>",
+ "files": [
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/ui/fonts/InterVariable.woff2",
+   "size": 317520,
+   "sha256": "b3ea285a91cea9dcdd66ecc9099674fe18867fd0ce41dd84f217a50d22a73763"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/fonts/InterVariable.woff2",
+   "size": 317520,
+   "sha256": "b3ea285a91cea9dcdd66ecc9099674fe18867fd0ce41dd84f217a50d22a73763"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_shoulder_yaw_link.STL",
+   "size": 450084,
+   "sha256": "f7c2689a9e38249d21b041fea1170047e96ae066830c38b76f16025e90df3362"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_knee_link.STL",
+   "size": 450084,
+   "sha256": "6a052b264642438f5a8eda0bc544f6dafcc4702935492fae7882a8b768c6dfd2"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/base_link_hip_flange_blue.STL",
+   "size": 329634,
+   "sha256": "e16cb0cd4c624b39e14da9468681abc09b2e79f5d97d941e0be5b0b1bef1cdb3"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_hip_yaw_link.STL",
+   "size": 450034,
+   "sha256": "db769cbd646bd768586f04fd64908f51fd55ee414bc0d6d9f8438247b2009155"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_hip_pitch_link.STL",
+   "size": 450084,
+   "sha256": "b48e9232e8836ee1e8e2211df0e71093df5979fc990b994b331ba4b45181fe04"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/base_link.STL",
+   "size": 450084,
+   "sha256": "06d52d23c907603929f0b39a7f67685315bdcdb8801b1c4acc4d6c28c6383773"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_ankle_roll_detail_blue.STL",
+   "size": 174884,
+   "sha256": "eedb32bb3c0b4318dfdc3bbd93b94abf7ceb01134e2186474166b88186a1d853"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_ankle_roll_detail_blue.STL",
+   "size": 174534,
+   "sha256": "13a738a0a9ef0e9f9e0eae531c776f51b6a0b3279915fbe0506ddda244fa8007"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/waist_yaw_link_visual_white.STL",
+   "size": 450084,
+   "sha256": "8dd2b2fae158c7ed62b676ebc2f83c601ff40c741ed686c1089b6e16890c9f0d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_hip_roll_link.STL",
+   "size": 450034,
+   "sha256": "4967673d486a696e675ec4f2720a732ea552fe69796e98dcdafaefcbe0feb102"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_ankle_roll_link_visual_white.STL",
+   "size": 450034,
+   "sha256": "f404d23043a7d3df1b11f067de4c25bd4da22799dac0bb283755eb19e277891b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_hip_yaw_link.STL",
+   "size": 450034,
+   "sha256": "8bbe6e4d7a59d8e6bbe087469aafb24a458b57510025beea59856115b4d3aab4"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/waist_yaw_logo_visual_blue.STL",
+   "size": 53184,
+   "sha256": "95d28b6b32395cfdd0a9c2d430c46cecf31bd27395ccbe224dc7f305f2f7159a"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_ankle_pitch_link.STL",
+   "size": 63484,
+   "sha256": "a825785993a28fd9670e89f66e9ccc8e3ab946a7e5d8865c00858c5a7a067a45"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_elbow_link.STL",
+   "size": 450084,
+   "sha256": "2a316cbb8a01b4254ae48125c2d306b86f085df9823f75152f9fba3ecb440296"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_shoulder_roll_link.STL",
+   "size": 450084,
+   "sha256": "1c2a987d8eb00eb2f06b649bedc5768a8a79a8742f01470d56c754c6179785dc"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_hip_pitch_link.STL",
+   "size": 450084,
+   "sha256": "5d145811e2788d576962db1131fbffad896981d93d25e8ef55e14e6982e26cdd"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_elbow_link.STL",
+   "size": 450034,
+   "sha256": "511ef1a18fb9d79542ca55273e9f8882c1031fa6eab3529fdad44e521c636d0a"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_shoulder_pitch_link.STL",
+   "size": 450034,
+   "sha256": "4983adc98478be0f8fc955aa304cda9a0bc3d2145acc2d7b51f7d93293f48120"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_shoulder_pitch_link.STL",
+   "size": 450084,
+   "sha256": "53d1bf2a2422447e656e731973c9b90964a841bd3bc7e70604f515abe4d3313d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_hip_roll_link.STL",
+   "size": 450084,
+   "sha256": "fd9cbcca2aa382a267817b5bd82c328de64f11080962320ef59b93512bad6c55"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_wrist_link.STL",
+   "size": 450084,
+   "sha256": "02ae18b855832b60c3c9fc62e1b5e2f7304aa16f97a7593f6ba0a6b09a02e978"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_ankle_pitch_link.STL",
+   "size": 63484,
+   "sha256": "37de763d1074abff50888ed5931d250dde6a6b74dbcb354a97d7a0c5cb887ba8"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_shoulder_roll_link.STL",
+   "size": 450084,
+   "sha256": "bbdc3ddb9a7b5ea37080ba5f9bba8f490ea0936654f0dd34f509787536c82178"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/left_ankle_roll_link_visual_white.STL",
+   "size": 450034,
+   "sha256": "f6b197b11123841925f9d521772e65331d2d9ad7b53262df59eda61586b4c9d4"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_knee_link.STL",
+   "size": 450034,
+   "sha256": "e28884634c1ade1e331a4411c72d116df873bb1fc1f802962290bf1fdf9e46f3"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/waist_roll_link.STL",
+   "size": 450034,
+   "sha256": "6a4b3a0df845a0251c734ea4fbba00c66e70ec67ecaf9b1f491ca6227a2b0587"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_wrist_link.STL",
+   "size": 450084,
+   "sha256": "76d3c45bb9538d3f2b0541767ada8fce5754d57cf8b5db8be090acb435bf66cf"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/lod/right_shoulder_yaw_link.STL",
+   "size": 450034,
+   "sha256": "a58b2e8dcd1bbee51efb14e1ca936acf0802a09d70fa3931cf56089b9986df02"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_shoulder_yaw_link.STL",
+   "size": 1027984,
+   "sha256": "4cfe28c2a31c5b7602c8546cac8fa491a97f1b88cbe579d48034bf857702adbb"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_knee_link.STL",
+   "size": 4138534,
+   "sha256": "878aa675f24ad2154265e72c4a3fbed65de041337dfe5c80c74f3333e6f6602a"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/base_link_hip_flange_blue.STL",
+   "size": 329634,
+   "sha256": "735770bc7b4568ea0728876d1b4fb6b4841901bca29e565c381a2abf5d8f586d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_hip_yaw_link.STL",
+   "size": 1796034,
+   "sha256": "7e792ca8795b4f44b7de1e2e8747a6c188c10fb8810b17f3269965dde27292bc"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_hip_pitch_link.STL",
+   "size": 884784,
+   "sha256": "a427e4c982b181623b8f322f45be08ebfc2f73abdf5492afb8728e0fefa80d83"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/base_link.STL",
+   "size": 2954484,
+   "sha256": "8fa93e11010c1d0a35ae79f03638fadfc26335320dbfbbd6ff56b5c6cb3c0d2e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_ankle_roll_detail_blue.STL",
+   "size": 174884,
+   "sha256": "a8f9dd58004f3baf92d28894543a4c2debf8cd6fd0758d6094c85e27fd79b31e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_ankle_roll_detail_blue.STL",
+   "size": 174534,
+   "sha256": "d43206b6aed6542a48f5ee9207b916d065eee928bb359c0cc46c1cd055317d4c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/waist_yaw_link_visual_white.STL",
+   "size": 5907084,
+   "sha256": "49884688768d95db6031cb81c0b8f29a8c834a36d87266b9c7cd8a116ffdd351"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_hip_roll_link.STL",
+   "size": 1816834,
+   "sha256": "4ccc27044b9c274cd81dae6775a59036c6449bb3d64fb6ed70294f17046edcb8"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_ankle_roll_link_visual_white.STL",
+   "size": 642034,
+   "sha256": "550600ab7b802fc423efaa0a78ce0f90c782151512006ab7be820477f786f759"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_hip_yaw_link.STL",
+   "size": 1650784,
+   "sha256": "e6361ed133e72f2040c88529746d4c17a057d60b0e8d253318fc94bea514e129"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/waist_yaw_logo_visual_blue.STL",
+   "size": 53584,
+   "sha256": "8710fa4e90cce7beb4b1062493a66163590fc50e06781bbaf2cfa2f07721a8fa"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_ankle_pitch_link.STL",
+   "size": 63484,
+   "sha256": "f19f73d04f8b0252e4001de541657864c44c5e7da204b7487d24eff162644b6c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_elbow_link.STL",
+   "size": 1927134,
+   "sha256": "45e761a34c5570ec7b200a6b15cf6e5d7dfe61fea1497e1954e17140c3c400b1"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_shoulder_roll_link.STL",
+   "size": 1201984,
+   "sha256": "41f6738917180d3aa62798f279e99f4d64ed57950d6138f8e249c7ca629444a9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_hip_pitch_link.STL",
+   "size": 882384,
+   "sha256": "cd12a399efb65721f3c75b73619971eafb26958367c30222ef3110bd4090a19d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_elbow_link.STL",
+   "size": 1927534,
+   "sha256": "34c9eeeb41588fc9970940d4d82db73ee0c3881613d1a76f0c90421d3b7c8e81"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_shoulder_pitch_link.STL",
+   "size": 906184,
+   "sha256": "2c0eb4ed8ccd410dc2d7f6949829a59d05889ab27ea4944120e8689720e6c40b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_shoulder_pitch_link.STL",
+   "size": 906634,
+   "sha256": "21ac44a4e038f09a7f0472490ee06c3ecb5c87cac51fdb645ad4382875235be0"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_hip_roll_link.STL",
+   "size": 1815834,
+   "sha256": "52c5c2edb3e83aafdbc633ee10ff4c368993e6c889d6a560d75982da5cc9a799"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_wrist_link.STL",
+   "size": 950684,
+   "sha256": "1184e55a4a98a75f2d9143e65cd5b1b1f6f42f35c49b4565c94d22f542df7c73"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_ankle_pitch_link.STL",
+   "size": 63484,
+   "sha256": "c4f5d66f6d6f0eaa0ef232b841d85907fca99ec81013b0682f35277ae16cc9e1"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_shoulder_roll_link.STL",
+   "size": 1272984,
+   "sha256": "4435df453ffe4325b6783d217081ec6360d52252ddb87b7f894434eb9e60c39b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/left_ankle_roll_link_visual_white.STL",
+   "size": 641634,
+   "sha256": "80ff0b6581d3d2bc3baff0b95b4ae07c3c4d420cddb338dc5f34aa08acc4a31a"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_knee_link.STL",
+   "size": 4129784,
+   "sha256": "ffe17fc9ba1614ae86610dc1b657461a3d1d70350729296c9210f68f3934d01d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/waist_roll_link.STL",
+   "size": 741434,
+   "sha256": "500f00489349bf018bbf325d9ed67dd272629b5f37e734a82b141329a9d656df"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_wrist_link.STL",
+   "size": 951534,
+   "sha256": "09064a38d9f2bddcc8c6b705811426bc88473c9587221012d08bdbddce94eda2"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/avatars/rp1/meshes/right_shoulder_yaw_link.STL",
+   "size": 1028484,
+   "sha256": "a88c4bce9e69979ae082de8420a031ca6772a4e0d08ab9f10af4b9617f4ec723"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/city.jpg",
+   "size": 3696083,
+   "sha256": "6222a7e1887c28419300735ce78c26e2d3a6a4f129ba4e557fd27ccd6457a4f1"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/room.glb",
+   "size": 47577408,
+   "sha256": "4e203c5da5673654cccd1d670ed53528c4162f4de073826a2556178b8fbcd282"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/lm_arch.exr",
+   "size": 9809814,
+   "sha256": "31be33d6d1859ad3af39e8fb1858d6eb126a4bbefb8364d719a89a821a7aab98"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/probe.exr",
+   "size": 1399848,
+   "sha256": "3440545963fbbeae4187cfbc875246bb90eb42476cee84a52f9b3912a488751f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/city_depth.png",
+   "size": 1135684,
+   "sha256": "9c007d41e335ae531159559a74fc0c53e881f8a02bdb58574160e56f893ec61d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/lm_floor.exr",
+   "size": 923282,
+   "sha256": "01520e4dd52a2c3ee6b4b9f7ecc7bc0b50787c9a73d0dd7b6589df6207836ac9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/ao_floor.png",
+   "size": 291341,
+   "sha256": "839763f9ebc97cf3d8671d8451aea6d8f912118612488e18a8d102165093998a"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/ao_arch.png",
+   "size": 2484891,
+   "sha256": "67166b23c122bedd64c7c0fd270c6814de3ef7b1c4efe00d4af7d3ad116ec155"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/lm_furn.exr",
+   "size": 5657599,
+   "sha256": "35363c8a032746e85dfbaaeec8c6bcbbba8fb2f1361d0c22efb5d1e7c628c9db"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/ao_furn.png",
+   "size": 832805,
+   "sha256": "1188ac78ce087df01124924c789da090e75304a30c05406e6b6b4e3d128ba79d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/city.exr",
+   "size": 15715752,
+   "sha256": "11fe9ab8f28cb87bd21597bbfd39e5fd2271ec3b8435a271cff19e8aba75b372"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/plant_money_tree_tall.glb",
+   "size": 3857976,
+   "sha256": "4bb06e35defbf826537796c332dd280134984bb4c85c101c9610040d44265bd8"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/city.jpg",
+   "size": 3598517,
+   "sha256": "e2075567720392453042f254a80748ce8761398e737461c47ef453f433db3431"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/room.glb",
+   "size": 37250076,
+   "sha256": "323efdb99b2687237c0c0e947e8c6ec14f1c93c26d3dfcd279e3f8f43a285bb5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/plant_calathea_c.glb",
+   "size": 2299396,
+   "sha256": "0cbf30f90116c9e423d24e38413e1e756bfb5ed86b8a3f2304655c90ec375cf2"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/lm_arch.exr",
+   "size": 6881257,
+   "sha256": "7e86f91b5ab768bca2ffce8404215a6555db27c3b17b9bde9558440f328c7da0"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/probe.exr",
+   "size": 1248574,
+   "sha256": "941a32ac1b2cf9826419b7f99b5423a7beff7e3bc48a57872aa140db7be5069c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/city_depth.png",
+   "size": 1155377,
+   "sha256": "efb34bfd2e46db84cc38140df18f83a534cdbc905735b5c52e70f2ec10287876"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/plant_calathea_b.glb",
+   "size": 2297124,
+   "sha256": "d23deeed04af44d9646a054ed19cf42e5f5956884ea99a78338c7dc8f621fc3f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/lm_floor.exr",
+   "size": 953237,
+   "sha256": "2438798f1c2de59e80ad6866b62298f3fdfaa92d40895ecd14da7492e3d470a2"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/plant_money_tree_shrub.glb",
+   "size": 3654584,
+   "sha256": "6cdbef82fe08cc4c561ac72193ce7cdd550d71f26a75656575acf26b84bc23e6"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/ao_floor.png",
+   "size": 266168,
+   "sha256": "366eee9652388a57a8d64a61db1c1fbe9afd393c4b518b7ba875f5e2a61d9ad2"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/ao_arch.png",
+   "size": 2323378,
+   "sha256": "49ae503c2cca5a8c1dcb153190aa799010d93592e39642366c00c778c397ba31"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/lm_furn.exr",
+   "size": 9946739,
+   "sha256": "74d233223f70eaeeab334ca1589613b2211114798afbddb169609eebac7a2e87"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/ao_furn.png",
+   "size": 1670609,
+   "sha256": "b3d8d6be1ed8c805ab20f0e2ed098db18dfd392a3f40fa45bfa8b124a6ac2e35"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/next/city.exr",
+   "size": 15643649,
+   "sha256": "7a1f798eb000bae5dc9dcda934e192da43e778c9d68a08905ba3621b62431471"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/raw/lm_arch.exr",
+   "size": 22560540,
+   "sha256": "96d121c05a6ca2d33f6a4ef19ac466c0301ee0ae42c19e8ec31c73b11499449d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/raw/lm_floor.exr",
+   "size": 5168005,
+   "sha256": "30fa06c6697401241fe2ef922ac4b2e5df6b6051af11ee35b3d41fdaaa56b8fb"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/baked/raw/lm_furn.exr",
+   "size": 6969261,
+   "sha256": "4d6f596f420f4b32d103e831e1b0cb6a3e36a616c215b71c8e09be23702b08fd"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/vendor/spark.module.js",
+   "size": 2997944,
+   "sha256": "5ae86ab35d4ceb655db486dcc336299775bb314c280d7e5b39f64e4539f8e0e9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/wood_table_001_rough_1k.jpg",
+   "size": 237261,
+   "sha256": "a2ca9ae89dfe7b8e2e5e92f0aa43467845417de8a50205b5852ef0d57c7624f9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/gen_rug_charcoal.png",
+   "size": 1017995,
+   "sha256": "abeedb3a4120e2a27c7ad6682b904021fc3900467429d95707041f31c9c0c61b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/wood_table_001_diff_1k.jpg",
+   "size": 215573,
+   "sha256": "460dd08d240f4a1f02982415048c3c5c200f385db212da18dc7e2df68bf4d0be"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/dark_wood_diff_1k.jpg",
+   "size": 754754,
+   "sha256": "d68da31655bf47024af893156a6a01a6c95bb60f55d97e2dc9bdd47be320e5b5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/gen_canvas_b.png",
+   "size": 783335,
+   "sha256": "9f256f95fa2f90f08892917c509d74c65d26c0817c225621d426657106065687"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/herringbone_parquet_nor_gl_2k.jpg",
+   "size": 1854683,
+   "sha256": "8891325197ab8a77689506118fade7bc812944a03bcce47b802e4b8742e590cd"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/gen_rug_slate.png",
+   "size": 1316983,
+   "sha256": "80d472d3923e67b53d36cfa066df755f6ed4e3e38ff0dde9a9f15329b1f6921e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/gen_canvas_a.png",
+   "size": 593743,
+   "sha256": "3704151f7d54009ae54b4ed8537139219f78c0bc2fc51c2500ce6eb33eae9484"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/herringbone_parquet_rough_2k.jpg",
+   "size": 2285252,
+   "sha256": "9fd86e1c5bff348625bab72091d7ea2fa80d197f8e4a5452b378ce8ae0abd9e5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/herringbone_parquet_diff_2k.jpg",
+   "size": 3482793,
+   "sha256": "8305c12adf1da61f4d267611948bfdc9293c9b9915da64e41cc1ab68c0167ff1"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/marble_01_rough_1k.jpg",
+   "size": 91848,
+   "sha256": "a3e9f373d22aebc449af73f6a18c9817e2146f17e567a083609ba8fbb62a72f5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/gen_rug_oat.png",
+   "size": 1360864,
+   "sha256": "8f123910ff4024ba5e6a3c4878237be625f92c46f675be6e90f49286f8607386"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/fabric_pattern_07_col_1_1k.jpg",
+   "size": 788593,
+   "sha256": "aeb7a1487b77aec55e39de662def4d371f5c7c617f62d1f291d7f9932ffebdc9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/assets/marble_01_diff_1k.jpg",
+   "size": 305029,
+   "sha256": "b10dabea976d68baa976a0d4e8dac58789df8d26a1b50697f320106f1b00a229"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/blender/baked.blend",
+   "size": 182989873,
+   "sha256": "5b5188e97fb9d19adb705a53019108bd84692eec75260051f97eb8dd681c5ed5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "baked-render/blender/scene.blend",
+   "size": 177992346,
+   "sha256": "3e26d38efbd1bc5f586b8ed81565455b6d07e435239563fccc4ade4868cc3a33"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/hdri/sunset_jhbcentral_8k.hdr",
+   "size": 93730967,
+   "sha256": "cbbe5f542cac76478457ac12e48451a2ad003cc69501d044b43b237daffba213"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/hdri/sunset_jhbcentral_4k.hdr",
+   "size": 23911312,
+   "sha256": "eb388d9816eaf79db2f3e8bd391117ae24f10437ea9e00d1a9a24e083150cf97"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/hdri/sunset_jhbcentral_2k.hdr",
+   "size": 6099369,
+   "sha256": "d906ad6158a3bb9571ec82d238cdad7390211040aea506b3670b52475ad69737"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/ceramic_vase_01/ceramic_vase_01.bin",
+   "size": 272656,
+   "sha256": "56ffadcafff3f56538d04b0b43c06c9704baeec2ac3ec286ef01c313c82906f0"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/ceramic_vase_01/textures/ceramic_vase_01_nor_gl_1k.jpg",
+   "size": 36504,
+   "sha256": "c35b59d15e0f08db44b0bc8a5870bc65ae781819e5abf0447996d0faf05b7722"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/ceramic_vase_01/textures/ceramic_vase_01_arm_1k.jpg",
+   "size": 74240,
+   "sha256": "121469880a7900513717685e9035dfc1b04613f85c778ab4e9dba98c1675d660"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/ceramic_vase_01/textures/ceramic_vase_01_diff_1k.jpg",
+   "size": 32351,
+   "sha256": "5f7d22178b74a59fe92aa0ccc958b897e2fb80df514eb28b97000097c0e71beb"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/sofa_02/sofa_02.bin",
+   "size": 74864,
+   "sha256": "cb337e03211be0309afa1ded2b6cbb2d402c0f794aaf8828fba559d27a42d3f5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/sofa_02/textures/sofa_02_nor_gl_1k.jpg",
+   "size": 139858,
+   "sha256": "c97a359703a8ce1cee62cbd9dc4013b611d821afb7769810983b464ebc5d0cfe"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/sofa_02/textures/sofa_02_arm_1k.jpg",
+   "size": 121752,
+   "sha256": "f2813f32cd9ec42a9080590d0953ac9e272d9baa0b22fdb5910bf325157393c6"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/sofa_02/textures/sofa_02_diff_1k.jpg",
+   "size": 86514,
+   "sha256": "4ff65c782578b52eee89cb96cc4e258ce1b6848e1a7655019af1f7207c749840"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/standing_picture_frame_01/standing_picture_frame_01.bin",
+   "size": 55424,
+   "sha256": "bdaf666c5011671c55d5661171d2395cee7d80f1558e92760c663050cba39b49"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/standing_picture_frame_01/textures/standing_picture_frame_01_nor_gl_1k.jpg",
+   "size": 36570,
+   "sha256": "75899a4f4bc80ec69383b148076c054fb1d61f0bf62a32bb913bc151f1d26f04"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/standing_picture_frame_01/textures/standing_picture_frame_01_artwork_nor_gl_1k.jpg",
+   "size": 17077,
+   "sha256": "2b1cabd85ed19872b1df2d509a8906fea80003925ae71e773b1fb0f6010ffbf0"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/standing_picture_frame_01/textures/standing_picture_frame_01_diff_1k.jpg",
+   "size": 94436,
+   "sha256": "e9d1030940b00ed576cafd704f7fc44226a255ed8d2db5ef3b8fd02d5521a763"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/standing_picture_frame_01/textures/standing_picture_frame_01_artwork_rough_1k.jpg",
+   "size": 12684,
+   "sha256": "62d875e9427f5d71f1bb4d9dc9569e34465bfd3067b8b13f5644b73e23a09fa3"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/standing_picture_frame_01/textures/standing_picture_frame_01_artwork_diff_1k.jpg",
+   "size": 116687,
+   "sha256": "d65a41f6391563f3c5e35b66fb6a96949d166072d174406223412ac4dfb0c11e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/standing_picture_frame_01/textures/standing_picture_frame_01_arm_1k.jpg",
+   "size": 107611,
+   "sha256": "1092eae6ea8c312fbb3acdd3ab90e80a83658b9a593ff8c8412151dbddac2250"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/hanging_picture_frame_02/hanging_picture_frame_02.bin",
+   "size": 115080,
+   "sha256": "0ed5813c8b30f63807ffac962e47135d3248b3804e07cb93862c13e29bed83d8"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/hanging_picture_frame_02/textures/hanging_picture_frame_02_artwork_roughness_1k.jpg",
+   "size": 74142,
+   "sha256": "305018ab800cbd02d61c08f9c5a422c2777f2b5cbb20579f671be56a1fb21853"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/hanging_picture_frame_02/textures/hanging_picture_frame_02_nor_gl_1k.jpg",
+   "size": 56776,
+   "sha256": "79367cf9d7e4981263dd1439297585148d6c93500acaffa7afeb534351e68b86"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/hanging_picture_frame_02/textures/hanging_picture_frame_02_arm_1k.jpg",
+   "size": 113780,
+   "sha256": "67378630bc6bb69799f8ee0fde4ab11ecd9e7a43ed3dfef402fdd784d8c2cea3"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/hanging_picture_frame_02/textures/hanging_picture_frame_02_artwork_diff_1k.jpg",
+   "size": 138383,
+   "sha256": "7e26aee962965fb201975ef5a99e2751a24c4b461b48e8348cea9f31cde027c2"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/hanging_picture_frame_02/textures/hanging_picture_frame_02_artwork_nor_gl_1k.jpg",
+   "size": 45035,
+   "sha256": "8a700c0d7d3f464177ead95879d60a8bf43ef77c034881379b2c036406ab9e27"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/hanging_picture_frame_02/textures/hanging_picture_frame_02_diff_1k.jpg",
+   "size": 146402,
+   "sha256": "575f2b6481b9e02474750ded776a0b490744228cb64d9b346f28bd78b9cf5897"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/desk_lamp_arm_01/desk_lamp_arm_01.bin",
+   "size": 736804,
+   "sha256": "07f34e32abecbaa63d28b9d12d6a0eb82b775a0f50c92327655909d72ff8489b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/desk_lamp_arm_01/textures/desk_lamp_arm_01_diff_1k.jpg",
+   "size": 702522,
+   "sha256": "159eb178aba3271bd555cbe07ca36431d8af9a006f0b8e9d8c67030cbdc9e4d3"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/desk_lamp_arm_01/textures/desk_lamp_arm_01_arm_1k.jpg",
+   "size": 780379,
+   "sha256": "206404c79fb7dcf8e2c4558c13544342f87d2190526231a1750c3c9adc256fbc"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/desk_lamp_arm_01/textures/desk_lamp_arm_01_nor_gl_1k.jpg",
+   "size": 651826,
+   "sha256": "feefedc3835ecef3634e97a24977451671f8f57747a023f48cd14c84bc73513a"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/dining_chair_02/dining_chair_02.bin",
+   "size": 544592,
+   "sha256": "c7f1ef858f73815176d2ab304472a69ccf6097e971e5258eb924a75f841d4af5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/dining_chair_02/textures/dining_chair_02_diff_1k.jpg",
+   "size": 91518,
+   "sha256": "343990f764790da1149485a422dee2bc6797945a6af06a37d02d7a7de041acf5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/dining_chair_02/textures/dining_chair_02_arm_1k.jpg",
+   "size": 162630,
+   "sha256": "0a81c0c886baa1e65d94fb6fb90ab4751bee319888ecf1c428ae62042d8a5b15"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/dining_chair_02/textures/dining_chair_02_nor_gl_1k.jpg",
+   "size": 119612,
+   "sha256": "348703512ca1215f8389e9108419c2d1a46537663db25f423c3ef900d20cfe61"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/metal_office_desk/metal_office_desk.bin",
+   "size": 229700,
+   "sha256": "65b558f41a75ad4822e31cc2a97eb34ed359199279a6bfbd650deb27cef78767"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/metal_office_desk/textures/metal_office_desk_arm_1k.jpg",
+   "size": 721614,
+   "sha256": "752916dd9bf8a163dc7e0d3673900791ee6d558bbe23894263ac92b42387f51b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/metal_office_desk/textures/metal_office_desk_nor_gl_1k.jpg",
+   "size": 170875,
+   "sha256": "f57eb004937e46392151b803e0cb1d88983958d01ad11d93df78a82cfcc6c407"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/metal_office_desk/textures/metal_office_desk_diff_1k.jpg",
+   "size": 470831,
+   "sha256": "1f02e3e77e8f82a3600664c991bd45c1c187452d61e9ede4336c6f90f7fa3139"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/bar_chair_round_01/bar_chair_round_01.bin",
+   "size": 1017152,
+   "sha256": "2bda85d89beb91097998b25293f10e72686b972aecffd2c14d1b5412cc1da276"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/bar_chair_round_01/textures/bar_chair_round_01_arm_1k.jpg",
+   "size": 751149,
+   "sha256": "9f34b279bdd1527ec19fc3a3bb0ce374f0c0ba2dc05dfbd58f561bc317bd36c7"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/bar_chair_round_01/textures/bar_chair_round_01_diff_1k.jpg",
+   "size": 599006,
+   "sha256": "1b3912fe1102b4082d7421aeb2e2717d3ebe914d261700f8710c0fdb7d7463bb"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/bar_chair_round_01/textures/bar_chair_round_01_nor_gl_1k.jpg",
+   "size": 442193,
+   "sha256": "91e4310863002228003d100be83e0524832e532d05f27ef8ed62675b116f0bd1"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_wooden_cabinet/modern_wooden_cabinet.bin",
+   "size": 1170136,
+   "sha256": "04e664a95f52c48d0caa8c3148ab7e4ad4a0554b37a2a5c0e39dc6ed6c46cafe"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_wooden_cabinet/textures/modern_wooden_cabinet_nor_gl_1k.jpg",
+   "size": 430053,
+   "sha256": "f08b3d0619a60e2eac19c9d9c0d7dc0e3eb75af2692d84b32ddfd12d857c15ab"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_wooden_cabinet/textures/modern_wooden_cabinet_arm_1k.jpg",
+   "size": 574020,
+   "sha256": "fad6df227ec6d431387b10bd244a0d087e89e6dce0b1c732df5c87f0a1def3f5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_wooden_cabinet/textures/modern_wooden_cabinet_diff_1k.jpg",
+   "size": 670353,
+   "sha256": "e494b67439da73775413d6aaea369ae05a8ebd7705be8df08dbcd2ee4fd545e4"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_ceiling_lamp_01/modern_ceiling_lamp_01.bin",
+   "size": 146828,
+   "sha256": "ae5140a64e12e639554158901a5e92340bb37c706096ff255804e3220fb96367"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_ceiling_lamp_01/textures/modern_ceiling_lamp_01_diff_1k.jpg",
+   "size": 79705,
+   "sha256": "c08bfbf7576a86a4a09d386ae9f0a92965fc652bf82f3a8dba1c796b1aa9e535"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_ceiling_lamp_01/textures/modern_ceiling_lamp_01_arm_1k.jpg",
+   "size": 124022,
+   "sha256": "f4c6a8e7c86b1deaaf0f74099539ff635063b63f594b0fadfc3ec8fac805df4e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_ceiling_lamp_01/textures/modern_ceiling_lamp_01_nor_gl_1k.jpg",
+   "size": 79333,
+   "sha256": "dd75bd21a901581325f5c363bd89b45430b8531cb27dead314cd087196a33c27"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/brass_vase_01/brass_vase_01.bin",
+   "size": 498240,
+   "sha256": "acc32719ee7c42c5b5fd07507a3dd7779e95445754759876bdbc133cebefa8ff"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/brass_vase_01/textures/brass_vase_01_nor_gl_1k.jpg",
+   "size": 78223,
+   "sha256": "dac5267183a708234e2640f89cde45df76c3927bbd5d2b280cb61fd7a4bd63ea"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/brass_vase_01/textures/brass_vase_01_arm_1k.jpg",
+   "size": 112273,
+   "sha256": "b17e947af6e5d2b1f62a3e4953f075ddd6a48f1c11596811fb55ff6b3aab2855"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/brass_vase_01/textures/brass_vase_01_diff_1k.jpg",
+   "size": 150797,
+   "sha256": "346bb95aeb7aaac89ff368c050e511f2e444d7636d1e135f8433a012423474dd"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_01/potted_plant_01.bin",
+   "size": 5345188,
+   "sha256": "a8dd1f7ce75f50dc25bbedc20809da02ee4193815c155b883a329925fa5548f7"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_01/textures/potted_plant_01_pot_rough_1k.jpg",
+   "size": 173192,
+   "sha256": "1256199fe3a88a0534bcd4c8bf141cfa9a28b68fce3f286193d0713796fd8561"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_01/textures/potted_plant_01_pot_nor_gl_1k.jpg",
+   "size": 200349,
+   "sha256": "ec02e51751e0822d229d48bea1373b06e2675c3725ff04fd1f87ac516719e620"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_01/textures/potted_plant_01_leaves_nor_gl_1k.jpg",
+   "size": 177105,
+   "sha256": "2faa756e0ee2b8341c752b283b93599157bf56f4083a9f61b825cdfa0c7138ff"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_01/textures/potted_plant_01_leaves_rough_1k.jpg",
+   "size": 91706,
+   "sha256": "765e3bd1bfdad39dd0d1cd755eafd1f9f1d46cbbb6013988cbfd1197de27a1f9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_01/textures/potted_plant_01_pot_diff_1k.jpg",
+   "size": 204900,
+   "sha256": "51c9d80e8abe585bd3dbcebe7cba1d3ed1a22b137c7cb66baf0e462c08dca312"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_01/textures/potted_plant_01_leaves_diff_1k.jpg",
+   "size": 124730,
+   "sha256": "b73891a0a606e139d0fcdd9e6fe503cd1210be3fc9c55fbd033941288231ccaa"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/book_encyclopedia_set_01/book_encyclopedia_set_01.bin",
+   "size": 2547932,
+   "sha256": "bbc726698b6e40ab5537b73e082f7bb4db97b9e6f978f52cdaf763dddc85d9ba"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_cover_diff_1k.jpg",
+   "size": 126794,
+   "sha256": "a456aae6ef0ab24769527cccac5313a802ad253584c49fc10a377ce75969d382"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_cover_nor_gl_1k.jpg",
+   "size": 19941,
+   "sha256": "17ad410f2d1aab487e47c729a5b988ea4e4d196679c8696331b7960e77a91c17"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_paper_diff_1k.jpg",
+   "size": 115297,
+   "sha256": "b552d6829b75db7a75012bb761068c63507b69e8e944597ea53f6d1a70efa36c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_paper_nor_gl_1k.jpg",
+   "size": 193390,
+   "sha256": "705f4380c654c44d086ceb120595078e562438c6e4ba01458d2d23fd61483d9d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_cover_arm_1k.jpg",
+   "size": 189997,
+   "sha256": "ab19b627092da77770de2212a04785940feb2df0957cab8993742a6b8b3f7bff"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_paper_roughness_1k.jpg",
+   "size": 12684,
+   "sha256": "62d875e9427f5d71f1bb4d9dc9569e34465bfd3067b8b13f5644b73e23a09fa3"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/steel_frame_shelves_03/steel_frame_shelves_03.bin",
+   "size": 259368,
+   "sha256": "6e299e00e277642eb1a1ac67776a8c43bd9c9dbad9a12b768bf3df274afde66f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/steel_frame_shelves_03/textures/steel_frame_shelves_03_drawers_nor_gl_1k.jpg",
+   "size": 487786,
+   "sha256": "e686d0d595eca83cc6ef2186cd199c2d2dde5729788f607e2b1f996d133415af"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/steel_frame_shelves_03/textures/steel_frame_shelves_03_drawers_diff_1k.jpg",
+   "size": 663476,
+   "sha256": "5128e44871e33eebe494fe93fba2c572b9a7970d37864ae294c6d25fc59064eb"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/steel_frame_shelves_03/textures/steel_frame_shelves_03_nor_gl_1k.jpg",
+   "size": 504726,
+   "sha256": "0e069fedd3573fe09096d766ca950e79903e8f971baaf6078ac7326d3c3dcfc8"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/steel_frame_shelves_03/textures/steel_frame_shelves_03_diff_1k.jpg",
+   "size": 375274,
+   "sha256": "1bbaf63d2905ddfa94a83c9aa1fe01ec8d867c0b073308cc02821ae624e31b9a"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/steel_frame_shelves_03/textures/steel_frame_shelves_03_drawers_arm_1k.jpg",
+   "size": 543122,
+   "sha256": "cfa78c59c402b8aa26e200a9993ffd260cebbb1b7768cc9a6f8c5c0c0b28ca6e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/steel_frame_shelves_03/textures/steel_frame_shelves_03_arm_1k.jpg",
+   "size": 719712,
+   "sha256": "9cbeebb818f340837554f59a46cd482e4a7ed6bf3fb7eb0a4707fe775473ad32"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/coffee_table_round_01/coffee_table_round_01.bin",
+   "size": 131112,
+   "sha256": "9605a0c156bff4ec87e8717a79978d85d4e750d21b3193a3d08bed16e8666035"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/coffee_table_round_01/textures/coffee_table_round_01_arm_1k.jpg",
+   "size": 721708,
+   "sha256": "7221b03af475555092abd650798facbb945bf4acf02e48f8697f012d8515bf52"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/coffee_table_round_01/textures/coffee_table_round_01_nor_gl_1k.jpg",
+   "size": 260520,
+   "sha256": "a5912db1918b1ec925efb19179675cafc8832b082f80b2ea35c3a58b45e1aec4"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/coffee_table_round_01/textures/coffee_table_round_01_diff_1k.jpg",
+   "size": 447037,
+   "sha256": "422b4a24a4459e1fd6d121aae4f1097dd3e467c7a8036bb1d003f955302f1d28"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/calathea_orbifolia_01/calathea_orbifolia_01.bin",
+   "size": 407968,
+   "sha256": "df1668bcb44914abac046217bbdae9867a3702198f7c374135f2b4456df8b038"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/calathea_orbifolia_01/textures/calathea_orbifolia_01_diff_1k.jpg",
+   "size": 455819,
+   "sha256": "a105a093d74317a3853319a06fdc78cad2a13e353962298d2094195720b9b4a0"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/calathea_orbifolia_01/textures/calathea_orbifolia_01_nor_gl_1k.jpg",
+   "size": 581558,
+   "sha256": "52aac88c18bf42c369aad9b2b5e41dbe58b015ca2fac7ff6ed4cb21147cb49c8"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/calathea_orbifolia_01/textures/calathea_orbifolia_01_arm_1k.jpg",
+   "size": 421555,
+   "sha256": "df4ea4dfc74a6965476200cffea69886ac26d3c089f356a7b69518149ef585e0"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/Ottoman_01/Ottoman_01.bin",
+   "size": 115200,
+   "sha256": "ca62a1ee87a30c69142ff15f1bca216842448f57d5b3d64de1d627014b347117"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/Ottoman_01/textures/Ottoman_01_arm_1k.jpg",
+   "size": 155704,
+   "sha256": "e894458d15a90e22e4290198929c8fb76e872526fe1f0bdf6d395a91d438bc7c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/Ottoman_01/textures/Ottoman_01_nor_gl_1k.jpg",
+   "size": 236930,
+   "sha256": "3220215de4173c81c4128619a0000ce5368a3d125409f5e7d64e1269e258d923"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/Ottoman_01/textures/Ottoman_01_diff_1k.jpg",
+   "size": 141622,
+   "sha256": "03f05a4a2e54ea1e6829a7d1b43dcfad5d2873078bd72534dc46e692c01f97a5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_arm_chair_01/modern_arm_chair_01.bin",
+   "size": 240728,
+   "sha256": "8755f2f498c0bb165660379d1b045465751c16bbeaf553c8dd76bb14c16d1ff6"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_arm_chair_01/textures/modern_arm_chair_01_pillow_diff_1k.jpg",
+   "size": 228851,
+   "sha256": "f1935436b460ad5c03ac7ff9d1e1b4aaedcdc9a503d79c257beb8cdac2e9e1f7"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_arm_chair_01/textures/modern_arm_chair_01_legs_arm_1k.jpg",
+   "size": 577931,
+   "sha256": "c76b65200a52cf649a865baf7f879dc34277b923edaac7ec8164eaf7c51c935d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_arm_chair_01/textures/modern_arm_chair_01_pillow_nor_gl_1k.jpg",
+   "size": 302377,
+   "sha256": "2717b9d22e1d3533e3c7436a0230b00b1d25bf396246679825c8db08edaba0a8"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_arm_chair_01/textures/modern_arm_chair_01_pillow_arm_1k.jpg",
+   "size": 321223,
+   "sha256": "fec333290ddfd70e78428251874d30d5410d6d0a956dd84922b0d3f3596e4b7a"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_arm_chair_01/textures/modern_arm_chair_01_legs_diff_1k.jpg",
+   "size": 460937,
+   "sha256": "6291421a8db6cd9bbbc8c141aa087465d698427249f813d24c6e5ccdbf0bf536"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_arm_chair_01/textures/modern_arm_chair_01_legs_nor_gl_1k.jpg",
+   "size": 560864,
+   "sha256": "af328e8530884907cf0d38a675338bb4e2b03c56ed2d21eb5abf505bb67c11de"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/side_table_01/side_table_01.bin",
+   "size": 117784,
+   "sha256": "b1f2a0519fc61cded1fdeac8169ac5b077836052671cd39a35cb56576c9aa11e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/side_table_01/textures/side_table_01_arm_1k.jpg",
+   "size": 129725,
+   "sha256": "ebaef894800faa2e09df7001c1536055c97648428410a9de76bb191aec00c014"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/side_table_01/textures/side_table_01_diff_1k.jpg",
+   "size": 183315,
+   "sha256": "e0d9f2f91bede592868f9b89d141f5e8542524b8356f1b68f0f5c6bb6447731d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/side_table_01/textures/side_table_01_nor_gl_1k.jpg",
+   "size": 71744,
+   "sha256": "14850c49ae1e06cf8701eac4fed2163c2ad075978d2878fcaa079dffe1fd1195"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_02/potted_plant_02.bin",
+   "size": 1852244,
+   "sha256": "9c9812482c78a59789ed32fa842b4cbd9365e09c900c31ebb998e5efe627fe97"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_02/textures/potted_plant_02_leaves_diff_1k.jpg",
+   "size": 167700,
+   "sha256": "3643dce6e6c0a9f40129bd837ec1a11802e8f43ea43cb29e58219d82e0ac632b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_02/textures/potted_plant_02_pot_rough_1k.jpg",
+   "size": 114886,
+   "sha256": "4e92ad8ee0f098050785d9a025e2c5a7d55bc7a7f7e1916cc7627fc7824a938f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_02/textures/potted_plant_02_leaves_rough_1k.jpg",
+   "size": 102396,
+   "sha256": "ac8959f70c0e91e77f3cd6fd3f73578b8aed64ac6c33fc34ac027a4e88276960"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_02/textures/potted_plant_02_pot_diff_1k.jpg",
+   "size": 155244,
+   "sha256": "684949bf24821d7e951d46915366b5a388d2e4ccaaa9d5284e718c83604705e9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_02/textures/potted_plant_02_pot_nor_gl_1k.jpg",
+   "size": 108343,
+   "sha256": "981a68721c8b7b9ac26b96d0210334599d5e8f529362f505082c071a0a58e86c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_02/textures/potted_plant_02_leaves_nor_gl_1k.jpg",
+   "size": 127232,
+   "sha256": "e0fe090ff7a511729c9bbe59df7288b400430fdab178529443dec75e0f06007d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/round_wooden_table_01/round_wooden_table_01.bin",
+   "size": 242688,
+   "sha256": "c2635368bc86239a73fafdd8bce20b4261155ce7241e95e809a753ed4693f157"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/round_wooden_table_01/textures/round_wooden_table_01_diff_1k.jpg",
+   "size": 117911,
+   "sha256": "d83659d8d584bbadf160760b825f990c6264901e33051643d19fcd389b0d19ae"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/round_wooden_table_01/textures/round_wooden_table_01_arm_1k.jpg",
+   "size": 134854,
+   "sha256": "32b5056dc36e3081987c20cd03f15e73298266c1aff3e573b832e9dd0f8145b9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/round_wooden_table_01/textures/round_wooden_table_01_nor_gl_1k.jpg",
+   "size": 50832,
+   "sha256": "5f80ed76e2eccaea8ab7c0cc9c85d29cc9b164aabfa2403304e1ec79dc47150c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_coffee_table_01/modern_coffee_table_01.bin",
+   "size": 154864,
+   "sha256": "b8fe0d49041b879a5d5962685a39e3daf009679f7b6a88ced1347e6dc6c0851e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_coffee_table_01/textures/modern_coffee_table_01_rough_1k.jpg",
+   "size": 403959,
+   "sha256": "8013b48b0ebb845907f840afcae9cbc915a5205ac82ed99cbba31771febacb0f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_coffee_table_01/textures/modern_coffee_table_01_diff_1k.jpg",
+   "size": 410569,
+   "sha256": "069b89dd3ef03ddcbb7b2e6a124b1903aa7848394509121aa19f87bd0ef0218c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/modern_coffee_table_01/textures/modern_coffee_table_01_nor_gl_1k.jpg",
+   "size": 359134,
+   "sha256": "43e0d317d0f8418b130c0058c645225ee83b808b1dc0e5e7236bead3bdd77139"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_04/potted_plant_04.bin",
+   "size": 241800,
+   "sha256": "158c1d27503d4845eb3573f00c01ae3f4f77f1d6ca8754c67bf1762745946f7f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_04/textures/potted_plant_04_diff_1k.jpg",
+   "size": 577545,
+   "sha256": "8693a971557fbafb12a24a2e23c1a04ab6b04ecdc4d26808c5ad3516a4971f24"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_04/textures/potted_plant_04_nor_gl_1k.jpg",
+   "size": 817786,
+   "sha256": "66e4627f6691a2d8104a6c53a39b41daddbd5bad8103e73f372c39166a3dcb07"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/potted_plant_04/textures/potted_plant_04_arm_1k.jpg",
+   "size": 478413,
+   "sha256": "7f3288345570ef700c851ea382ed267490ffc8c901ccc31f2ec5507e4d098e48"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/pachira_aquatica_01/pachira_aquatica_01.bin",
+   "size": 2036788,
+   "sha256": "a803777635a4744cc304bd936806242d8875430cc588295c9fa2792a64747c8e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/pachira_aquatica_01/textures/pachira_aquatica_01_bark_nor_gl_1k.jpg",
+   "size": 723624,
+   "sha256": "389b0f8cc3e8bf4ee78ea12c367ff3003d69d8e83de8baf908e6f2e123d1e6a8"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/pachira_aquatica_01/textures/pachira_aquatica_01_leaves_nor_gl_1k.jpg",
+   "size": 490166,
+   "sha256": "3a442aa75df0e6f37bb7410f8ae09927b419d2dba202943cda40f52a7194804c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/pachira_aquatica_01/textures/pachira_aquatica_01_leaves_diff_1k.jpg",
+   "size": 320484,
+   "sha256": "b3211c240dd2ea7913326e7f21f9db9d029ee487b5e59d58d0e10c8cc77d203f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/pachira_aquatica_01/textures/pachira_aquatica_01_bark_diff_1k.jpg",
+   "size": 592488,
+   "sha256": "9ca175a1c105a3555c47626ebead36505c29482ea0018f4c6e9a5828ce6d7b25"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/pachira_aquatica_01/textures/pachira_aquatica_01_leaves_arm_1k.jpg",
+   "size": 372937,
+   "sha256": "42824afde27e7f0111a2e673f0a7cfe0b18bc21d2201b85d9737fce48c1016a3"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/pachira_aquatica_01/textures/pachira_aquatica_01_bark_arm_1k.jpg",
+   "size": 588614,
+   "sha256": "7c44f930e3a6c14acb9043e50d8244da7869f8937233c58276d1b3212a3a6960"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/mid_century_lounge_chair/mid_century_lounge_chair.bin",
+   "size": 171384,
+   "sha256": "26346cdc548ad74b1b6db5734c8c231c3c740656b012de2cc3bbc2b3b975200c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/mid_century_lounge_chair/textures/mid_century_lounge_chair_arm_1k.jpg",
+   "size": 636493,
+   "sha256": "9fa5fa4af5306576a3a27886767feec5431f41d94df9119f2ccced8f0b024f1a"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/mid_century_lounge_chair/textures/mid_century_lounge_chair_diff_1k.jpg",
+   "size": 627298,
+   "sha256": "ae1f80e964426b49f70b402403c444a655bdaa363d8d43fee5b57fcb3b492c54"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/models/mid_century_lounge_chair/textures/mid_century_lounge_chair_nor_gl_1k.jpg",
+   "size": 648960,
+   "sha256": "4bb4b325e4478f5d9063e4e061cf34bc6ccc3067abda608c1548c4a367f50397"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/walnut_veneer/walnut_veneer_nor_gl_1k.jpg",
+   "size": 442897,
+   "sha256": "de823c2e9942ea77caeddab08add49688a9792b79aac496640fecaee9fbcb5c4"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/walnut_veneer/walnut_veneer_diff_1k.jpg",
+   "size": 496596,
+   "sha256": "d8c971e403b185b5c350d1e6fa75c3e7fcc36130781c7686263f6bcd23ac4db1"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/walnut_veneer/walnut_veneer_arm_1k.jpg",
+   "size": 641173,
+   "sha256": "a1b6b1e6ab8ae8021229f0b1c60a8946e1bbd189537046dff55072971213ce88"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/walnut_veneer/walnut_veneer_rough_1k.jpg",
+   "size": 556628,
+   "sha256": "5cb9d78ec685155d2b66a1db01abc61049d00953d783d0c78d829512de9ab0b4"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/white_plaster_02/white_plaster_02_nor_gl_1k.jpg",
+   "size": 652310,
+   "sha256": "eb572ca3630d5bfde72e2601b1f02412da23ca005cd19384dced8690be4cb783"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/white_plaster_02/white_plaster_02_diff_1k.jpg",
+   "size": 527219,
+   "sha256": "a1ebbe091bd1ae93d2abd5de8d69f9003a8d0ee6532bcf9a87c2492c97051f23"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/white_plaster_02/white_plaster_02_arm_1k.jpg",
+   "size": 191017,
+   "sha256": "2bb1115821715dfd8bbd1c5a294a5bb43b97d5c46b1aa8aa8f744bcaf5eeeb10"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/white_plaster_02/white_plaster_02_rough_1k.jpg",
+   "size": 295900,
+   "sha256": "4ff1fe957cd161b07f721fe6c28a9459c8c2e8ec65627a26c16e483a07c80d85"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/grey_cartago_01/grey_cartago_01_diff_1k.jpg",
+   "size": 831197,
+   "sha256": "850a297569e17d41bc978341767a775c8f4950c6e020ed27a0078cca956189fc"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/grey_cartago_01/grey_cartago_01_rough_1k.jpg",
+   "size": 464034,
+   "sha256": "8ec2b11e6c7120977bf08027866918eb2e772a871511340b5443de00c03d21fd"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/grey_cartago_01/grey_cartago_01_nor_gl_1k.jpg",
+   "size": 165813,
+   "sha256": "7ede958b21d5077c98f23fe77e8387da5845e1a5690c21bd717ca7e802f17247"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/grey_cartago_01/grey_cartago_01_arm_1k.jpg",
+   "size": 516348,
+   "sha256": "b145dbe68c239fdd6098ef3b659d93d64c7afcbff7becaa771adfadb863efbef"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/wool_boucle/wool_boucle_rough_1k.jpg",
+   "size": 1272361,
+   "sha256": "f09f24bd26378b03bb798d4b75010ac8cc0fd1e4b858959e97e6d8d74fa3f6d8"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/wool_boucle/wool_boucle_nor_gl_1k.jpg",
+   "size": 1266355,
+   "sha256": "2cc13a2be4d0bb942a59a86d613665c0d24ff201560daa4d841cee597af0c752"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/wool_boucle/wool_boucle_arm_1k.jpg",
+   "size": 1561832,
+   "sha256": "5a46c8ded370471c2f26a698e4b33abcaab59f823ead459b97c52297a096053b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/wool_boucle/wool_boucle_diff_1k.jpg",
+   "size": 1284379,
+   "sha256": "fee39653b3c78efe89636508f2c10ceb38ecb10c0d735ae8dd4e9935cf26540e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/herringbone_parquet/herringbone_parquet_diff_1k.jpg",
+   "size": 829046,
+   "sha256": "d6c66492a6c4cfd4e8ed18c9cdd4e0303f3de4e04613d2adca8bc2b8f2dd2350"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/herringbone_parquet/herringbone_parquet_nor_gl_1k.jpg",
+   "size": 373438,
+   "sha256": "af6a822100fd6369bb75e43bb764f4a71ca41f521538ac796e92e681e3ad38f5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/herringbone_parquet/herringbone_parquet_arm_1k.jpg",
+   "size": 554910,
+   "sha256": "64ded181ebe84df02998929e95b5a9a4b613f268a5355f7ef56cd91da879b207"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/herringbone_parquet/herringbone_parquet_rough_1k.jpg",
+   "size": 515202,
+   "sha256": "6058f5a1d27cef64f40057370188fec65c34998868d202a944f346ad9866ed62"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/marble_01/marble_01_nor_gl_1k.jpg",
+   "size": 110230,
+   "sha256": "77c2a9b549a6a408659f8197be91945aeb0abc33e697f1dd2ce24ee8dc7c2bc0"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/marble_01/marble_01_arm_1k.jpg",
+   "size": 54740,
+   "sha256": "84b1516c27b4393230e77e0aa525186b4a8a415169661a4385f02dcb10c14104"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/marble_01/marble_01_rough_1k.jpg",
+   "size": 91848,
+   "sha256": "a3e9f373d22aebc449af73f6a18c9817e2146f17e567a083609ba8fbb62a72f5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "cc0-assets/assets/tex/marble_01/marble_01_diff_1k.jpg",
+   "size": 305029,
+   "sha256": "b10dabea976d68baa976a0d4e8dac58789df8d26a1b50697f320106f1b00a229"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "splat-world-model/vendor/spark.module.js",
+   "size": 2997944,
+   "sha256": "5ae86ab35d4ceb655db486dcc336299775bb314c280d7e5b39f64e4539f8e0e9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "splat-world-model/assets/NYC_219.splat",
+   "size": 91569344,
+   "sha256": "c6c0c20a57453f428de588c3e3b7a5383bf3a0df8c60ebb37df9ca6f6dd24fcc"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "splat-world-model/assets/NYC_010_dusk.splat",
+   "size": 89857984,
+   "sha256": "911b91f933d85143b909579440df9c58c6781a6c6300f81f192500334fbadc95"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "splat-world-model/assets/NYC_004.splat",
+   "size": 66943040,
+   "sha256": "b71dfb04ea5ab5900a21f98f1c204e32340756a5dae4a513521dbd9d0aa67e22"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "splat-world-model/assets/NYC_010.splat",
+   "size": 89857984,
+   "sha256": "c46f34be880481fb80b346cc3b56756f397e0e78995639586551f2e9bff8fdbb"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "splat-world-model/assets/NYC_219_dusk.splat",
+   "size": 91569344,
+   "sha256": "7fbea1154c77ab2dfc094e9602a7ef19c46e7370ac68f4b05f8f4a8076dbb9b6"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "splat-world-model/assets/NYC_004_dusk.splat",
+   "size": 66943040,
+   "sha256": "fa34bed305b3b1990a8714523d55bcfaada6d6cf81a6cc15dff3e725a486e699"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "ai-image-backdrop/pano.jpg",
+   "size": 3475786,
+   "sha256": "538efba46ae5d7b8c1e3dff889a1066cd3411abc5d6420354d968ef7ac833653"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/pwa/icon-512.png",
+   "size": 245702,
+   "sha256": "c7d826be374909427de4ec5ab990b964c963d8b37c1b2e627c89a96a0b1aa609"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/pwa/icon-512-maskable.png",
+   "size": 180595,
+   "sha256": "c1ad7f25af166a18d45ddd7cd4a32d6695ef61911eca51f15975dcdd0bdac046"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/pwa/icon-192.png",
+   "size": 44867,
+   "sha256": "0bf47d56d2126a2c29ca6498aa487462c95769066ca9abbaf4ee9e3f2f1bad3f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/city.jpg",
+   "size": 1282750,
+   "sha256": "ae9108d250ad68d9ffddff9b468139caab188f091da50e905e676270f22261c4"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/lm_arch.exr",
+   "size": 3241872,
+   "sha256": "89190a75ffa25e282bf3e04004d33b77cfbec9b2d985c7a4addee7845c9f5402"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/probe.exr",
+   "size": 448514,
+   "sha256": "abdfdf5ac67bb7afb7214c9a324e42d985482d6229e780778c5aac79f9b3fb6c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/city_depth.png",
+   "size": 163320,
+   "sha256": "86b6afa62c24284deef30c74752c9151f2cdb8e2aa9aa74faaf967446e1acf9f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/lm_floor.exr",
+   "size": 305371,
+   "sha256": "927a2d873c33877a67a3f9d80becb4f8a78e355e3ed8e2934d291a2825d51703"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/ao_floor.png",
+   "size": 49080,
+   "sha256": "2de8ff37286a45b81703a080665fa9d4e49fbff6bce7171024104b89db78c54d"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/ao_arch.png",
+   "size": 395247,
+   "sha256": "e90ea2eb080d304e0af5ab9109d4a0bf783d8055eec0c8499cb642883cece4ac"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/lm_furn.exr",
+   "size": 2317885,
+   "sha256": "ee4d40e689b88873aec617e64c256421797a2439f7d357df561b82cc88e14759"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/ao_furn.png",
+   "size": 234091,
+   "sha256": "7eb18822cd9fc345db3c8de78570b760e9b3ffa116bc083ebbcacf93b84b529f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/cc0/potted_plant_01/potted_plant_01.glb",
+   "size": 1048984,
+   "sha256": "322e5db623153c818c73e09a8783dc8d1e485bfb3400a979d2651b4a3c03a207"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/cc0/book_encyclopedia_set_01/book_encyclopedia_set_01.glb",
+   "size": 970456,
+   "sha256": "c3451dc7710db9953533252c7f7c953cb81d93b7d60dfd59289617b81faa453f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/cc0/calathea_orbifolia_01/calathea_orbifolia_01.glb",
+   "size": 716320,
+   "sha256": "11ccf0bb33b02798e23a188c99699d53c38d83d7ec8ef6afac269ecfbc135196"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/cc0/potted_plant_02/potted_plant_02.glb",
+   "size": 914208,
+   "sha256": "1e6ebf92b1c9049a5c9d547e5a27ef3c821388fe46e6bd906da3f8c09ddaa7f2"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/cc0/potted_plant_04/potted_plant_04.glb",
+   "size": 367128,
+   "sha256": "f8f18ea85908510ddbe768d98e44528fb124cc0faf9e5ff0c1fe04dbb7459b78"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/quest/cc0/pachira_aquatica_01/pachira_aquatica_01.glb",
+   "size": 624884,
+   "sha256": "a6c932f9ef1e86ab020d6b31f859008117e75dedc520df87bfd90302d8c77c68"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/why-better.png",
+   "size": 1039848,
+   "sha256": "78b3ff288f203af26ed3267b368a7b5165f04974df875cc916f4a29d0704c573"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/cover-landscape.png",
+   "size": 2766901,
+   "sha256": "0acd7e37a8d219538172b736a38ed1b6acd06dc3cdc8a16e5e2f9f41df11af25"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/screenshot-5.png",
+   "size": 2936830,
+   "sha256": "a6bed441629e36e92d008ea673bb6a4ed458d63feffd4d77f95c86e99079ced7"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/cover-square.png",
+   "size": 1552018,
+   "sha256": "ff40a5c938a84fff0ded6c008a7cbb1aedaa39ded1a6dc890d7e6e962833fc25"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/cover-hero.png",
+   "size": 2054805,
+   "sha256": "2e28fb8c41443b068ef57a3f8b38df66f096ad73a1e6bc02f1a2f82fbfbdea92"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/cover-portrait.png",
+   "size": 1044935,
+   "sha256": "f75d8b3f3baee620c2590905abb6f05b10c305d140861bc7a7818ed92a39c2c9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/screenshot-1.png",
+   "size": 2146332,
+   "sha256": "8a3b4bbe481ed3cada02ee4398e7caf2721d53b1e434eecfd21c791ca6cb392f"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/screenshot-3.png",
+   "size": 2689921,
+   "sha256": "c2489c9a114315efe80814be05b8aa0f2512e8eb5ea732a4413c62fddde60707"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/trailer-cover.png",
+   "size": 2766901,
+   "sha256": "0acd7e37a8d219538172b736a38ed1b6acd06dc3cdc8a16e5e2f9f41df11af25"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/screenshot-2.png",
+   "size": 3245939,
+   "sha256": "ce2e0dbaf4029f730bb776cfa425c639d4908396aad985a3d74882da34ad4708"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/screenshot-4.png",
+   "size": 3150440,
+   "sha256": "c446577cc49aeafe62784845ba27c1b643ddd8956ffdebb3b7912f58bac302d0"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/cover-mini.png",
+   "size": 376664,
+   "sha256": "09fb580aceb1294dea846d985c5e2729551f5e24d4c4fb5464ec2983edcc6c72"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/trailer.mp4",
+   "size": 32118164,
+   "sha256": "2db80bd655937698a27ca98b815613a0193d3b53d5d1f0ae124358f792c4ccfd"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/icon.png",
+   "size": 245702,
+   "sha256": "c7d826be374909427de4ec5ab990b964c963d8b37c1b2e627c89a96a0b1aa609"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/logo.png",
+   "size": 63479,
+   "sha256": "1c1bab4c2c3c1bc6d76c9c34228c3cbe5292070e7ea6581c1470aab82f7a92a9"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/cover-landscape.png",
+   "size": 3214812,
+   "sha256": "ad4dbedf32e42a33e1f57864b3cbf951324f8ac8e9362138465779d9fbfafaaf"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/trailer-sheet.jpg",
+   "size": 164524,
+   "sha256": "078507adf4c32eddde81c314c1ea97a985969e4783b88e9d9905c675804c948b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/cover-square.png",
+   "size": 1812158,
+   "sha256": "9c0480c797cbe8055a9a98890390ec443a6bafba3c65d6b6758d2a3f737ab9d5"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/cover-hero.png",
+   "size": 2374401,
+   "sha256": "0c49443cf634b4f66e047bfd17cc96c37c181d5eecc8337d82a1c3eaba856147"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/cover-portrait.png",
+   "size": 1198429,
+   "sha256": "4b813cd53bfcc521764e5f090ba5944189c3645b767d3eb1683cd69d808bd226"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/shot-4-desks.png",
+   "size": 2846992,
+   "sha256": "ebe7313edaca6d91baebda9d63bfc39b37625491f359d417a9fb5d2ef441713b"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/shot-3-place.png",
+   "size": 2449282,
+   "sha256": "997efa76bdf1c2443212a6d6b8a824139e469f1acc17e4662238e423a04c1d1e"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/shot-2-panel.png",
+   "size": 2228071,
+   "sha256": "a595b24af849a525c6427523e8820e3e7f9f09bf559421171fd5db6c1eb0bebe"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/covers-sheet.jpg",
+   "size": 604712,
+   "sha256": "0abdbf630c7eb82a50905a5adf00e520e62b8604d22ee4d4f0a7681c6d2880ab"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/shot-6-teleport.png",
+   "size": 3303459,
+   "sha256": "0e6e29d893b2c612b62c601df5a7fc5632f7d81a861e7a1caf0fab5fdd9c1699"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/screenshots-sheet.jpg",
+   "size": 846827,
+   "sha256": "5240abd0a804f70da86f0af854abb2981fe71bb2e3fc3fb03710c1f4456218ef"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/cover-mini.png",
+   "size": 429256,
+   "sha256": "c6741a0a102791bd602905428885f5c75722bd327f8178419cf457d29432da5c"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/shot-1-arrive.png",
+   "size": 3388194,
+   "sha256": "5618e55c74daad8de5ef57562c541fd67f34d5e0a9867aebc8d13f17ab952727"
+  },
+  {
+   "lab": "sky-lab",
+   "path": "xr-quest/listing/assets/raw/shot-5-lounge.png",
+   "size": 3107459,
+   "sha256": "b69471910b28b21b3c38132aac663554eca38165fb9da9406c36d4f7de1e07f1"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/agent-v1.png",
+   "size": 1163971,
+   "sha256": "5378a08a49851efe4022b645ae405148f343237ff965d44510a2424fb177bfe2"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/worlds-real-v1.png",
+   "size": 1731985,
+   "sha256": "3aecc216a05ae662cf44e80cedc88af27c07c9e0ffb5805556f7519db7ba0c60"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/platforms-v1.png",
+   "size": 985553,
+   "sha256": "1288e3fe5fc5afd7123b995e069a8961782df27cc0cab535c2c35940d041d7b3"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/platforms-v3.png",
+   "size": 1670598,
+   "sha256": "e56180e067413811293087b1da9d1175383ddbf42d353dd5b041dde090b56d68"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/palace-v1.png",
+   "size": 1129623,
+   "sha256": "3f4fb934acebd8fdde2ee919e495d707509d48254a6e7a975c0bdc3ac9423a91"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v4-a.png",
+   "size": 1601245,
+   "sha256": "8d304cd966128354bc8761ba62d73426c722f8a2e1bd865b61895cb0ec8f0f61"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/proximity-v2.png",
+   "size": 1025064,
+   "sha256": "25c2778f2f13f25d650c43d9260b0ec837612780cc10242369aec94588c2ef3f"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/cta-real-v1.png",
+   "size": 1874754,
+   "sha256": "26d7ad17a1ee62c144c96175269f4e3ee92c63d95b7816e6bf6f67309134ffa4"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v5-a.png",
+   "size": 2627560,
+   "sha256": "683b748aaab07f646808afb49b82373efff95ba698e8b49a5883985249b158a3"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-real-v1.png",
+   "size": 2080311,
+   "sha256": "88866bdd9fb83f9c2a31dd02fed50334111bfd3574b71cfddc7ad025944620d3"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/worlds-v3.png",
+   "size": 1768391,
+   "sha256": "57dfe1284872265aca99ec9be9ce8d0d36b2a24d3eeae9a8d23560ee92abad4a"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v5-a-portrait-1.png",
+   "size": 2290938,
+   "sha256": "555236e806059e72ee39225424a7fd68f9f632675f3786857fca9ed6b0ec7167"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/proximity-v3.png",
+   "size": 1730974,
+   "sha256": "157abff9263335e28d2f0b9231e3d30fe936fd9f1f0c5de83e59c025e60ee80f"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/palace-real-v1.png",
+   "size": 2090285,
+   "sha256": "a6eb156569a99fd1ad1599815a890f90592188dceeb5d295daf0ffa20fd698ea"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/agent-v3.png",
+   "size": 1555789,
+   "sha256": "9e47c61718c88d2f028fcaa458df874892e1beb829dc92b94546da3c3e35a155"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v5-d.png",
+   "size": 2647701,
+   "sha256": "b184873dbd76ebe35611b855e605dbd9adefd57ae119bd57df5b273b34fe5963"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/worlds-v1.png",
+   "size": 1143900,
+   "sha256": "4d47c20a67e2f10bae2d60516ab189989ae8d963ba1b25d4ea68c0732761d16c"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/pages-v1.png",
+   "size": 1159604,
+   "sha256": "99218ecebc9d45101c2ec7ec2f72de0a7d9d11ca4139d8b630ea9c3bbd4557c1"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/cta-v1.png",
+   "size": 994147,
+   "sha256": "0ffb84620bd04199daec82c0c4755507cf30a85a319b96649f4b076f1d11d8af"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v5-c.png",
+   "size": 2287162,
+   "sha256": "1b5b4600ecd7d8286472e4c6b9b86f469d048291ea250eb5376d3ee199b50190"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/pages-v3.png",
+   "size": 1830811,
+   "sha256": "cfa7d82ca048847903d62d319c0127ffd5dd5dfc5d5cd82b824935fdc3c5ad70"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/palace-v2.png",
+   "size": 1279481,
+   "sha256": "2a63e30c5bfc966f348ffc11bd4992bda7e9fa8d3fea559a7ca4d64b8a88dbc8"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v5-b.png",
+   "size": 2370417,
+   "sha256": "8e9889bd038b5b0086c162a97a6ef90d5a20925968684dfd69e5d248ae989967"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/platforms-real-v1.png",
+   "size": 1731625,
+   "sha256": "93105e94994611fa162d7096495b8db0908d5e2bcbeacb30c070383c3f7d073f"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v4-d.png",
+   "size": 2144359,
+   "sha256": "71416aab32a6f7ad66e5495bfb5c09eb4e82463b5c31ad64178de6957bda2126"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/palace-v3.png",
+   "size": 1970518,
+   "sha256": "f4fb3a49c1e703159c8195f6bad8682fd137265aec40f9a10bb7222647f9546e"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v1.png",
+   "size": 898215,
+   "sha256": "6e41cf82f65f828e654e1ac6f9c363392aabd1548642f72c3105f94ca5086a2d"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/momentum-v3.png",
+   "size": 1774437,
+   "sha256": "a046eb50763ad7e89b5dba66413655f3468a8aa968bc1271ee1871bb2fef4aec"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v4-b.png",
+   "size": 1526737,
+   "sha256": "ac86615056778a71a2a542e8295b6e39ffc30f037f860393cf7dd360795f52c3"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/cta-v3.png",
+   "size": 1909926,
+   "sha256": "7c2e96576b8d4ce311ec094020f2b307b3908b240eaebe09ea8bdbbf563685f5"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v3.png",
+   "size": 1882553,
+   "sha256": "97b5bb129c076b118d7d28e057612545f61d3e871ce0e8d00c61ea97aaed8c99"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/pages-real-v1.png",
+   "size": 1942789,
+   "sha256": "71b445fb29bd39b48715c985e867bbee189b20d5ce7da9c3d52140a8767ec1cf"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/proximity-v1.png",
+   "size": 918141,
+   "sha256": "56922a25d7a044b1d94d88b2a7ff81de3e86e2c3c30bdf9d3c02344cb7d8a20b"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v4-c.png",
+   "size": 1458928,
+   "sha256": "01180dd02ab3c30c9c4e6312af74d2f6701e6ca0effd9edca56015d19312b041"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/proximity-real-v1.png",
+   "size": 1846950,
+   "sha256": "0a66be020c443a3daf7b3be80c10b06e70e76f17a96e18eb2e47a2c33d623746"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v5-a-portrait-3.png",
+   "size": 2269489,
+   "sha256": "bc325d65ac5d903e75fffe2ef9fffcd0a503495a4a6a42b7debea6a93de35894"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/momentum-real-v1.png",
+   "size": 1849413,
+   "sha256": "ae23c5f7f0457e533661c8ac4c43a497a5e53d1bb9fb81f47b813d6e98b50c99"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/hero-v5-a-portrait-2.png",
+   "size": 2525604,
+   "sha256": "e1e3d65b2ef99a2e32565c2157409d20eb538fb733bcd074f7c73464810cbac2"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/momentum-v1.png",
+   "size": 962191,
+   "sha256": "3d025983fa5c4bd01c2077123e4173d3ceb5173c8cd6fb2e5ab19d125e4e54e9"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "images/originals/agent-real-v1.png",
+   "size": 1564542,
+   "sha256": "f955edc46a8d2a2944f93653c6914f99a19e31a143621ae8070c59dfd6aab59d"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/resend-part3.png",
+   "size": 137946,
+   "sha256": "144639bd991f59a7517fb61ad5f0e4cc7fe81c2e499469ec84ce091c47702805"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/cursor-2023-03-part1.png",
+   "size": 41058,
+   "sha256": "d6bc15734a40ab68bf0483aacbca0b3ffe0ed32b3838ca0396c047403fd68dd0"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/resend-part4.png",
+   "size": 281673,
+   "sha256": "845fd43e72da1cc9626845a8274e8d0edaa24b6951232a4c0d6b0d9c50619ff0"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/cursor-2023-03.png",
+   "size": 144960,
+   "sha256": "7dde51aecc6db712a155388581e7ca6bec707a21e5f81d553e45abfa9b4c9b8c"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/cursor-2023-06-part1.png",
+   "size": 260251,
+   "sha256": "e8330dcb1aaf1796046ce021cab7189029a94197c24adfc6a354d3ba92ff1180"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/resend-part5.png",
+   "size": 218740,
+   "sha256": "db0ec7edf062a6301d75216d8d90d35af5471b4983c013182fdeb37d30859f31"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/resend-part2.png",
+   "size": 197151,
+   "sha256": "ed5e99b7e82bd8f147ad5bca7e996c82b691cd819e82e86c01ea2e89d2d0a15b"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/cursor-2023-03-part0.png",
+   "size": 32690,
+   "sha256": "fb2dd6bc77d435fb89de5cc46059d7c9c674c9d739eef4523164c1e19fb34507"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/cursor-2023-06-part2.png",
+   "size": 205128,
+   "sha256": "422a67ce1dcc5f57a83c03764044e81c22c36a26bfb7e19ed9a11f2978c78c95"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/cursor-2023-06.png",
+   "size": 602020,
+   "sha256": "8e03dd5cbf56b57bdbb3faecf3c851e467613df72ccce2b85ccb26cdb46e3b47"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/cursor-2023-03-part2.png",
+   "size": 76066,
+   "sha256": "40641a172aac018d840d6a1f5cb0909db6e9e24de3b893ed572e7a707d239398"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/cursor-2023-06-part0.png",
+   "size": 158409,
+   "sha256": "636ca04394b574ba09f8bee1f63c23600b8ee21564c93549feeee5ae9b0fbf94"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/resend-home.png",
+   "size": 1877949,
+   "sha256": "a7fe4f4df0c54c39614c69fafb792d857103373d5ed4f213c8102e08475a9024"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/resend-part1.png",
+   "size": 146833,
+   "sha256": "3e034217ea5291467d29fdc7bc8bd860ae6338a836ab1874d447a1a4fe95bbac"
+  },
+  {
+   "lab": "onboarding-mockup",
+   "path": "references/resend-part0.png",
+   "size": 457159,
+   "sha256": "d3dc71661a0246ee453e69257426f6040b500d84c3cb4a1f6615ff94293e6f20"
+  }
+ ]
+}

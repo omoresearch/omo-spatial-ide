@@ -13,7 +13,11 @@ import type { WorldEntity, StationConfig, StationEntity, TabKind } from '../comm
 import { stations } from '../common/world-model';
 import { proposalLines } from './build-room'; // w3:build
 import { RoomInspector } from './build-room-inspector'; // w3:build
-import { WorldSizeSection } from './build-world-size'; // w3:build
+import { WorldBuilder } from './world-builder-panel'; // builder-ui
+import { InspectorExtras } from './builder-inspector'; // builder-ui
+import type { AdminController, AdminState } from './admin-controller'; // builder-ui
+import { OmoSelect } from './omo-select'; // world-ui
+import '../../src/browser/world-tokens.css'; // world-ui: the one overlay token file
 import '../../src/browser/build-mode.css';
 
 function useBuild(build: BuildMode): void {
@@ -38,13 +42,15 @@ export function BuildToggle(props: { build: BuildMode }): React.ReactElement {
     React.useEffect(() => { props.build.sync(); });
     React.useEffect(() => { const id = window.setInterval(() => props.build.sync(), 500); return () => window.clearInterval(id); }, [props.build]);
     const on = props.build.active;
+    // world-ui — one build-mode indicator: while building, the top toolbar is the indicator (no 'Building' pill).
+    if (on) return <></>;
     return <button type="button" className={`omo-build-toggle${on ? ' is-on' : ''}`} data-testid="build-toggle" aria-pressed={on}
         title={on ? 'Leave build mode (B)' : 'Build mode (B)'} onMouseDown={e => e.preventDefault()} onClick={() => props.build.toggle()}>
-        <BuildGlyph name="build" size={14} />{on ? 'Building' : 'Build'} <kbd>B</kbd>
+        <BuildGlyph name="build" size={14} />Build <kbd>B</kbd>
     </button>;
 }
 
-export function BuildPanel(props: { build: BuildMode }): React.ReactElement | null {
+export function BuildPanel(props: { build: BuildMode; admin?: AdminController; adminState?: AdminState }): React.ReactElement | null {
     const build = props.build;
     useBuild(build);
     const store = build.store;
@@ -59,7 +65,6 @@ export function BuildPanel(props: { build: BuildMode }): React.ReactElement | nu
     };
     return <div className="omo-build" data-testid="build-mode" data-tool={s.tool} data-ghost={s.ghostAt && (s.tool === 'place' || s.tool === 'move') ? `${s.ghostAt.x},${s.ghostAt.z},${s.ghostAt.rotation},${s.ghostValid}` : ''} data-selected={s.selected ?? ''} data-hover={s.hover ?? ''} onKeyDown={onKey}>
         <div className="omo-build-topbar" role="toolbar" aria-label="Build tools">
-            <span className="omo-build-badge"><BuildGlyph name="build" size={14} /> Build</span>
             <ToolButton glyph="cursor" label="Select" keyHint="V" active={s.tool === 'select'} onClick={() => build.selectTool()} />
             <ToolButton glyph="move" label="Move" keyHint="M" active={s.tool === 'move'} disabled={!selected} onClick={() => build.startMove()} />
             <ToolButton glyph="rotate" label="Turn" keyHint="R" disabled={!selected && s.tool !== 'place'} onClick={() => build.rotate(1)} />
@@ -71,12 +76,14 @@ export function BuildPanel(props: { build: BuildMode }): React.ReactElement | nu
             <span className="omo-build-sep" />
             <button type="button" className="omo-build-exit" data-testid="build-exit" onClick={() => build.exit()} title="Leave build mode (B)"><Icon name="x" size={14} /> Done</button>
         </div>
-        {/* t3:polish2 — pending changes sit under the palette (left column); the inspector keeps the right side, so they never cover each other. */}
-        <div className="omo-build-left"><Palette build={build} />{store.proposal && <ProposalBar build={build} />}</div>
+        {/* builder-ui — one World Builder panel in the right column: Talk / Add / Rooms / Inspect, with the proposal tray at its foot. */}
+        <WorldBuilder build={build} admin={props.admin} adminState={props.adminState}
+            inspector={selected && !setupFor ? <Inspector key={selected.id} build={build} entity={selected} /> : undefined}
+            tray={store.proposal ? <ProposalBar build={build} /> : undefined}
+            notice={s.notice ? <div className={`omo-build-notice is-${s.noticeTone}`} role={s.noticeTone === 'warn' ? 'alert' : 'status'} data-testid="build-notice">{s.noticeTone === 'warn' ? <Icon name="alert" size={14} /> : <Icon name="check" size={14} />}{s.notice}</div> : undefined} />
         <div className={`omo-build-hint${s.tool === 'place' || s.tool === 'move' ? (s.ghostValid ? ' is-ok' : ' is-bad') : ''}`} role="status" data-testid="build-hint">{s.hint}</div>
-        {s.notice && <div className={`omo-build-notice is-${s.noticeTone}`} role={s.noticeTone === 'warn' ? 'alert' : 'status'} data-testid="build-notice">{s.noticeTone === 'warn' ? <Icon name="alert" size={14} /> : <Icon name="check" size={14} />}{s.notice}</div>}
+        {/* world-ui — no centre toast: build notices show inside the World Builder panel (above the tray). */}
         {!s.worldRenderer && <div className="omo-build-renderer-note" data-testid="build-renderer-note">Blueprint view · New things show as outlines until the world renderer draws them.</div>}
-        {selected && !setupFor && <Inspector key={selected.id} build={build} entity={selected} />}
         {setupFor && <StationSetup key={setupFor.id} build={build} entity={setupFor} />}
     </div>;
 }
@@ -86,29 +93,6 @@ function ToolButton(props: { glyph: string; label: string; keyHint?: string; act
         title={props.keyHint ? `${props.label} (${props.keyHint})` : props.label} aria-label={props.label} onMouseDown={e => e.preventDefault()} onClick={props.onClick}>
         <BuildGlyph name={props.glyph} size={16} />{!props.iconOnly && <span>{props.label}</span>}
     </button>;
-}
-
-function Palette(props: { build: BuildMode }): React.ReactElement {
-    const { build } = props, s = build.state;
-    const groups: Array<PaletteItem['group']> = ['Spaces', 'Stations', 'Screens', 'Decor']; // w3:build: + Spaces
-    const hasDesk = !!build.store && stations(build.store.preview).length > 0;
-    return <aside className="omo-build-palette" aria-label="Build palette" data-testid="build-palette">
-        {groups.map(group => <section key={group} className={`omo-build-group is-${group.toLowerCase()}`}>
-            <h3>{group}</h3>
-            <div className="omo-build-items">{PALETTE.filter(item => item.group === group).map(item => {
-                const chosen = s.tool === 'place' && s.item === item.id;
-                const blocked = item.id === 'mirror' && !hasDesk;
-                return <button key={item.id} type="button" className={`omo-build-item${chosen ? ' is-chosen' : ''}`} data-testid={`build-item-${item.id}`} aria-pressed={chosen}
-                    disabled={blocked} title={blocked ? 'Add a desk first. A mirror follows one desk.' : `${item.title} · ${item.hint}`}
-                    onMouseDown={e => e.preventDefault()} onClick={() => chosen ? build.selectTool() : build.choose(item.id as PaletteId)}>
-                    <span className="omo-build-item-art"><BuildGlyph name={item.glyph} size={group === 'Decor' ? 20 : 24} /></span>
-                    <span className="omo-build-item-text"><strong>{item.title}</strong><small>{item.hint}</small></span>
-                </button>;
-            })}</div>
-        </section>)}
-        {build.store && <WorldSizeSection build={build} world={build.store.preview} />}{/* w3:build */}
-        <p className="omo-build-palette-foot">Place · <kbd>R</kbd> turn · <kbd>Esc</kbd> stop. Changes wait for <b>Apply</b>.</p>
-    </aside>;
 }
 
 function NumberField(props: { label: string; value: number; min: number; max: number; step: number; disabled?: boolean; onCommit: (n: number) => void; testid?: string }): React.ReactElement {
@@ -144,7 +128,6 @@ function Inspector(props: { build: BuildMode; entity: WorldEntity }): React.Reac
         <div className="omo-build-actions">
             <button type="button" disabled={locked} onClick={() => build.startMove()}><BuildGlyph name="move" size={14} /> Move</button>
             <button type="button" disabled={locked} onClick={() => build.rotate(1)}><BuildGlyph name="rotate" size={14} /> Turn</button>
-            <button type="button" className="is-danger" data-testid="build-remove" disabled={locked} onClick={() => build.remove()}><BuildGlyph name="trash" size={14} /> Remove</button>
         </div>
         {(e.kind === 'monitor-wall' || e.kind === 'web-wall') && <div className="omo-build-size">
             <NumberField label="Width" testid="build-width" value={e.width} min={e.kind === 'web-wall' ? 0.8 : 0.6} max={8} step={0.1} onCommit={n => build.resize(e.id, { width: n, height: e.height, elevation: e.elevation })} />
@@ -152,11 +135,11 @@ function Inspector(props: { build: BuildMode; entity: WorldEntity }): React.Reac
             <NumberField label="Lift" value={e.elevation} min={0} max={3} step={0.05} onCommit={n => build.resize(e.id, { width: e.width, height: e.height, elevation: n })} />
         </div>}
         {e.kind === 'room' && <RoomInspector build={build} room={e} />}{/* w3:build */}
-        {(e.kind === 'monitor-wall' || e.kind === 'mirror') && <label className="omo-build-field"><span>Follows</span>
-            <select data-testid="build-link-select" value={linkTarget ?? ''} onChange={ev => ev.target.value ? build.link(e.id, ev.target.value) : build.unlink(e.id)}>
-                {e.kind === 'monitor-wall' && <option value="">Nothing (its own view)</option>}
-                {deskList.map(d => <option key={d.id} value={d.id}>{entityTitle(d)}</option>)}
-            </select></label>}
+        <InspectorExtras build={build} entity={e} />{/* builder-ui: page address, tab layout, duplicate, delete with confirmation */}
+        {(e.kind === 'monitor-wall' || e.kind === 'mirror') && <div className="omo-build-field"><span>Follows</span>
+            <OmoSelect testid="build-link-select" ariaLabel="Follows" value={linkTarget ?? ''}
+                options={[...(e.kind === 'monitor-wall' ? [{ value: '', label: 'Nothing (its own view)' }] : []), ...deskList.map(d => ({ value: d.id, label: entityTitle(d) }))]}
+                onChange={v => v ? build.link(e.id, v) : build.unlink(e.id)} /></div>}
         {e.kind === 'station' && <>
             <div className="omo-build-station-sum">
                 <span className={`omo-build-chip is-${e.station.kind}`}>{e.station.kind === 'hermes' ? 'Agent desk' : 'Shell desk'}</span>
@@ -235,18 +218,16 @@ function StationSetup(props: { build: BuildMode; entity: StationEntity }): React
                         <button type="button" role="radio" aria-checked={draft.kind === 'hermes'} data-testid="setup-kind-hermes" onClick={() => patch({ kind: 'hermes' })}><BuildGlyph name="desk-agent" size={14} /> Agent (Hermes)</button>
                         <button type="button" role="radio" aria-checked={draft.kind === 'shell'} data-testid="setup-kind-shell" onClick={() => patch({ kind: 'shell' })}><BuildGlyph name="desk-shell" size={14} /> Shell</button>
                     </div></div>
-                <label className="omo-build-field"><span>Hermes profile</span>
-                    <select data-testid="setup-profile" value={draft.profile ?? ''} onChange={ev => patch({ profile: ev.target.value || undefined })}>
-                        <option value="">Workspace default</option>
-                        {profiles.map(p => <option key={p} value={p}>{p}</option>)}
-                        {!knownProfile && draft.profile && <option value={draft.profile}>{draft.profile} (not on this computer)</option>}
-                    </select>
-                    <small>{profiles.length ? `${profiles.length} profile${profiles.length === 1 ? '' : 's'} on this computer. Only the name is saved.` : 'No Hermes profiles found yet. Open a desk once to read them.'}</small></label>
+                <div className="omo-build-field"><span>Hermes profile</span>
+                    <OmoSelect testid="setup-profile" ariaLabel="Hermes profile" value={draft.profile ?? ''} disabled={locked}
+                        options={[{ value: '', label: 'Workspace default' }, ...profiles.map(p => ({ value: p, label: p })), ...(!knownProfile && draft.profile ? [{ value: draft.profile, label: `${draft.profile} (not on this computer)` }] : [])]}
+                        onChange={v => patch({ profile: v || undefined })} />
+                    <small>{profiles.length ? `${profiles.length} profile${profiles.length === 1 ? '' : 's'} on this computer. Only the name is saved.` : 'No Hermes profiles found yet. Open a desk once to read them.'}</small></div>
                 <div className="omo-build-field"><span>Starting tabs</span>
                     <ol className="omo-build-tabs" data-testid="setup-tabs">{draft.tabs.map((tab, i) => <li key={i}>
                         <span className="omo-build-tabnum">{i + 1}</span>
                         <input aria-label={`Tab ${i + 1} name`} maxLength={40} value={tab.name} onChange={ev => setTab(i, { name: ev.target.value })} />
-                        <select aria-label={`Tab ${i + 1} kind`} value={tab.kind} onChange={ev => setTab(i, { kind: ev.target.value as TabKind })}>{TAB_KINDS.map(k => <option key={k.kind} value={k.kind}>{k.label}</option>)}</select>
+                        <OmoSelect ariaLabel={`Tab ${i + 1} kind`} value={tab.kind} disabled={locked} options={TAB_KINDS.map(k => ({ value: k.kind, label: k.label }))} onChange={v => setTab(i, { kind: v as TabKind })} />
                         <button type="button" aria-label={`Remove tab ${i + 1}`} disabled={draft.tabs.length <= 1} onClick={() => setDraft(d => ({ ...d, tabs: d.tabs.filter((_, j) => j !== i) }))}><Icon name="x" size={12} /></button>
                     </li>)}</ol>
                     <button type="button" className="omo-build-addtab" data-testid="setup-add-tab" disabled={draft.tabs.length >= 8} onClick={() => setDraft(d => ({ ...d, tabs: [...d.tabs, { name: d.kind === 'hermes' && !d.tabs.some(t => t.kind === 'hermes') ? 'Hermes' : `Shell ${d.tabs.length + 1}`, kind: d.kind === 'hermes' && !d.tabs.some(t => t.kind === 'hermes') ? 'hermes' : 'shell' }] }))}><Icon name="plus" size={12} /> Add tab</button>

@@ -16,7 +16,7 @@ const config = { executablePath:'/opt/google/chrome/chrome', headless:true, user
 async function open(browser) {
  const page = await browser.newPage();
  // Classic dock flows; focus mode is covered by its own check.
- await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); } catch {} });
+ await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0'); localStorage.setItem('omo.starter', 'classic') /* world-ui: legacy checks use the IDE chrome */; } catch {} });
  page.on('pageerror',e=>console.error('PAGE ERROR:',e.message));
  await page.goto(process.env.OMO_URL || 'http://127.0.0.1:3190',{waitUntil:'domcontentloaded',timeout:60000});
  await page.waitForSelector('[data-testid="omo-world"]',{timeout:60000});

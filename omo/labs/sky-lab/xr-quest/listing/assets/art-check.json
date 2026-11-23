@@ -1,0 +1,161 @@
+{
+ "title": "Omo Space",
+ "assets": {
+  "screenshot-1.png": {
+   "size": [
+    2560,
+    1440
+   ],
+   "mode": "RGB"
+  },
+  "screenshot-2.png": {
+   "size": [
+    2560,
+    1440
+   ],
+   "mode": "RGB"
+  },
+  "screenshot-3.png": {
+   "size": [
+    2560,
+    1440
+   ],
+   "mode": "RGB"
+  },
+  "screenshot-4.png": {
+   "size": [
+    2560,
+    1440
+   ],
+   "mode": "RGB"
+  },
+  "screenshot-5.png": {
+   "size": [
+    2560,
+    1440
+   ],
+   "mode": "RGB"
+  },
+  "cover-landscape.png": {
+   "size": [
+    2560,
+    1440
+   ],
+   "mode": "RGB",
+   "title_box": [
+    677,
+    501,
+    1883,
+    743
+   ],
+   "title_in_safe_area": true,
+   "safe": [
+    256,
+    288,
+    2304,
+    1007
+   ]
+  },
+  "cover-hero.png": {
+   "size": [
+    3000,
+    900
+   ],
+   "mode": "RGB",
+   "title_box": [
+    980,
+    361,
+    2019,
+    570
+   ],
+   "title_in_safe_area": true,
+   "safe": [
+    300,
+    180,
+    2700,
+    630
+   ]
+  },
+  "cover-square.png": {
+   "size": [
+    1440,
+    1440
+   ],
+   "mode": "RGB",
+   "title_box": [
+    269,
+    527,
+    1171,
+    708
+   ],
+   "title_in_safe_area": true,
+   "safe": [
+    144,
+    288,
+    1296,
+    1007
+   ]
+  },
+  "cover-portrait.png": {
+   "size": [
+    1008,
+    1440
+   ],
+   "mode": "RGB",
+   "title_box": [
+    220,
+    528,
+    787,
+    640
+   ],
+   "title_in_safe_area": true,
+   "safe": [
+    100,
+    288,
+    907,
+    1007
+   ]
+  },
+  "cover-mini.png": {
+   "size": [
+    1080,
+    360
+   ],
+   "mode": "RGB",
+   "title_box": [
+    296,
+    138,
+    784,
+    235
+   ],
+   "title_in_safe_area": true,
+   "safe": [
+    108,
+    72,
+    972,
+    251
+   ]
+  },
+  "trailer-cover.png": {
+   "size": [
+    2560,
+    1440
+   ],
+   "mode": "RGB"
+  },
+  "icon.png": {
+   "size": [
+    512,
+    512
+   ],
+   "mode": "RGB"
+  },
+  "logo.png": {
+   "size": [
+    3337,
+    899
+   ],
+   "mode": "RGBA"
+  }
+ }
+}

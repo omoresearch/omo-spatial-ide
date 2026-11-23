@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#000000">
+<meta name="robots" content="noindex">
+<title>Omo Space: make your world</title>
+<meta name="description" content="Onboarding mock-up for Omo Space: describe your world, bring your local chats, and watch the world form.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preload" as="image" href="../images/web/palace.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%227%22 fill=%22%237cf2d0%22/%3E%3C/svg%3E">
+<style>
+/* Tokens: same as the landing mock-up (true black, editorial serif + quiet sans, one mint accent). */
+:root{
+  --bg:#000; --ink:#f3f3f1; --ink-2:#b0b0b0; --ink-3:#6b6b6b;
+  --line:#1c1c1c; --line-2:#2a2a2a; --mint:#7cf2d0; --mint-soft:#d9fff3;
+  --serif:"Instrument Serif","Times New Roman",serif;
+  --sans:"Geist",-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,monospace;
+  --ay:42%;            /* finale anchor: where the world forms */
+  --row:44px;          /* reader row height (no layout during the read: rows are fixed height) */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);overflow:hidden;overscroll-behavior:none}
+body{color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+img{display:block;max-width:100%;height:auto}
+em{font-style:italic;color:var(--mint-soft)}
+kbd{font-family:var(--mono);font-size:11.5px;display:inline-block;min-width:20px;padding:1px 6px;border:1px solid var(--line-2);border-bottom-width:2px;border-radius:6px;color:var(--ink-2);background:#080808;line-height:1.5;text-align:center}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus{outline:none}
+:focus-visible{outline:1px solid rgba(124,242,208,.7);outline-offset:4px;border-radius:999px}
+
+.stage{position:fixed;inset:0;height:100vh;height:100svh;overflow:hidden;isolation:isolate}
+/* static sky: a few precise points of light, never animated */
+.stage::before{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
+  background:radial-gradient(1px 1px at 12% 18%,rgba(255,255,255,.55),transparent),
+             radial-gradient(1px 1px at 84% 14%,rgba(255,255,255,.45),transparent),
+             radial-gradient(1px 1px at 70% 31%,rgba(124,242,208,.7),transparent),
+             radial-gradient(1px 1px at 24% 72%,rgba(255,255,255,.35),transparent),
+             radial-gradient(1.5px 1.5px at 92% 66%,rgba(124,242,208,.5),transparent),
+             radial-gradient(1px 1px at 6% 52%,rgba(255,255,255,.35),transparent),
+             radial-gradient(1px 1px at 47% 88%,rgba(255,255,255,.3),transparent)}
+
+/* ---------- global light: the horizon line, its glow, the point, the ring ---------- */
+.light{position:absolute;inset:0;pointer-events:none}
+.hz,.hz-on,.sheen{position:absolute;left:0;top:50%;width:100%;height:1px;margin-top:-.5px;will-change:transform,opacity}
+.hz{background:linear-gradient(90deg,transparent,rgba(255,255,255,.10) 20%,rgba(255,255,255,.28) 38%,rgba(124,242,208,.85) 50%,rgba(255,255,255,.28) 62%,rgba(255,255,255,.10) 80%,transparent);opacity:0;transform:scaleX(0)}
+.hz-on{background:linear-gradient(90deg,transparent 18%,rgba(124,242,208,.9) 50%,transparent 82%);opacity:0}
+.sheen{width:26vw;background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);opacity:0}
+.glow{position:absolute;left:50%;top:50%;width:1300px;height:420px;margin:-210px 0 0 -650px;opacity:0;will-change:opacity,transform}
+.glow i{position:absolute;inset:0;background:radial-gradient(closest-side,rgba(124,242,208,.17),rgba(124,242,208,.05) 55%,transparent 80%);will-change:opacity}
+.glow::after{content:"";position:absolute;left:50%;top:0;width:900px;height:50%;margin-left:-450px;background:radial-gradient(ellipse 50% 100% at 50% 100%,rgba(217,255,243,.06),transparent 70%)}
+.spark{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#fff;opacity:0;will-change:transform,opacity;
+  box-shadow:0 0 10px 3px rgba(124,242,208,.9),0 0 46px 14px rgba(124,242,208,.32);z-index:4}
+.ring{position:absolute;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;border-radius:50%;border:1.5px solid rgba(124,242,208,.75);opacity:0;will-change:transform,opacity;
+  box-shadow:0 0 40px rgba(124,242,208,.25),inset 0 0 40px rgba(124,242,208,.18)}
+.bloom{position:absolute;left:50%;top:50%;width:110vmax;height:110vmax;margin:-55vmax 0 0 -55vmax;border-radius:50%;opacity:0;will-change:transform,opacity;
+  background:radial-gradient(closest-side,rgba(217,255,243,.45),rgba(124,242,208,.16) 30%,rgba(124,242,208,.04) 55%,transparent 72%)}
+
+/* ---------- chrome ---------- */
+.top{position:absolute;top:0;left:0;right:0;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:5;opacity:0;pointer-events:none}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.02em;font-size:18px;color:var(--ink)}
+.logo i{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0,#bdfbe9 25%,var(--mint) 55%,#1c6b58 100%);box-shadow:0 0 18px rgba(124,242,208,.55)}
+.logo span{color:var(--ink-3);font-weight:400}
+.prog{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.08em}
+.seg{width:30px;height:2px;border-radius:2px;background:var(--line-2);overflow:hidden}
+.seg i{display:block;height:100%;background:var(--mint);transform:scaleX(0);transform-origin:0 50%;will-change:transform}
+
+/* ---------- scenes ---------- */
+.scene{position:absolute;inset:0;visibility:hidden;pointer-events:none;z-index:2}
+.scene.on{visibility:visible;pointer-events:auto}
+.rv{opacity:0}
+.half{position:absolute;left:0;right:0;display:flex;justify-content:center;padding:0 24px}
+.half.up{top:0;bottom:50%;align-items:flex-end}
+.half.down{top:50%;bottom:0;align-items:flex-start}
+.col{width:100%;max-width:760px;display:flex;flex-direction:column;align-items:center;text-align:center}
+
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint)}
+.eyebrow::before{content:"";width:22px;height:1px;background:linear-gradient(90deg,transparent,var(--mint))}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(50px,8vw,104px);line-height:.98;letter-spacing:-.025em;text-wrap:balance}
+h1 em{text-shadow:0 0 40px rgba(124,242,208,.35)}
+h2{font-family:var(--serif);font-weight:400;font-size:clamp(36px,4.8vw,62px);line-height:1.02;letter-spacing:-.02em;text-wrap:balance}
+.lede,.sub{color:var(--ink-2);font-size:18px;max-width:520px;text-wrap:pretty}
+.hint{font-family:var(--mono);font-size:12px;color:var(--ink-3);letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:12px;height:50px;padding:0 22px 0 26px;border-radius:999px;font-size:15.5px;font-weight:500;border:1px solid var(--line-2);background:#0b0b0b;color:var(--ink);transition:background-color .25s,border-color .25s,transform .25s cubic-bezier(.25,.46,.45,.94)}
+.btn:hover{border-color:#3d3d3d;background:#141414}
+.btn.primary{background:var(--mint);color:#02130e;border-color:var(--mint);box-shadow:0 0 0 1px rgba(124,242,208,.25),0 10px 44px -8px rgba(124,242,208,.55)}
+.btn.primary:hover{background:#9af6dc;transform:translateY(-1px)}
+.btn.primary:active{transform:scale(.98)}
+.btn.primary kbd{background:rgba(2,19,14,.12);border-color:rgba(2,19,14,.22);color:#02130e}
+.btn:focus-visible{outline-offset:5px}
+.link{font-size:14.5px;color:var(--ink-3);padding:12px 6px;transition:color .2s}
+.link:hover{color:var(--ink)}
+
+/* welcome */
+#welcome .up .col{padding-bottom:44px;gap:26px}
+#welcome .down .col{padding-top:44px;gap:18px}
+#welcome .lede{margin-top:-4px}
+
+/* stage 1: world prompt. The global horizon line is the underline of the prompt. */
+#world .up .col{gap:34px;padding-bottom:8px}
+#world h2{max-width:700px}
+#world .sub{font-size:17px;margin-bottom:12px}
+#seed{width:min(640px,86vw);height:84px;resize:none;border:0;background:transparent;color:var(--ink);text-align:center;
+  font-family:var(--serif);font-style:italic;font-size:28px;line-height:1.3;padding:4px 0 6px;caret-color:var(--mint);overflow:hidden}
+#world .k-touch{display:none}
+@media (pointer:coarse){#world .k-fine{display:none}#world .k-touch{display:inline}}
+#seed::placeholder{transition:opacity .9s}
+#seed.fade::placeholder{opacity:0}
+#seed::placeholder{color:#3a3a3a;transition:color .6s}
+#seed:focus::placeholder{color:#2a2a2a}
+#world .down .col{padding-top:24px;gap:22px}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:620px}
+.chip{height:36px;padding:0 15px;border-radius:999px;border:1px solid var(--line-2);background:#060606;color:var(--ink-2);font-size:13.5px;transition:border-color .25s,color .25s,background-color .25s}
+.chip:hover{color:var(--ink);border-color:#3a3a3a}
+.chip[aria-pressed="true"]{color:var(--mint-soft);border-color:rgba(124,242,208,.55);background:rgba(124,242,208,.06)}
+.chip-l{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);width:100%;margin-bottom:2px}
+
+/* stage 2: bring your mind */
+#mind{overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+#mind::-webkit-scrollbar{display:none}
+.mind-wrap{min-height:100%;display:flex;flex-direction:column;justify-content:center;max-width:1120px;margin:0 auto;padding:84px 32px 40px}
+.seedpill{align-self:flex-start;display:flex;align-items:center;gap:10px;max-width:100%;height:34px;padding:0 14px 0 12px;border-radius:999px;font-size:13.5px;color:var(--ink-2);
+  background:linear-gradient(#050505,#050505) padding-box,linear-gradient(90deg,rgba(124,242,208,.6),rgba(255,255,255,.12) 50%,rgba(124,242,208,.35)) border-box;border:1px solid transparent}
+.seedpill .sd{flex:none;width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 10px var(--mint)}
+.seedpill b{flex:none;font-weight:500;color:var(--ink)}
+.seedpill q{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--serif);font-style:italic;font-size:16px;color:var(--mint-soft)}
+.mind-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center;margin-top:34px}
+.mind-copy{display:flex;flex-direction:column;align-items:flex-start;gap:18px;min-width:0}
+.stack{display:grid;grid-template-columns:minmax(0,1fr);width:100%;min-width:0}
+.stack>*{grid-area:1/1;min-width:0}
+.stack>.b,.stack>.c{opacity:0;visibility:hidden}
+#mind h2{font-size:clamp(34px,4.2vw,56px)}
+#mind .sub{font-size:16.5px;max-width:480px}
+.panel{margin-top:8px}
+.sources{display:flex;flex-direction:column;gap:10px}
+.src{display:flex;align-items:center;gap:16px;width:100%;min-height:64px;padding:12px 16px;border-radius:16px;border:1px solid var(--line);background:linear-gradient(180deg,#0a0a0a,#050505);text-align:left;transition:border-color .25s}
+.src:hover{border-color:#333}
+.src[aria-pressed="true"]{border-color:rgba(124,242,208,.38)}
+.chk{flex:none;width:20px;height:20px;border-radius:50%;border:1px solid #3a3a3a;display:grid;place-items:center;transition:border-color .25s}
+.chk i{width:10px;height:10px;border-radius:50%;background:var(--mint);box-shadow:0 0 10px rgba(124,242,208,.8);transform:scale(0);transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+.src[aria-pressed="true"] .chk{border-color:rgba(124,242,208,.7)}
+.src[aria-pressed="true"] .chk i{transform:scale(1)}
+.nm{flex:1;min-width:0}
+.nm strong{display:block;font-weight:500;font-size:15.5px}
+.nm small{display:block;font-family:var(--mono);font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{flex:none;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mint);border:1px solid rgba(124,242,208,.3);border-radius:999px;padding:2px 8px}
+.src kbd{flex:none}
+.more{font-size:13.5px;color:var(--ink-3);padding:4px 4px 0}
+.reader{opacity:0;visibility:hidden}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stat{padding:12px 0 12px 14px;border-left:1px solid var(--line)}
+.stat:first-child{border-left:0;padding-left:0}
+.stat small{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.odo{display:flex;font-family:var(--mono);font-size:22px;line-height:1;height:1em;margin-top:6px;color:var(--ink)}
+.dg{display:block;width:.62em;height:1em;overflow:hidden;transition:opacity .4s}
+.st{display:block;transition:transform .5s cubic-bezier(.25,.46,.45,.94);will-change:transform}
+.st span{display:block;height:1em}
+.rows{position:relative;height:calc(var(--row) * 5);overflow:hidden;margin-top:6px;
+  -webkit-mask-image:linear-gradient(transparent,#000 34%);mask-image:linear-gradient(transparent,#000 34%)}
+.strip{position:absolute;left:0;right:0;bottom:0;will-change:transform}
+.row{display:grid;grid-template-columns:62px minmax(0,1fr) auto;align-items:center;gap:12px;height:var(--row);border-bottom:1px solid #111;opacity:0;font-size:14.5px}
+.row .s{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-3);text-transform:lowercase}
+.row .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
+.row .to{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.row .to b{font-weight:400;color:var(--mint)}
+.actions{margin-top:10px}
+.act{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.act.b,.act.c{opacity:0;visibility:hidden}
+.local{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink-2);letter-spacing:.02em}
+.local .dot{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 10px var(--mint)}
+.local svg{width:14px;height:14px;color:var(--mint)}
+
+/* the field: where understood things gather into rooms */
+.field{position:relative;width:100%;aspect-ratio:1/1;max-width:500px;justify-self:end}
+.field::before{content:"";position:absolute;inset:6%;border-radius:50%;background:radial-gradient(closest-side,rgba(124,242,208,.07),transparent 75%)}
+.field::after{content:"";position:absolute;inset:0;border-radius:50%;border:1px solid rgba(255,255,255,.04)}
+.field svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.field line{stroke:rgba(124,242,208,.32);stroke-width:1;vector-effect:non-scaling-stroke;opacity:0}
+.halo{position:absolute;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;background:radial-gradient(closest-side,rgba(124,242,208,.20),rgba(124,242,208,.05) 60%,transparent);opacity:0;will-change:transform,opacity}
+.lbl{position:absolute;width:140px;margin-left:-70px;text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mint-soft);opacity:0;will-change:transform,opacity}
+.pt{position:absolute;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:#fff;box-shadow:0 0 6px 1px rgba(124,242,208,.8);opacity:0;will-change:transform,opacity}
+.pt.m{background:var(--mint)}
+.field-idle{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--mint);box-shadow:0 0 14px 4px rgba(124,242,208,.5)}
+
+/* finale */
+.f-world{position:absolute;left:50%;top:var(--ay);width:118svh;height:78.7svh;margin:-39.35svh 0 0 -59svh;overflow:hidden;
+  -webkit-mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 58%,transparent 100%);mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 58%,transparent 100%)}
+.f-img{position:absolute;inset:0;opacity:0;will-change:transform,opacity}
+.f-img img{width:100%;height:100%;object-fit:cover}
+.cur{position:absolute;left:-2%;right:-2%;height:62%;will-change:transform}
+.cur.t{top:-12%;background:linear-gradient(to top,transparent 0,rgba(0,0,0,.85) 6%,#000 14%)}
+.cur.b{bottom:-12%;background:linear-gradient(to bottom,transparent 0,rgba(0,0,0,.85) 6%,#000 14%)}
+.f-light{position:absolute;inset:0;pointer-events:none}
+.f-light .hz,.f-light .glow,.f-light .spark,.f-light .bloom{top:var(--ay)}
+.f-light .hz{z-index:1}
+.sp{position:absolute;top:var(--ay);width:3px;height:3px;margin:-1.5px;border-radius:50%;background:#fff;box-shadow:0 0 6px 1px rgba(124,242,208,.9);opacity:0;will-change:transform,opacity}
+.f-wordsbox{position:absolute;left:0;right:0;top:0;height:calc(var(--ay) * 2);display:flex;align-items:center;justify-content:center;padding:0 24px;pointer-events:none;z-index:3}
+.f-words{max-width:780px;text-align:center;font-family:var(--serif);font-style:italic;font-size:clamp(28px,3.6vw,46px);line-height:1.18;color:var(--mint-soft);text-shadow:0 0 30px rgba(124,242,208,.35)}
+.f-words span{display:inline-block;opacity:0;will-change:transform,opacity}
+.f-end{position:absolute;left:0;right:0;bottom:0;padding:0 24px calc(6.5svh + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;z-index:4}
+.f-end::before{content:"";position:absolute;left:0;right:0;bottom:0;height:150%;z-index:-1;background:linear-gradient(transparent,rgba(0,0,0,.82) 45%,#000)}
+.f-end h2{font-size:clamp(40px,5vw,66px)}
+.f-q{font-family:var(--serif);font-style:italic;font-size:19px;color:var(--ink-2);max-width:620px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.f-end .btn{margin-top:12px}
+
+/* end card */
+#end .col{gap:20px}
+#end .half.up .col{padding-bottom:30px}
+#end .half.down .col{padding-top:30px;flex-direction:row;justify-content:center;flex-wrap:wrap;gap:14px}
+.end-glow{position:absolute;left:50%;top:50%;width:900px;height:500px;margin:-250px 0 0 -450px;background:radial-gradient(closest-side,rgba(124,242,208,.10),transparent);opacity:0;pointer-events:none}
+
+/* ---------- small screens ---------- */
+@media (max-width:900px){
+  .mind-wrap{padding:76px 22px 28px;justify-content:flex-start}
+  .mind-grid{grid-template-columns:minmax(0,1fr);gap:18px;margin-top:14px}
+  .field{order:-1;aspect-ratio:auto;height:24svh;max-width:none;justify-self:stretch}
+  .field::before{inset:0 8%;border-radius:50%}
+  .field::after{display:none}
+  .halo{width:80px;height:80px;margin:-40px 0 0 -40px}
+  .lbl{font-size:9.5px;letter-spacing:.08em;width:110px;margin-left:-55px}
+  .mind-copy{gap:14px}
+  .seedpill{align-self:stretch}
+}
+@media (max-width:700px){
+  :root{--row:40px;--ay:41%}
+  body{font-size:16px}
+  .top{padding:0 20px;height:58px}
+  .half{padding:0 22px}
+  h1{font-size:clamp(46px,13vw,64px)}
+  .lede{font-size:16.5px}
+  #welcome .up .col{padding-bottom:36px;gap:20px}
+  #welcome .down .col{padding-top:36px}
+  #world h2{font-size:34px}
+  #world .sub{font-size:15.5px;margin-bottom:6px}
+  #world .up .col{gap:14px}
+  #seed{font-size:22px;height:66px}
+  .chip{height:34px;padding:0 13px;font-size:13px}
+  #mind h2{font-size:32px}
+  #mind .sub{font-size:15px}
+  .src{min-height:58px;padding:10px 14px;gap:12px}
+  .src kbd{display:none}
+  .rows{height:calc(var(--row) * 3)}
+  .row{grid-template-columns:44px minmax(0,1fr) auto;gap:8px;font-size:13.5px}
+  .row .s{font-size:9.5px}
+  .row .to{font-size:10.5px}
+  .stat{padding:10px 0 10px 10px}
+  .stat small{font-size:9.5px;letter-spacing:.08em}
+  .odo{font-size:19px}
+  .f-world{width:152vw;height:101.3vw;margin:-50.65vw 0 0 -76vw}
+  .f-words{font-size:27px}
+  .f-q{font-size:16.5px;max-width:88vw}
+  .btn{height:52px}
+  .hint .desk{display:none}
+}
+@media (pointer:coarse){.hint .keyonly{display:none}}
+@media (max-height:700px) and (max-width:700px){
+  .field{height:18svh}
+  #world h2{font-size:30px}
+  #world .sub{display:none}
+}
+
+/* ---- clean stage 2: one centred column, the constellation is the picture ---- */
+#mind .eyebrow,.nm small,.src kbd,.tag,.more,.stat:nth-child(3),.stat:nth-child(4),.row .s{display:none}
+.mind-wrap{max-width:620px;align-items:center;text-align:center}
+.seedpill{align-self:center;height:28px;font-size:12.5px;border-color:transparent;background:none;opacity:.8}
+.seedpill b{display:none}
+.seedpill q{font-size:14px;max-width:420px}
+.mind-grid{grid-template-columns:minmax(0,1fr);gap:26px;margin-top:18px;justify-items:center}
+.field{order:-1;aspect-ratio:2/1;width:min(560px,100%);max-width:none;justify-self:center}
+.mind-copy{align-items:center;gap:16px;width:100%}
+#mind h2{font-size:clamp(32px,3.6vw,46px);text-align:center}
+#mind .sub{text-align:center;color:var(--ink-3);font-size:15.5px}
+.panel{width:min(420px,100%);margin-top:6px}
+.sources{gap:8px}
+.src{min-height:52px;padding:10px 16px;border-radius:14px;background:transparent;gap:14px}
+.src[aria-pressed="true"]{border-color:rgba(124,242,208,.28);background:rgba(124,242,208,.03)}
+.nm strong{font-size:15px}
+.stats{grid-template-columns:1fr 1fr;border:0}
+.stat{border-left:0;padding:0;text-align:center}
+.stat small{text-align:center}
+.odo{justify-content:center;font-size:28px}
+.rows{height:var(--row);margin-top:14px;-webkit-mask-image:none;mask-image:none}
+.row{grid-template-columns:minmax(0,1fr);justify-items:center;border-bottom:0;gap:2px;height:var(--row)}
+.row .t{color:var(--ink-2);font-size:14px}
+.row .to{display:none}
+.actions{margin-top:4px}
+.act{justify-content:center}
+@media (max-width:900px){
+  .field{aspect-ratio:auto;height:22svh;width:100%}
+  .mind-wrap{padding:70px 22px 24px}
+  #mind h2{font-size:30px}
+  .rows{height:var(--row)}
+}
+.lbl{text-shadow:0 0 6px #000,0 0 12px #000,0 0 18px #000}
+.dg{-webkit-mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent)}
+</style>
+</head>
+<body>
+<main class="stage" id="stage">
+
+  <div class="light" aria-hidden="true">
+    <div class="glow" id="glow"><i></i></div>
+    <div class="bloom" id="bloom"></div>
+    <div class="ring" id="ring"></div>
+    <div class="hz" id="hz"></div>
+    <div class="hz-on" id="hzOn"></div>
+    <div class="sheen" id="sheen"></div>
+    <div class="spark" id="spark"></div>
+  </div>
+
+  <header class="top" id="top">
+    <span class="logo"><i></i>omo<span>space</span></span>
+    <span class="prog" aria-label="Progress"><span class="seg"><i id="seg1"></i></span><span class="seg"><i id="seg2"></i></span><span id="stepTxt">1 / 2</span></span>
+  </header>
+
+  <!-- 0. Welcome -->
+  <section class="scene on" id="welcome" aria-label="Welcome">
+    <div class="half up"><div class="col">
+      <span class="logo rv"><i></i>omo<span>space</span></span>
+      <h1 class="rv">Your mind,<br><em>given a place.</em></h1>
+      <p class="lede rv">In about a minute you will have a world of your own, shaped by how you think and what you are working on.</p>
+    </div></div>
+    <div class="half down"><div class="col">
+      <button class="btn primary rv" id="go" data-primary>Get started <kbd aria-hidden="true">&#8629;</kbd></button>
+      <p class="hint rv"><span class="keyonly">or press Enter</span></p>
+    </div></div>
+  </section>
+
+  <!-- 1. Shape your world -->
+  <section class="scene" id="world" aria-label="Stage 1: imagine your world">
+    <div class="half up"><div class="col">
+      <h2 class="rv">If your mind had a home,<br><em>what would it look like?</em></h2>
+      <label class="sr" for="seed">The home your mind would live in</label>
+      <textarea id="seed" class="rv" rows="2" maxlength="180" spellcheck="false" enterkeyhint="go" placeholder="A lighthouse library at the edge of the sea&hellip;"></textarea>
+    </div></div>
+    <div class="half down"><div class="col">
+      <p class="hint rv"><kbd aria-hidden="true">&#8629;</kbd> <span class="k-fine">Enter to bring it to life</span><span class="k-touch">Tap go to bring it to life</span></p>
+    </div></div>
+  </section>
+
+  <!-- 2. Bring your mind -->
+  <section class="scene" id="mind" aria-label="Stage 2: import your mind">
+    <div class="mind-wrap">
+      <div class="seedpill rv"><i class="sd" id="seedDot"></i><b>Your world</b><q id="seedEcho"></q></div>
+      <div class="mind-grid">
+        <div class="mind-copy">
+          <p class="eyebrow rv">Stage 2 &middot; Import your mind</p>
+          <div class="stack" id="heads">
+            <h2 class="a rv">Bring your mind <em>with you.</em></h2>
+            <h2 class="b" aria-live="polite">Reading, <em>on this device.</em></h2>
+            <h2 class="c" aria-live="polite">Your mind <em>has rooms now.</em></h2>
+          </div>
+          <p class="sub rv">Your chats become rooms. Read here, never uploaded.</p>
+          <div class="stack panel" id="panel">
+            <div class="sources rv" role="group" aria-label="Sources">
+              <button class="src" data-src="hermes" aria-pressed="true"><span class="chk"><i></i></span><span class="nm"><strong>Hermes chats</strong><small>~/.hermes/sessions &middot; on this computer</small></span><span class="tag">Local</span><kbd>1</kbd></button>
+              <button class="src" data-src="claude" aria-pressed="true"><span class="chk"><i></i></span><span class="nm"><strong>Claude Code chats</strong><small>~/.claude/projects &middot; on this computer</small></span><span class="tag">Local</span><kbd>2</kbd></button>
+              <p class="more">Later: Cursor, ChatGPT exports, Obsidian and Notion.</p>
+            </div>
+            <div class="reader" id="reader">
+              <div class="stats">
+                <div class="stat"><small>Chats</small><span class="odo" id="oChats"></span></div>
+                <div class="stat"><small>Rooms</small><span class="odo" id="oRooms"></span></div>
+                <div class="stat"><small>Screens</small><span class="odo" id="oScreens"></span></div>
+                <div class="stat"><small>Notes</small><span class="odo" id="oNotes"></span></div>
+              </div>
+              <div class="rows"><div class="strip" id="strip"></div></div>
+            </div>
+          </div>
+          <div class="stack actions" id="actions">
+            <div class="act a rv">
+              <button class="btn primary" id="read" data-primary>Read on this device <kbd aria-hidden="true">&#8629;</kbd></button>
+              <button class="link" id="skip" data-own-enter>Skip for now</button>
+            </div>
+            <div class="act b"><span class="local"><span class="dot"></span>Reading on this device &middot; 0 bytes sent</span></div>
+            <div class="act c">
+              <button class="btn primary" id="form" data-primary>Form my world <kbd aria-hidden="true">&#8629;</kbd></button>
+              <span class="local"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>0 bytes left this device</span>
+            </div>
+          </div>
+        </div>
+        <div class="field rv" id="field" aria-hidden="true">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" id="links"></svg>
+          <span class="field-idle" id="fieldIdle"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. The world forms -->
+  <section class="scene" id="finale" aria-label="Your world">
+    <div class="f-world" id="fWorld">
+      <div class="f-img" id="fImg"><img id="worldImg" src="../images/web/palace.jpg" width="1536" height="1024" alt="A floating palace of curved glass rooms and bridges of light around a glowing core" decoding="async"></div>
+      <div class="cur t" id="curT"></div>
+      <div class="cur b" id="curB"></div>
+    </div>
+    <div class="f-light" aria-hidden="true">
+      <div class="glow" id="fGlow"><i></i></div>
+      <div class="bloom" id="fBloom"></div>
+      <div class="hz" id="fHz"></div>
+      <div class="spark" id="fCore"></div>
+      <div id="sparks"></div>
+    </div>
+    <div class="f-wordsbox"><p class="f-words" id="words" aria-hidden="true"></p></div>
+    <div class="f-end">
+      <h2 class="rv">Your world <em>is ready.</em></h2>
+      <p class="f-q rv" id="fq"></p>
+      <button class="btn primary rv" id="enter" data-primary>Enter your world <kbd aria-hidden="true">&#8629;</kbd></button>
+    </div>
+  </section>
+
+  <!-- end of the mock-up -->
+  <section class="scene" id="end" aria-label="End of the mock-up">
+    <div class="end-glow" id="endGlow"></div>
+    <div class="half up"><div class="col">
+      <h2 class="rv">You are <em>in.</em></h2>
+      <p class="sub rv">This is where your real world opens. This page is a mock-up of the first minute: no sign-in, and nothing on your computer was read.</p>
+    </div></div>
+    <div class="half down"><div class="col">
+      <button class="btn primary rv" id="again" data-primary>Start again <kbd aria-hidden="true">&#8629;</kbd></button>
+      <a class="btn rv" href="../" data-own-enter>See the Omo Space page</a>
+    </div></div>
+  </section>
+</main>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FINE = matchMedia('(pointer: fine)').matches;
+// Easing borrowed from the cognition.cv onboarding (ease-out, spring for buttons), plus a long expo for light.
+const E = { out:'cubic-bezier(.25,.46,.45,.94)', spring:'cubic-bezier(.34,1.56,.64,1)', smooth:'cubic-bezier(.4,0,.2,1)',
+            expo:'cubic-bezier(.16,1,.3,1)', inout:'cubic-bezier(.7,0,.3,1)', in:'cubic-bezier(.55,0,.8,.3)' };
+const marks = window.__marks = [];
+const mark = n => marks.push([n, performance.now()]);
+const wait = ms => new Promise(r => setTimeout(r, RM ? ms * .25 : ms));
+const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+// Every animation is transform/opacity only, run by the compositor (Web Animations API).
+function A(el, kf, o) {
+  if (!el) return Promise.resolve();
+  o = Object.assign({ fill:'both', easing:E.out }, typeof o === 'number' ? { duration:o } : o);
+  if (RM) {
+    if (o.iterations === Infinity) return Promise.resolve();
+    const last = kf[kf.length - 1];
+    kf = kf.map(k => { const c = Object.assign({}, k); if ('transform' in last) c.transform = last.transform; return c; });
+    o.duration = Math.min(o.duration, 240); o.delay = 0; o.easing = 'linear';
+  }
+  return el.animate(kf, o).finished.catch(() => {});
+}
+const IN  = [{ opacity:0, transform:'translate3d(0,22px,0)' }, { opacity:1, transform:'translate3d(0,0,0)' }];
+const OUT = [{ opacity:1, transform:'translate3d(0,0,0)' }, { opacity:0, transform:'translate3d(0,-16px,0)' }];
+const FADE_IN = [{ opacity:0 }, { opacity:1 }], FADE_OUT = [{ opacity:1 }, { opacity:0 }];
+const reveal = (els, start = 0, step = 120, dur = 1000) => els.forEach((el, i) => A(el, IN, { duration:dur, delay:start + i * step }));
+const leave  = (els, step = 50, dur = 560) => els.forEach((el, i) => A(el, OUT, { duration:dur, delay:i * step, easing:E.smooth }));
+const on  = el => el.classList.add('on');
+const off = el => el.classList.remove('on');
+
+const S = { welcome:$('#welcome'), world:$('#world'), mind:$('#mind'), finale:$('#finale'), end:$('#end') };
+const hz = $('#hz'), hzOn = $('#hzOn'), glow = $('#glow'), spark = $('#spark'), ring = $('#ring'), bloom = $('#bloom'), sheen = $('#sheen');
+let stage = 'welcome', busy = true, loops = [];
+
+/* ---------- Welcome ---------- */
+async function intro() {
+  await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]);
+  await frame();
+  mark('intro');
+  A(hz, [{ opacity:0, transform:'scaleX(0)' }, { opacity:1, transform:'scaleX(1)' }], { duration:2200, easing:E.expo, delay:150 });
+  A(glow, [{ opacity:0, transform:'scale(.6,.3)' }, { opacity:1, transform:'scale(1,1)' }], { duration:2600, easing:E.expo, delay:250 });
+  const w = $$('.rv', S.welcome);           // logo, h1, lede, button, hint (cognition.cv rhythm: 400/700/1000/1300ms)
+  A(w[0], IN, { duration:900, delay:400 });
+  A(w[1], IN, { duration:1100, delay:650 });
+  A(w[2], IN, { duration:1100, delay:950 });
+  A(w[3], [{ opacity:0, transform:'translate3d(0,-18px,0) scale(.96)' }, { opacity:1, transform:'translate3d(0,0,0) scale(1)' }], { duration:1200, delay:1300, easing:E.spring });
+  A(w[4], FADE_IN, { duration:900, delay:1800 });
+  await wait(2500);
+  mark('intro:end');
+  if (!RM) {
+    loops.push($('#glow i').animate([{ opacity:1 }, { opacity:.55 }, { opacity:1 }], { duration:6400, iterations:Infinity, easing:'ease-in-out' }));
+    loops.push(sheen.animate([{ opacity:0, transform:'translate3d(-30vw,0,0)' }, { opacity:.55, offset:.3 }, { opacity:.55, offset:.7 }, { opacity:0, transform:'translate3d(104vw,0,0)' }],
+      { duration:5200, iterations:Infinity, easing:'cubic-bezier(.45,0,.55,1)', delay:200, endDelay:2600 }));
+  }
+  busy = false;
+  $('#go').focus({ preventScroll:true });
+}
+
+/* ---------- Welcome -> Stage 1: the line folds into a point of light, which opens the next room ---------- */
+const underline = () => Math.min(640, innerWidth * .86) / innerWidth;
+async function toWorld() {
+  busy = true; mark('t1');
+  loops.forEach(a => a.cancel()); loops = [];
+  leave($$('.rv', S.welcome), 60);
+  A(hz, [{ transform:'scaleX(1)', opacity:1 }, { transform:'scaleX(0)', opacity:1 }], { duration:950, easing:E.inout });
+  A(glow, [{ opacity:1, transform:'scale(1,1)' }, { opacity:.35, transform:'scale(.35,.6)' }], { duration:950, easing:E.inout });
+  A(spark, [{ opacity:0, transform:'scale(.2)' }, { opacity:1, transform:'scale(1)' }], { duration:450, delay:600 });
+  await wait(980);
+  A(spark, [{ opacity:1, transform:'scale(1)' }, { opacity:1, transform:'scale(2.4)', offset:.22 }, { opacity:0, transform:'scale(.5)' }], { duration:1200 });
+  A(ring, [{ opacity:0, transform:'scale(.003)' }, { opacity:.95, offset:.06 }, { opacity:0, transform:'scale(1)' }], { duration:1700, easing:'cubic-bezier(.15,.75,.25,1)' });
+  A(bloom, [{ opacity:0, transform:'scale(.04)' }, { opacity:1, offset:.12 }, { opacity:0, transform:'scale(1.25)' }], { duration:1500 });
+  off(S.welcome); on(S.world); stage = 'world';
+  A($('#top'), FADE_IN, { duration:900, delay:500 });
+  A($('#seg1'), [{ transform:'scaleX(0)' }, { transform:'scaleX(1)' }], { duration:900, delay:700, easing:E.expo });
+  await wait(320);
+  A(hz, [{ transform:'scaleX(0)', opacity:1 }, { transform:`scaleX(${underline()})`, opacity:1 }], { duration:1300, easing:E.expo });
+  A(glow, [{ opacity:.2, transform:'scale(.35,.6)' }, { opacity:.45, transform:'scale(.7,.8)' }], { duration:1600, easing:E.expo });
+  const r = $$('.rv', S.world);            // h2, textarea, hint
+  reveal(r.slice(0, 2), 260, 220);
+  A(r[2], FADE_IN, { duration:1400, delay:1300 });
+  await wait(1450);
+  mark('t1:end'); busy = false;
+  if (FINE) $('#seed').focus({ preventScroll:true });
+}
+const seed = $('#seed');
+seed.addEventListener('focus', () => A(hzOn, [{ opacity:0, transform:`scaleX(${underline() * .6})` }, { opacity:1, transform:`scaleX(${underline()})` }], { duration:600, easing:E.expo }));
+seed.addEventListener('blur',  () => A(hzOn, [{ opacity:1 }, { opacity:0 }], { duration:400 }));
+
+
+/* ---------- Stage 1 -> Stage 2: the prompt condenses into a seed of light that flies up into the pill ---------- */
+function setPrompt(v) {
+  $('#seedEcho').textContent = v;
+  $('#fq').textContent = `\u201C${v}\u201D`;
+  const words = v.split(/\s+/).slice(0, 22);
+  $('#words').innerHTML = words.map(w => `<span>${w.replace(/[&<>"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[ch])}</span>`).join(' ') + (v.split(/\s+/).length > 22 ? ' <span>\u2026</span>' : '');
+}
+async function toMind() {
+  busy = true;
+  const v = (seed.value.trim() || 'A quiet dark room that grows with me').replace(/\s+/g, ' ');
+  seed.value = v; setPrompt(v); seed.blur();
+  await frame();                            // the hidden scene takes its new text before any motion starts
+  mark('t2');
+  const r = $$('.rv', S.world);
+  leave([r[0], r[2]], 50);
+  A(r[1], [{ opacity:1, transform:'translate3d(0,0,0) scale(1)' }, { opacity:0, transform:'translate3d(0,14px,0) scale(.96)' }], { duration:700, easing:E.inout });
+  A(hzOn, FADE_OUT, { duration:300 });
+  A(hz, [{ transform:`scaleX(${underline()})`, opacity:1 }, { transform:'scaleX(0)', opacity:1 }], { duration:800, easing:E.inout });
+  A(glow, [{ opacity:.8, transform:'scale(.7,.8)' }, { opacity:0, transform:'scale(.2,.4)' }], { duration:900, easing:E.inout });
+  A(spark, [{ opacity:0, transform:'translate3d(0,0,0) scale(.2)' }, { opacity:1, transform:'translate3d(0,0,0) scale(1.3)' }], { duration:400, delay:520 });
+  await wait(900);
+  const d = $('#seedDot').getBoundingClientRect();
+  const dx = d.left + d.width / 2 - innerWidth / 2, dy = d.top + d.height / 2 - innerHeight / 2;
+  A(spark, [{ opacity:1, transform:'translate3d(0,0,0) scale(1.3)' }, { opacity:1, transform:`translate3d(${dx}px,${dy}px,0) scale(.7)` }], { duration:950, easing:'cubic-bezier(.6,0,.2,1)' });
+  off(S.world); on(S.mind); stage = 'mind';
+  $('#stepTxt').textContent = '2 / 2';
+  A($('#seg2'), [{ transform:'scaleX(0)' }, { transform:'scaleX(1)' }], { duration:900, delay:300, easing:E.expo });
+  const m = $$('.rv', S.mind);              // pill, eyebrow, h2.a, sub, sources, act.a, field
+  A(m[0], [{ opacity:0, transform:'scale(.92)' }, { opacity:1, transform:'scale(1)' }], { duration:700, delay:820, easing:E.out });
+  A(spark, [{ opacity:1 }, { opacity:0 }], { duration:350, delay:900 });
+  reveal(m.slice(1, 6), 1000, 110);
+  A(m[6], [{ opacity:0, transform:'scale(.9)' }, { opacity:1, transform:'scale(1)' }], { duration:1600, delay:1100, easing:E.expo });
+  await wait(2000);
+  if ($('#read').getBoundingClientRect().bottom > innerHeight) S.mind.scrollTo({ top:S.mind.scrollHeight, behavior:RM ? 'auto' : 'smooth' });
+  mark('t2:end'); busy = false;
+  $('#read').focus({ preventScroll:true });
+}
+
+/* ---------- Stage 2: the calm, simulated read (mock data, nothing is read) ---------- */
+const ROOMS = [
+  { name:'Landing page', x:30, y:27 }, { name:'Auth',   x:72, y:22 }, { name:'Growth', x:84, y:56 },
+  { name:'Billing',      x:62, y:80 }, { name:'Brand',  x:20, y:66 }, { name:'Infra',  x:48, y:50 } ];
+const LINKS = [[0,5],[1,5],[2,5],[3,5],[4,5],[0,1],[1,2],[3,4],[4,0]];
+const ITEMS = [
+  ['hermes','Landing page hero motion',0],      ['claude','Fix the login redirect loop',1],   ['hermes','Weekly growth report',2],
+  ['claude','Stripe webhook retries',3],         ['hermes','Brand colours and type scale',4],  ['claude','Move the database to Postgres 17',5],
+  ['claude','Pricing section layout',0],         ['hermes','Onboarding email sequence',2],     ['claude','Session tokens expire too early',1],
+  ['hermes','Logo on a dark background',4],      ['claude','Invoice PDF rendering',3],         ['claude','CI runner on the home PC',5],
+  ['hermes','Ad angles for the spring test',2],  ['claude','Mobile nav overflow at 390px',0],  ['hermes','Refund policy wording',3],
+  ['claude','Magic link sign-in',1],             ['hermes','Voice and tone notes',4],          ['claude','Queue workers keep restarting',5],
+  ['hermes','Referral reward idea',2],           ['claude','Hero image fades into black',0],   ['claude','Trial to paid upgrade flow',3],
+  ['hermes','Icon set for small sizes',4],       ['claude','Backups and restore drill',5],     ['hermes','Who to call about the launch',2] ];
+const KIND = ['Screen', 'Note', 'Note', 'Screen', 'Note'];
+const chosen = () => $$('.src').filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.src);
+$$('.src').forEach(b => b.addEventListener('click', () => b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true')));
+
+function odo(el, digits) {
+  el.innerHTML = Array.from({ length:digits }, () => `<span class="dg"><span class="st">${[...'0123456789'].map(n => `<span>${n}</span>`).join('')}</span></span>`).join('');
+  el._st = $$('.st', el); el._dg = $$('.dg', el); setOdo(el, 0);
+}
+function setOdo(el, n) {
+  const s = String(n).padStart(el._st.length, '0'); let lead = true;
+  s.split('').forEach((c, i) => { el._st[i].style.transform = `translate3d(0,${-c * 10}%,0)`; lead = lead && c === '0' && i < s.length - 1; el._dg[i].style.opacity = lead ? .18 : 1; });
+}
+const O = { chats:$('#oChats'), rooms:$('#oRooms'), screens:$('#oScreens'), notes:$('#oNotes') };
+odo(O.chats, 3); odo(O.rooms, 2); odo(O.screens, 2); odo(O.notes, 2);
+
+let plan = null;
+function build(srcs) {                       // all DOM is made before the read starts, so the read itself causes no layout
+  const items = ITEMS.filter(it => srcs.includes(it[0]));
+  const field = $('#field'), fw = field.clientWidth, fh = field.clientHeight;
+  $$('.pt,.halo,.lbl', field).forEach(n => n.remove());
+  const seen = new Set(), rowsHtml = [], pts = [];
+  items.forEach((it, i) => {
+    const room = ROOMS[it[2]], first = !seen.has(it[2]); seen.add(it[2]);
+    const kind = first ? 'Room' : KIND[i % KIND.length];
+    rowsHtml.push(`<div class="row"><span class="s">${it[0]}</span><span class="t">${it[1]}</span><span class="to">&rarr; <b>${kind}</b> ${room.name}</span></div>`);
+    for (let k = 0; k < 2; k++) {
+      const a = Math.random() * Math.PI * 2, rr = 8 + Math.random() * 22;
+      const jx = Math.cos(a) * rr * (fw < 420 ? 1.3 : 1), jy = Math.sin(a) * rr * (fh < 260 ? .55 : 1);
+      const sx = (Math.random() - .5) * fw * .9, sy = (Math.random() - .5) * fh * .9;
+      pts.push({ i, html:`<span class="pt${k ? ' m' : ''}" style="left:calc(${room.x}% + ${jx.toFixed(1)}px);top:calc(${room.y}% + ${jy.toFixed(1)}px)" data-sx="${sx.toFixed(1)}" data-sy="${sy.toFixed(1)}"></span>` });
+    }
+  });
+  $('#strip').innerHTML = rowsHtml.join('');
+  field.insertAdjacentHTML('beforeend',
+    ROOMS.map((r, k) => `<span class="halo" data-k="${k}" style="left:${r.x}%;top:${r.y}%"></span>`).join('') +
+    pts.map(p => p.html).join('') +
+    ROOMS.map((r, k) => `<span class="lbl" data-k="${k}" style="left:${r.x}%;top:calc(${r.y}% + ${fh < 260 ? 14 : 22}px)">${r.name}</span>`).join(''));
+  $('#links').innerHTML = LINKS.map(([a, b]) => `<line data-a="${a}" data-b="${b}" x1="${ROOMS[a].x}" y1="${ROOMS[a].y}" x2="${ROOMS[b].x}" y2="${ROOMS[b].y}"/>`).join('');
+  const total = (srcs.includes('hermes') ? 64 : 0) + (srcs.includes('claude') ? 112 : 0);   // sample numbers: this mock-up reads nothing
+  return { items, rows:$$('.row'), pts:$$('.pt', field), total, roomsUsed:seen.size };
+}
+function swap(outEl, inEl) {            // cross-fade two cells of one grid stack; sizes never change
+  A(outEl, OUT, { duration:500, easing:E.smooth }).then(() => { outEl.style.visibility = 'hidden'; });
+  inEl.style.visibility = 'visible';
+  A(inEl, IN, { duration:900, delay:220 });
+}
+async function startRead() {
+  const srcs = chosen();
+  if (!srcs.length) { A($('.sources'), [{ transform:'translateX(0)' }, { transform:'translateX(-8px)' }, { transform:'translateX(7px)' }, { transform:'translateX(-4px)' }, { transform:'translateX(0)' }], { duration:420, fill:'none' }); return; }
+  busy = true;
+  plan = build(srcs);
+  await frame();
+  mark('read');
+  const heads = $('#heads');
+  swap($('.a', heads), $('.b', heads));
+  swap($('.sources'), $('#reader'));
+  swap($('.act.a'), $('.act.b'));
+  A($('#fieldIdle'), [{ opacity:1, transform:'scale(1)' }, { opacity:0, transform:'scale(3)' }], { duration:900 });
+  const rows = plan.rows, n = rows.length, V = 1;
+  const rowH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row')) || 44;
+  const STEP = RM ? 90 : Math.max(240, Math.round(6600 / n));
+  $('#strip').style.transform = `translate3d(0,${(n - 1) * rowH}px,0)`;   // the newest row always lands on the bottom line
+  const shown = new Set(); const litLinks = new Set(); let rooms = 0;
+  const t0 = performance.now(), dur = STEP * n + 400;
+  const tick = setInterval(() => {
+    const p = Math.min(1, (performance.now() - t0) / dur);
+    setOdo(O.chats, Math.round(plan.total * p));
+    setOdo(O.screens, Math.round(41 * p * plan.total / 176));
+    setOdo(O.notes, Math.round(96 * p * plan.total / 176));
+    if (p >= 1) clearInterval(tick);
+  }, 110);
+  await wait(500);
+  for (let i = 0; i < n; i++) {
+    const it = plan.items[i], k = it[2];
+    A(rows[i], [{ opacity:0, transform:'translate3d(12px,0,0)' }, { opacity:1, transform:'translate3d(0,0,0)' }], { duration:600, easing:E.out });
+    if (i > 0) A($('#strip'), [{ transform:`translate3d(0,${(n - i) * rowH}px,0)` }, { transform:`translate3d(0,${(n - 1 - i) * rowH}px,0)` }], { duration:Math.min(700, STEP * .9), easing:E.smooth });
+    if (i > 2) A(rows[i - 3], [{ opacity:1 }, { opacity:.5 }], { duration:600 });
+    plan.pts.filter((_, j) => (j >> 1) === i).forEach((pt, j) =>
+      A(pt, [{ opacity:0, transform:`translate3d(${pt.dataset.sx}px,${pt.dataset.sy}px,0) scale(.4)` }, { opacity:1, offset:.25 }, { opacity:.95, transform:'translate3d(0,0,0) scale(1)' }],
+        { duration:1500, delay:j * 90, easing:'cubic-bezier(.2,.7,.2,1)' }));
+    if (!shown.has(k)) {
+      shown.add(k); rooms++;
+      setOdo(O.rooms, rooms);
+      A($(`.halo[data-k="${k}"]`), [{ opacity:0, transform:'scale(.3)' }, { opacity:1, transform:'scale(1)' }], { duration:1600, delay:500, easing:E.expo });
+      A($(`.lbl[data-k="${k}"]`), [{ opacity:0, transform:'translate3d(0,6px,0)' }, { opacity:.9, transform:'translate3d(0,0,0)' }], { duration:900, delay:800 });
+      $$('#links line').forEach(l => {
+        const a = +l.dataset.a, b = +l.dataset.b, key = a + '-' + b;
+        if (!litLinks.has(key) && shown.has(a) && shown.has(b)) { litLinks.add(key); A(l, [{ opacity:0 }, { opacity:1 }], { duration:1400, delay:700 }); }
+      });
+    }
+    await wait(STEP);
+  }
+  await wait(600);
+  setOdo(O.chats, plan.total); setOdo(O.rooms, plan.roomsUsed);
+  mark('read:end');
+  A($('.rows'), [{ opacity:1 }, { opacity:0 }], { duration:600 });
+  swap($('.b', heads), $('.c', heads));
+  swap($('.act.b'), $('.act.c'));
+  if (S.mind.scrollHeight > S.mind.clientHeight + 2) S.mind.scrollTo({ top:S.mind.scrollHeight, behavior:RM ? 'auto' : 'smooth' });   // short phones: bring the button up
+  await wait(900);
+  busy = false;
+  $('#form').focus({ preventScroll:true });
+}
+
+/* ---------- Finale: the mind folds into one point, the prompt becomes light, the world rises out of the line ---------- */
+const fImg = $('#fImg'), fHz = $('#fHz'), fCore = $('#fCore'), fGlow = $('#fGlow'), fBloom = $('#fBloom');
+function makeSparks() {
+  const box = $('#sparks'); let h = '';
+  for (let i = 0; i < (innerWidth <= 700 ? 16 : 26); i++) h += `<span class="sp" style="left:${(14 + Math.random() * 72).toFixed(1)}%"></span>`;
+  box.innerHTML = h; return $$('.sp', box);
+}
+async function formWorld(skipped) {
+  busy = true;
+  const sparks = makeSparks();
+  if (skipped) { const v = seed.value.trim() || 'A quiet dark room that grows with me'; setPrompt(v); }
+  try { await $('#worldImg').decode(); } catch (e) {}
+  await frame();
+  mark('fin');
+  const ay = innerHeight * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ay')) / 100);
+  const field = $('#field'), fr = field.getBoundingClientRect();
+  const fx = innerWidth / 2 - (fr.left + fr.width / 2), fy = ay - (fr.top + fr.height / 2);
+  leave($$('.rv,.stack>.c,.act.c,.reader', S.mind).filter(e => e !== field), 25, 520);
+  A(field, [{ opacity:1, transform:'translate3d(0,0,0) scale(1)' }, { opacity:1, offset:.7 }, { opacity:0, transform:`translate3d(${fx}px,${fy}px,0) scale(.05)` }], { duration:1500, easing:'cubic-bezier(.7,0,.2,1)' });
+  A($('#top'), FADE_OUT, { duration:700 });
+  on(S.finale); stage = 'finale';
+  A(fCore, [{ opacity:0, transform:'scale(.2)' }, { opacity:1, transform:'scale(1.15)' }], { duration:700, delay:1150, easing:E.out });
+  await wait(1500);
+  off(S.mind);
+  // the words of the prompt arrive, one by one
+  const ws = $$('#words span');
+  ws.forEach((w, i) => A(w, [{ opacity:0, transform:'translate3d(0,12px,0)' }, { opacity:1, transform:'translate3d(0,0,0)' }], { duration:800, delay:i * 75 }));
+  A(fCore, [{ opacity:1, transform:'scale(1.15)' }, { opacity:.35, transform:'scale(.7)' }], { duration:600 });
+  await wait(800 + ws.length * 75 + 1000);
+  // ...and fall into the point of light
+  const rects = ws.map(w => w.getBoundingClientRect());
+  ws.forEach((w, i) => {
+    const r = rects[i], dx = innerWidth / 2 - (r.left + r.width / 2), dy = ay - (r.top + r.height / 2);
+    const dist = Math.hypot(dx, dy), delay = Math.max(0, 260 - dist * .5);
+    A(w, [{ opacity:1, transform:'translate3d(0,0,0) scale(1)' }, { opacity:.8, offset:.35 }, { opacity:0, offset:.8 }, { opacity:0, transform:`translate3d(${dx}px,${dy}px,0) scale(.12)` }], { duration:1000, delay, easing:E.in });
+  });
+  A(fCore, [{ opacity:.35, transform:'scale(.7)' }, { opacity:1, transform:'scale(1)', offset:.6 }, { opacity:1, transform:'scale(2.6)' }], { duration:1300, easing:E.in });
+  await wait(1250);
+  // the point opens into a line of light
+  A(fBloom, [{ opacity:0, transform:'scale(.05)' }, { opacity:.9, offset:.15 }, { opacity:0, transform:'scale(1.1)' }], { duration:1600 });
+  A(fCore, [{ opacity:1, transform:'scale(2.6)' }, { opacity:0, transform:'scale(.8)' }], { duration:1500, easing:E.out });
+  A(fHz, [{ opacity:1, transform:'scaleX(0)' }, { opacity:1, transform:'scaleX(1)' }], { duration:1500, easing:E.expo });
+  A(fGlow, [{ opacity:0, transform:'scale(.2,.5)' }, { opacity:1, transform:'scale(1,1)' }], { duration:2200, easing:E.expo });
+  sparks.forEach((s, i) => {
+    const up = Math.random() < .78, h = (up ? -1 : 1) * (60 + Math.random() * innerHeight * (up ? .3 : .12));
+    A(s, [{ opacity:0, transform:'translate3d(0,0,0) scale(.6)' }, { opacity:1, offset:.2 }, { opacity:0, transform:`translate3d(0,${h.toFixed(0)}px,0) scale(1)` }],
+      { duration:1800 + Math.random() * 1600, delay:200 + i * 60 + Math.random() * 300, easing:'cubic-bezier(.2,.6,.3,1)' });
+  });
+  await wait(250);
+  // the world rises out of the line
+  A(fImg, [{ opacity:0, transform:'translate3d(0,2.5%,0) scale(.93)' }, { opacity:1, transform:'translate3d(0,0,0) scale(1)' }], { duration:3200, easing:E.expo });
+  A($('#curT'), [{ transform:'translate3d(0,0,0)' }, { transform:'translate3d(0,-102%,0)' }], { duration:2800, easing:'cubic-bezier(.45,0,.15,1)' });
+  A($('#curB'), [{ transform:'translate3d(0,0,0)' }, { transform:'translate3d(0,102%,0)' }], { duration:2800, easing:'cubic-bezier(.45,0,.15,1)' });
+  await wait(2300);
+  A(fHz, [{ opacity:1 }, { opacity:.28 }], { duration:1600 });
+  A(fGlow, [{ opacity:1 }, { opacity:.45 }], { duration:1600 });
+  const end = $$('.rv', S.finale);
+  A(end[0], IN, { duration:1100 });
+  A(end[1], IN, { duration:1100, delay:180 });
+  A(end[2], [{ opacity:0, transform:'translate3d(0,-14px,0) scale(.96)' }, { opacity:1, transform:'translate3d(0,0,0) scale(1)' }], { duration:1200, delay:420, easing:E.spring });
+  await wait(1500);
+  mark('fin:end'); busy = false;
+  $('#enter').focus({ preventScroll:true });
+}
+
+async function enterWorld() {
+  busy = true; mark('enter');
+  leave($$('.rv', S.finale), 40, 500);
+  A(fHz, [{ opacity:.28 }, { opacity:0 }], { duration:500 });
+  A(fGlow, [{ opacity:.45, transform:'scale(1,1)' }, { opacity:0, transform:'scale(1.6,1.6)' }], { duration:1400 });
+  A(fImg, [{ opacity:1, transform:'translate3d(0,0,0) scale(1)' }, { opacity:1, offset:.55 }, { opacity:0, transform:'translate3d(0,3%,0) scale(1.75)' }], { duration:1700, easing:'cubic-bezier(.6,0,.35,1)' });
+  A(fBloom, [{ opacity:0, transform:'scale(.2)' }, { opacity:.55, offset:.6 }, { opacity:0, transform:'scale(1.6)' }], { duration:1700, delay:300, easing:E.inout });
+  await wait(1600);
+  off(S.finale); on(S.end); stage = 'end';
+  A($('#endGlow'), FADE_IN, { duration:1600 });
+  reveal($$('.rv', S.end), 100, 130);
+  await wait(1300);
+  mark('enter:end'); busy = false;
+  $('#again').focus({ preventScroll:true });
+}
+
+/* ---------- input: keyboard first ---------- */
+const act = {
+  welcome:() => toWorld(),
+  world:() => toMind(),
+  mind:() => { if (!plan) startRead(); else formWorld(false); },
+  finale:() => enterWorld(),
+  end:() => { location.href = location.pathname; }
+};
+$('#go').addEventListener('click', () => { if (!busy) act.welcome(); });
+$('#read').addEventListener('click', () => { if (!busy && !plan) startRead(); });
+$('#form').addEventListener('click', () => { if (!busy) formWorld(false); });
+$('#skip').addEventListener('click', () => { if (!busy) { plan = { skipped:true }; formWorld(true); } });
+$('#enter').addEventListener('click', () => { if (!busy) enterWorld(); });
+$('#again').addEventListener('click', () => act.end());
+addEventListener('keydown', e => {
+  const t = e.target;
+  if (stage === 'mind' && !plan && (e.key === '1' || e.key === '2')) { $$('.src')[+e.key - 1].click(); return; }
+  if (e.key !== 'Enter' || e.isComposing) return;
+  if (t && t.closest && t.closest('[data-own-enter]')) return;   // chips, skip and links keep their own Enter
+  e.preventDefault();
+  if (busy) return;
+  act[stage]();
+});
+intro();
+})();
+</script>
+<script>
+/* the placeholder slowly drifts between imagined worlds until the user types */
+(()=>{const t=document.getElementById('seed');if(!t||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+const W=['A lighthouse library at the edge of the sea\u2026','A glass treehouse above the clouds\u2026','A quiet observatory full of floating notes\u2026','A moonlit garden where every path is a project\u2026','A warm cabin in the snow, screens glowing like lanterns\u2026'];
+let i=0;setInterval(()=>{if(t.value)return;t.classList.add('fade');setTimeout(()=>{i=(i+1)%W.length;t.placeholder=W[i];t.classList.remove('fade')},900)},4200)})();
+</script>
+</body>
+</html>

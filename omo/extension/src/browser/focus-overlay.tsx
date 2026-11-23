@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { createPortal } from '@theia/core/shared/react-dom';
+import { createPortal } from 'react-dom';
 import type { MonitorFrame, TerminalWorkstation } from './room-scene';
 import { MONITOR_COLS, MONITOR_ROWS } from './runtime-console-controller';
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';
@@ -20,7 +20,7 @@ export interface FocusOverlayProps {
 const DESK_LABEL: Record<string, string> = new Proxy({ terminal: 'Desk one', 'terminal-2': 'Desk two' } as Record<string, string>, { get: (base, id: string) => stationName(id) || base[id] || id });
 
 /** Live size of an element, for fitting the terminal text to it. */
-function useSize(ref: React.RefObject<HTMLElement>): { width: number; height: number } | undefined {
+function useSize(ref: React.RefObject<HTMLElement | null>): { width: number; height: number } | undefined {
     const [size, setSize] = React.useState<{ width: number; height: number }>();
     React.useLayoutEffect(() => {
         const el = ref.current; if (!el) return;
@@ -279,8 +279,7 @@ export function FocusOverlay(props: FocusOverlayProps): React.ReactElement | nul
     const host = controls?.element.closest<HTMLElement>('.omo-scene-wrap');
     if (!host || !controls?.enabled) return null;
     if (!shown || !station) {
-        return createPortal(<button type="button" className="omo-focus-launch" data-testid="focus-full-launch" title="Full-screen terminal (F)"
-            onClick={() => focus.fullScreenActive()}><Icon name="maximize" size={14} />Full-screen terminal <kbd>F</kbd></button>, host);
+        return null; // world-ui r4/4: no 'Full-screen terminal F' chip; it is in the ⌘K palette and F still works
     }
 
     const refocus = (): void => {

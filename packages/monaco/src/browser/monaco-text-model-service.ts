@@ -18,17 +18,18 @@ import { inject, injectable, named, postConstruct } from '@theia/core/shared/inv
 import URI from '@theia/core/lib/common/uri';
 import { ResourceProvider, ReferenceCollection, Event, MaybePromise, Resource, ContributionProvider, OS, Emitter } from '@theia/core';
 import { EditorPreferences, EditorPreferenceChange } from '@theia/editor/lib/common/editor-preferences';
-import { MonacoEditorModel } from './monaco-editor-model';
-import { IDisposable, IReference } from '@theia/monaco-editor-core/esm/vs/base/common/lifecycle';
-import { MonacoToProtocolConverter } from './monaco-to-protocol-converter';
-import { ProtocolToMonacoConverter } from './protocol-to-monaco-converter';
+import { TextEditorDocumentService } from '@theia/editor/lib/browser/text-editor-document-service';
+import { MonacoEditorModel } from './monaco-editor-model.js';
+import { IDisposable, IReference } from '@theia/monaco-editor-core/esm/vs/base/common/lifecycle.js';
+import { MonacoToProtocolConverter } from './monaco-to-protocol-converter.js';
+import { ProtocolToMonacoConverter } from './protocol-to-monaco-converter.js';
 import { ILogger } from '@theia/core/lib/common/logger';
 import * as monaco from '@theia/monaco-editor-core';
-import { ITextModelService, ITextModelContentProvider } from '@theia/monaco-editor-core/esm/vs/editor/common/services/resolverService';
-import { ITextModelUpdateOptions } from '@theia/monaco-editor-core/esm/vs/editor/common/model';
+import { ITextModelService, ITextModelContentProvider } from '@theia/monaco-editor-core/esm/vs/editor/common/services/resolverService.js';
+import { ITextModelUpdateOptions } from '@theia/monaco-editor-core/esm/vs/editor/common/model.js';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
-import { StandaloneServices } from '@theia/monaco-editor-core/esm/vs/editor/standalone/browser/standaloneServices';
-import { ITextResourcePropertiesService } from '@theia/monaco-editor-core/esm/vs/editor/common/services/textResourceConfiguration';
+import { StandaloneServices } from '@theia/monaco-editor-core/esm/vs/editor/standalone/browser/standaloneServices.js';
+import { ITextResourcePropertiesService } from '@theia/monaco-editor-core/esm/vs/editor/common/services/textResourceConfiguration.js';
 
 export const MonacoEditorModelFactory = Symbol('MonacoEditorModelFactory');
 export interface MonacoEditorModelFactory {
@@ -57,7 +58,7 @@ export interface MonacoEditorModelFilter {
 }
 
 @injectable()
-export class MonacoTextModelService implements ITextModelService {
+export class MonacoTextModelService implements ITextModelService, TextEditorDocumentService {
     declare readonly _serviceBrand: undefined;
 
     protected readonly _models = new ReferenceCollection<string, MonacoEditorModel>(
@@ -127,6 +128,10 @@ export class MonacoTextModelService implements ITextModelService {
 
     get(uri: string): MonacoEditorModel | undefined {
         return this._models.get(uri);
+    }
+
+    getDocument(uri: URI): MonacoEditorModel | undefined {
+        return this.get(uri.toString());
     }
 
     get onDidCreate(): Event<MonacoEditorModel> {

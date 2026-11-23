@@ -12,7 +12,7 @@
  * Every artifact gets a <file>.sha256. The last stdout line is a JSON summary.
  *
  * Bundled runtimes (sha256-pinned in packaging/pins.json, opt out with --no-node / --no-tmux):
- *   vendor/node   official Node.js 22 LTS for this platform, so users do not need to install Node.
+ *   vendor/node   official Node.js 24 LTS for this platform, so users do not need to install Node.
  *   vendor/tmux   official tmux static build (tmux/tmux-builds); used only when no tmux is installed.
  * Python 3.11+ stays a prerequisite (the launchers explain how to install it).
  */
@@ -75,6 +75,10 @@ function stagePayload(stage, version, platformArch) {
     copy('browser-app/package.json');
     copy('plugins');
     copy('runtime', { filter: src => noPyc(src) && !src.includes(`${path.sep}tests${path.sep}`) });
+    // mac-kits: style-kit assets (baked rooms + CC0 props) when installed by scripts/fetch-style-kits.cjs. Without them the app
+    // draws the procedural shells, so a release build sets OMO_REQUIRE_KITS=1 and a missing kit fails the package.
+    if (fs.existsSync(path.join(ROOT, 'kits'))) copy('kits');
+    if (fs.existsSync(path.join(ROOT, 'style-kits.lock.json'))) copy('style-kits.lock.json');
     for (const rel of ['scripts/start.cjs', 'scripts/runtime-ide-plugins.cjs', 'scripts/doctor.cjs', 'scripts/prepare-ide.cjs', 'ide-extensions.lock.json', 'package.json', 'README.md', 'MAC-SETUP.md', 'SETUP.md']) {
         if (fs.existsSync(path.join(ROOT, rel))) copy(rel);
     }
@@ -93,7 +97,7 @@ function stagePayload(stage, version, platformArch) {
     // CLI launcher (the release smoke test and terminal users run this).
     fs.writeFileSync(path.join(stage, 'omo'), `#!/bin/sh
 # Omo Spatial IDE ${version} command-line launcher: ./omo [--workspace DIR] [--port N]
-# Uses the bundled Node.js (vendor/node) when present, else Node.js 22+ on PATH.
+# Uses the bundled Node.js (vendor/node) when present, else Node.js 24+ on PATH.
 # tmux: an installed tmux wins; else the bundled one (vendor/tmux). Python 3.11+ must be installed.
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -101,7 +105,7 @@ case "$(uname -s)" in Darwin) PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; exp
 NODE="$HERE/vendor/node/bin/node"
 if [ ! -x "$NODE" ]; then
     NODE="$(command -v node 2>/dev/null || true)"
-    [ -n "$NODE" ] || { echo "Omo needs Node.js 22 or newer (macOS: brew install node@22)." >&2; exit 1; }
+    [ -n "$NODE" ] || { echo "Omo needs Node.js 24 or newer (macOS: brew install node@24)." >&2; exit 1; }
 fi
 if [ -z "\${OMO_SPATIAL_TMUX:-}" ] && ! command -v tmux >/dev/null 2>&1; then
     if [ -x "$HERE/vendor/tmux/tmux" ]; then OMO_SPATIAL_TMUX="$HERE/vendor/tmux/tmux"; export OMO_SPATIAL_TMUX
@@ -119,7 +123,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 NODE="$HERE/vendor/node/bin/node"
 if [ ! -x "$NODE" ]; then
     NODE="$(command -v node 2>/dev/null || true)"
-    [ -n "$NODE" ] || { echo "omo-room-server needs Node.js 22 or newer." >&2; exit 1; }
+    [ -n "$NODE" ] || { echo "omo-room-server needs Node.js 24 or newer." >&2; exit 1; }
 fi
 exec "$NODE" "$HERE/server/omo-room-server.cjs" "$@"
 `, { mode: 0o755 });
@@ -156,9 +160,15 @@ const PAYLOAD_REQUIRED = [
     'server/omo-room-server.cjs', 'server/src/server.cjs', 'server/src/hub.cjs', 'server/vendor/world-model.cjs', 'server/vendor/presence-protocol.cjs',
     'server/vendor/player-state.cjs', 'server/node_modules/ws/index.js'
 ];
+/** mac-kits: kit files a release package must carry when OMO_REQUIRE_KITS=1. */
+const KITS_REQUIRED = ['kits/skyline-penthouse/room.glb', 'kits/skyline-penthouse/props.json', 'style-kits.lock.json'];
 function verifyPayload(stage) {
     const missing = PAYLOAD_REQUIRED.filter(rel => !fs.existsSync(path.join(stage, rel)));
     if (missing.length) throw new Error(`Package payload incomplete: ${missing.join(', ')}`);
+    if (process.env.OMO_REQUIRE_KITS === '1') {
+        const kitMissing = KITS_REQUIRED.filter(rel => !fs.existsSync(path.join(stage, rel)));
+        if (kitMissing.length) throw new Error(`Package payload has no style kits (OMO_REQUIRE_KITS=1): ${kitMissing.join(', ')}`);
+    }
     const tests = path.join(stage, 'runtime', 'tests');
     if (fs.existsSync(tests)) fs.rmSync(tests, { recursive: true, force: true }); // the filter keeps an empty dir
 }
@@ -315,4 +325,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
-module.exports = { parseArgs, infoPlist, PAYLOAD_REQUIRED };
+module.exports = { parseArgs, infoPlist, PAYLOAD_REQUIRED, KITS_REQUIRED };

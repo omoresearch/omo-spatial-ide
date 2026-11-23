@@ -110,8 +110,8 @@ export function openDoorways(entities: readonly WorldEntity[]): Array<{ x: numbe
 
 /** A walking function bound to one world: same signature as advancePlayer without the layout. */
 export type WorldMover = (player: PlayerPose, input: { forward: number; right: number }, seconds: number) => PlayerPose;
-export function worldMover(world: WorldSpec): WorldMover {
-    const blocks = footprints(world), b = walkBounds(world.shell);
+export function worldMover(world: WorldSpec, extra: readonly Footprint[] = []): WorldMover {
+    const blocks = [...footprints(world), ...extra], b = walkBounds(world.shell); // sky:merge M1 — extra: baked style-kit furniture
     const walls = roomWalls(world); // w3:render — room walls block, doorways do not (empty for a classic world: exact v1 rules)
     const blocked = (x: number, z: number): boolean => blocks.some(f => inside(f, x, z)) || walls.some(r => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ);
     return (player, input, seconds) => {

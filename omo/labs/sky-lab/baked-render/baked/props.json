@@ -1,0 +1,112 @@
+[
+ {
+  "id": "book_encyclopedia_set_01",
+  "pos": [
+   0.4,
+   0.68,
+   -5.3
+  ],
+  "rotY": 0.0,
+  "scale": 1.0
+ },
+ {
+  "id": "pachira_aquatica_01",
+  "pos": [
+   12.35,
+   0,
+   -10.95
+  ],
+  "rotY": 0.4,
+  "scale": 1.4
+ },
+ {
+  "id": "potted_plant_01",
+  "pos": [
+   1.3,
+   0,
+   -11.35
+  ],
+  "rotY": 1.1,
+  "scale": 1.7
+ },
+ {
+  "id": "potted_plant_02",
+  "pos": [
+   17.3,
+   0,
+   -6.6
+  ],
+  "rotY": 0.0,
+  "scale": 1.8
+ },
+ {
+  "id": "calathea_orbifolia_01",
+  "pos": [
+   2.2,
+   0,
+   -5.0
+  ],
+  "rotY": 0.7,
+  "scale": 1.9
+ },
+ {
+  "id": "potted_plant_02",
+  "pos": [
+   13.0,
+   0,
+   -5.0
+  ],
+  "rotY": 2.0,
+  "scale": 1.5
+ },
+ {
+  "id": "pachira_aquatica_01",
+  "pos": [
+   7.2,
+   0,
+   -10.95
+  ],
+  "rotY": 2.1,
+  "scale": 1.3
+ },
+ {
+  "id": "potted_plant_01",
+  "pos": [
+   13.95,
+   0,
+   -0.55
+  ],
+  "rotY": 0.6,
+  "scale": 1.6
+ },
+ {
+  "id": "calathea_orbifolia_01",
+  "pos": [
+   1.0,
+   0,
+   -1.0
+  ],
+  "rotY": 1.9,
+  "scale": 1.7
+ },
+ {
+  "id": "potted_plant_04",
+  "pos": [
+   3.58,
+   0.79,
+   -5.22
+  ],
+  "rotY": 0.0,
+  "scale": 1.0
+ },
+ {
+  "id": "potted_plant_04",
+  "pos": [
+   10.38,
+   0.79,
+   -5.22
+  ],
+  "rotY": 1.0,
+  "scale": 1.0
+ }
+]

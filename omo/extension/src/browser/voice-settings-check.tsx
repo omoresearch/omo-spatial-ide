@@ -16,8 +16,8 @@ export function VoiceCheckPanel(props: { state: RoomVoiceState; settings?: OmoVo
     const [loop, setLoop] = React.useState<{ handle: LoopbackHandle; state: string; path?: string; level: number }>();
     const [rec, setRec] = React.useState<{ phase: 'idle' | 'recording' | 'ready' | 'playing'; url?: string; bytes?: number; level: number }>({ phase: 'idle', level: 0 });
     const [error, setError] = React.useState('');
-    const loopRef = React.useRef<LoopbackHandle>();
-    const urlRef = React.useRef<string>();
+    const loopRef = React.useRef<LoopbackHandle | undefined>(undefined);
+    const urlRef = React.useRef<string | undefined>(undefined);
     React.useEffect(() => () => { loopRef.current?.stop(); if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
     React.useEffect(() => {
         if (!loop) return;

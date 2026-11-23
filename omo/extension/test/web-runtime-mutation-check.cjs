@@ -1,6 +1,6 @@
 // Mutation check for the web runtime: break one guard or input path at a time in the COMPILED
 // service, confirm the real-Chrome suite goes red, then restore. A harmless control must stay green.
-// Run: npx --yes --package=node@22.23.4 --call 'node extension/test/web-runtime-mutation-check.cjs'
+// Run: npx --yes --package=node@24.22.3 --call 'node extension/test/web-runtime-mutation-check.cjs'
 const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');

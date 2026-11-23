@@ -70,7 +70,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
-          node-version: '22'
+          node-version: '24'
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
@@ -100,6 +100,20 @@ jobs:
         run: npm rebuild drivelist node-pty --foreground-scripts
       - name: Type-check and compile
         run: npm run compile
+      - name: Install the style kits (baked rooms + CC0 props) from the checksum-verified kits release
+        # The kit binaries (~100 MB) are not in git. They live as a zip on the build mirror's omo-kits-v1 release;
+        # the .sha256 checks the zip and fetch-style-kits.cjs --check verifies every file against style-kits.lock.json.
+        env:
+          KITS_URL: https://github.com/omoresearch/omo-spatial-ide-build/releases/download/omo-kits-v1
+          KITS_ZIP: omo-style-kits-skyline-penthouse-v1.zip
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$KITS_ZIP" "$KITS_URL/$KITS_ZIP"
+          want="$(curl -fsSL --retry 3 "$KITS_URL/$KITS_ZIP.sha256" | awk '{print $1}')"
+          if command -v sha256sum >/dev/null 2>&1; then got="$(sha256sum "$RUNNER_TEMP/$KITS_ZIP" | awk '{print $1}')"; else got="$(shasum -a 256 "$RUNNER_TEMP/$KITS_ZIP" | awk '{print $1}')"; fi
+          test -n "$want" && test "$want" = "$got" || { echo "kits zip checksum mismatch: want $want got $got"; exit 1; }
+          rm -rf kits && mkdir -p kits && unzip -q "$RUNNER_TEMP/$KITS_ZIP" -d kits
+          node scripts/fetch-style-kits.cjs --check
+          echo "OMO_REQUIRE_KITS=1" >> "$GITHUB_ENV"
       - name: Cache checksum-verified IDE extension downloads
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:

@@ -1,13 +1,13 @@
 {
   "_comment": "Pinned third-party runtimes bundled into the Omo app packages. Every download is sha256-verified by fetch-pinned.cjs before use. Update url + sha256 together, from the publisher's own checksum list.",
   "node": {
-    "version": "22.23.4",
-    "source": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt (official Node.js release, LTS 'Jod')",
+    "version": "24.22.3",
+    "source": "https://nodejs.org/dist/v24.22.3/SHASUMS256.txt (official Node.js release, LTS 'Krypton')",
     "assets": {
-      "darwin-arm64": { "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-darwin-arm64.tar.gz", "sha256": "c9e1dbc748b33ed2d14f42445191ecaf14c56259c7a9a26d0042c49ec2b66428", "dir": "node-v22.23.4-darwin-arm64" },
-      "darwin-x64": { "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-darwin-x64.tar.gz", "sha256": "efcc2b0db6f94bf53eddb038fe2b370277a042bd29e4f19b8f8e23598795b819", "dir": "node-v22.23.4-darwin-x64" },
-      "linux-x64": { "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz", "sha256": "b8492284c76a54baf58d61668dd0e41ee0fc98adabf9503d30f05d08f55b4406", "dir": "node-v22.23.4-linux-x64" },
-      "linux-arm64": { "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-arm64.tar.gz", "sha256": "f7a1e486dbc8b286847815b477d4fb5e9fb963ed4489c3e1588853d685f589f9", "dir": "node-v22.23.4-linux-arm64" }
+      "darwin-arm64": { "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-darwin-arm64.tar.gz", "sha256": "ff6e17d4874b76d272212b908cc020d6e815fba5a6c7eaaa06add725840307fd", "dir": "node-v24.22.3-darwin-arm64" },
+      "darwin-x64": { "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-darwin-x64.tar.gz", "sha256": "977614af0504c81045e7fd85596dbca0e5f951b96681516dadafedcca8c447f7", "dir": "node-v24.22.3-darwin-x64" },
+      "linux-x64": { "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-linux-x64.tar.gz", "sha256": "061ec3e3062115705b56b51fa9cc330ab50d34b6969387d4e4b1a50c6809acc2", "dir": "node-v24.22.3-linux-x64" },
+      "linux-arm64": { "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-linux-arm64.tar.gz", "sha256": "261af2af250dfd7e9f25cf151d1b2713a0adf8f10a9ad116c4947f68627affe8", "dir": "node-v24.22.3-linux-arm64" }
     }
   },
   "tmux": {

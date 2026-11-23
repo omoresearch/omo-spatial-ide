@@ -90,7 +90,7 @@ Run with Node 22.23.4:
 ```
 cd omo
 export OMO_SPATIAL_TEST_TMUX=$HOME/.local/share/omo/bin/tmux   # when tmux is not on PATH
-npx --yes --package=node@22.23.4 --call 'npm run compile && node --experimental-strip-types --test --test-concurrency=1 extension/test/*.test.cjs'
+npx --yes --package=node@24.22.3 --call 'npm run compile && node --experimental-strip-types --test --test-concurrency=1 extension/test/*.test.cjs'
 ```
 
 - `extension/test/runtime-extra.test.cjs` has 12 tests. They use real tmux 3.7b, real bash and the

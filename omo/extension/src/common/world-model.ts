@@ -53,7 +53,8 @@ export interface MonitorWallEntity extends EntityBase { kind: 'monitor-wall'; wi
 export interface WebWallEntity extends EntityBase { kind: 'web-wall'; width: number; height: number; elevation: number; home?: string }
 export interface MirrorEntity extends EntityBase { kind: 'mirror'; link: string }
 export interface ReviewScreenEntity extends EntityBase { kind: 'review-screen' }
-export interface DecorEntity extends EntityBase { kind: 'decor'; decor: DecorKind; scale?: number }
+/** sky:merge — `prop` names a style-kit catalogue model (world-style-kits.ts KIT_PROPS); `decor` stays the fallback look + collision. */
+export interface DecorEntity extends EntityBase { kind: 'decor'; decor: DecorKind; scale?: number; prop?: string }
 /**
  * w3:expand — a room inside the world: its own floor, walls on all four sides and a doorway (a 1.6 m gap,
  * centred) in every side listed in `doors` (default ['front']). The transform is the room centre; rotation
@@ -135,7 +136,7 @@ export function validEntity(e: unknown, shell: WorldShell): e is WorldEntity {
         case 'web-wall': return finite(v.width, 0.8, 8) && finite(v.height, 0.6, 4) && finite(v.elevation, 0, 3) && (v.home === undefined || (typeof v.home === 'string' && /^https?:\/\//.test(v.home) && v.home.length <= 2048));
         case 'mirror': return WORLD_ID_RE.test(v.link);
         case 'review-screen': return true;
-        case 'decor': return ['plant', 'lamp', 'crystal', 'sofa', 'bookshelf', 'whiteboard', 'rug', 'window'].includes(v.decor) && (v.scale === undefined || finite(v.scale, 0.25, 4));
+        case 'decor': return ['plant', 'lamp', 'crystal', 'sofa', 'bookshelf', 'whiteboard', 'rug', 'window'].includes(v.decor) && (v.scale === undefined || finite(v.scale, 0.25, 4)) && (v.prop === undefined || (typeof v.prop === 'string' && /^[A-Za-z0-9_]{1,48}$/.test(v.prop))); // sky:merge prop
         case 'room': return validRoom(v);
         default: return false;
     }
@@ -144,13 +145,13 @@ export function validEntity(e: unknown, shell: WorldShell): e is WorldEntity {
 export function validRoom(v: RoomEntity): boolean {
     const quarter = Math.abs(Math.round(v.transform.rotation / (Math.PI / 2)) * (Math.PI / 2) - v.transform.rotation) < 1e-6;
     const doors = v.doors === undefined || (Array.isArray(v.doors) && v.doors.length <= 4 && new Set(v.doors).size === v.doors.length && v.doors.every(d => WALL_SIDES.includes(d)));
-    return finite(v.width, ROOM_MIN, ROOM_MAX) && finite(v.depth, ROOM_MIN, ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle');
+    return finite(v.width, ROOM_MIN, ROOM_MAX) && finite(v.depth, ROOM_MIN, ROOM_MAX) && quarter && doors && (v.theme === undefined || v.theme === 'station' || v.theme === 'jungle' || v.theme === 'skyline');
 }
 
 export function validateWorld(w: unknown): WorldResult {
     const v = w as WorldSpec;
     if (!v || v.version !== WORLD_VERSION || !text(v.name, 120) || !Number.isInteger(v.revision) || v.revision < 0) return { ok: false, error: 'Not a version 2 world.' };
-    if (!v.shell || !['station', 'jungle'].includes(v.shell.theme) || !finite(v.shell.width, SHELL_MIN, SHELL_MAX) || !finite(v.shell.depth, SHELL_MIN, SHELL_MAX)
+    if (!v.shell || !['station', 'jungle', 'skyline'].includes(v.shell.theme) || !finite(v.shell.width, SHELL_MIN, SHELL_MAX) || !finite(v.shell.depth, SHELL_MIN, SHELL_MAX)
         || (v.shell.open !== undefined && typeof v.shell.open !== 'boolean')) return { ok: false, error: 'The room shell is invalid.' };
     if (!Array.isArray(v.entities) || v.entities.length > WORLD_MAX_ENTITIES) return { ok: false, error: `A world holds at most ${WORLD_MAX_ENTITIES} things.` };
     const ids = new Set<string>();

@@ -4,6 +4,7 @@ import { AgentGlyph } from './agent-glyphs';
 import { VoiceSettingsPanel } from './voice-settings-panel';
 import { VoiceCheckPanel } from './voice-settings-check';
 import type { VoicePeerState } from './voice-controller';
+import '../../src/browser/world-tokens.css'; // world-ui: the one overlay token file
 import '../../src/browser/voice.css';
 
 import { DESK_NAME } from './chat-mentions'; // w2:runtime: names of every world station

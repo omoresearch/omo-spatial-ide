@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { createPortal } from '@theia/core/shared/react-dom';
+import { createPortal } from 'react-dom';
 import type { TerminalWorkstation, Workstation } from './room-scene';
 import { currentStations, stationName } from './world-stations'; // w2:runtime
 import type { RuntimeConsoleController, RuntimeConsoleState } from './runtime-console-controller';
@@ -95,7 +95,7 @@ export function ShortcutsLane(props: ShortcutsLaneProps): React.ReactElement | n
     const latest = React.useRef(props); latest.current = props;
     const [toast, setToast] = React.useState<{ text: string; tone: 'info' | 'warn'; id: number }>();
     const [rename, setRename] = React.useState<RenameBox>();
-    const armed = React.useRef<{ station: TerminalWorkstation; tabId: string; at: number }>();
+    const armed = React.useRef<{ station: TerminalWorkstation; tabId: string; at: number } | undefined>(undefined);
     // F1 (or ? when not typing): the key sheet. First room on this device: the coach mark, once.
     const [sheet, setSheet] = React.useState(false);
     const [coach, setCoach] = React.useState(() => !coachSeen());

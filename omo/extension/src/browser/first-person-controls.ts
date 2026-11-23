@@ -51,6 +51,8 @@ export class FirstPersonControls {
     // w2:render — walking rules and reset spot of the current WorldSpec (RoomScene sets them). Unset = v1 layout rules.
     mover?: (player: PlayerPose, input: { forward: number; right: number }, seconds: number) => PlayerPose;
     home?: PlayerPose;
+    /** world-ui r4/2: eye height of the current world (a style kit sets its own); unset = EYE_Y. */
+    eye?: number;
     private keys = new Set<string>();
     private selecting = false;
     private selectionOrigin?: { x: number; y: number };
@@ -357,7 +359,7 @@ export class FirstPersonControls {
         this.focusListeners.forEach(listener => listener(state));
     }
     private dropFocus(): void { this.flight = undefined; if (this.focusState.phase !== 'walk') this.setFocus({ phase: 'walk', full: false }); }
-    private walkView(out: View = this.view): View { out.x = this.pose.x; out.y = EYE_Y; out.z = this.pose.z; out.yaw = this.pose.yaw; out.pitch = this.pose.pitch; return out; }
+    private walkView(out: View = this.view): View { out.x = this.pose.x; out.y = this.eye ?? EYE_Y; out.z = this.pose.z; out.yaw = this.pose.yaw; out.pitch = this.pose.pitch; return out; }
     private currentView(): View { const p = this.camera.position, r = this.camera.rotation; return { x: p.x, y: p.y, z: p.z, yaw: r.y, pitch: r.x }; }
     /** Square-on, distance fitted to the live aspect so the screen fills ~90% of the view. */
     private screenView(screen: FocusScreen, out: View = this.view): View {

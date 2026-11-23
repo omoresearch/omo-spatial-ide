@@ -17,7 +17,7 @@
 import { ElectronMainApplication, ElectronMainApplicationContribution } from '@theia/core/lib/electron-main/electron-main-application';
 import { ElectronSecurityTokenService } from '@theia/core/lib/electron-main/electron-security-token-service';
 import { inject, injectable } from '@theia/core/shared/inversify';
-import { MiniBrowserEndpoint } from '../common/mini-browser-endpoint';
+import { MiniBrowserEndpoint } from '../common/mini-browser-endpoint.js';
 
 /**
  * Since the mini-browser might serve content from a new origin,
@@ -30,9 +30,11 @@ export class MiniBrowserElectronMainContribution implements ElectronMainApplicat
     @inject(ElectronSecurityTokenService)
     protected readonly electronSecurityTokenService: ElectronSecurityTokenService;
 
-    async onStart(app: ElectronMainApplication): Promise<void> {
-        const url = this.getMiniBrowserEndpoint(await app.backendPort);
-        await this.electronSecurityTokenService.setElectronSecurityTokenCookie(url);
+    onStart(app: ElectronMainApplication): void {
+        // Contributions start before the backend is listening; the cookie is only needed once a mini-browser loads.
+        app.backendPort
+            .then(port => this.electronSecurityTokenService.setElectronSecurityTokenCookie(this.getMiniBrowserEndpoint(port)))
+            .catch(error => console.error('Failed to set the security token cookie for the mini-browser.', error));
     }
 
     protected getMiniBrowserEndpoint(port: number): string {

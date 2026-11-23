@@ -1,0 +1,13 @@
+{
+ "model": "segmind/tiny-sd",
+ "seed": 11,
+ "size": [
+  2048,
+  2048
+ ],
+ "prompt": "google earth satellite image of New York city at night, map view from directly above, rectangular city blocks separated by straight streets in a grid, flat roofs seen from above, orange sodium street lights along the streets, car headlights, dark rooftops, high resolution aerial imagery",
+ "negative": "text, watermark, logo, letters, people, blurry, cartoon, painting, illustration, cgi, perspective, horizon, sky, skyline, tilt, fisheye, frame, border, low quality",
+ "cfg": 7.0,
+ "pass2_strength": 0.4,
+ "seconds": 94.3
+}

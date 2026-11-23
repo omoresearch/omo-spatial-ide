@@ -1,0 +1,405 @@
+{
+  "hero": [
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/hero-v1.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1536x1024",
+      "seconds": 23.8,
+      "server_fields": {
+        "created": 1795159561,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "medium",
+        "safety_identifier": null,
+        "size": "1536x1024",
+        "usage": {
+          "input_tokens": 431,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 431
+          },
+          "output_tokens": 601,
+          "output_tokens_details": {
+            "image_tokens": 601,
+            "text_tokens": 0
+          },
+          "total_tokens": 1032
+        },
+        "imagegen_request_id": "30c501b1-2558-4783-b085-6ce41ba6e02a",
+        "data_fields": [
+          {
+            "generation_id": "41622ac3-d6b2-4529-a36d-5dc681dedf01"
+          }
+        ]
+      },
+      "prompt": "Hero image: a floating circular platform of polished black stone hovering in an infinite dark void, seen from a low three-quarter angle. On the platform is a sleek personal workspace: a curved low desk, a smooth chair, and a ring of five large thin floating glass screens arranged in a gentle arc around the desk at different heights and depths, each softly glowing with abstract code-like light lines in mint and white. Behind them a tall curved 'web wall' screen glows faintly. A soft mint light pools on the platform floor and a fine ring of light traces the platform edge. Tiny drifting motes of light in the air like dust in a beam. The whole scene is small in the centre and surrounded by deep black space.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    }
+  ],
+  "momentum": [
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/momentum-v1.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1536x1024",
+      "seconds": 23.4,
+      "server_fields": {
+        "created": 1795159561,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "low",
+        "safety_identifier": null,
+        "size": "1536x1024",
+        "usage": {
+          "input_tokens": 396,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 396
+          },
+          "output_tokens": 343,
+          "output_tokens_details": {
+            "image_tokens": 343,
+            "text_tokens": 0
+          },
+          "total_tokens": 739
+        },
+        "imagegen_request_id": "676385ce-fea3-46ac-ba0d-0e4396c60abd",
+        "data_fields": [
+          {
+            "generation_id": "02825d25-993c-4cd8-b329-c975bf37d9c2"
+          }
+        ]
+      },
+      "prompt": "Concept image for 'no friction to continue': a quiet dark workspace room exactly as someone left it, still alive. A chair turned slightly away from a sleek desk, floating screens still glowing mid-task with abstract light lines, a half-finished floating 3D model on the desk paused in mid-air, a soft trail of light leading from the foreground toward the desk like a path back into the work. The room has no walls, it dissolves into black at the edges. Cinematic, intimate, warm sense of 'pick up where you left off'.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    }
+  ],
+  "proximity": [
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/proximity-v1.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1672x941",
+      "seconds": 21.6,
+      "server_fields": {
+        "created": 1795159559,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "low",
+        "safety_identifier": null,
+        "size": "1672x941",
+        "usage": {
+          "input_tokens": 391,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 391
+          },
+          "output_tokens": 301,
+          "output_tokens_details": {
+            "image_tokens": 301,
+            "text_tokens": 0
+          },
+          "total_tokens": 692
+        },
+        "imagegen_request_id": "128d9e43-66af-402a-96bb-1f33b297e0c4",
+        "data_fields": [
+          {
+            "generation_id": "5786a429-e155-476b-938a-fd4b90561e8e"
+          }
+        ]
+      },
+      "prompt": "Concept image for proximity voice chat in a 3D workspace: two sleek minimal faceless humanoid avatars made of smooth matte graphite with soft mint rim light, standing close together near a floating screen, with gentle concentric rings of light rippling out on the dark floor from each of them and overlapping where they meet, showing their voices blending. A third avatar stands far away in the dark, its own faint ring separate and dim. Elegant, abstract figures with no facial features, no clothing details. Black floor that fades to black.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    },
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/proximity-v2.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1672x941",
+      "seconds": 24.8,
+      "server_fields": {
+        "created": 1795159863,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "medium",
+        "safety_identifier": null,
+        "size": "1672x941",
+        "usage": {
+          "input_tokens": 418,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 418
+          },
+          "output_tokens": 515,
+          "output_tokens_details": {
+            "image_tokens": 515,
+            "text_tokens": 0
+          },
+          "total_tokens": 933
+        },
+        "imagegen_request_id": "6357ad5f-6191-434f-9f9c-95e091049e76",
+        "data_fields": [
+          {
+            "generation_id": "93153f0e-62e0-474d-a2d1-07f1dff6ff65"
+          }
+        ]
+      },
+      "prompt": "Concept image for proximity voice chat in a sleek 3D workspace: two minimal faceless humanoid avatars of smooth matte graphite with mint rim light stand close together beside a floating glass screen, one clearly talking with a gentle open-hand gesture. Soft circular ripples of mint light spread outward from each avatar's head at chest height, like sound, and where the two sets of ripples overlap they glow brighter. Far away to the right, in the dark, a third avatar works alone at a small desk with its own faint separate ripple that does not touch theirs, a clear dark gap between them. Polished black floor with soft reflections. Calm, elegant, cinematic.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    }
+  ],
+  "worlds": [
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/worlds-v1.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1536x1024",
+      "seconds": 21.6,
+      "server_fields": {
+        "created": 1795159559,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "low",
+        "safety_identifier": null,
+        "size": "1536x1024",
+        "usage": {
+          "input_tokens": 383,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 383
+          },
+          "output_tokens": 343,
+          "output_tokens_details": {
+            "image_tokens": 343,
+            "text_tokens": 0
+          },
+          "total_tokens": 726
+        },
+        "imagegen_request_id": "b906d0cf-fcdd-4da6-8d0b-047b0cd939f8",
+        "data_fields": [
+          {
+            "generation_id": "af6c219d-9f5e-41e5-99a8-ed1b7696f54c"
+          }
+        ]
+      },
+      "prompt": "Concept image for shareable worlds built from your data: a small floating glass sphere containing a complete miniature workspace world, desks, tiny screens, elegant 3D data sculptures such as glowing bar towers, a flowing line graph shaped like a ribbon and a constellation of connected nodes. A thin bright thread of mint light leaves the sphere and travels to a second, smaller identical sphere floating further away, as if the world is being shared. Jewel-like, precise, magical, set in pure black space.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    }
+  ],
+  "pages": [
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/pages-v1.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1536x1024",
+      "seconds": 30.2,
+      "server_fields": {
+        "created": 1795159589,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "medium",
+        "safety_identifier": null,
+        "size": "1536x1024",
+        "usage": {
+          "input_tokens": 391,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 391
+          },
+          "output_tokens": 601,
+          "output_tokens_details": {
+            "image_tokens": 601,
+            "text_tokens": 0
+          },
+          "total_tokens": 992
+        },
+        "imagegen_request_id": "a84dcd76-0c6f-4b7e-a41b-1d229f670428",
+        "data_fields": [
+          {
+            "generation_id": "6deb4b2c-2b1b-4e7e-be09-c26de4ac157b"
+          }
+        ]
+      },
+      "prompt": "Concept image for persistent web pages generated on demand: inside a dark spatial workspace, a tall gently curved wall of dark glass where several website page layouts are materialising out of streams of tiny glowing particles. The layouts are made only of abstract blocks: image rectangles, soft lines for text, rounded button shapes, no readable words. One page is fully formed and pinned in place with a soft mint glow, others are still assembling from light. A sleek desk and chair stand in front of the wall for scale. Edges dissolve into black.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    }
+  ],
+  "agent": [
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/agent-v1.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1672x941",
+      "seconds": 25.7,
+      "server_fields": {
+        "created": 1795159585,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "low",
+        "safety_identifier": null,
+        "size": "1672x941",
+        "usage": {
+          "input_tokens": 407,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 407
+          },
+          "output_tokens": 301,
+          "output_tokens_details": {
+            "image_tokens": 301,
+            "text_tokens": 0
+          },
+          "total_tokens": 708
+        },
+        "imagegen_request_id": "507e1ce7-b91d-4a4c-91a9-7063adf5e91b",
+        "data_fields": [
+          {
+            "generation_id": "dc65571c-4314-4705-9b06-96630818cc6e"
+          }
+        ]
+      },
+      "prompt": "Concept image for an AI agent that lives inside your 3D workspace and is spatially aware of everything: a calm luminous presence at the centre of a dark workspace, a softly glowing mint-white orb of light with gentle internal motion, hovering at eye height. From it, very fine hairline threads of light reach out to every object in the room, each floating screen, the desk, a shelf of floating cards, a web wall, a distant second desk, showing that it sees and connects everything. Serene, intelligent, not a robot, no face. The room dissolves into black at the edges.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    }
+  ],
+  "palace": [
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/palace-v1.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1536x1024",
+      "seconds": 23.5,
+      "server_fields": {
+        "created": 1795159584,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "medium",
+        "safety_identifier": null,
+        "size": "1536x1024",
+        "usage": {
+          "input_tokens": 401,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 401
+          },
+          "output_tokens": 601,
+          "output_tokens_details": {
+            "image_tokens": 601,
+            "text_tokens": 0
+          },
+          "total_tokens": 1002
+        },
+        "imagegen_request_id": "dff1fd7d-aa1b-4367-aa46-ed9866d4d28b",
+        "data_fields": [
+          {
+            "generation_id": "88465821-a5fd-4b95-99eb-14daa9a86c59"
+          }
+        ]
+      },
+      "prompt": "Concept image for 'the world's first multiplayer mind palace': a vast, breathtaking architecture floating in black space, many elegant open rooms and terraces stacked at different levels and connected by thin bridges and stairways of light, like a palace of thought. Each room holds glowing floating screens and memory cards. Several tiny minimal faceless avatars, each with a soft mint rim light, are working in different rooms at the same time, small in scale to show the grandeur. Sleek modern architecture, curved black stone and dark glass, not fantasy castle. The whole structure fades into black at the edges.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    },
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/palace-v2.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1536x1024",
+      "seconds": 26.7,
+      "server_fields": {
+        "created": 1795159865,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "medium",
+        "safety_identifier": null,
+        "size": "1536x1024",
+        "usage": {
+          "input_tokens": 459,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 459
+          },
+          "output_tokens": 601,
+          "output_tokens_details": {
+            "image_tokens": 601,
+            "text_tokens": 0
+          },
+          "total_tokens": 1060
+        },
+        "imagegen_request_id": "d9cdecae-b4ca-4858-a9d3-d67a499c1fa9",
+        "data_fields": [
+          {
+            "generation_id": "d4126a17-fb7b-4a4d-864c-f398eb0d316b"
+          }
+        ]
+      },
+      "prompt": "Concept image for 'your multiplayer mind palace': a grand but clearly readable floating architecture in black space, built around one bright central core, a large softly glowing mint sphere of light at the heart of a circular atrium. Around it, on three elegant curved terraces of black stone and dark glass, sit distinct rooms of thought: a library of floating glowing cards, a room with a big floating 3D model, a quiet desk with three screens, a garden-like room with a small tree. Thin bridges of light link every room to the core. Several small minimal faceless avatars with soft mint rim light: two stand together sharing one floating hologram, one walks across a bridge of light toward them, one works alone at a desk. Sleek, modern, curved architecture, not a fantasy castle. Clear silhouette, calm, magical. Edges fade fully to black.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    }
+  ],
+  "platforms": [
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/platforms-v1.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1536x1024",
+      "seconds": 18.3,
+      "server_fields": {
+        "created": 1795159580,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "low",
+        "safety_identifier": null,
+        "size": "1536x1024",
+        "usage": {
+          "input_tokens": 396,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 396
+          },
+          "output_tokens": 343,
+          "output_tokens_details": {
+            "image_tokens": 343,
+            "text_tokens": 0
+          },
+          "total_tokens": 739
+        },
+        "imagegen_request_id": "4cf7403a-789f-42ee-b454-64048a6b66ce",
+        "data_fields": [
+          {
+            "generation_id": "a76ff3c3-6fa7-4949-b069-8ba96d9221bd"
+          }
+        ]
+      },
+      "prompt": "Product concept for 'runs in the browser or as a desktop app': a sleek modern laptop with a black aluminium body (no logo, no brand marks) placed at a gentle three-quarter angle on an invisible black surface, and beside it, floating slightly behind, a large frameless dark browser-like window panel. Both screens show the same scene: a beautiful 3D spatial workspace with a floating platform, glowing screens and soft mint light. A faint reflection under the laptop. No keyboard legends visible, no text, no logos. Everything else is pure black.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    }
+  ],
+  "cta": [
+    {
+      "file": "~/dev/omo-space-landing-mockup/images/originals/cta-v1.png",
+      "requested_model": "gpt-image-2.6-sunburst",
+      "route": "openai-codex (ChatGPT subscription OAuth)",
+      "pixels": "1024x1536",
+      "seconds": 16.6,
+      "server_fields": {
+        "created": 1795159596,
+        "background": "opaque",
+        "output_format": "png",
+        "quality": "low",
+        "safety_identifier": null,
+        "size": "1024x1536",
+        "usage": {
+          "input_tokens": 371,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 371
+          },
+          "output_tokens": 343,
+          "output_tokens_details": {
+            "image_tokens": 343,
+            "text_tokens": 0
+          },
+          "total_tokens": 714
+        },
+        "imagegen_request_id": "f2439ed8-4866-4467-88d1-8d03120d9008",
+        "data_fields": [
+          {
+            "generation_id": "ba9298f4-35fb-4eff-b8b5-3d6ff4e78a34"
+          }
+        ]
+      },
+      "prompt": "Final call-to-action image: a tall, slim doorway made of pure soft light standing alone in an endless black void, slightly open, with a glimpse of a warm, inviting glowing 3D workspace beyond it, floating screens and a mint glow spilling out through the opening onto a black reflective floor in a long soft beam. Minimal, iconic, magical, the feeling of stepping into your own mind. Lots of black space around it.\n\nSTYLE AND PLACEMENT RULES (critical): This image sits on a website whose page background is pure black #000000. The background of the image must be pure black, and all four edges of the image must fade fully to pure black (#000000) with no border, frame, vignette band, box, horizon line or grey haze reaching the edges, so the picture melts into the black page with no visible rectangle. Keep the subject inside the central 70% of the frame with generous black negative space around it.\nLook: a premium, sleek, modern 3D spatial workspace for software makers, rendered like high-end product CGI with cinematic lighting. Smooth rounded architectural forms, satin black and graphite materials, polished dark glass, thin luminous edges. Light comes from the screens and from soft mint-teal (#7CF2D0) and cool white glows, with a few tiny warm amber accents at most. Calm, magical, quiet and precise, like a still from a beautiful sci-fi film, not a game.\nNot Minecraft: no voxels, no blocky low-poly cubes, no pixel art, no cartoon, no toy look.\nScreens and panels show only abstract soft glowing lines and shapes, never readable text, letters, numbers, logos, icons with words, or user-interface labels. No watermark, no signature, no captions anywhere in the image."
+    }
+  ]
+}

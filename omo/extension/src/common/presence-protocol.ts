@@ -87,7 +87,7 @@ export function presenceJoin(input: PresenceJoin): PresenceJoin {
     if (typeof input.name !== 'string' || !input.name.trim() || input.name.trim().length > 32 || /[\u0000-\u001f\u007f-\u009f]/u.test(input.name)) throw new Error('Name must be 1–32 characters without control characters.');
     if (typeof input.clientId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(input.clientId)) throw new Error('Invalid tab identity.');
     if (typeof input.projectUri !== 'string' || input.projectUri.length > 4096 || !input.projectUri.startsWith('file:///') || /[\u0000-\u001f]/u.test(input.projectUri)) throw new Error('Choose a local project.');
-    if (input.theme !== 'station' && input.theme !== 'jungle') throw new Error('Invalid room theme.');
+    if (input.theme !== 'station' && input.theme !== 'jungle' && input.theme !== 'skyline') throw new Error('Invalid room theme.');
     if (input.layout !== undefined && input.layout !== 'classic' && input.layout !== 'wide') throw new Error('Invalid room layout.');
     const normalized: PresenceJoin = { roomId: input.roomId, name: input.name.trim(), clientId: input.clientId, projectUri: input.projectUri, theme: input.theme };
     if (input.layout === 'wide') normalized.layout = 'wide';

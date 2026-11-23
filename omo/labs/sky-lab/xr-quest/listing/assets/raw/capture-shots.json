@@ -1,0 +1,29 @@
+[
+  {
+    "file": "listing/assets/raw/shot-1-arrive.png",
+    "note": "arrival: three live desks, right controller pointing at Desk 2, left wrist hint"
+  },
+  {
+    "file": "listing/assets/raw/shot-2-panel.png",
+    "note": "Desk 2 brought close as a readable panel; the real test-suite results (out/test-step4-run2.log)"
+  },
+  {
+    "file": "listing/assets/raw/shot-3-place.png",
+    "note": "panel gripped and moved aside (grabbed=true); Desk 3 still live (top) behind it"
+  },
+  {
+    "file": "listing/assets/raw/shot-4-desks.png",
+    "note": "three desks, three real shells (git log, test results, top), seen from the west end"
+  },
+  {
+    "file": "listing/assets/raw/shot-5-lounge.png",
+    "note": "the lounge and the city through two glass walls, controllers down"
+  },
+  {
+    "file": "listing/assets/raw/shot-6-teleport.png",
+    "note": "teleport aim on the floor (valid=true), looking back over the lounge to the desks"
+  },
+  {
+    "errors": []
+  }
+]

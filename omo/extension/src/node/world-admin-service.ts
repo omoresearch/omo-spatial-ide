@@ -35,6 +35,8 @@ import type {
     WorldAdminHermesStatus, WorldAdminPlan, WorldAdminRequest, WorldAdminService
 } from '../common/world-admin-protocol';
 import { describeOp, newProposalId, planWithRules, summarize } from '../common/world-admin-rules';
+import { KIT_PROPS, STYLE_KITS, kitProp } from '../common/world-style-kits'; // sky:merge M7
+import { WORLD_TEMPLATES } from '../common/world-templates'; // sky:merge M7
 import { assertHermesProfileTurnLeaseFree, inspectHermesProfileTurnLeases } from './hermes-profile-lease';
 import { isExecutable, sanitizedEnv, which } from './runtime-discovery';
 
@@ -117,8 +119,8 @@ WorldOp is one of:
 {"op":"resize","id":string,"width":number,"height":number,"elevation"?:number}
 {"op":"link","id":string,"to"?:string}          (monitor-wall or mirror -> a station id; omit "to" to unlink a monitor wall)
 {"op":"rename","id":string,"label":string}
-{"op":"shell","shell":{"theme"?:"station"|"jungle","width"?:number,"depth"?:number,"open"?:boolean}}   (world ${SHELL_MIN}..${SHELL_MAX} m each way; "open":true = open world, no outer walls)
-{"op":"reshape","id":roomId,"width":number,"depth":number,"doors"?:WallSide[],"theme"?:"station"|"jungle"}   (resize a room ${ROOM_MIN}..${ROOM_MAX} m and/or set its doorways)
+{"op":"shell","shell":{"theme"?:"station"|"jungle"|"skyline","width"?:number,"depth"?:number,"open"?:boolean}}   (world ${SHELL_MIN}..${SHELL_MAX} m each way; "open":true = open world, no outer walls)
+{"op":"reshape","id":roomId,"width":number,"depth":number,"doors"?:WallSide[],"theme"?:"station"|"jungle"|"skyline"}   (resize a room ${ROOM_MIN}..${ROOM_MAX} m and/or set its doorways)
 {"op":"name","name":string}
 
 Transform = {"x":number,"z":number,"rotation":number}  metres; x right (-width/2..width/2), z towards the front (-depth/2..depth/2); rotation radians, 0 faces the back wall (-z).
@@ -129,8 +131,8 @@ WorldEntity = common {"id":string matching ^[a-z0-9][a-z0-9-]{0,47}$ and unique,
   {"kind":"web-wall","width":0.8..8,"height":0.6..4,"elevation":0..3,"home"?:"https://..."}
   {"kind":"mirror","link":stationId}
   {"kind":"review-screen"}
-  {"kind":"decor","decor":"plant"|"lamp"|"crystal"|"sofa"|"bookshelf"|"whiteboard"|"rug"|"window","scale"?:0.25..4}
-  {"kind":"room","width":${ROOM_MIN}..${ROOM_MAX},"depth":${ROOM_MIN}..${ROOM_MAX},"doors"?:WallSide[] (default ["front"]; each is a 1.6 m doorway in the middle of that wall),"theme"?:"station"|"jungle"}
+  {"kind":"decor","decor":"plant"|"lamp"|"crystal"|"sofa"|"bookshelf"|"whiteboard"|"rug"|"window","scale"?:0.25..4,"prop"?:PropId}   (prop = a style-kit catalogue model, see STYLE KITS; decor = its fallback look)
+  {"kind":"room","width":${ROOM_MIN}..${ROOM_MAX},"depth":${ROOM_MIN}..${ROOM_MAX},"doors"?:WallSide[] (default ["front"]; each is a 1.6 m doorway in the middle of that wall),"theme"?:"station"|"jungle"|"skyline"}
       a room inside the world with its own floor and walls; transform = its centre; rotation 0 or ±1.5708 (quarter turns) only; it must fit inside the world.
 StationConfig = {"name":string (max 60),"kind":"hermes"|"shell","profile"?:string (a Hermes profile NAME, never a path),"tabs":[{"name":string,"kind":"shell"|"hermes"|"claude"|"codex"}] (1..8),"locked":boolean}
 
@@ -141,6 +143,8 @@ World layout:
 - When adding a desk, put it inside the room the user means (or the room with the related desks), next to related desks; put a monitor wall linked to a desk just behind that desk.
 - A new room goes next to existing rooms (about 2 m apart) with a doorway facing the nearest existing room. To turn a classic world into an open world, set "open":true, grow the shell, and add a room of the old size at the old centre so nothing moves.
 
+${styleKitPromptSection()}
+
 Rules:
 - Ops apply in order; an op may refer to an id added earlier in the same list.
 - A locked station refuses every change except {"op":"update-station","id":...,"station":{"locked":false}}.
@@ -148,6 +152,22 @@ Rules:
 - Never put secrets, tokens, passwords, API keys, file paths or host names of private machines into any field.
 - Never start an agent; WorldOps cannot run anything. Only change what the user asked for.
 - Prefer moving existing things over removing them. Keep existing ids.`;
+
+/**
+ * sky:merge M7 — what Hermes needs to build kit rooms: the style kits (theme, baked floor, anchors), every catalogue
+ * prop id with its fallback decor kind, and the starting-world templates ("make me a <description> world").
+ */
+export function styleKitPromptSection(): string {
+    const r = (n: number): number => Math.round(n * 100) / 100;
+    const kits = STYLE_KITS.map(k => `- "${k.id}" (theme "${k.theme}"): ${k.description} Baked floor ${k.shell.width} x ${k.shell.depth} m (a CLOSED world of exactly this size with no rooms draws the baked shell). Desk anchors ${k.desks.map(d => `{"x":${r(d.x)},"z":${r(d.z)},"rotation":${r(d.rotation)}}`).join(', ')}; web wall anchor {"x":${r(k.webWall.transform.x)},"z":${r(k.webWall.transform.z)},"rotation":${r(k.webWall.transform.rotation)}} width ${k.webWall.width} height ${k.webWall.height} elevation ${k.webWall.elevation}; free decor spots ${k.decorSlots.map(s => `(${s.x}, ${s.z})`).join(', ')}.`).join('\n');
+    const props = KIT_PROPS.map(p => `${p.id} (${p.label.toLowerCase()}, decor "${p.fallback}"${p.scale ? `, scale ${p.scale}` : ''})`).join('; ');
+    const tpl = WORLD_TEMPLATES.map(t => `${t.id} (${t.world.shell.theme}${t.world.shell.open ? ', open' : ''}: ${t.summary})`).join('; ');
+    return `STYLE KITS (the "skyline" theme uses them):
+${kits}
+- A room in a kit's style: {"kind":"room",...,"theme":"skyline"}. A kit lounge: a skyline room with sofa_02, coffee_table_round_01 and a plant prop inside it.
+- Place a kit prop with {"kind":"decor","decor":<its decor>,"prop":<PropId>}. PropId is EXACTLY one of: ${props}.
+- "Make me a <description> world": remove every entity, set the shell (theme, width, depth, open) of the nearest template, then add its entities; the skyline kit world puts its desks on the desk anchors and the web wall on the web wall anchor. Templates: ${tpl}.`;
+}
 
 export function buildHermesPrompt(world: WorldSpec, request: string): string {
     return `${HERMES_ADMIN_SYSTEM}\n\nCURRENT WORLD (JSON):\n${JSON.stringify(world)}\n\nUSER REQUEST:\n${request}\n\nYOUR ANSWER (one JSON object only):`;
@@ -215,6 +235,11 @@ export function checkHermesAnswer(world: WorldSpec, answer: unknown): CheckedHer
     }
     for (const value of strings(ops)) {
         if (SECRETISH.some(re => re.test(value))) throw new Error('Hermes put something that looks like a file path, password or key into the world. The plan was rejected.');
+    }
+    // sky:merge M7 — a kit prop must be a real catalogue id.
+    for (const [index, op] of ops.entries()) {
+        const prop = op.op === 'add' && op.entity && op.entity.kind === 'decor' ? (op.entity as { prop?: unknown }).prop : undefined;
+        if (prop !== undefined && !kitProp(String(prop))) throw new Error(`Change ${index + 1} uses “${String(prop).slice(0, 48)}”, which is not in the style-kit catalogue.`);
     }
     // Validate op by op for a precise error, then the whole list atomically.
     let draft = world;

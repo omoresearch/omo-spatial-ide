@@ -1,7 +1,8 @@
+import { starterTheme } from './starter-world'; // world-ui (g)
 import * as React from 'react';
 import { injectable, inject, postConstruct, optional } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
-import type { Message } from '@theia/core/shared/@lumino/messaging';
+import type { Message } from '@lumino/messaging';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
@@ -63,12 +64,15 @@ import { FocusMode } from './focus-mode';
 import { FocusOverlay } from './focus-overlay';
 import { ShortcutsLane } from './shortcuts-lane'; // omo keys6 lane
 import { OmoImmersiveService } from './immersive-service'; // omo immersive lane
-import { ImmersivePill } from './immersive-hud'; // omo immersive lane
+import { WorldTopBar, WorldView } from './world-topbar'; // world-ui: the one slim top bar
+import { ShapeMode } from './shape-mode'; // shape (its import also registers Space before any room exists)
+import { CommandPalette, PaletteCommand, isPaletteKey, PALETTE_TOGGLE_EVENT } from './command-palette'; // world-ui
+import { SettingsSheet, SheetSection } from './settings-sheet'; // world-ui
 import { Icon } from './icons'; // omo immersive lane
 // w2:admin (mount hook) — in-world World admin console
 import { AdminController, AdminState, LocalAdminWorldStore, ADMIN_TOGGLE_EVENT, bindAdminKeys } from './admin-controller';
 import type { AdminWorldStore } from './admin-controller';
-import { AdminPanel, AdminButton } from './admin-panel';
+import { AdminPanel } from './admin-panel';
 import { WorldAdminService } from '../common/world-admin-protocol';
 import { sceneControls as adminSceneControls } from './focus-screen';
 // end w2:admin
@@ -96,12 +100,13 @@ const asDesk = (id: string): TerminalWorkstation => id as TerminalWorkstation;
 const CAMERA = { azimuth: 0.56, elevation: 0.61, distance: 24 };
 const THEMES = {
     station: { title: 'Space station', eyebrow: 'ORBITAL / 01', description: 'A quiet observatory for your next big idea.', symbol: '◉' },
-    jungle: { title: 'Prehistoric jungle', eyebrow: 'EXPEDITION / 02', description: 'A green retreat. Room to think, space to build.', symbol: '✳' }
+    jungle: { title: 'Prehistoric jungle', eyebrow: 'EXPEDITION / 02', description: 'A green retreat. Room to think, space to build.', symbol: '✳' },
+    skyline: { title: 'Manhattan skyline', eyebrow: 'FLOOR 61 / 03', description: 'A glass penthouse floor above the city at dusk.', symbol: '▲' } // sky:render
 };
 
 function SceneView(props: { theme: RoomTheme; layout: RoomLayoutId; kit: RoomKitId; camera: RoomState['camera']; onSelect: (station: Workstation, point?: ScreenPoint) => void; onTextSelect: (station: TerminalWorkstation) => void; onCamera: (camera: RoomState['camera']) => void; walk: boolean; terminalFrames: Record<TerminalWorkstation, MonitorFrame>; webFrame?: WebSurfaceFrame; onInstance?: (scene: RoomScene | undefined) => void; onInput: (text: string) => void; onPaste: (text: string) => void; onScroll?: (delta: number) => void; onWebScroll?: (point: ScreenPoint, deltaY: number, deltaX: number) => void; onMessage: (text: string) => void; onShortcut?: (shortcut: 'new-shell' | 'select-tab-2' | 'workspace-picker') => void; onOpenLink?: (url: string) => void; onPose?: (pose: PlayerPose) => void; children?: React.ReactNode }): React.ReactElement {
     const host = React.useRef<HTMLDivElement>(null);
-    const instance = React.useRef<RoomScene>();
+    const instance = React.useRef<RoomScene | undefined>(undefined);
     const callbacks = React.useRef(props); callbacks.current = props;
     const [error, setError] = React.useState('');
     const [ready, setReady] = React.useState(false);
@@ -214,7 +219,7 @@ export class OmoWorldWidget extends ReactWidget {
     private agentSignalPoller?: AgentSignalPoller; // w2:agents
     private project?: URI;
     private room?: RoomState;
-    private draftTheme: RoomTheme = 'station';
+    private draftTheme: RoomTheme = starterTheme(); // world-ui (g): new rooms start in the skyline penthouse
     private draftLayout: RoomLayoutId = 'classic';
     private draftKit: RoomKitId = 'hermes-desk';
     private draftName = '';
@@ -345,6 +350,7 @@ export class OmoWorldWidget extends ReactWidget {
         // --- omo immersive lane (mount hook): the room fills the window while a saved room shows. ---
         const offImmersive = this.immersive.mode.subscribe(() => this.update());
         this.toDispose.push({ dispose: () => { offImmersive(); this.immersive.mode.setEngaged(false); } });
+        this.bindPaletteKeys(); // world-ui
         // --- end omo immersive lane ---
         // --- omo parity2 lane (mount hook): read-only getters; goToDesk is the same path as clicking the desk. Starts nothing. ---
         // w2:agents: real agent signals (read-only) feed the notifications hub; the screen hint stays the fallback.
@@ -397,6 +403,89 @@ export class OmoWorldWidget extends ReactWidget {
     protected override onUpdateRequest(msg: Message): void { super.onUpdateRequest(msg); this.syncImmersive(); this.buildMode.sync(); /* w2:build */ }
     private toggleImmersiveButton = (): void => { this.worldScene?.releaseTyping(); this.immersive.toggleFromButton(); this.focusMode.controls?.element.focus({ preventScroll: true }); };
     private leaveImmersive = (): void => { this.immersive.leave(); this.focusMode.controls?.element.focus({ preventScroll: true }); };
+    // --- world-ui: ⌘K palette + settings sheet. Every control that left the chrome is reachable here. ---
+    private paletteOpen = false;
+    private sheet?: SheetSection;
+    private refocusWorld(): void { this.focusMode.controls?.element.focus({ preventScroll: true }); }
+    private openPalette = (): void => { if (!this.room || this.configuring) return; this.worldScene?.releaseTyping(); this.paletteOpen = true; this.update(); };
+    private closePalette = (): void => { this.paletteOpen = false; this.update(); if (!this.sheet) this.refocusWorld(); };
+    private openSheet = (section: SheetSection = 'share'): void => { this.worldScene?.releaseTyping(); this.paletteOpen = false; this.sheet = section; this.update(); };
+    private closeSheet = (): void => { this.sheet = undefined; this.update(); this.refocusWorld(); };
+    private get worldView(): WorldView { return this.reviewOpen ? 'code' : this.taskOverviewOpen || this.taskWorkspacesOpen ? 'tasks' : 'world'; }
+    private chooseView = (view: WorldView): void => {
+        if (view === 'world') { this.closeWorkspacePanels(); this.refocusWorld(); return; }
+        if (view === 'tasks') { if (this.taskOverviewOpen) return; this.openTaskOverview(); return; }
+        if (!this.reviewOpen) this.selectStation('code');
+    };
+    private sceneButton(testid: string): void { this.node.querySelector<HTMLElement>(`[data-testid="${testid}"]`)?.click(); }
+    private bindPaletteKeys(): void {
+        const key = (event: KeyboardEvent): void => {
+            if (!this.room || this.configuring || this.isDisposed || !this.isVisible) return;
+            const c = this.focusMode.controls;
+            if (!isPaletteKey(event, !!c && (c.typing || c.attached))) return;
+            event.preventDefault(); event.stopImmediatePropagation();
+            if (this.paletteOpen) this.closePalette(); else this.openPalette();
+        };
+        const toggle = (): void => { if (this.paletteOpen) this.closePalette(); else this.openPalette(); };
+        window.addEventListener('keydown', key, true); window.addEventListener(PALETTE_TOGGLE_EVENT, toggle);
+        this.toDispose.push({ dispose: () => { window.removeEventListener('keydown', key, true); window.removeEventListener(PALETTE_TOGGLE_EVENT, toggle); } });
+    }
+    private paletteCommands(): PaletteCommand[] {
+        const out: PaletteCommand[] = [];
+        const joined = this.presenceState.phase === 'joined';
+        const v = this.voiceHub?.state, voiceOn = v?.voice.phase === 'on';
+        out.push(
+            { id: 'view-world', group: 'Go to', label: 'World', icon: 'walk', run: () => this.chooseView('world') },
+            { id: 'view-tasks', group: 'Go to', label: 'Tasks', hint: 'Task overview', icon: 'check', run: () => this.chooseView('tasks') },
+            { id: 'view-task-workspaces', group: 'Go to', label: 'Task workspaces', icon: 'split', disabled: !this.project, run: () => this.openTaskWorkspaces() },
+            { id: 'view-code', group: 'Go to', label: 'Code', hint: 'Review project changes', icon: 'terminal', run: () => this.chooseView('code') });
+        for (const info of this.stationList) out.push({ id: `desk-${info.id}`, group: 'Desks', label: info.name, hint: this.stations.locked(info.id) ? 'Locked' : 'Walk to its screen',
+            keys: info.slot <= 9 ? `Ctrl+${info.slot}` : undefined, icon: 'monitor',
+            run: () => { this.closeWorkspacePanels(); this.chooseStation(info.id); this.focusMode.attachTo(info.id as TerminalWorkstation); } });
+        if (ROOM_KITS[this.room?.kit ?? 'hermes-desk'].webWall) out.push({ id: 'desk-web', group: 'Desks', label: 'Web wall', icon: 'window', run: () => this.chooseStation('web') });
+        out.push(
+            { id: 'desk-mirror', group: 'Desks', label: `Mirror · ${this.stationName(this.mirrorTarget)}`, icon: 'split', run: () => this.selectStation('mirror') },
+            { id: 'station-recipes', group: 'Desks', label: 'Station recipes', hint: 'Save and apply desk tabs', icon: 'refresh', run: () => { this.recipeOpen = true; this.openSheet('desks'); } },
+            { id: 'agents', group: 'Agents', label: 'Agents', hint: 'Installed agents and live signals', icon: 'users', run: () => this.openSheet('agents') },
+            { id: 'notifications', group: 'Agents', label: 'Agent notifications', icon: 'bell', run: () => window.dispatchEvent(new CustomEvent('omo:notices-toggle')) },
+            { id: 'share', group: 'People', label: joined ? 'Shared room' : 'Share or join a room', hint: 'Your name and room code', icon: 'users', run: () => this.openSheet('share') });
+        if (joined) out.push({ id: 'leave-room', group: 'People', label: 'Leave shared room', icon: 'x', run: () => this.leavePresence() });
+        out.push(
+            { id: 'chat', group: 'People', label: 'Room chat', keys: 'Enter', icon: 'chat', disabled: !this.hudHub, run: () => { this.hudHub?.chat.setOpen(true); this.hudHub?.focusChat?.(); } },
+            { id: 'voice', group: 'Voice', label: voiceOn ? (v?.voice.muted ? 'Unmute' : 'Mute') : 'Turn on voice', keys: voiceOn ? 'M' : undefined, icon: 'mic',
+                disabled: !v?.supported || !v?.joined, hint: v?.joined ? undefined : 'Join a shared room first',
+                run: () => { if (voiceOn) this.voiceHub?.voice?.toggleMuted(); else void this.voiceHub?.voice?.enable(); } },
+            { id: 'voice-settings', group: 'Voice', label: 'Voice and speech settings', hint: 'Speech download, voice check, read aloud', icon: 'volume', run: () => this.openSheet('voice') },
+            { id: 'build', group: 'Room', label: this.buildMode.active ? 'Leave build mode' : 'Build mode', keys: 'B', icon: 'plus', run: () => { this.closeWorkspacePanels(); this.buildMode.toggle(); } },
+            { id: 'admin', group: 'Room', label: 'World admin', keys: 'H', icon: 'pencil', disabled: !this.admin, run: () => this.admin?.toggle() },
+            { id: 'full-screen-terminal', group: 'Desks', label: 'Full-screen terminal', keys: 'F', hint: 'The nearest desk, full window', icon: 'maximize', disabled: !this.room || this.configuring, run: () => this.focusMode.fullScreenActive() }, // world-ui r4/4: was a chip in the view
+            { id: 'customise', group: 'Room', label: 'Customise room', hint: 'Theme, layout, kit, name, presets', icon: 'pencil', run: () => this.configure() },
+            { id: 'overview', group: 'Camera', label: 'Overview', icon: 'maximize', run: () => this.sceneButton('overview-mode') },
+            { id: 'first-person', group: 'Camera', label: 'First person', icon: 'walk', run: () => this.sceneButton('walk-mode') },
+            { id: 'reset-view', group: 'Camera', label: 'Reset view', icon: 'refresh', run: () => this.worldScene?.resetCamera() },
+            { id: 'settings', group: 'App', label: 'Settings', icon: 'more', run: () => this.openSheet('room') },
+            { id: 'keys', group: 'App', label: 'Keyboard shortcuts', keys: 'F1', icon: 'keyboard', run: () => window.dispatchEvent(new CustomEvent('omo:keys-help')) },
+            { id: 'immersive', group: 'App', label: this.immersive.mode.active ? 'Show the IDE (leave immersive)' : 'Immersive world', keys: 'G', icon: this.immersive.mode.active ? 'collapse' : 'expand',
+                run: () => { if (this.immersive.mode.active) this.leaveImmersive(); else this.toggleImmersiveButton(); } });
+        return out;
+    }
+    private sheetSections(taskSourceUri: string | undefined): Partial<Record<SheetSection, React.ReactNode>> {
+        return {
+            share: <div className="omo-sheet-section" data-testid="sheet-share">{this.dockPieces(taskSourceUri, 'share')}</div>,
+            voice: <div className="omo-sheet-section" data-testid="sheet-voice">{this.voiceHub ? this.dockPieces(taskSourceUri, 'voice') : <p className="omo-sheet-empty">Voice is not ready yet.</p>}</div>,
+            desks: <div className="omo-sheet-section" data-testid="sheet-desks">
+                <button type="button" className="omo-sheet-row-button" data-testid="sheet-recipes-toggle" aria-expanded={this.recipeOpen} onClick={() => { this.recipeOpen = !this.recipeOpen; this.update(); }}>{this.recipeOpen ? 'Hide station recipes' : 'Station recipes'}</button>
+                {this.dockPieces(taskSourceUri, 'desks')}</div>,
+            agents: <div className="omo-sheet-section" data-testid="sheet-agents">{this.dockPieces(taskSourceUri, 'agents')}</div>,
+            room: <div className="omo-sheet-section" data-testid="sheet-room">
+                <dl className="omo-sheet-facts"><dt>Room</dt><dd>{this.room?.projectName}</dd><dt>Project folder</dt><dd title={this.project?.path.toString()}>{this.project?.path.toString() ?? 'No folder'}</dd></dl>
+                <button type="button" className="omo-sheet-row-button" data-testid="sheet-customise" onClick={() => { this.sheet = undefined; this.configure(); }}>Customise room</button>
+                <button type="button" className="omo-sheet-row-button" data-testid="sheet-immersive" onClick={() => { this.sheet = undefined; this.leaveImmersive(); }}>Show the IDE (leave immersive) <kbd>G</kbd></button>
+                <button type="button" className="omo-sheet-row-button" data-testid="sheet-keys" onClick={() => window.dispatchEvent(new CustomEvent('omo:keys-help'))}>Keyboard shortcuts <kbd>F1</kbd></button>
+                <p className="omo-sheet-note">Saved on this device. No account. Nothing starts unless you choose it.</p></div>
+        };
+    }
+    // --- end world-ui ---
     // --- end omo immersive lane ---
     private storageKey(): string { return `omo.room.v1:${this.project?.toString() ?? ''}`; }
     /**
@@ -927,7 +1016,23 @@ export class OmoWorldWidget extends ReactWidget {
         } catch { this.error = 'Those saved appearance settings could not be exported.'; this.update(); }
     };
     private cancelConfiguration = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetRevision++; this.presetStatus = ''; this.error = ''; this.configuring = false; this.update(); };
-    private configure = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? 'station'; this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.onboardingEpoch++; this.onboardingClassic = !!this.room; /* w2:onboard */ this.update(); };
+    private configure = (): void => { this.invalidatePresetRead(); this.draftWorld = undefined; this.draftWorldSource = undefined; /* w2:templates */ this.presetStatus = ''; this.error = ''; this.leavePresence();this.draftTheme = this.room?.theme ?? starterTheme(); this.draftLayout = this.room?.layout ?? 'classic'; this.draftKit = this.room?.kit ?? 'hermes-desk'; this.draftCamera = this.room ? { ...this.room.camera } : undefined; this.draftName = this.room?.projectName ?? this.draftName; this.configuring = true; this.feedback = ''; this.onboardingEpoch++; this.onboardingClassic = !!this.room; /* w2:onboard */ this.update(); };
+
+    /** world-ui: the console-dock controls. Shown as the dock row with the IDE chrome, or inside the settings sheet while immersive. */
+    private dockPieces(taskSourceUri: string | undefined, only?: 'share' | 'voice' | 'desks' | 'agents'): React.ReactNode {
+        const all = !only;
+        return <>
+                        {(all||only==='share')&&<PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>}
+                        {/* w2:mp-client (mount hook) */}{(all||only==='share')&&this.remoteRoom&&<div className="omo-remote-anchor" ref={el=>{this.remoteAnchor=el;}}><RemoteRoomChip view={this.remoteRoom.state} open={this.remotePanelOpen} onToggle={()=>{this.remotePanelOpen=!this.remotePanelOpen;this.update();}}/>
+                            {this.remotePanelOpen&&<RemoteRoomPopover anchor={this.remoteAnchor}><RemoteRoomPanel controller={this.remoteRoom} view={this.remoteRoom.state} onClose={()=>{this.remotePanelOpen=false;this.update();}}/></RemoteRoomPopover>}</div>}
+                        {/* omo voice lane (mount hook) */}{(all||only==='voice')&&this.voiceHub&&<VoicePanel hub={this.voiceHub} view={this.voiceHub.state}/>}
+                        {/* w2:runtime — desk switcher lists every station in the world (Ctrl+1..9 while attached). Legacy test ids kept for desks one and two. */}
+                        {(all||only==='desks')&&<nav className="omo-station-switch" aria-label="Physical workstations" data-many={this.stationList.length > 2 ? 'true' : undefined}>{/* t3:polish2: 3+ desks -> own wrapping row */}{this.stationList.map(info => { const bells = this.deskState(info.id).unreadBells; const legacy = info.id === 'terminal' ? 'one' : info.id === 'terminal-2' ? 'two' : undefined; return <button key={info.id} data-testid={legacy ? `station-${legacy}-controls` : `station-controls-${info.id}`} data-station={info.id} aria-pressed={this.activeMode === info.id} title={info.slot <= 9 ? `${info.name} (Ctrl+${info.slot} while attached)` : info.name} onClick={()=>this.chooseStation(info.id)}>{this.stations.locked(info.id) ? '🔒 ' : ''}{info.name}{bells > 0 && <strong className="omo-bell-alert" data-testid={legacy ? `station-${legacy}-bell` : `station-bell-${info.id}`} role="status"> · Bell {bells}</strong>}</button>; })}{ROOM_KITS[this.room?.kit ?? 'hermes-desk'].webWall && <button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button>}<button data-testid="station-mirror-controls" onClick={()=>this.selectStation('mirror')}>Mirror · {this.stationName(this.mirrorTarget)}</button>{this.stationList.length > 1 && <select data-testid="station-mirror-link" aria-label="Mirror follows" value={this.mirrorTarget} onChange={event => this.linkMirror(event.target.value)}>{this.stationList.map(info => <option key={info.id} value={info.id}>{info.name}</option>)}</select>}<button data-testid="station-recipe-toggle" aria-expanded={this.recipeOpen} onClick={()=>{this.recipeOpen=!this.recipeOpen;this.update();}}>Station recipes</button>{/* w2:agents */}<button data-testid="agents-toggle" aria-expanded={this.agentsOpen} onClick={()=>{this.agentsOpen=!this.agentsOpen;this.update();}}>Agents</button></nav>}
+                        {/* w2:agents (mount hook) */}{(all||only==='agents')&&(this.agentsOpen||!all)&&<AgentsPanel signals={this.agentSignals} runtime={this.runtime} desk={this.consoleState} projectUri={this.project?.toString()} onOpenWeb={this.openTerminalLink} onClose={()=>{this.agentsOpen=false;this.update();}}/>}
+                        {(all||only==='desks')&&this.recipeOpen&&<StationRecipePanel key={this.activeStation} recipes={recipesForStation(this.recipes,this.activeStation)} stationId={this.activeStation} stationName={this.stationName(this.activeStation)} setup={this.stations.setupRecipeFor(this.activeStation)} worldLocked={this.stations.configLocked(this.activeStation)} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} locked={this.stations.locked(this.activeStation)} onLock={locked=>this.setStationLock(this.activeStation,locked)} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)}/>}
+                        {(all||only==='desks')&&(this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.stationName(this.activeStation)} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>)}
+        </>;
+    }
 
     protected render(): React.ReactNode {
         if (!this.initialized) return <div className="omo-loading">Opening your workspace…</div>;
@@ -935,6 +1040,11 @@ export class OmoWorldWidget extends ReactWidget {
         const layout = this.configuring ? this.draftLayout : this.room?.layout ?? 'classic';
         const taskSourceUri=this.project?.toString();
         return <main className={`omo-root omo-${theme}`} data-testid="omo-world" data-project-uri={this.project?.toString()||''} data-configured={this.room ? 'true' : 'false'} data-active-station={this.activeMode} data-immersive={String(this.immersive.mode.active)}>
+            {/* world-ui (mount hook): immersive = the ONE slim floating top bar, ⌘K palette and settings sheet. */}
+            {this.room && !this.configuring && this.immersive.mode.active && <WorldTopBar roomName={this.room.projectName} view={this.worldView} presence={this.presenceState} hud={this.hudHub} voice={this.voiceHub}
+                error={this.error} onView={this.chooseView} onShare={() => this.openSheet('share')} onPalette={this.openPalette} onSettings={() => this.openSheet('room')}/>}
+            {this.room && !this.configuring && <CommandPalette open={this.paletteOpen} commands={this.paletteOpen ? this.paletteCommands() : []} onClose={this.closePalette}/>}
+            {this.room && !this.configuring && this.immersive.mode.active && this.sheet && <SettingsSheet section={this.sheet} onSection={section => { this.sheet = section; this.update(); }} onClose={this.closeSheet}>{this.sheetSections(taskSourceUri)}</SettingsSheet>}
             {/* design lane (omo/build-design): header markup + classNames only */}
             <header className="omo-header">
                 <div className="omo-brand"><span className="omo-brand-mark">o<span>m</span>o</span><span className="omo-brand-caption">Spatial IDE</span></div>
@@ -987,26 +1097,17 @@ export class OmoWorldWidget extends ReactWidget {
                     <div className="omo-stage-heading"><div><span className="omo-kicker">{THEMES[theme].eyebrow}</span><h2>{this.configuring ? THEMES[theme].title : this.room!.projectName}</h2><p>{this.configuring ? THEMES[theme].description : 'Same project. A different perspective.'}</p></div>
                         {!this.configuring && <button className="omo-outline" data-testid="edit-room" onClick={this.configure}>◌ Customise room</button>}
                     </div>
-                    {this.room && !this.configuring && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
-                        <PresenceStrip state={this.presenceState} onJoin={this.joinPresence} onLeave={this.leavePresence} deskRoom={this.personalRoom?.roomId}/>
-                        {/* w2:mp-client (mount hook) */}{this.remoteRoom&&<div className="omo-remote-anchor" ref={el=>{this.remoteAnchor=el;}}><RemoteRoomChip view={this.remoteRoom.state} open={this.remotePanelOpen} onToggle={()=>{this.remotePanelOpen=!this.remotePanelOpen;this.update();}}/>
-                            {this.remotePanelOpen&&<RemoteRoomPopover anchor={this.remoteAnchor}><RemoteRoomPanel controller={this.remoteRoom} view={this.remoteRoom.state} onClose={()=>{this.remotePanelOpen=false;this.update();}}/></RemoteRoomPopover>}</div>}
-                        {/* omo voice lane (mount hook) */}{this.voiceHub&&<VoicePanel hub={this.voiceHub} view={this.voiceHub.state}/>}
-                        {/* w2:runtime — desk switcher lists every station in the world (Ctrl+1..9 while attached). Legacy test ids kept for desks one and two. */}
-                        <nav className="omo-station-switch" aria-label="Physical workstations" data-many={this.stationList.length > 2 ? 'true' : undefined}>{/* t3:polish2: 3+ desks -> own wrapping row */}{this.stationList.map(info => { const bells = this.deskState(info.id).unreadBells; const legacy = info.id === 'terminal' ? 'one' : info.id === 'terminal-2' ? 'two' : undefined; return <button key={info.id} data-testid={legacy ? `station-${legacy}-controls` : `station-controls-${info.id}`} data-station={info.id} aria-pressed={this.activeMode === info.id} title={info.slot <= 9 ? `${info.name} (Ctrl+${info.slot} while attached)` : info.name} onClick={()=>this.chooseStation(info.id)}>{this.stations.locked(info.id) ? '🔒 ' : ''}{info.name}{bells > 0 && <strong className="omo-bell-alert" data-testid={legacy ? `station-${legacy}-bell` : `station-bell-${info.id}`} role="status"> · Bell {bells}</strong>}</button>; })}{ROOM_KITS[this.room?.kit ?? 'hermes-desk'].webWall && <button data-testid="station-web-controls" aria-pressed={this.activeMode === 'web'} onClick={()=>this.chooseStation('web')}>Web wall</button>}<button data-testid="station-mirror-controls" onClick={()=>this.selectStation('mirror')}>Mirror · {this.stationName(this.mirrorTarget)}</button>{this.stationList.length > 1 && <select data-testid="station-mirror-link" aria-label="Mirror follows" value={this.mirrorTarget} onChange={event => this.linkMirror(event.target.value)}>{this.stationList.map(info => <option key={info.id} value={info.id}>{info.name}</option>)}</select>}<button data-testid="station-recipe-toggle" aria-expanded={this.recipeOpen} onClick={()=>{this.recipeOpen=!this.recipeOpen;this.update();}}>Station recipes</button>{/* w2:agents */}<button data-testid="agents-toggle" aria-expanded={this.agentsOpen} onClick={()=>{this.agentsOpen=!this.agentsOpen;this.update();}}>Agents</button></nav>
-                        {/* w2:agents (mount hook) */}{this.agentsOpen&&<AgentsPanel signals={this.agentSignals} runtime={this.runtime} desk={this.consoleState} projectUri={this.project?.toString()} onOpenWeb={this.openTerminalLink} onClose={()=>{this.agentsOpen=false;this.update();}}/>}
-                        {this.recipeOpen&&<StationRecipePanel key={this.activeStation} recipes={recipesForStation(this.recipes,this.activeStation)} stationId={this.activeStation} stationName={this.stationName(this.activeStation)} setup={this.stations.setupRecipeFor(this.activeStation)} worldLocked={this.stations.configLocked(this.activeStation)} profile={this.consoleState.profile} onSave={this.saveStationRecipe} onApply={this.applyStationRecipe} onDelete={this.deleteStationRecipe} onClose={()=>{this.recipeOpen=false;this.update();}} locked={this.stations.locked(this.activeStation)} onLock={locked=>this.setStationLock(this.activeStation,locked)} idleSleep={this.consoleState.host?.idleSleep} onIdleSleep={(on,seconds)=>void this.console?.setIdleSleep(on,seconds)}/>}
-                        {this.activeMode === 'web' ? <WebSurfaceStrip key={this.project?.toString()} state={this.webState} controller={this.web} initialUrl={this.savedWebUrl}/> : <><RuntimeConsoleStrip key={this.activeStation} state={this.consoleState} controller={this.console} onOpenLink={this.openTerminalLink} onReview={this.openTaskReview} onNewAgentTask={this.openAgentWorkflow}/>{this.taskWorkflowOpen&&taskSourceUri&&this.room&&<AgentWorkflowPanel projectUri={taskSourceUri} stationId={this.binding()?.stationId??''} stationLabel={this.stationName(this.activeStation)} authority={this.taskWorkspaceUiService as TaskWorkspaceAuthority} runtimeState={this.consoleState} runtimeController={this.console} onOpenWorkspace={this.openAgentWorkflowProject} onContinueDesk={this.continueAgentWorkflowDesk} onClose={this.closeAgentWorkflow}/>}</>}
+                    {this.room && !this.configuring && !this.immersive.mode.active && <div className="omo-console-dock" onPointerDownCapture={()=>this.worldScene?.releaseTyping()}>
+                        {this.dockPieces(taskSourceUri)}
                     </div>}
                     <SceneView key={`${theme}:${layout}:${this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'}:${this.presetRevision}`} theme={theme} layout={layout} kit={this.configuring ? this.draftKit : this.room?.kit ?? 'hermes-desk'} camera={(this.configuring ? this.draftCamera : undefined) ?? this.room?.camera ?? CAMERA} onSelect={this.selectStation} onTextSelect={this.chooseStation} onCamera={this.cameraChanged} walk={!this.configuring} terminalFrames={this.monitors} webFrame={this.webState.frame} onInstance={scene=>{this.worldScene=scene;this.drawStoredWorld(scene);/* w2:render */this.pushLinkedFrames();/* w2:runtime */scene?.setPeers(this.presenceState.snapshot?.members.filter(m=>m.id!==this.presenceState.snapshot?.selfId)??[]);scene?.setMirrorFrame(this.mirrorMonitor);if(this.codeReviewFrame)scene?.setCodeReview(this.codeReviewFrame);if(this.configuring&&!this.onboardingClassic&&this.onboardingWorld)scene?.setWorld(this.onboardingWorld);/* w2:onboard; t2:regress: not under the classic form */if(this.configuring&&this.onboardingClassic&&this.draftWorld)scene?.setWorld({...this.draftWorld,shell:{...this.draftWorld.shell,theme:this.draftTheme}});/* t3:polish2: Customise preview draws the template/imported world */}} onInput={this.terminalInput} onPaste={this.pasteInput} onScroll={this.worldScroll} onWebScroll={this.webScroll} onShortcut={this.monitorShortcut} onOpenLink={this.openTerminalLink} onPose={this.poseChanged} onMessage={text=>{this.feedback=text;this.update();}}>
-                        {/* omo immersive lane (mount hook) */}{this.room && !this.configuring && (this.immersive.mode.active
-                            ? <ImmersivePill roomName={this.room.projectName} activeDesk={this.activeMode as Workstation} focus={this.focusMode} hud={this.hudHub} voice={this.voiceHub}
-                                desks={this.stationList.map(info => ({ id: info.id, label: info.name, slot: info.slot }))}
-                                bells={Object.fromEntries(this.stationList.map(info => [info.id, this.deskState(info.id).unreadBells]))} onExit={this.leaveImmersive}/>
-                            : <><BuildToggle build={this.buildMode}/>{/* w2:build */}<button type="button" className="omo-immersive-launch" data-testid="immersive-launch" title="Immersive world (G)" onMouseDown={event => event.preventDefault()} onClick={this.toggleImmersiveButton}>
-                                <Icon name="expand" size={14} />Immersive world <kbd>G</kbd></button></>)}
-                        {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode}/>}
-                        {/* t3:polish2 — the Admin button lives inside the 3D view (it was over the voice panel). */}{this.room && !this.configuring && this.admin && this.adminState && !this.adminState.open && <AdminButton open={false} onClick={() => { this.worldScene?.releaseTyping(); this.admin?.toggle(true); }}/>}
+                        {/* omo immersive lane (mount hook); world-ui: immersive shows the top bar (main level), not the launch buttons */}{this.room && !this.configuring && !this.immersive.mode.active
+                            && <><BuildToggle build={this.buildMode}/>{/* w2:build */}<button type="button" className="omo-immersive-launch" data-testid="immersive-launch" title="Immersive world (G)" onMouseDown={event => event.preventDefault()} onClick={this.toggleImmersiveButton}>
+                                <Icon name="expand" size={14} />Immersive world <kbd>G</kbd></button></>}
+                        {/* world-ui: the old 'Walk up and click this screen' banner is now a quiet crosshair hint. */}{this.room && !this.configuring && this.immersive.mode.active && this.consoleState.phase === 'idle' && !this.buildMode.active
+                            && <div className="omo-crosshair-hint" data-testid="crosshair-hint" aria-hidden="true">Click a screen to use it</div>}
+                        {/* w2:build (mount hook) */}{this.room && !this.configuring && <BuildPanel build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* builder-ui */}{this.room && !this.configuring && <ShapeMode build={this.buildMode} admin={this.admin} adminState={this.adminState}/>}{/* shape */}
+                        {/* world-ui r4/4: no Admin chip in the view: World admin is in the ⌘K palette, H still opens it. */}
                     </SceneView>
                     {/* w2:admin (mount hook) */}{this.room && !this.configuring && this.admin && this.adminState && <>
                         <AdminPanel controller={this.admin} state={this.adminState} worldName={this.room.projectName} previewSupported={!!this.adminStore()?.preview}/></>}
@@ -1018,7 +1119,8 @@ export class OmoWorldWidget extends ReactWidget {
                     {this.configuring && <div className="omo-preview-badge"><i/> LIVE ROOM PREVIEW</div>}
                 </section>
             </div>
-            <footer className="omo-footer"><span>◈ &nbsp; {this.configuring ? 'A workspace with a sense of place.' : this.project?.path.toString()}</span><span role={this.error ? 'alert' : 'status'} className={this.error ? 'omo-error' : ''}>{this.error || this.feedback || 'Built on Theia · Local first'}</span></footer>
+            {/* world-ui: no raw project path in the chrome (it is in Settings → Room and the folder tooltip). */}
+            <footer className="omo-footer" data-project-path={this.project?.path.toString() ?? ''} /* migrating: world-ui hid the path text; tests read the owned project here */><span>◈ &nbsp; {this.configuring ? 'A workspace with a sense of place.' : this.room?.projectName}</span><span role={this.error ? 'alert' : 'status'} className={this.error ? 'omo-error' : ''}>{this.error || this.feedback || 'Built on Theia · Local first'}</span></footer>
         </main>;
     }
 }

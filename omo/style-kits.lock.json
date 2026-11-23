@@ -1,0 +1,654 @@
+{
+ "note": "sky:merge style-kit assets. Installed (not committed) by scripts/fetch-style-kits.cjs into omo/kits/.",
+ "license": "Baked shell: Omo (made in Blender for this kit). Props: CC0 Poly Haven.",
+ "kits": {
+  "skyline-penthouse": {
+   "files": {
+    "room.glb": {
+     "size": 47577408,
+     "sha256": "4e203c5da5673654cccd1d670ed53528c4162f4de073826a2556178b8fbcd282"
+    },
+    "lm_floor.exr": {
+     "size": 923282,
+     "sha256": "01520e4dd52a2c3ee6b4b9f7ecc7bc0b50787c9a73d0dd7b6589df6207836ac9"
+    },
+    "lm_arch.exr": {
+     "size": 9809814,
+     "sha256": "31be33d6d1859ad3af39e8fb1858d6eb126a4bbefb8364d719a89a821a7aab98"
+    },
+    "lm_furn.exr": {
+     "size": 5657599,
+     "sha256": "35363c8a032746e85dfbaaeec8c6bcbbba8fb2f1361d0c22efb5d1e7c628c9db"
+    },
+    "ao_floor.png": {
+     "size": 291341,
+     "sha256": "839763f9ebc97cf3d8671d8451aea6d8f912118612488e18a8d102165093998a"
+    },
+    "ao_arch.png": {
+     "size": 2484891,
+     "sha256": "67166b23c122bedd64c7c0fd270c6814de3ef7b1c4efe00d4af7d3ad116ec155"
+    },
+    "ao_furn.png": {
+     "size": 832805,
+     "sha256": "1188ac78ce087df01124924c789da090e75304a30c05406e6b6b4e3d128ba79d"
+    },
+    "probe.exr": {
+     "size": 1399848,
+     "sha256": "3440545963fbbeae4187cfbc875246bb90eb42476cee84a52f9b3912a488751f"
+    },
+    "city.jpg": {
+     "size": 3696083,
+     "sha256": "6222a7e1887c28419300735ce78c26e2d3a6a4f129ba4e557fd27ccd6457a4f1"
+    },
+    "city_depth.png": {
+     "size": 1135684,
+     "sha256": "9c007d41e335ae531159559a74fc0c53e881f8a02bdb58574160e56f893ec61d"
+    },
+    "lamps.json": {
+     "size": 2019,
+     "sha256": "22285494e5bca33f17b73e52285b1aca8c49239b9f251c5567040eb09d609e2c"
+    },
+    "props.json": {
+     "size": 1180,
+     "sha256": "cf2d153c811f96528c91858a6fffb36f7dc2570216c9fb51dd38f59609019639"
+    },
+    "cc0/pachira_aquatica_01/pachira_aquatica_01.bin": {
+     "size": 2036788,
+     "sha256": "a803777635a4744cc304bd936806242d8875430cc588295c9fa2792a64747c8e"
+    },
+    "cc0/pachira_aquatica_01/pachira_aquatica_01.gltf": {
+     "size": 13730,
+     "sha256": "e73b77c0ffadd8b9fa686faabfecf37799123fe4bc756f816145a4f8c9f53364"
+    },
+    "cc0/pachira_aquatica_01/textures/pachira_aquatica_01_bark_arm_1k.jpg": {
+     "size": 588614,
+     "sha256": "7c44f930e3a6c14acb9043e50d8244da7869f8937233c58276d1b3212a3a6960"
+    },
+    "cc0/pachira_aquatica_01/textures/pachira_aquatica_01_bark_diff_1k.jpg": {
+     "size": 592488,
+     "sha256": "9ca175a1c105a3555c47626ebead36505c29482ea0018f4c6e9a5828ce6d7b25"
+    },
+    "cc0/pachira_aquatica_01/textures/pachira_aquatica_01_bark_nor_gl_1k.jpg": {
+     "size": 723624,
+     "sha256": "389b0f8cc3e8bf4ee78ea12c367ff3003d69d8e83de8baf908e6f2e123d1e6a8"
+    },
+    "cc0/pachira_aquatica_01/textures/pachira_aquatica_01_leaves_arm_1k.jpg": {
+     "size": 372937,
+     "sha256": "42824afde27e7f0111a2e673f0a7cfe0b18bc21d2201b85d9737fce48c1016a3"
+    },
+    "cc0/pachira_aquatica_01/textures/pachira_aquatica_01_leaves_diff_1k.jpg": {
+     "size": 320484,
+     "sha256": "b3211c240dd2ea7913326e7f21f9db9d029ee487b5e59d58d0e10c8cc77d203f"
+    },
+    "cc0/pachira_aquatica_01/textures/pachira_aquatica_01_leaves_nor_gl_1k.jpg": {
+     "size": 490166,
+     "sha256": "3a442aa75df0e6f37bb7410f8ae09927b419d2dba202943cda40f52a7194804c"
+    },
+    "cc0/potted_plant_01/potted_plant_01.bin": {
+     "size": 5345188,
+     "sha256": "a8dd1f7ce75f50dc25bbedc20809da02ee4193815c155b883a329925fa5548f7"
+    },
+    "cc0/potted_plant_01/potted_plant_01.gltf": {
+     "size": 7969,
+     "sha256": "23b30294407684b02f14800d6685bd8938da5d2111e17753ac8dd3c37d8c88a0"
+    },
+    "cc0/potted_plant_01/textures/potted_plant_01_leaves_diff_1k.jpg": {
+     "size": 124730,
+     "sha256": "b73891a0a606e139d0fcdd9e6fe503cd1210be3fc9c55fbd033941288231ccaa"
+    },
+    "cc0/potted_plant_01/textures/potted_plant_01_leaves_nor_gl_1k.jpg": {
+     "size": 177105,
+     "sha256": "2faa756e0ee2b8341c752b283b93599157bf56f4083a9f61b825cdfa0c7138ff"
+    },
+    "cc0/potted_plant_01/textures/potted_plant_01_leaves_rough_1k.jpg": {
+     "size": 91706,
+     "sha256": "765e3bd1bfdad39dd0d1cd755eafd1f9f1d46cbbb6013988cbfd1197de27a1f9"
+    },
+    "cc0/potted_plant_01/textures/potted_plant_01_pot_diff_1k.jpg": {
+     "size": 204900,
+     "sha256": "51c9d80e8abe585bd3dbcebe7cba1d3ed1a22b137c7cb66baf0e462c08dca312"
+    },
+    "cc0/potted_plant_01/textures/potted_plant_01_pot_nor_gl_1k.jpg": {
+     "size": 200349,
+     "sha256": "ec02e51751e0822d229d48bea1373b06e2675c3725ff04fd1f87ac516719e620"
+    },
+    "cc0/potted_plant_01/textures/potted_plant_01_pot_rough_1k.jpg": {
+     "size": 173192,
+     "sha256": "1256199fe3a88a0534bcd4c8bf141cfa9a28b68fce3f286193d0713796fd8561"
+    },
+    "cc0/potted_plant_02/potted_plant_02.bin": {
+     "size": 1852244,
+     "sha256": "9c9812482c78a59789ed32fa842b4cbd9365e09c900c31ebb998e5efe627fe97"
+    },
+    "cc0/potted_plant_02/potted_plant_02.gltf": {
+     "size": 6653,
+     "sha256": "c533dcce0d1aa4379eb7db04601a04983f8df2422b28578de922655a416e64a9"
+    },
+    "cc0/potted_plant_02/textures/potted_plant_02_leaves_diff_1k.jpg": {
+     "size": 167700,
+     "sha256": "3643dce6e6c0a9f40129bd837ec1a11802e8f43ea43cb29e58219d82e0ac632b"
+    },
+    "cc0/potted_plant_02/textures/potted_plant_02_leaves_nor_gl_1k.jpg": {
+     "size": 127232,
+     "sha256": "e0fe090ff7a511729c9bbe59df7288b400430fdab178529443dec75e0f06007d"
+    },
+    "cc0/potted_plant_02/textures/potted_plant_02_leaves_rough_1k.jpg": {
+     "size": 102396,
+     "sha256": "ac8959f70c0e91e77f3cd6fd3f73578b8aed64ac6c33fc34ac027a4e88276960"
+    },
+    "cc0/potted_plant_02/textures/potted_plant_02_pot_diff_1k.jpg": {
+     "size": 155244,
+     "sha256": "684949bf24821d7e951d46915366b5a388d2e4ccaaa9d5284e718c83604705e9"
+    },
+    "cc0/potted_plant_02/textures/potted_plant_02_pot_nor_gl_1k.jpg": {
+     "size": 108343,
+     "sha256": "981a68721c8b7b9ac26b96d0210334599d5e8f529362f505082c071a0a58e86c"
+    },
+    "cc0/potted_plant_02/textures/potted_plant_02_pot_rough_1k.jpg": {
+     "size": 114886,
+     "sha256": "4e92ad8ee0f098050785d9a025e2c5a7d55bc7a7f7e1916cc7627fc7824a938f"
+    },
+    "cc0/potted_plant_04/potted_plant_04.bin": {
+     "size": 241800,
+     "sha256": "158c1d27503d4845eb3573f00c01ae3f4f77f1d6ca8754c67bf1762745946f7f"
+    },
+    "cc0/potted_plant_04/potted_plant_04.gltf": {
+     "size": 7081,
+     "sha256": "b3a3bc3e97da75844999c4da07b7104b6c023f729a7c045979929b9504184339"
+    },
+    "cc0/potted_plant_04/textures/potted_plant_04_arm_1k.jpg": {
+     "size": 478413,
+     "sha256": "7f3288345570ef700c851ea382ed267490ffc8c901ccc31f2ec5507e4d098e48"
+    },
+    "cc0/potted_plant_04/textures/potted_plant_04_diff_1k.jpg": {
+     "size": 577545,
+     "sha256": "8693a971557fbafb12a24a2e23c1a04ab6b04ecdc4d26808c5ad3516a4971f24"
+    },
+    "cc0/potted_plant_04/textures/potted_plant_04_nor_gl_1k.jpg": {
+     "size": 817786,
+     "sha256": "66e4627f6691a2d8104a6c53a39b41daddbd5bad8103e73f372c39166a3dcb07"
+    },
+    "cc0/calathea_orbifolia_01/calathea_orbifolia_01.bin": {
+     "size": 407968,
+     "sha256": "df1668bcb44914abac046217bbdae9867a3702198f7c374135f2b4456df8b038"
+    },
+    "cc0/calathea_orbifolia_01/calathea_orbifolia_01.gltf": {
+     "size": 9309,
+     "sha256": "399130c01bfff6b493f885652112c3c841c3814b024a3d3c87773e0c5ab4f156"
+    },
+    "cc0/calathea_orbifolia_01/textures/calathea_orbifolia_01_arm_1k.jpg": {
+     "size": 421555,
+     "sha256": "df4ea4dfc74a6965476200cffea69886ac26d3c089f356a7b69518149ef585e0"
+    },
+    "cc0/calathea_orbifolia_01/textures/calathea_orbifolia_01_diff_1k.jpg": {
+     "size": 455819,
+     "sha256": "a105a093d74317a3853319a06fdc78cad2a13e353962298d2094195720b9b4a0"
+    },
+    "cc0/calathea_orbifolia_01/textures/calathea_orbifolia_01_nor_gl_1k.jpg": {
+     "size": 581558,
+     "sha256": "52aac88c18bf42c369aad9b2b5e41dbe58b015ca2fac7ff6ed4cb21147cb49c8"
+    },
+    "cc0/sofa_02/sofa_02.bin": {
+     "size": 74864,
+     "sha256": "cb337e03211be0309afa1ded2b6cbb2d402c0f794aaf8828fba559d27a42d3f5"
+    },
+    "cc0/sofa_02/sofa_02.gltf": {
+     "size": 4183,
+     "sha256": "5df114209f9b956ccd4831eaeef469a81339ab371d0056eb6d5d29eee08eb431"
+    },
+    "cc0/sofa_02/textures/sofa_02_arm_1k.jpg": {
+     "size": 121752,
+     "sha256": "f2813f32cd9ec42a9080590d0953ac9e272d9baa0b22fdb5910bf325157393c6"
+    },
+    "cc0/sofa_02/textures/sofa_02_diff_1k.jpg": {
+     "size": 86514,
+     "sha256": "4ff65c782578b52eee89cb96cc4e258ce1b6848e1a7655019af1f7207c749840"
+    },
+    "cc0/sofa_02/textures/sofa_02_nor_gl_1k.jpg": {
+     "size": 139858,
+     "sha256": "c97a359703a8ce1cee62cbd9dc4013b611d821afb7769810983b464ebc5d0cfe"
+    },
+    "cc0/mid_century_lounge_chair/mid_century_lounge_chair.bin": {
+     "size": 171384,
+     "sha256": "26346cdc548ad74b1b6db5734c8c231c3c740656b012de2cc3bbc2b3b975200c"
+    },
+    "cc0/mid_century_lounge_chair/mid_century_lounge_chair.gltf": {
+     "size": 2884,
+     "sha256": "47c5769ee4dfa350e2506a6a76d8ef58a1e1060344acda35c503ddff46645d26"
+    },
+    "cc0/mid_century_lounge_chair/textures/mid_century_lounge_chair_arm_1k.jpg": {
+     "size": 636493,
+     "sha256": "9fa5fa4af5306576a3a27886767feec5431f41d94df9119f2ccced8f0b024f1a"
+    },
+    "cc0/mid_century_lounge_chair/textures/mid_century_lounge_chair_diff_1k.jpg": {
+     "size": 627298,
+     "sha256": "ae1f80e964426b49f70b402403c444a655bdaa363d8d43fee5b57fcb3b492c54"
+    },
+    "cc0/mid_century_lounge_chair/textures/mid_century_lounge_chair_nor_gl_1k.jpg": {
+     "size": 648960,
+     "sha256": "4bb4b325e4478f5d9063e4e061cf34bc6ccc3067abda608c1548c4a367f50397"
+    },
+    "cc0/modern_arm_chair_01/modern_arm_chair_01.bin": {
+     "size": 240728,
+     "sha256": "8755f2f498c0bb165660379d1b045465751c16bbeaf553c8dd76bb14c16d1ff6"
+    },
+    "cc0/modern_arm_chair_01/modern_arm_chair_01.gltf": {
+     "size": 5121,
+     "sha256": "d31be520add2603447b43acedbdacf9516866f7c89e9ea9230c9edbac9cc6e6a"
+    },
+    "cc0/modern_arm_chair_01/textures/modern_arm_chair_01_legs_arm_1k.jpg": {
+     "size": 577931,
+     "sha256": "c76b65200a52cf649a865baf7f879dc34277b923edaac7ec8164eaf7c51c935d"
+    },
+    "cc0/modern_arm_chair_01/textures/modern_arm_chair_01_legs_diff_1k.jpg": {
+     "size": 460937,
+     "sha256": "6291421a8db6cd9bbbc8c141aa087465d698427249f813d24c6e5ccdbf0bf536"
+    },
+    "cc0/modern_arm_chair_01/textures/modern_arm_chair_01_legs_nor_gl_1k.jpg": {
+     "size": 560864,
+     "sha256": "af328e8530884907cf0d38a675338bb4e2b03c56ed2d21eb5abf505bb67c11de"
+    },
+    "cc0/modern_arm_chair_01/textures/modern_arm_chair_01_pillow_arm_1k.jpg": {
+     "size": 321223,
+     "sha256": "fec333290ddfd70e78428251874d30d5410d6d0a956dd84922b0d3f3596e4b7a"
+    },
+    "cc0/modern_arm_chair_01/textures/modern_arm_chair_01_pillow_diff_1k.jpg": {
+     "size": 228851,
+     "sha256": "f1935436b460ad5c03ac7ff9d1e1b4aaedcdc9a503d79c257beb8cdac2e9e1f7"
+    },
+    "cc0/modern_arm_chair_01/textures/modern_arm_chair_01_pillow_nor_gl_1k.jpg": {
+     "size": 302377,
+     "sha256": "2717b9d22e1d3533e3c7436a0230b00b1d25bf396246679825c8db08edaba0a8"
+    },
+    "cc0/Ottoman_01/Ottoman_01.bin": {
+     "size": 115200,
+     "sha256": "ca62a1ee87a30c69142ff15f1bca216842448f57d5b3d64de1d627014b347117"
+    },
+    "cc0/Ottoman_01/Ottoman_01.gltf": {
+     "size": 2656,
+     "sha256": "cb515553924d7ca85b94807aba7d7d5110fafa0fedf7132573b105ac8b900584"
+    },
+    "cc0/Ottoman_01/textures/Ottoman_01_arm_1k.jpg": {
+     "size": 155704,
+     "sha256": "e894458d15a90e22e4290198929c8fb76e872526fe1f0bdf6d395a91d438bc7c"
+    },
+    "cc0/Ottoman_01/textures/Ottoman_01_diff_1k.jpg": {
+     "size": 141622,
+     "sha256": "03f05a4a2e54ea1e6829a7d1b43dcfad5d2873078bd72534dc46e692c01f97a5"
+    },
+    "cc0/Ottoman_01/textures/Ottoman_01_nor_gl_1k.jpg": {
+     "size": 236930,
+     "sha256": "3220215de4173c81c4128619a0000ce5368a3d125409f5e7d64e1269e258d923"
+    },
+    "cc0/bar_chair_round_01/bar_chair_round_01.bin": {
+     "size": 1017152,
+     "sha256": "2bda85d89beb91097998b25293f10e72686b972aecffd2c14d1b5412cc1da276"
+    },
+    "cc0/bar_chair_round_01/bar_chair_round_01.gltf": {
+     "size": 2833,
+     "sha256": "6a8f92123245268cbb69fc96f305ee710b32a7a06761b143d3049eaabfcbdd32"
+    },
+    "cc0/bar_chair_round_01/textures/bar_chair_round_01_arm_1k.jpg": {
+     "size": 751149,
+     "sha256": "9f34b279bdd1527ec19fc3a3bb0ce374f0c0ba2dc05dfbd58f561bc317bd36c7"
+    },
+    "cc0/bar_chair_round_01/textures/bar_chair_round_01_diff_1k.jpg": {
+     "size": 599006,
+     "sha256": "1b3912fe1102b4082d7421aeb2e2717d3ebe914d261700f8710c0fdb7d7463bb"
+    },
+    "cc0/bar_chair_round_01/textures/bar_chair_round_01_nor_gl_1k.jpg": {
+     "size": 442193,
+     "sha256": "91e4310863002228003d100be83e0524832e532d05f27ef8ed62675b116f0bd1"
+    },
+    "cc0/dining_chair_02/dining_chair_02.bin": {
+     "size": 544592,
+     "sha256": "c7f1ef858f73815176d2ab304472a69ccf6097e971e5258eb924a75f841d4af5"
+    },
+    "cc0/dining_chair_02/dining_chair_02.gltf": {
+     "size": 2723,
+     "sha256": "88352a44a17319846f61fe03ce75c79fb1849aa508b6a262366c149c1bbd06b8"
+    },
+    "cc0/dining_chair_02/textures/dining_chair_02_arm_1k.jpg": {
+     "size": 162630,
+     "sha256": "0a81c0c886baa1e65d94fb6fb90ab4751bee319888ecf1c428ae62042d8a5b15"
+    },
+    "cc0/dining_chair_02/textures/dining_chair_02_diff_1k.jpg": {
+     "size": 91518,
+     "sha256": "343990f764790da1149485a422dee2bc6797945a6af06a37d02d7a7de041acf5"
+    },
+    "cc0/dining_chair_02/textures/dining_chair_02_nor_gl_1k.jpg": {
+     "size": 119612,
+     "sha256": "348703512ca1215f8389e9108419c2d1a46537663db25f423c3ef900d20cfe61"
+    },
+    "cc0/coffee_table_round_01/coffee_table_round_01.bin": {
+     "size": 131112,
+     "sha256": "9605a0c156bff4ec87e8717a79978d85d4e750d21b3193a3d08bed16e8666035"
+    },
+    "cc0/coffee_table_round_01/coffee_table_round_01.gltf": {
+     "size": 2776,
+     "sha256": "58fe785584f8999f760e590b04ce74f83962d42c9440ab9415910f63a31165dc"
+    },
+    "cc0/coffee_table_round_01/textures/coffee_table_round_01_arm_1k.jpg": {
+     "size": 721708,
+     "sha256": "7221b03af475555092abd650798facbb945bf4acf02e48f8697f012d8515bf52"
+    },
+    "cc0/coffee_table_round_01/textures/coffee_table_round_01_diff_1k.jpg": {
+     "size": 447037,
+     "sha256": "422b4a24a4459e1fd6d121aae4f1097dd3e467c7a8036bb1d003f955302f1d28"
+    },
+    "cc0/coffee_table_round_01/textures/coffee_table_round_01_nor_gl_1k.jpg": {
+     "size": 260520,
+     "sha256": "a5912db1918b1ec925efb19179675cafc8832b082f80b2ea35c3a58b45e1aec4"
+    },
+    "cc0/round_wooden_table_01/round_wooden_table_01.bin": {
+     "size": 242688,
+     "sha256": "c2635368bc86239a73fafdd8bce20b4261155ce7241e95e809a753ed4693f157"
+    },
+    "cc0/round_wooden_table_01/round_wooden_table_01.gltf": {
+     "size": 4089,
+     "sha256": "dd09c1663b10d15a1fda12ba4f53743e8b8379b17254a78be22100d584738b48"
+    },
+    "cc0/round_wooden_table_01/textures/round_wooden_table_01_arm_1k.jpg": {
+     "size": 134854,
+     "sha256": "32b5056dc36e3081987c20cd03f15e73298266c1aff3e573b832e9dd0f8145b9"
+    },
+    "cc0/round_wooden_table_01/textures/round_wooden_table_01_diff_1k.jpg": {
+     "size": 117911,
+     "sha256": "d83659d8d584bbadf160760b825f990c6264901e33051643d19fcd389b0d19ae"
+    },
+    "cc0/round_wooden_table_01/textures/round_wooden_table_01_nor_gl_1k.jpg": {
+     "size": 50832,
+     "sha256": "5f80ed76e2eccaea8ab7c0cc9c85d29cc9b164aabfa2403304e1ec79dc47150c"
+    },
+    "cc0/side_table_01/side_table_01.bin": {
+     "size": 117784,
+     "sha256": "b1f2a0519fc61cded1fdeac8169ac5b077836052671cd39a35cb56576c9aa11e"
+    },
+    "cc0/side_table_01/side_table_01.gltf": {
+     "size": 2700,
+     "sha256": "a441125a4f660a23a31601aedd9aa379c6febf2b35171c08814187b5ec5a3309"
+    },
+    "cc0/side_table_01/textures/side_table_01_arm_1k.jpg": {
+     "size": 129725,
+     "sha256": "ebaef894800faa2e09df7001c1536055c97648428410a9de76bb191aec00c014"
+    },
+    "cc0/side_table_01/textures/side_table_01_diff_1k.jpg": {
+     "size": 183315,
+     "sha256": "e0d9f2f91bede592868f9b89d141f5e8542524b8356f1b68f0f5c6bb6447731d"
+    },
+    "cc0/side_table_01/textures/side_table_01_nor_gl_1k.jpg": {
+     "size": 71744,
+     "sha256": "14850c49ae1e06cf8701eac4fed2163c2ad075978d2878fcaa079dffe1fd1195"
+    },
+    "cc0/modern_coffee_table_01/modern_coffee_table_01.bin": {
+     "size": 154864,
+     "sha256": "b8fe0d49041b879a5d5962685a39e3daf009679f7b6a88ced1347e6dc6c0851e"
+    },
+    "cc0/modern_coffee_table_01/modern_coffee_table_01.gltf": {
+     "size": 2771,
+     "sha256": "a35d811da4c174d0c888f23353dda21501763dbf5505c66f57fef4b3f613e50c"
+    },
+    "cc0/modern_coffee_table_01/textures/modern_coffee_table_01_diff_1k.jpg": {
+     "size": 410569,
+     "sha256": "069b89dd3ef03ddcbb7b2e6a124b1903aa7848394509121aa19f87bd0ef0218c"
+    },
+    "cc0/modern_coffee_table_01/textures/modern_coffee_table_01_nor_gl_1k.jpg": {
+     "size": 359134,
+     "sha256": "43e0d317d0f8418b130c0058c645225ee83b808b1dc0e5e7236bead3bdd77139"
+    },
+    "cc0/modern_coffee_table_01/textures/modern_coffee_table_01_rough_1k.jpg": {
+     "size": 403959,
+     "sha256": "8013b48b0ebb845907f840afcae9cbc915a5205ac82ed99cbba31771febacb0f"
+    },
+    "cc0/metal_office_desk/metal_office_desk.bin": {
+     "size": 229700,
+     "sha256": "65b558f41a75ad4822e31cc2a97eb34ed359199279a6bfbd650deb27cef78767"
+    },
+    "cc0/metal_office_desk/metal_office_desk.gltf": {
+     "size": 13510,
+     "sha256": "f07032a5ee89aacceebf10fd9fa192c22775ae81861cfb0bdb1594497179373c"
+    },
+    "cc0/metal_office_desk/textures/metal_office_desk_arm_1k.jpg": {
+     "size": 721614,
+     "sha256": "752916dd9bf8a163dc7e0d3673900791ee6d558bbe23894263ac92b42387f51b"
+    },
+    "cc0/metal_office_desk/textures/metal_office_desk_diff_1k.jpg": {
+     "size": 470831,
+     "sha256": "1f02e3e77e8f82a3600664c991bd45c1c187452d61e9ede4336c6f90f7fa3139"
+    },
+    "cc0/metal_office_desk/textures/metal_office_desk_nor_gl_1k.jpg": {
+     "size": 170875,
+     "sha256": "f57eb004937e46392151b803e0cb1d88983958d01ad11d93df78a82cfcc6c407"
+    },
+    "cc0/desk_lamp_arm_01/desk_lamp_arm_01.bin": {
+     "size": 736804,
+     "sha256": "07f34e32abecbaa63d28b9d12d6a0eb82b775a0f50c92327655909d72ff8489b"
+    },
+    "cc0/desk_lamp_arm_01/desk_lamp_arm_01.gltf": {
+     "size": 4453,
+     "sha256": "2ac8389afc1519449a9cfdf7efd9fa36780a2177bb47ab58f7a7dda7d247dc8c"
+    },
+    "cc0/desk_lamp_arm_01/textures/desk_lamp_arm_01_arm_1k.jpg": {
+     "size": 780379,
+     "sha256": "206404c79fb7dcf8e2c4558c13544342f87d2190526231a1750c3c9adc256fbc"
+    },
+    "cc0/desk_lamp_arm_01/textures/desk_lamp_arm_01_diff_1k.jpg": {
+     "size": 702522,
+     "sha256": "159eb178aba3271bd555cbe07ca36431d8af9a006f0b8e9d8c67030cbdc9e4d3"
+    },
+    "cc0/desk_lamp_arm_01/textures/desk_lamp_arm_01_nor_gl_1k.jpg": {
+     "size": 651826,
+     "sha256": "feefedc3835ecef3634e97a24977451671f8f57747a023f48cd14c84bc73513a"
+    },
+    "cc0/modern_ceiling_lamp_01/modern_ceiling_lamp_01.bin": {
+     "size": 146828,
+     "sha256": "ae5140a64e12e639554158901a5e92340bb37c706096ff255804e3220fb96367"
+    },
+    "cc0/modern_ceiling_lamp_01/modern_ceiling_lamp_01.gltf": {
+     "size": 6177,
+     "sha256": "f88b5d0a81fa813457a77474e7e4e812f97ad5fac2109ba03ddb183274be3f8c"
+    },
+    "cc0/modern_ceiling_lamp_01/textures/modern_ceiling_lamp_01_arm_1k.jpg": {
+     "size": 124022,
+     "sha256": "f4c6a8e7c86b1deaaf0f74099539ff635063b63f594b0fadfc3ec8fac805df4e"
+    },
+    "cc0/modern_ceiling_lamp_01/textures/modern_ceiling_lamp_01_diff_1k.jpg": {
+     "size": 79705,
+     "sha256": "c08bfbf7576a86a4a09d386ae9f0a92965fc652bf82f3a8dba1c796b1aa9e535"
+    },
+    "cc0/modern_ceiling_lamp_01/textures/modern_ceiling_lamp_01_nor_gl_1k.jpg": {
+     "size": 79333,
+     "sha256": "dd75bd21a901581325f5c363bd89b45430b8531cb27dead314cd087196a33c27"
+    },
+    "cc0/steel_frame_shelves_03/steel_frame_shelves_03.bin": {
+     "size": 259368,
+     "sha256": "6e299e00e277642eb1a1ac67776a8c43bd9c9dbad9a12b768bf3df274afde66f"
+    },
+    "cc0/steel_frame_shelves_03/steel_frame_shelves_03.gltf": {
+     "size": 9767,
+     "sha256": "5778bc40d135c7c02a62acdaa4be11fa856fe462c574cbc09033e78a269833d8"
+    },
+    "cc0/steel_frame_shelves_03/textures/steel_frame_shelves_03_arm_1k.jpg": {
+     "size": 719712,
+     "sha256": "9cbeebb818f340837554f59a46cd482e4a7ed6bf3fb7eb0a4707fe775473ad32"
+    },
+    "cc0/steel_frame_shelves_03/textures/steel_frame_shelves_03_diff_1k.jpg": {
+     "size": 375274,
+     "sha256": "1bbaf63d2905ddfa94a83c9aa1fe01ec8d867c0b073308cc02821ae624e31b9a"
+    },
+    "cc0/steel_frame_shelves_03/textures/steel_frame_shelves_03_drawers_arm_1k.jpg": {
+     "size": 543122,
+     "sha256": "cfa78c59c402b8aa26e200a9993ffd260cebbb1b7768cc9a6f8c5c0c0b28ca6e"
+    },
+    "cc0/steel_frame_shelves_03/textures/steel_frame_shelves_03_drawers_diff_1k.jpg": {
+     "size": 663476,
+     "sha256": "5128e44871e33eebe494fe93fba2c572b9a7970d37864ae294c6d25fc59064eb"
+    },
+    "cc0/steel_frame_shelves_03/textures/steel_frame_shelves_03_drawers_nor_gl_1k.jpg": {
+     "size": 487786,
+     "sha256": "e686d0d595eca83cc6ef2186cd199c2d2dde5729788f607e2b1f996d133415af"
+    },
+    "cc0/steel_frame_shelves_03/textures/steel_frame_shelves_03_nor_gl_1k.jpg": {
+     "size": 504726,
+     "sha256": "0e069fedd3573fe09096d766ca950e79903e8f971baaf6078ac7326d3c3dcfc8"
+    },
+    "cc0/book_encyclopedia_set_01/book_encyclopedia_set_01.bin": {
+     "size": 2547932,
+     "sha256": "bbc726698b6e40ab5537b73e082f7bb4db97b9e6f978f52cdaf763dddc85d9ba"
+    },
+    "cc0/book_encyclopedia_set_01/book_encyclopedia_set_01.gltf": {
+     "size": 55011,
+     "sha256": "89eb80fffd619ebbe5043d632bd8cf25b2d68a3614aee2f356e850c69ae498ba"
+    },
+    "cc0/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_cover_arm_1k.jpg": {
+     "size": 189997,
+     "sha256": "ab19b627092da77770de2212a04785940feb2df0957cab8993742a6b8b3f7bff"
+    },
+    "cc0/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_cover_diff_1k.jpg": {
+     "size": 126794,
+     "sha256": "a456aae6ef0ab24769527cccac5313a802ad253584c49fc10a377ce75969d382"
+    },
+    "cc0/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_cover_nor_gl_1k.jpg": {
+     "size": 19941,
+     "sha256": "17ad410f2d1aab487e47c729a5b988ea4e4d196679c8696331b7960e77a91c17"
+    },
+    "cc0/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_paper_diff_1k.jpg": {
+     "size": 115297,
+     "sha256": "b552d6829b75db7a75012bb761068c63507b69e8e944597ea53f6d1a70efa36c"
+    },
+    "cc0/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_paper_nor_gl_1k.jpg": {
+     "size": 193390,
+     "sha256": "705f4380c654c44d086ceb120595078e562438c6e4ba01458d2d23fd61483d9d"
+    },
+    "cc0/book_encyclopedia_set_01/textures/book_encyclopedia_set_01_paper_roughness_1k.jpg": {
+     "size": 12684,
+     "sha256": "62d875e9427f5d71f1bb4d9dc9569e34465bfd3067b8b13f5644b73e23a09fa3"
+    },
+    "cc0/modern_wooden_cabinet/modern_wooden_cabinet.bin": {
+     "size": 1170136,
+     "sha256": "04e664a95f52c48d0caa8c3148ab7e4ad4a0554b37a2a5c0e39dc6ed6c46cafe"
+    },
+    "cc0/modern_wooden_cabinet/modern_wooden_cabinet.gltf": {
+     "size": 10960,
+     "sha256": "9c0765063297018e854d11bc27da3cbab3c33904a3be2f5c15f46635df7e857f"
+    },
+    "cc0/modern_wooden_cabinet/textures/modern_wooden_cabinet_arm_1k.jpg": {
+     "size": 574020,
+     "sha256": "fad6df227ec6d431387b10bd244a0d087e89e6dce0b1c732df5c87f0a1def3f5"
+    },
+    "cc0/modern_wooden_cabinet/textures/modern_wooden_cabinet_diff_1k.jpg": {
+     "size": 670353,
+     "sha256": "e494b67439da73775413d6aaea369ae05a8ebd7705be8df08dbcd2ee4fd545e4"
+    },
+    "cc0/modern_wooden_cabinet/textures/modern_wooden_cabinet_nor_gl_1k.jpg": {
+     "size": 430053,
+     "sha256": "f08b3d0619a60e2eac19c9d9c0d7dc0e3eb75af2692d84b32ddfd12d857c15ab"
+    },
+    "cc0/brass_vase_01/brass_vase_01.bin": {
+     "size": 498240,
+     "sha256": "acc32719ee7c42c5b5fd07507a3dd7779e95445754759876bdbc133cebefa8ff"
+    },
+    "cc0/brass_vase_01/brass_vase_01.gltf": {
+     "size": 2693,
+     "sha256": "becf6d52678c63d7321c8ab51fb1a03a80d8dd61feb183977867069cdd470f9d"
+    },
+    "cc0/brass_vase_01/textures/brass_vase_01_arm_1k.jpg": {
+     "size": 112273,
+     "sha256": "b17e947af6e5d2b1f62a3e4953f075ddd6a48f1c11596811fb55ff6b3aab2855"
+    },
+    "cc0/brass_vase_01/textures/brass_vase_01_diff_1k.jpg": {
+     "size": 150797,
+     "sha256": "346bb95aeb7aaac89ff368c050e511f2e444d7636d1e135f8433a012423474dd"
+    },
+    "cc0/brass_vase_01/textures/brass_vase_01_nor_gl_1k.jpg": {
+     "size": 78223,
+     "sha256": "dac5267183a708234e2640f89cde45df76c3927bbd5d2b280cb61fd7a4bd63ea"
+    },
+    "cc0/ceramic_vase_01/ceramic_vase_01.bin": {
+     "size": 272656,
+     "sha256": "56ffadcafff3f56538d04b0b43c06c9704baeec2ac3ec286ef01c313c82906f0"
+    },
+    "cc0/ceramic_vase_01/ceramic_vase_01.gltf": {
+     "size": 2706,
+     "sha256": "4e2c69eb5bbccf86e9fbf92af438464669d804c1f0eae041ee28651a5b57d91e"
+    },
+    "cc0/ceramic_vase_01/textures/ceramic_vase_01_arm_1k.jpg": {
+     "size": 74240,
+     "sha256": "121469880a7900513717685e9035dfc1b04613f85c778ab4e9dba98c1675d660"
+    },
+    "cc0/ceramic_vase_01/textures/ceramic_vase_01_diff_1k.jpg": {
+     "size": 32351,
+     "sha256": "5f7d22178b74a59fe92aa0ccc958b897e2fb80df514eb28b97000097c0e71beb"
+    },
+    "cc0/ceramic_vase_01/textures/ceramic_vase_01_nor_gl_1k.jpg": {
+     "size": 36504,
+     "sha256": "c35b59d15e0f08db44b0bc8a5870bc65ae781819e5abf0447996d0faf05b7722"
+    },
+    "cc0/hanging_picture_frame_02/hanging_picture_frame_02.bin": {
+     "size": 115080,
+     "sha256": "0ed5813c8b30f63807ffac962e47135d3248b3804e07cb93862c13e29bed83d8"
+    },
+    "cc0/hanging_picture_frame_02/hanging_picture_frame_02.gltf": {
+     "size": 6433,
+     "sha256": "ea9a1d44e8d794e224a5342204669a328b57d64d5df629d1d5d86e60e27245e5"
+    },
+    "cc0/hanging_picture_frame_02/textures/hanging_picture_frame_02_arm_1k.jpg": {
+     "size": 113780,
+     "sha256": "67378630bc6bb69799f8ee0fde4ab11ecd9e7a43ed3dfef402fdd784d8c2cea3"
+    },
+    "cc0/hanging_picture_frame_02/textures/hanging_picture_frame_02_artwork_diff_1k.jpg": {
+     "size": 138383,
+     "sha256": "7e26aee962965fb201975ef5a99e2751a24c4b461b48e8348cea9f31cde027c2"
+    },
+    "cc0/hanging_picture_frame_02/textures/hanging_picture_frame_02_artwork_nor_gl_1k.jpg": {
+     "size": 45035,
+     "sha256": "8a700c0d7d3f464177ead95879d60a8bf43ef77c034881379b2c036406ab9e27"
+    },
+    "cc0/hanging_picture_frame_02/textures/hanging_picture_frame_02_artwork_roughness_1k.jpg": {
+     "size": 74142,
+     "sha256": "305018ab800cbd02d61c08f9c5a422c2777f2b5cbb20579f671be56a1fb21853"
+    },
+    "cc0/hanging_picture_frame_02/textures/hanging_picture_frame_02_diff_1k.jpg": {
+     "size": 146402,
+     "sha256": "575f2b6481b9e02474750ded776a0b490744228cb64d9b346f28bd78b9cf5897"
+    },
+    "cc0/hanging_picture_frame_02/textures/hanging_picture_frame_02_nor_gl_1k.jpg": {
+     "size": 56776,
+     "sha256": "79367cf9d7e4981263dd1439297585148d6c93500acaffa7afeb534351e68b86"
+    },
+    "cc0/standing_picture_frame_01/standing_picture_frame_01.bin": {
+     "size": 55424,
+     "sha256": "bdaf666c5011671c55d5661171d2395cee7d80f1558e92760c663050cba39b49"
+    },
+    "cc0/standing_picture_frame_01/standing_picture_frame_01.gltf": {
+     "size": 6936,
+     "sha256": "cd8a0326db53a48c918940c9a7ad016236d825a6b487e5d312fcac33897074bc"
+    },
+    "cc0/standing_picture_frame_01/textures/standing_picture_frame_01_arm_1k.jpg": {
+     "size": 107611,
+     "sha256": "1092eae6ea8c312fbb3acdd3ab90e80a83658b9a593ff8c8412151dbddac2250"
+    },
+    "cc0/standing_picture_frame_01/textures/standing_picture_frame_01_artwork_diff_1k.jpg": {
+     "size": 116687,
+     "sha256": "d65a41f6391563f3c5e35b66fb6a96949d166072d174406223412ac4dfb0c11e"
+    },
+    "cc0/standing_picture_frame_01/textures/standing_picture_frame_01_artwork_nor_gl_1k.jpg": {
+     "size": 17077,
+     "sha256": "2b1cabd85ed19872b1df2d509a8906fea80003925ae71e773b1fb0f6010ffbf0"
+    },
+    "cc0/standing_picture_frame_01/textures/standing_picture_frame_01_artwork_rough_1k.jpg": {
+     "size": 12684,
+     "sha256": "62d875e9427f5d71f1bb4d9dc9569e34465bfd3067b8b13f5644b73e23a09fa3"
+    },
+    "cc0/standing_picture_frame_01/textures/standing_picture_frame_01_diff_1k.jpg": {
+     "size": 94436,
+     "sha256": "e9d1030940b00ed576cafd704f7fc44226a255ed8d2db5ef3b8fd02d5521a763"
+    },
+    "cc0/standing_picture_frame_01/textures/standing_picture_frame_01_nor_gl_1k.jpg": {
+     "size": 36570,
+     "sha256": "75899a4f4bc80ec69383b148076c054fb1d61f0bf62a32bb913bc151f1d26f04"
+    }
+   }
+  }
+ }
+}

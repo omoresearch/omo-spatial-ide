@@ -104,6 +104,10 @@ export interface AdminState {
     hermes?: WorldAdminHermesStatus;
     busy: boolean;
     error: string;
+    /** builder-ui — true while the World Builder's Talk tab shows this conversation (the floating panel hides). */
+    embedded?: boolean;
+    /** builder-ui — bumps when H / the Admin button asks for the console while it is embedded (the builder shows Talk). */
+    talkFocus?: number;
 }
 
 export interface AdminControllerHost {
@@ -135,7 +139,21 @@ export class AdminController {
 
     get activeEntry(): AdminEntry | undefined { return this.state.entries.find(e => e.id === this.state.activeId); }
 
+    /**
+     * builder-ui — the World Builder shows this conversation in its Talk tab: open it embedded (the floating
+     * panel hides) and, when the builder closes, put the floating panel back the way it was.
+     */
+    private openBeforeEmbed = false;
+    embed(on: boolean): void {
+        if (on === !!this.state.embedded) return;
+        if (on) { this.openBeforeEmbed = this.state.open; this.toggle(true); this.emit({ embedded: true }); return; }
+        this.emit({ embedded: false });
+        if (!this.openBeforeEmbed) this.toggle(false);
+    }
+
     toggle(open = !this.state.open): void {
+        // builder-ui — while embedded, H / the Admin button only bring the Talk tab forward; the builder owns closing.
+        if (this.state.embedded) { this.emit({ talkFocus: (this.state.talkFocus ?? 0) + 1, confirmingHermes: open ? this.state.confirmingHermes : false }); return; }
         if (open === this.state.open) return;
         if (open) {
             const store = this.host.store();

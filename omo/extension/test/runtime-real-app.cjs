@@ -60,7 +60,7 @@ async function trustAuthoredProject(page) {
     try {
         page = await browser.newPage();
         // Classic dock flows; focus mode is covered by its own check.
-        await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); } catch {} });
+        await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.focus.clickAttach', 'false'); localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0'); localStorage.setItem('omo.starter', 'classic') /* world-ui: legacy checks use the IDE chrome */; } catch {} });
         const errors = []; page.on('pageerror', error => errors.push(error.message));
         await page.goto(process.env.OMO_URL || 'http://127.0.0.1:3190', { waitUntil: 'domcontentloaded' });
         await trustAuthoredProject(page);
@@ -77,7 +77,7 @@ async function trustAuthoredProject(page) {
         }
         await page.waitForSelector('[data-testid="runtime-console"]', { timeout: 20000 });
         check('Real rendered route includes persistent-runtime console, not just an unmounted component', true);
-        check('Room still starts in first person at eye height', await page.$eval(CANVAS, e => e.dataset.navigation === 'walk' && e.dataset.eyeY === '1.75'));
+        check('Room still starts in first person at eye height', await page.$eval(CANVAS, e => e.dataset.navigation === 'walk' && (e.dataset.eyeY === '1.75' || (e.dataset.styleKit && e.dataset.eyeY === '1.5')))); // world-ui r4/2: a style kit sets its own eye height
         check('Session controls have their own layout row and never cover the 3D viewport', await page.evaluate(() => {
             const controls = document.querySelector('[data-testid="runtime-console"]').getBoundingClientRect();
             const canvas = document.querySelector('canvas[data-testid="omo-world-canvas"]').getBoundingClientRect();

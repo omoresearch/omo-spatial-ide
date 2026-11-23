@@ -51,7 +51,7 @@ export function AdminPanel(props: { controller: AdminController; state: AdminSta
     const log = React.useRef<HTMLOListElement>(null);
     React.useEffect(() => { if (state.open) input.current?.focus({ preventScroll: true }); }, [state.open]);
     React.useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [state.entries.length, state.entries[state.entries.length - 1]?.status]);
-    if (!state.open) return null;
+    if (!state.open || state.embedded) return null; // builder-ui: the World Builder's Talk tab shows it instead
     const submit = (): void => { const value = text.trim(); if (!value || state.busy) return; setText(''); void controller.ask(value); };
     const hermesOn = state.useHermes && state.hermesConfirmed;
     return <section className="omo-admin-panel" data-testid="admin-panel" role="dialog" aria-label="World admin"
@@ -98,8 +98,4 @@ export function AdminPanel(props: { controller: AdminController; state: AdminSta
     </section>;
 }
 
-/** Toolbar button for the header / tool dock. */
-export function AdminButton(props: { open: boolean; disabled?: boolean; onClick: () => void }): React.ReactElement {
-    return <button type="button" data-testid="admin-toggle" className={`omo-admin-toggle${props.open ? ' active' : ''}`} aria-expanded={props.open} disabled={props.disabled}
-        title="World admin (H)" onMouseDown={event => event.preventDefault()} onClick={props.onClick}>⌬ Admin <kbd>H</kbd></button>;
-}
+// world-ui r4/4: the in-view 'Admin H' chip (AdminButton) is gone: World admin is in the ⌘K palette and H toggles it.

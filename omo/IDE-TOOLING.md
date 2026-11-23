@@ -1,6 +1,6 @@
 # Conventional IDE tooling
 
-The spatial app uses maintained Theia 1.74.3 modules plus VS Code-compatible extensions. It does not use the retired `@theia/git` package. Physical agent screens and the existing read-only task review remain separate from the conventional SCM UI.
+The spatial app uses maintained Theia 1.77.0 modules plus VS Code-compatible extensions. It does not use the retired `@theia/git` package. Physical agent screens and the existing read-only task review remain separate from the conventional SCM UI.
 
 ## Reproducible setup
 

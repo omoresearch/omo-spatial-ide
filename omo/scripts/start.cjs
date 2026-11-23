@@ -57,7 +57,7 @@ function main(args = process.argv.slice(2)) {
         console.log('Usage: npm start -- [--workspace /path/to/project] [--port 3190]\nLocal single-user IDE. Listens only on 127.0.0.1. Default: the bundled demo project.');
         return;
     }
-    if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Omo requires Node.js 22 or newer.');
+    if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Omo requires Node.js 24 or newer (Theia 1.77 needs Node 24+).');
     // Canonical roots: macOS /var, /tmp and some install paths are symlinks to /private/...; the strict
     // per-entry symlink checks below then apply inside the canonical tree.
     const appRoot = fs.realpathSync(path.resolve(__dirname, '..'));

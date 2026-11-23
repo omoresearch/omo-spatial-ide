@@ -1,0 +1,17 @@
+=== SLICE git-review-real-app.cjs 02:00:06 load=6.72
+PASS: owned temporary Git repo and isolated app; physical Code review, scoped real patches, long-preview label, literal filename/editor, unchanged index/HEAD/file.
+=== EXIT git-review-real-app.cjs 0
+=== SLICE room-layout-real-app.cjs 02:00:24 load=7.00
+PASS: Room setup exposes a saved physical layout choice
+PASS: Legacy rooms default to the classic layout
+PASS: The live setup preview moves the actual two desk objects
+PASS: Saving the layout does not start a terminal or agent
+PASS: Real WASD reaches both moved physical monitors, each with a different live shell
+PASS: Room layout and shell actions do not open the web wall
+PASS: Cancel restores the saved physical layout, not the unsaved preview
+PASS: Reload preserves the saved layout and original shell PID/environment
+PASS: Saving another layout moves desks without rebinding or restarting either shell
+PASS: No agent was started by choosing, saving, cancelling or reloading layouts
+PASS: The real shared-room service refuses a classic client joining a wide layout
+PASS: The same two clients can join once their saved layouts match, without starting a terminal
+=== EXIT room-layout-real-app.cjs 0

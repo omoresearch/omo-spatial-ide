@@ -1,0 +1,23 @@
+// Unit checks for the proximity-voice math (node mp/test-spatial.mjs). Pure functions, no browser.
+import { proximityVolume, facing, relativeAzimuth, sourcePosition, PROXIMITY } from './spatial.js';
+let fail = 0;
+const ok = (name, c, d = '') => { console.log(`${c ? 'PASS' : 'FAIL'}  ${name}${d ? '  — ' + d : ''}`); if (!c) fail++; };
+const near = (a, b, e = 1e-6) => Math.abs(a - b) < e;
+ok('full volume at 0 m and 1.5 m', proximityVolume(0) === 1 && proximityVolume(1.5) === 1);
+ok('full volume up to the near edge (2.5 m)', proximityVolume(PROXIMITY.near) === 1);
+ok('fades: 5 m quieter than 2.5 m, louder than 9 m', proximityVolume(5) < 1 && proximityVolume(5) > proximityVolume(9), `5m=${proximityVolume(5)} 9m=${proximityVolume(9)}`);
+ok('below 0.3 at 9 m', proximityVolume(9) < 0.3, String(proximityVolume(9)));
+ok('near silent (< 0.06) at 12 m', proximityVolume(12) > 0 && proximityVolume(12) < 0.06, String(proximityVolume(12)));
+ok('still a whisper at 14.9 m', proximityVolume(14.9) > 0, String(proximityVolume(14.9)));
+ok('silent (0) at 15 m and beyond', proximityVolume(15) === 0 && proximityVolume(16) === 0 && proximityVolume(40) === 0);
+ok('monotonic non-increasing 0..20 m', (() => { let p = 2; for (let d = 0; d <= 20; d += 0.05) { const v = proximityVolume(d); if (v > p + 1e-9) return false; p = v; } return true; })());
+ok('bad input is treated as far away (silent)', proximityVolume(NaN) === 0 && proximityVolume(Infinity) === 0);
+const f0 = facing(0), f90 = facing(Math.PI / 2);
+ok('yaw 0 faces -z, yaw +90 faces -x (three.js camera convention)', near(f0.x, 0) && near(f0.z, -1) && near(f90.x, -1) && near(f90.z, 0));
+const L = { x: 0, z: 0, yaw: 0 };
+ok('a voice to the east is on the right when facing north', near(relativeAzimuth(L, { x: 3, z: 0 }), Math.PI / 2));
+ok('a voice to the west is on the left', near(relativeAzimuth(L, { x: -3, z: 0 }), -Math.PI / 2));
+ok('a voice ahead is at 0', near(relativeAzimuth(L, { x: 0, z: -3 }), 0));
+const sp = sourcePosition(L, { x: 0, z: 0 });
+ok('co-located voice is pushed to 0.3 m ahead (HRTF needs a direction)', near(Math.hypot(sp.x, sp.z), 0.3) && sp.z < 0);
+process.exit(fail ? 1 : 0);

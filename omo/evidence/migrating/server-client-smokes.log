@@ -1,0 +1,30 @@
+ok   loopback plain mode (for Tailscale Serve / TLS proxy in front)
+ok   redeemInvite helper
+ok   RoomClient connect + welcome
+ok   RoomClient request world-ops
+ok   other client tracks the new world
+ok   presence pose tracked
+ok   bad key rejected with 4001
+
+7 checks passed
+ok   room server listening http://127.0.0.1:34871
+ok   IDE client hosts with the create-room owner key
+ok   owner seeds the untouched room with the IDE world
+ok   owner key stored as the member token (0600 store in the IDE)
+ok   owner mints an IDE invite link
+ok   invite link opens the join page in a browser
+ok   second IDE client joins with the invite link (no role asked = builder, as older IDE clients edited the world)
+ok   both members see each other (presence)
+ok   invited member applies a world op
+ok   owner receives the shared world change
+ok   stale baseRevision is a conflict, not a silent overwrite
+ok   chat-ack for the sender
+ok   owner receives the chat line
+ok   pose crosses to the other member
+ok   invite is single use
+ok   member-role invite joins as member
+ok   member world edit is refused readably: Your role in this room is “member”: you can chat, talk and share agent status, but only builders and the owner can change the room. Ask the room owner to make you a builder. Nothing was changed.
+ok   wrong owner key refused
+ok   stored member key reconnects and sees the world
+
+19 checks passed

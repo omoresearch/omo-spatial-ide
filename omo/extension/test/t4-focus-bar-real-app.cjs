@@ -36,7 +36,7 @@ if (PORT < 3540 || PORT > 3559) throw new Error('Use a port from 3540 to 3559.')
         browser = await puppeteer.launch({ executablePath: '/opt/google/chrome/chrome', headless: true, userDataDir: path.join(S, 'chrome'),
             args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--disable-dev-shm-usage'], defaultViewport: { width: 1440, height: 900 } });
         const page = await browser.newPage();
-        await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.focus.clickAttach', 'false'); } catch {} });
+        await page.evaluateOnNewDocument(() => { try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0'); localStorage.setItem('omo.starter', 'classic') /* world-ui: legacy checks use the IDE chrome */; localStorage.setItem('omo.focus.clickAttach', 'false'); } catch {} });
         await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded' });
         const trust = () => page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click());
         for (let i = 0; i < 200 && !await page.$('[data-testid="omo-onboarding"]'); i++) { await trust(); await pause(300); }

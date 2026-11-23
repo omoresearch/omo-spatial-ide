@@ -16,6 +16,7 @@ import {
 import type { RoomTheme } from '../common/room-state';
 import type { RoomLayoutId, RoomKitId } from '../common/player-state';
 import { ROOM_LAYOUTS } from '../common/player-state';
+import { kitForTheme } from '../common/world-style-kits'; // sky:merge M1
 
 export type DeskAgent = 'hermes' | 'claude' | 'codex' | 'shell';
 
@@ -50,6 +51,8 @@ export const ONBOARDING_TEMPLATES: readonly OnboardingTemplate[] = [
         prompt: 'prehistoric jungle studio: 2 Hermes desks for writing and editing, a web wall for references, plants and a sofa' },
     { id: 'ops', title: 'Mission control', caption: '4 shells · 2 monitor walls', symbol: '◉',
         prompt: 'mission control in orbit: 4 shell desks for build, deploy, logs and alerts, 2 monitor walls, a web wall for dashboards' },
+    { id: 'skyline', title: 'NYC skyscraper', caption: '3 desks · glass floor at dusk', symbol: '▲',
+        prompt: 'skyline penthouse: a Hermes desk for planning, a Claude desk for code, a Codex desk for review, a web wall for docs, plants and a sofa' }, // sky:render
     { id: 'classic', title: 'Classic room', caption: 'The original Omo room', symbol: '▢',
         prompt: 'classic room: 2 desks, a web wall and a mirror' }
 ];
@@ -66,6 +69,7 @@ const ENTITY_WORD = /\b(walls?|mirrors?|desks?|stations?|workstations?|screens?|
 const STOP_START = new RegExp(`^(?:the|${QTY})\\b`);
 
 const JUNGLE_WORDS = /\b(jungle|forest|prehistoric|dino\w*|rain ?forest|garden|greenhouse|tropical|nature|leafy|green|botanic\w*|expedition)\b/g;
+const SKYLINE_WORDS = /\b(skyscraper|skyline|manhattan|new york|nyc|penthouse|high-?rise|tower|city)\b/g; // sky:render
 const SPACE_WORDS = /\b(space|orbit\w*|galax\w*|cosmic|observatory|moon|mars|sci-?fi|rocket|starship|mission control|astro\w*)\b/g;
 
 const DECOR_WORDS: Array<[RegExp, DecorKind]> = [
@@ -192,6 +196,7 @@ const ORIGIN: Transform = { x: 0, z: 0, rotation: 0 };
 /** Deterministic placement of every entity for a given world. Pure; used by the planner and by edits. */
 export function arrangement(world: WorldSpec, assign?: ReadonlyMap<string, string>): Arrangement {
     if (rooms(world).length) return zonedArrangement(world, assign); // w3:admin — a world with rooms is laid out room by room
+    const kitPlan = kitArrangement(world); if (kitPlan) return kitPlan; // sky:merge M1 — fits the baked skyline kit
     const desks = stations(world);
     const n = desks.length;
     const cols = n <= 3 ? Math.max(1, n) : n <= 4 ? 2 : n <= 6 ? 3 : 4;
@@ -199,7 +204,8 @@ export function arrangement(world: WorldSpec, assign?: ReadonlyMap<string, strin
     const walls = world.entities.filter(e => e.kind === 'web-wall' || e.kind === 'monitor-wall');
     const width = n <= 2 && walls.length <= 2 ? 12 : clamp(half(Math.max(cols * 4.4 + 2.4, walls.length * 2.8 + 1)), 12, 40);
     const depth = n <= 2 ? 10 : clamp(half(rows * 3.2 + 7), 10, 40);
-    const shell: WorldShell = { theme: world.shell.theme, width, depth };
+    const sky = world.shell.theme === 'skyline'; // sky:render — a penthouse floor is roomy: glass all round, desks set in from it
+    const shell: WorldShell = { theme: world.shell.theme, width: sky ? Math.max(width, 24) : width, depth: sky ? Math.max(depth, 18) : depth };
     const transforms = new Map<string, Transform>();
     const sizes = new Map<string, { width: number; height: number; elevation: number }>();
     // Desks: the familiar classic positions for one or two desks, else a centred grid facing the back wall.
@@ -244,6 +250,27 @@ export function arrangement(world: WorldSpec, assign?: ReadonlyMap<string, strin
         }
     }
     return { shell, transforms, sizes };
+}
+
+/**
+ * sky:merge M1 — a skyline world small enough for the baked penthouse kit (up to 3 desks, 1 web/monitor wall, no
+ * mirrors / review screens / rooms) takes the kit's exact floor: desks on its desk anchors, the wall on its
+ * webwall_anchor, decor on its free slots. Larger worlds keep the procedural skyline layout.
+ */
+export function kitArrangement(world: WorldSpec): Arrangement | undefined {
+    const kit = kitForTheme(world.shell.theme); if (!kit) return undefined;
+    const desks = stations(world), walls = world.entities.filter(e => e.kind === 'web-wall' || e.kind === 'monitor-wall');
+    const decor = world.entities.filter(e => e.kind === 'decor');
+    const reviews = world.entities.filter(e => e.kind === 'review-screen'), mirrors = world.entities.filter(e => e.kind === 'mirror');
+    if (!desks.length || desks.length > kit.desks.length || walls.length > 1 || reviews.length > 1 || mirrors.length > 1 || decor.length > kit.decorSlots.length || world.entities.some(e => e.kind === 'room')) return undefined;
+    const transforms = new Map<string, Transform>(), sizes = new Map<string, { width: number; height: number; elevation: number }>();
+    desks.forEach((d, i) => transforms.set(d.id, { ...kit.desks[i] }));
+    walls.forEach(w => { transforms.set(w.id, { ...kit.webWall.transform }); sizes.set(w.id, { width: kit.webWall.width, height: kit.webWall.height, elevation: kit.webWall.elevation }); });
+    decor.forEach((d, i) => transforms.set(d.id, { x: kit.decorSlots[i].x, z: kit.decorSlots[i].z, rotation: 0 }));
+    // Free wall spots of the baked floor: the south wall west of the web wall, and the west wall between the desks and the shelves.
+    reviews.forEach(r => transforms.set(r.id, { x: r3(kit.webWall.transform.x - kit.webWall.width / 2 - 2.6), z: kit.webWall.transform.z, rotation: Math.PI }));
+    mirrors.forEach(m => transforms.set(m.id, { x: r3(-kit.shell.width / 2 + 0.12), z: 2.6, rotation: Math.PI / 2 }));
+    return { shell: { theme: world.shell.theme, width: kit.shell.width, depth: kit.shell.depth }, transforms, sizes };
 }
 
 export interface Arrangement {
@@ -407,6 +434,7 @@ export function emptyWorld(name: string, theme: RoomTheme): WorldSpec {
 
 function detectTheme(text: string): RoomTheme | undefined {
     const jungle = (text.match(JUNGLE_WORDS) ?? []).length, space = (text.match(SPACE_WORDS) ?? []).length;
+    if ((text.match(SKYLINE_WORDS) ?? []).length) return 'skyline'; // sky:render
     if (jungle > space) return 'jungle';
     if (space > 0) return 'station';
     return undefined;

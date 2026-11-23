@@ -7,6 +7,7 @@ import type { BuildMode } from './build-mode';
 import type { RoomEntity, WallSide } from '../common/world-model';
 import { ROOM_MIN, ROOM_MAX, WALL_SIDES } from '../common/world-model';
 import { DOOR_WIDTH } from './build-room';
+import { OmoSelect } from './omo-select'; // world-ui
 
 const SIDE_LABEL: Record<WallSide, string> = { back: 'Back', front: 'Front', left: 'Left', right: 'Right' };
 const fmt = (n: number): string => String(Math.round(n * 10) / 10);
@@ -40,11 +41,9 @@ export function RoomInspector(props: { build: BuildMode; room: RoomEntity }): Re
                     className={doors.includes(side) ? 'is-on' : ''} onClick={() => toggle(side)}>{SIDE_LABEL[side]}</button>)}</div>
             <small>{doors.length ? `A ${DOOR_WIDTH} m gap in the ${doors.map(d => SIDE_LABEL[d].toLowerCase()).join(', ')} wall${doors.length === 1 ? '' : 's'}.` : 'No doorway: the room is closed.'}</small>
         </div>
-        <label className="omo-build-field"><span>Theme</span>
-            <select data-testid="build-room-theme" value={room.theme ?? ''} onChange={e => reshape({ theme: (e.target.value || undefined) as RoomEntity['theme'] })}>
-                {!room.theme && <option value="">Same as the world</option>}
-                <option value="station">Station</option>
-                <option value="jungle">Jungle</option>
-            </select></label>
+        <div className="omo-build-field"><span>Theme</span>
+            <OmoSelect testid="build-room-theme" ariaLabel="Room theme" value={room.theme ?? ''}
+                options={[...(!room.theme ? [{ value: '', label: 'Same as the world' }] : []), { value: 'skyline', label: 'Skyline' }, { value: 'station', label: 'Station' }, { value: 'jungle', label: 'Jungle' }]}
+                onChange={v => reshape({ theme: (v || undefined) as RoomEntity['theme'] })} /></div>
     </div>;
 }

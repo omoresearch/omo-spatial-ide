@@ -1,0 +1,102 @@
+<!doctype html><html><head><meta charset="utf-8"><title>RP1 avatar look test</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#2a2826}#lab{position:fixed;left:0;right:0;bottom:22px;display:flex;justify-content:space-around;font:500 15px/1.3 Inter,system-ui,sans-serif;color:#ece6de}#lab small{display:block;opacity:.6;font-size:12px;text-align:center}#lab span{text-align:center}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script></head>
+<body><div id="lab"></div>
+<script type="module">
+// RoboParty RP1 humanoid (github.com/Roboparty/RP1_description; the one we used in the Minecraft world) rebuilt from its MJCF in three.js. Blue trim = the person's colour.
+import * as THREE from 'three';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createAvatar, attachAvatars } from './avatars-v2.js';
+window.__errors = []; addEventListener('error', e => window.__errors.push(String(e.message)));
+const Q = new URLSearchParams(location.search), MODE = Q.get('mode') || 'pair';
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.AgXToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.append(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#2a2826');
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.55;
+const key = new THREE.DirectionalLight('#ffe2c4', 2.0); key.position.set(-3.5, 7.5, 5.5); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -5, right: 5, top: 4, bottom: -1, near: 0.5, far: 20 }); key.shadow.radius = 8; key.shadow.bias = -0.0004; scene.add(key);
+scene.add(new THREE.HemisphereLight('#efeae2', '#5a4a3e', 0.6));
+const back = new THREE.DirectionalLight('#ffffff', 0.9); back.position.set(1.5, 3.5, -5); scene.add(back);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), new THREE.MeshStandardMaterial({ color: '#8c7562', roughness: 0.6 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const wall = new THREE.Mesh(new THREE.PlaneGeometry(24, 8), new THREE.MeshStandardMaterial({ color: '#77716b', roughness: 0.95 })); wall.position.set(0, 4, -3.2); scene.add(wall);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+
+// --- MJCF -> three.js ---
+const xml = new DOMParser().parseFromString(await (await fetch('rp1/mjcf/robot_24dof.xml')).text(), 'text/xml');
+const mats = {}; for (const m of xml.querySelectorAll('asset > material')) { const c = (m.getAttribute('rgba') || '0.8 0.8 0.8 1').split(/\s+/).map(Number); mats[m.getAttribute('name')] = c; }
+const meshFile = {}; for (const m of xml.querySelectorAll('asset > mesh')) { const f = m.getAttribute('file'); meshFile[m.getAttribute('name') || f.split('/').pop().replace(/\.stl$/i, '')] = f; }
+const loader = new STLLoader(), geomCache = {};
+async function geom(name) { if (!geomCache[name]) geomCache[name] = loader.loadAsync('rp1/' + meshFile[name]).then(g => { g.computeVertexNormals(); return [g]; }); return geomCache[name]; }
+const vec = (s, d) => (s ? s.split(/\s+/).map(Number) : d);
+async function build(accent) {
+  const pending = [];
+  const material = (name) => { const c = mats[name] || [0.8, 0.8, 0.8, 1]; const lum = (c[0] + c[1] + c[2]) / 3;
+    const isRed = c[2] > 0.5 && c[0] < 0.2; // RP1's blue trim becomes the person's colour
+    const isWhite = lum > 0.82;
+    return new THREE.MeshPhysicalMaterial({ color: isRed ? accent : new THREE.Color(c[0], c[1], c[2]).convertSRGBToLinear(), roughness: isWhite ? 0.32 : 0.45, metalness: lum < 0.1 ? 0.2 : 0.0, clearcoat: isWhite ? 0.6 : 0.1, clearcoatRoughness: 0.25, emissive: isRed ? accent : 0x000000, emissiveIntensity: isRed ? 0.35 : 0 }); };
+  function walk(el, parent) {
+    const g = new THREE.Group(); const p = vec(el.getAttribute('pos'), [0, 0, 0]); g.position.set(...p);
+    const q = el.getAttribute('quat'); if (q) { const [w, x, y, z] = vec(q); g.quaternion.set(x, y, z, w); }
+    g.name = el.getAttribute('name') || ''; parent.add(g);
+    for (const c of el.children) {
+      if (c.tagName === 'geom' && c.getAttribute('class') === 'visual' && c.getAttribute('mesh') && meshFile[c.getAttribute('mesh')]) {
+        const mat = material(c.getAttribute('material'));
+        pending.push(geom(c.getAttribute('mesh')).then(gs => gs.forEach(ge => { const m = new THREE.Mesh(ge, mat); m.castShadow = m.receiveShadow = true;
+          const gp = c.getAttribute('pos'); if (gp) m.position.set(...vec(gp)); const gq = c.getAttribute('quat'); if (gq) { const [w, x, y, z] = vec(gq); m.quaternion.set(x, y, z, w); } g.add(m); })));
+      } else if (c.tagName === 'body') walk(c, g);
+    }
+    return g;
+  }
+  const root = new THREE.Group(); const face = new THREE.Group(); face.rotation.y = +(Q.get('face') ?? -1) * Math.PI / 2; root.add(face); // RP1's MJCF faces +X; turn it to face +Z (the camera)
+  const zUp = new THREE.Group(); zUp.rotation.x = -Math.PI / 2; face.add(zUp);
+  walk(xml.querySelector('worldbody > body'), zUp);
+  await Promise.all(pending);
+  return root;
+}
+// a calm stance: elbows soft, torso straight (joint names from the MJCF bodies)
+function pose(root, t, speaking) {
+  const set = (n, axis, a) => { const b = root.getObjectByName(n); if (!b) return; b.userData.q0 ??= b.quaternion.clone(); b.quaternion.copy(b.userData.q0).multiply(new THREE.Quaternion().setFromAxisAngle(axis, a)); };
+  const Y = new THREE.Vector3(0, 1, 0), X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
+  const br = Math.sin(t * 1.3) * 0.02;
+  // MJCF joint axes (body-local, Z-up): shoulder roll X, elbow +-Y, waist yaw Z. A relaxed stand: arms a little out, elbows soft.
+  set('left_shoulder_roll_link', X, -0.06); set('right_shoulder_roll_link', X, 0.06);
+  const EL = +(Q.get('el') ?? 1.3), ER = +(Q.get('er') ?? 1.3); set('left_elbow_link', Y, EL + br * 2); set('right_elbow_link', Y, ER + br * 2);
+  set('waist_yaw_link', Z, speaking ? Math.sin(t * 0.9) * 0.08 : 0);
+}
+function dress(r, accent) {
+  r.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(r), top = bb.max.y;
+  // the head ring is the top ~0.17 m; find its centre from the meshes that live up there
+  const hb = new THREE.Box3(), v = new THREE.Vector3();
+  r.traverse(m => { if (!m.isMesh || m.name === 'visor') return; const pa = m.geometry.attributes.position; for (let k = 0; k < pa.count; k += 3) { v.fromBufferAttribute(pa, k).applyMatrix4(m.matrixWorld); if (v.y > top - 0.15) hb.expandByPoint(v); } });
+  const c = hb.getCenter(new THREE.Vector3()), s = hb.getSize(new THREE.Vector3());
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.5, 48, 24), new THREE.MeshPhysicalMaterial({ color: '#0b0d12', roughness: 0.12, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 }));
+  visor.scale.set(s.x * 0.78, s.y * 0.72, Math.max(0.05, s.z * 0.55)); visor.position.copy(r.worldToLocal(c.clone())); visor.name = 'visor'; r.add(visor);
+  const eye = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, s.x * 0.28, 4, 12), new THREE.MeshBasicMaterial({ color: accent }));
+  eye.rotation.z = Math.PI / 2; eye.position.copy(visor.position).add(new THREE.Vector3(0, s.y * 0.12, visor.scale.z * 0.5 + 0.002)); eye.name = 'eye'; r.add(eye);
+  const sh = new THREE.Mesh(new THREE.CircleGeometry(0.32, 48), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.16, depthWrite: false }));
+  sh.rotation.x = -Math.PI / 2; sh.position.y = 0.003; sh.visible = false; r.add(sh);
+  r.userData.hb = { c: c.toArray().map(v => +v.toFixed(3)), s: s.toArray().map(v => +v.toFixed(3)) };
+}
+const robots = [];
+const people = [{ name: 'Harry', c: '#5fb4ff' }, { name: 'Maya', c: '#ff8a6b' }];
+for (let i = 0; i < 2; i++) { const r = await build(new THREE.Color(people[i].c)); r.position.set(MODE === 'pair' ? -1.6 + i * 1.1 : -0.55 + i * 1.1, 0, 0); r.rotation.y = i ? -0.25 : 0.25; scene.add(r); robots.push(r); }
+robots.forEach((r, i) => dress(r, new THREE.Color(people[i].c))); window.__head = robots[0].userData.hb; { const r = robots[0]; const L = []; r.traverse(m => { if (m.isMesh && m.parent?.name) { const b = new THREE.Box3().setFromObject(m); L.push([m.parent.name, +b.min.y.toFixed(2), +b.max.y.toFixed(2)]); } }); window.__parts = L.sort((a, b) => b[2] - a[2]).slice(0, 5); }
+// size check
+const box = new THREE.Box3().setFromObject(robots[0]); window.__size = box.getSize(new THREE.Vector3()).toArray().map(v => +v.toFixed(2));
+let compare = [];
+if (MODE === 'pair') {
+  await attachAvatars({ scene, camera: cam, renderer });
+  people.forEach((p, i) => { const a = createAvatar({ id: 'B' + p.name, name: p.name, colour: p.c, body: i ? 'f' : 'm', style: 'light' }); scene.add(a.root); a.setPose({ x: 0.9 + i * 0.9, y: 0, z: 0, yaw: Math.PI + (i ? -0.18 : 0.18) }); compare.push(a); });
+  document.getElementById('lab').innerHTML = '<span>RP1 humanoid<small>RoboParty model · person colour as the trim</small></span><span>B · Light form<small>current recommendation</small></span>';
+  cam.position.set(0, 1.5, 8.2); cam.lookAt(0, 0.95, 0);
+} else { cam.position.set(0, 1.45, 4.4); cam.lookAt(0, 0.95, 0); }
+let t = 0;
+window.__frame = (dt) => { t += dt; robots.forEach((r, i) => { const e = r.getObjectByName('eye'); if (e) e.scale.x = i === 0 ? 1 + Math.abs(Math.sin(t * 9)) * 0.9 : 1; }); if (Q.get('pose') !== '0') robots.forEach((r, i) => pose(r, t + i, i === 0)); compare.forEach((a) => a.update(dt, cam)); renderer.render(scene, cam); };
+window.__frame(0.016);
+window.__ready = true;
+</script></body></html>

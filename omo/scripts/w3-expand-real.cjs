@@ -41,7 +41,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         const page = await browser.newPage();
         page.on('pageerror', e => errors.push(String(e.message || e)));
         await page.evaluateOnNewDocument(() => {
-            try { localStorage.setItem('omo.coach.v1', 'seen'); } catch {}
+            try { localStorage.setItem('omo.coach.v1', 'seen'); localStorage.setItem('omo.immersive', '0'); localStorage.setItem('omo.starter', 'classic') /* world-ui: legacy checks use the IDE chrome */; } catch {}
             new MutationObserver(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Yes, I trust the authors')?.click()).observe(document, { childList: true, subtree: true });
         });
         const ds = () => page.$eval(CANVAS, c => ({ ...c.dataset }));
@@ -139,6 +139,7 @@ const check = (name, pass, detail) => { checks.push({ name, pass: !!pass, detail
         let placed = false, ghostAt;
         for (const [fx, fy] of [[0.97, 0.5], [0.95, 0.6], [0.93, 0.4], [0.98, 0.7], [0.9, 0.5], [0.04, 0.5], [0.06, 0.6]]) {
             const x = wrap[0] + wrap[2] * fx, y = wrap[1] + wrap[3] * fy;
+            if (!await page.evaluate((x, y) => document.elementFromPoint(x, y)?.tagName === 'CANVAS', x, y)) continue; // builder-ui: the build panel moved to the right column
             await page.mouse.move(x, y); await pause(300);
             const ghost = await page.$eval('[data-testid="build-mode"]', e => e.dataset.ghost || '');
             if (/true$/.test(ghost)) { ghostAt = [fx, fy]; await page.mouse.click(x, y); placed = true; break; }

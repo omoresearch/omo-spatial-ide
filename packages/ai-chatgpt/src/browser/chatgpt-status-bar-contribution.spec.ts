@@ -23,9 +23,9 @@ import { expect } from 'chai';
 import { AIActivationService } from '@theia/ai-core/lib/browser';
 import { Emitter, PreferenceChange, PreferenceService } from '@theia/core';
 import { StatusBar, StatusBarAlignment, StatusBarEntry } from '@theia/core/lib/browser/status-bar/status-bar-types';
-import { ChatGptAuthService, ChatGptAuthState, CHATGPT_ENABLED_PREF } from '../common';
-import { ChatGptCommands } from './chatgpt-command-contribution';
-import { ChatGptStatusBarContribution } from './chatgpt-status-bar-contribution';
+import { ChatGptAuthService, ChatGptAuthState, CHATGPT_ENABLED_PREF } from '../common/index.js';
+import { ChatGptCommands } from './chatgpt-command-contribution.js';
+import { ChatGptStatusBarContribution } from './chatgpt-status-bar-contribution.js';
 
 disableJSDOM();
 
@@ -104,11 +104,20 @@ describe('ChatGptStatusBarContribution', () => {
         expect(entry()?.command).to.equal(ChatGptCommands.SIGN_IN.id);
     });
 
+    it('shows disabled token sharing separately from connection status', async () => {
+        initialState = Promise.resolve({ isAuthenticated: true, accountLabel: 'user@example.com', canUseChatGptPlan: false });
+        await start();
+        expect(entry()?.text).to.contain('Token sharing disabled');
+        expect(entry()?.tooltip).to.contain('user@example.com');
+        expect(entry()?.command).to.equal(ChatGptCommands.SIGN_IN.id);
+    });
+
     it('shows the initial authenticated account', async () => {
         initialState = Promise.resolve({ isAuthenticated: true, accountLabel: 'initial@example.com' });
         await start();
         expect(entry()?.text).to.equal('$(openai) ChatGPT: initial@example.com');
         expect(entry()?.command).to.equal(ChatGptCommands.SIGN_OUT.id);
+        expect(entry()?.tooltip).to.contain('ChatGPT subscription');
     });
 
     it('removes the entry while disabled and restores it when enabled', async () => {

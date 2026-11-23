@@ -19,8 +19,8 @@ import { Disposable, DisposableCollection, nls, PreferenceService } from '@theia
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { StatusBar, StatusBarAlignment } from '@theia/core/lib/browser/status-bar/status-bar-types';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
-import { CHATGPT_ENABLED_PREF, ChatGptAuthService, ChatGptAuthState } from '../common';
-import { ChatGptCommands } from './chatgpt-command-contribution';
+import { CHATGPT_ENABLED_PREF, ChatGptAuthService, ChatGptAuthState } from '../common/index.js';
+import { ChatGptCommands } from './chatgpt-command-contribution.js';
 
 const CHATGPT_STATUS_BAR_ID = 'chatgpt-auth-status';
 
@@ -81,15 +81,21 @@ export class ChatGptStatusBarContribution implements FrontendApplicationContribu
             return;
         }
         const accountLabel = this.authState.accountLabel ?? 'ChatGPT';
+        const sharingDisabled = this.authState.isAuthenticated && this.authState.canUseChatGptPlan === false;
         this.statusBar.setElement(CHATGPT_STATUS_BAR_ID, {
-            text: this.authState.isAuthenticated ? `$(openai) ChatGPT: ${accountLabel}`
-                : `$(openai) ${nls.localize('theia/ai/chatgpt/models/signIn', 'Sign in with ChatGPT')}`,
-            tooltip: this.authState.isAuthenticated
-                ? nls.localize('theia/ai/chatgpt/statusBar/signedIn', 'Signed in to ChatGPT as {0}. Click to sign out.', accountLabel)
-                : nls.localize('theia/ai/chatgpt/statusBar/signedOut', 'Not signed in to ChatGPT. Click to sign in.'),
+            text: sharingDisabled
+                ? `$(openai) ChatGPT: ${nls.localize('theia/ai/chatgpt/statusBar/sharingDisabled', 'Token sharing disabled')}`
+                : this.authState.isAuthenticated ? `$(openai) ChatGPT: ${accountLabel}`
+                    : `$(openai) ${nls.localize('theia/ai/chatgpt/models/signIn', 'Sign in with ChatGPT')}`,
+            tooltip: sharingDisabled
+                ? nls.localize('theia/ai/chatgpt/statusBar/enableSharing', 'Connected as {0}, but token sharing is not enabled. Click to reconnect.', accountLabel)
+                : this.authState.isAuthenticated
+                    ? nls.localize('theia/ai/chatgpt/statusBar/connected',
+                        'Connected to ChatGPT as {0}. Requests use your ChatGPT subscription. Click to sign out.', accountLabel)
+                    : nls.localize('theia/ai/chatgpt/statusBar/signedOut', 'Not connected to ChatGPT. Click to sign in.'),
             alignment: StatusBarAlignment.RIGHT,
             priority: 100,
-            command: this.authState.isAuthenticated ? ChatGptCommands.SIGN_OUT.id : ChatGptCommands.SIGN_IN.id
+            command: this.authState.isAuthenticated && !sharingDisabled ? ChatGptCommands.SIGN_OUT.id : ChatGptCommands.SIGN_IN.id
         });
     }
 }

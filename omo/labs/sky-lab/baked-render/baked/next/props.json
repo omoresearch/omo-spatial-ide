@@ -1,0 +1,199 @@
+[
+ {
+  "id": "book_encyclopedia_set_01",
+  "pos": [
+   0.3,
+   0.32,
+   -6.45
+  ],
+  "rotY": 0.0,
+  "scale": 0.9
+ },
+ {
+  "id": "potted_plant_04",
+  "pos": [
+   9.969999999999999,
+   0.93,
+   -7.12
+  ],
+  "rotY": 0.4,
+  "scale": 0.8
+ },
+ {
+  "id": "potted_plant_04",
+  "pos": [
+   5.55,
+   2.275,
+   -8.05
+  ],
+  "rotY": 0.3,
+  "scale": 1.0
+ },
+ {
+  "id": "potted_plant_04",
+  "pos": [
+   9.75,
+   2.275,
+   -8.05
+  ],
+  "rotY": 2.1,
+  "scale": 1.0
+ },
+ {
+  "id": "potted_plant_04",
+  "pos": [
+   9.15,
+   0.495,
+   -8.05
+  ],
+  "rotY": 1.3,
+  "scale": 0.9
+ },
+ {
+  "id": "money_tree_tall",
+  "url": "plant_money_tree_tall.glb",
+  "pos": [
+   11.8,
+   0,
+   -11.3
+  ],
+  "rotY": 0.6,
+  "scale": 1.15
+ },
+ {
+  "id": "money_tree_tall",
+  "url": "plant_money_tree_tall.glb",
+  "pos": [
+   17.4,
+   0,
+   -10.45
+  ],
+  "rotY": 2.4,
+  "scale": 1.0
+ },
+ {
+  "id": "money_tree_shrub",
+  "url": "plant_money_tree_shrub.glb",
+  "pos": [
+   0.75,
+   0,
+   -0.75
+  ],
+  "rotY": 1.2,
+  "scale": 1.2
+ },
+ {
+  "id": "calathea_b",
+  "url": "plant_calathea_b.glb",
+  "pos": [
+   0.42,
+   0,
+   -3.55
+  ],
+  "rotY": 0.4,
+  "scale": 1.7
+ },
+ {
+  "id": "calathea_b",
+  "url": "plant_calathea_b.glb",
+  "pos": [
+   0.42,
+   0,
+   -8.45
+  ],
+  "rotY": 2.0,
+  "scale": 1.7
+ },
+ {
+  "id": "calathea_c",
+  "url": "plant_calathea_c.glb",
+  "pos": [
+   3.25,
+   0,
+   -11.45
+  ],
+  "rotY": 1.0,
+  "scale": 1.6
+ },
+ {
+  "id": "potted_plant_01",
+  "pos": [
+   8.65,
+   0,
+   -11.45
+  ],
+  "rotY": 0.6,
+  "scale": 1.5
+ },
+ {
+  "id": "potted_plant_02",
+  "pos": [
+   13.95,
+   0,
+   -0.55
+  ],
+  "rotY": 2.0,
+  "scale": 1.5
+ },
+ {
+  "id": "potted_plant_02",
+  "pos": [
+   6.85,
+   0,
+   -0.5
+  ],
+  "rotY": 0.0,
+  "scale": 1.4
+ },
+ {
+  "id": "potted_plant_01",
+  "pos": [
+   17.45,
+   0,
+   -3.3
+  ],
+  "rotY": 1.1,
+  "scale": 1.3
+ },
+ {
+  "id": "potted_plant_02",
+  "pos": [
+   16.9,
+   0,
+   -0.6
+  ],
+  "rotY": 0.7,
+  "scale": 1.5
+ },
+ {
+  "id": "potted_plant_04",
+  "pos": [
+   6.58,
+   0.75,
+   -10.05
+  ],
+  "rotY": 0.0,
+  "scale": 1.0
+ },
+ {
+  "id": "potted_plant_04",
+  "pos": [
+   9.78,
+   0.75,
+   -10.05
+  ],
+  "rotY": 1.0,
+  "scale": 1.0
+ },
+ {
+  "id": "calathea_c",
+  "url": "plant_calathea_c.glb",
+  "pos": [
+   5.2,
+   0,
+   -11.45
+  ],
+  "rotY": 2.2,
+  "scale": 1.6
+ }
+]

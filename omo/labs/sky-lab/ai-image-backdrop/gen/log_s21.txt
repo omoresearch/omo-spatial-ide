@@ -1,0 +1,64 @@
+~/dev/omo-sky-lab/ai-image-backdrop/.pydeps/diffusers/utils/deprecation_utils.py:23: FutureWarning: `torch_dtype` is deprecated and will be removed in version 1.0.0. Please use `dtype` instead.
+  deprecate("torch_dtype", "1.0.0", _TORCH_DTYPE_DEPRECATION_MESSAGE)
+Cannot initialize model with low cpu memory usage because `accelerate` was not found in the environment. Defaulting to `low_cpu_mem_usage=False`. It is strongly recommended to install `accelerate` for faster and less memory-intense model loading. You can do so with: 
+```
+pip install accelerate
+```
+.
+Loading pipeline components...:   0%|          | 0/5 [00:00<?, ?it/s]~/ai/comfy/ComfyUI/.venv/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+An error occurred while trying to fetch ~/dev/omo-sky-lab/ai-image-backdrop/gen/../models/tiny-sd/unet: Error no file named diffusion_pytorch_model.safetensors found in directory ~/dev/omo-sky-lab/ai-image-backdrop/gen/../models/tiny-sd/unet.
+Defaulting to unsafe serialization. Pass `allow_pickle=False` to raise an error instead.
+Loading pipeline components...:  20%|██        | 1/5 [00:00<00:00,  7.69it/s]
+Loading weights:   0%|          | 0/196 [00:00<?, ?it/s][ALoading weights: 100%|██████████| 196/196 [00:00<00:00, 76494.24it/s]
+An error occurred while trying to fetch ~/dev/omo-sky-lab/ai-image-backdrop/gen/../models/tiny-sd/vae: Error no file named diffusion_pytorch_model.safetensors found in directory ~/dev/omo-sky-lab/ai-image-backdrop/gen/../models/tiny-sd/vae.
+Defaulting to unsafe serialization. Pass `allow_pickle=False` to raise an error instead.
+Loading pipeline components...:  80%|████████  | 4/5 [00:00<00:00, 19.36it/s]Loading pipeline components...: 100%|██████████| 5/5 [00:00<00:00, 21.01it/s]
+pass 1: 4096x1024, 30 steps
+  step 1/30 5.55s
+  step 2/30 4.98s
+  step 3/30 5.27s
+  step 4/30 5.12s
+  step 5/30 5.12s
+  step 6/30 5.13s
+  step 7/30 5.13s
+  step 8/30 5.12s
+  step 9/30 5.13s
+  step 10/30 5.15s
+  step 11/30 5.19s
+  step 12/30 5.20s
+  step 13/30 5.21s
+  step 14/30 5.24s
+  step 15/30 5.23s
+  step 16/30 5.24s
+  step 17/30 5.39s
+  step 18/30 5.12s
+  step 19/30 5.12s
+  step 20/30 5.12s
+  step 21/30 5.12s
+  step 22/30 5.12s
+  step 23/30 5.12s
+  step 24/30 5.12s
+  step 25/30 5.12s
+  step 26/30 5.12s
+  step 27/30 5.12s
+  step 28/30 5.12s
+  step 29/30 5.12s
+  step 30/30 5.12s
+pass1 saved (4096, 1024) 159.1s
+pass 2: 8192x2048, strength 0.42
+  step 1/13 6.66s
+  step 2/13 7.17s
+  step 3/13 7.17s
+  step 4/13 7.18s
+  step 5/13 7.42s
+  step 6/13 7.57s
+  step 7/13 7.57s
+  step 8/13 7.56s
+  step 9/13 7.37s
+  step 10/13 7.21s
+  step 11/13 7.39s
+  step 12/13 7.59s
+  step 13/13 8.26s
+pass2 saved (8192, 2048)
+done 282.2s

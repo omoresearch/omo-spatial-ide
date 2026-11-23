@@ -146,6 +146,7 @@ export class BuildMode {
     /** True while build mode owns clicks: the host must not open a workstation for a scene click. */
     get ownsClicks(): boolean { return this.state.active; }
     get store(): WorldStore | undefined { return this.boundStore?.store; }
+    get scene(): RoomScene | undefined { return this.bound?.scene; } proposeOps(ops: WorldOp[], label: string): boolean { return this.propose(ops, label); } // builder-ui
     subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
 
     /** Follow the current scene and store. Cheap; safe to call often. */
@@ -200,7 +201,7 @@ export class BuildMode {
         this.layer.attach(threeOf(this.bound.scene).scene);
         this.markWrap(true); this.pushWorld();
         this.render();
-        this.options.message('Build mode · Pick something from the palette · Click a thing to select it · B to leave.');
+        // world-ui — no extra 'Build mode' status text: the top toolbar is the one build-mode indicator.
     }
     /** Leave build mode. A pending draft must be applied or discarded first, unless forced (room closed). */
     exit(force = false): boolean {
@@ -593,6 +594,7 @@ export class BuildMode {
     }
     private storeChanged(change: WorldStoreChange): void {
         this.pushWorld();
+        (threeOf(this.bound?.scene).canvas as (HTMLCanvasElement & { omoMagic?: { storeChanged(c: WorldStoreChange): void } }) | undefined)?.omoMagic?.storeChanged(change); // world-magic
         if (change.reason === 'error' && change.error) this.warn(change.error);
         // A selected thing that no longer exists (removed, undone) is dropped.
         if (this.state.selected && !this.entity(this.state.selected)) this.set({ selected: undefined, setupFor: undefined });

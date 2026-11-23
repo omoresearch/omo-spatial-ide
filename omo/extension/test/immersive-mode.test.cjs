@@ -14,12 +14,22 @@ function fakeShell(open = {}) {
   return { state, calls, isExpanded: a => state[a], collapse: a => { calls.push(`collapse:${a}`); state[a] = false; }, expand: a => { calls.push(`expand:${a}`); state[a] = true; } };
 }
 function make(opts = {}) {
-  const storage = opts.storage ?? memoryStorage(), shell = opts.shell ?? fakeShell(), chrome = [];
+  // world-ui: immersive is the default now; most cases start from a person who left it ('0').
+  const storage = opts.storage ?? memoryStorage({ [IMMERSIVE_KEY]: '0' }), shell = opts.shell ?? fakeShell(), chrome = [];
   const mode = new ImmersiveMode({ storage, shell, setChrome: hidden => chrome.push(hidden) });
   return { mode, storage, shell, chrome };
 }
 
-test('immersive is off by default and needs both the choice and a showing room', () => {
+test('world-ui: immersive is ON by default for a saved room; an explicit 0 keeps the IDE chrome', () => {
+  const fresh = make({ storage: memoryStorage() });
+  assert.equal(fresh.mode.enabled, true, 'nothing saved = immersive');
+  assert.equal(fresh.mode.active, false, 'but only while a saved room shows');
+  fresh.mode.setEngaged(true); assert.equal(fresh.mode.active, true); assert.deepEqual(fresh.chrome, [true]);
+  fresh.mode.toggle(); assert.equal(fresh.storage.getItem(IMMERSIVE_KEY), '0', 'leaving is remembered');
+  assert.equal(make({ storage: memoryStorage({ [IMMERSIVE_KEY]: '0' }) }).mode.enabled, false);
+});
+
+test('immersive needs both the choice and a showing room', () => {
   const { mode, chrome } = make();
   assert.equal(mode.enabled, false); assert.equal(mode.active, false);
   mode.setEngaged(true); assert.equal(mode.active, false, 'room alone does not hide chrome');
@@ -64,7 +74,8 @@ test('blocked storage and a broken shell never throw', () => {
   const shell = { isExpanded() { throw new Error('not ready'); }, collapse() { throw new Error('x'); }, expand() { throw new Error('x'); } };
   const { mode, chrome } = make({ storage, shell });
   mode.setEngaged(true); mode.toggle(); mode.toggle();
-  assert.deepEqual(chrome, [true, false]);
+  // Blocked storage reads as nothing saved = the immersive default: on, off, on.
+  assert.deepEqual(chrome, [true, false, true]);
 });
 
 test('listeners hear changes; dispose gives the chrome back and keeps the choice', () => {

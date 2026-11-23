@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<style>html,body{margin:0;height:100%;background:#1b1d24;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+// Avatar lineup (standalone smoke page): 6 avatars, warm studio light, used by avatars/smoke.cjs.
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+const M = await import(new URLSearchParams(location.search).get('style') === 'rp1' ? './avatars-rp1.js' : './avatars.js'); const { createAvatar, attachAvatars, HATS } = M;
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.append(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#2a2533');
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 100);
+cam.position.set(0, 1.35, 6.2); cam.lookAt(0, 0.95, 0);
+const key = new THREE.DirectionalLight('#ffe2c4', 2.2); key.position.set(3, 5, 4); key.castShadow = true; scene.add(key);
+scene.add(new THREE.HemisphereLight('#bcd2ff', '#4a3a30', 0.8));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(8, 64), new THREE.MeshStandardMaterial({ color: '#6b5444', roughness: 0.8 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const composer = { render: () => renderer.render(scene, cam), __omoCam: cam };
+await attachAvatars({ scene, camera: cam, renderer, composer });
+const cols = ['#5fb4ff', '#ff7a6b', '#ffc24b', '#3ddc97', '#b48cff', '#ff8fc7'];
+const names = ['Harry', 'Kaviru', 'Maya', 'Leo', 'Sana', 'Ada'];
+const styles = ['spiky', 'bob', 'swoop', 'curly', 'ponytail', 'bob'], outfits = ['tee', 'hoodie', 'tee', 'hoodie', 'tee', 'hoodie'];
+const av = HATS.map((hat, i) => { const a = createAvatar({ id: 'a' + i, name: names[i], colour: cols[i], hat, hairStyle: styles[i], outfit: outfits[i] }); scene.add(a.root); a.setPose({ x: (i - 2.5) * 0.95, y: 0, z: 0, yaw: Math.PI }); return a; });
+let speak = 0; const clock = new THREE.Clock();
+// a simple stool (lineup only) under any avatar that sits: seat top = a.sitHeight
+const stoolMat = new THREE.MeshStandardMaterial({ color: '#c08a5a', roughness: 0.6 });
+const stools = av.map((a) => { const g = new THREE.Group(); const h = a.sitHeight;
+  const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 32), stoolMat); seat.position.y = h - 0.025; g.add(seat);
+  for (let k = 0; k < 3; k++) { const an = k / 3 * Math.PI * 2; const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, h - 0.05, 10), stoolMat); leg.position.set(Math.cos(an) * 0.13, (h - 0.05) / 2, Math.sin(an) * 0.13); g.add(leg); }
+  g.position.set(a.root.position.x, 0, a.root.position.z - 0.02); g.visible = false; scene.add(g); return g; });
+window.__setStates = (list) => list.forEach((s, i) => { if (!av[i]) return; av[i].setState(s); stools[i].visible = s === 'sit'; });
+window.__speak = (on) => { speak = on ? 1 : 0; };
+window.__mute = (i, on) => av[i].setMuted(on);
+window.__errors = []; window.__cam = cam; window.__av = av; window.__THREE = THREE;
+addEventListener('error', e => window.__errors.push(String(e.message)));
+function loop() { const dt = Math.min(0.05, clock.getDelta()); const t = clock.elapsedTime;
+  av.forEach((a, i) => { a.setSpeaking(speak && i === 1 ? 0.5 + 0.5 * Math.abs(Math.sin(t * 9)) : 0); a.lookAt(cam.position); a.update(dt, cam); });
+  composer.render(dt); requestAnimationFrame(loop); }
+loop(); window.__ready = true;
+</script></body></html>

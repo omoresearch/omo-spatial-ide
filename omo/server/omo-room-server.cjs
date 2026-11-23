@@ -4,7 +4,7 @@
 //
 //   node omo/server/omo-room-server.cjs --data DIR --port N [--host H] [--tls-cert F --tls-key F]
 //        [--public-url https://omo.example.ts.net] [--allow-origin URL]... [--trust-proxy] [--allow-plain-http] [--trace-frames FILE (tests only)]
-//   node omo/server/omo-room-server.cjs create-room --data DIR --id ROOM [--name TEXT] [--owner NAME] [--theme station|jungle] [--world FILE]
+//   node omo/server/omo-room-server.cjs create-room --data DIR --id ROOM [--name TEXT] [--owner NAME] [--theme station|jungle|skyline] [--world FILE]
 //   node omo/server/omo-room-server.cjs invite      --data DIR --room ROOM [--role member|builder|viewer] [--ttl 24h] [--note TEXT] [--public-url URL]
 //   node omo/server/omo-room-server.cjs invites     --data DIR --room ROOM
 //   node omo/server/omo-room-server.cjs revoke      --data DIR --room ROOM --invite ID
@@ -47,7 +47,7 @@ async function main() {
         let world;
         if (a.world) world = JSON.parse(fs.readFileSync(a.world, 'utf8'));
         const theme = a.theme || 'station';
-        if (!['station', 'jungle'].includes(theme)) die('--theme is station or jungle.');
+        if (!['station', 'jungle', 'skyline'].includes(theme)) die('--theme is station, jungle or skyline.');
         const out = await createRoom(data, { id: need(a, 'id'), name: a.name, ownerName: a.owner, theme, world });
         process.stdout.write([
             `Room created: ${out.room.id} (${out.room.name})`,

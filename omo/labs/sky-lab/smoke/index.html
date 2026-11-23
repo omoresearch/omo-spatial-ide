@@ -1,0 +1,10 @@
+<!doctype html><html><body style="margin:0;background:#000"><canvas id="c"></canvas>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+const r=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});r.setSize(innerWidth,innerHeight);
+const s=new THREE.Scene(),cam=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,100);
+const m=new THREE.Mesh(new THREE.TorusKnotGeometry(1,.3,128,16),new THREE.MeshNormalMaterial());s.add(m);
+window.__tourAt=t=>{cam.position.set(Math.sin(t*6.28)*5,1,Math.cos(t*6.28)*5);cam.lookAt(0,0,0);r.render(s,cam);};
+window.__tourAt(0);window.__ready=true;
+</script></body></html>

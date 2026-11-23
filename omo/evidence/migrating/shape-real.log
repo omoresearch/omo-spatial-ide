@@ -1,0 +1,41 @@
+PASS Chrome renders on the GPU (not SwiftShader) — "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 5060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+PASS The top bar has a Shape button
+PASS Space opens Shape — {"active":"INPUT#shape-input","nav":"overview","body":"monaco-enable-motion underline-links vs-dark dark-theia linux theia-dark omo-immersive-world omo-shaping omo-shape-open","build":true,"notice":"◈   shapeWorld saved on this device. Nothing was started. Click a desk to open it."}
+PASS One prompt at the bottom centre: 560-640 px wide, 44 px tall, 15 px text, "Describe a change…" — {"w":634,"h":44,"centreX":0,"bottomGap":78,"font":"15px","placeholder":"Describe a change…","focused":true,"chips":["Add a reading nook by the window","Make it warmer at night","Add a web wall"],"hud":"0.3","nav":"overview"}
+PASS Three suggestion chips under it; the prompt has the keys — ["Add a reading nook by the window","Make it warmer at night","Add a web wall"]
+PASS The rest of the HUD fades to 30%; the camera rises to the overview — {"hud":"0.3","nav":"overview"}
+PASS The World Builder panel is hidden (behind Browse)
+PASS The camera frames the change: the ghost group is near the view centre and fills a good part of it — {"frame1":{"framed":"true","ghost":"551,268,874,591"},"off":[-7,-20],"h":323}
+PASS The plan shows as a pending ghost in the room (3 new things) — {"ids":"armchair,floor-lamp,shelves","diff":"+3 decor items"}
+PASS ONE caption card: one plain sentence + Keep / Undo — {"c1":"A reading nook: armchair, floor lamp and shelves by the window.","cap1":{"n":1,"anchor":"720,599","box":[902,373,1262,487],"keep":true,"undo":true}}
+PASS The caption sits beside the change (near its projected anchor, a leader joins them) — {"side":"right","anchor":"720,599","ghost":"551,268,874,591","box":[902,373,1262,487]}
+PASS The caption never covers the change (its rect misses the projected ghost bounds) — {"side":"right","anchor":"720,599","ghost":"551,268,874,591","box":[902,373,1262,487]}
+PASS A leader line joins the caption to the change
+PASS Nothing covers the centre of the room (with the caption up) — ["CANVAS","CANVAS","CANVAS","CANVAS","CANVAS"]
+PASS Nothing is saved before Keep
+PASS The ghost is the real furniture (tinted models, not boxes) — {"real":"armchair,floor-lamp,shelves","meshes":23}
+PASS The nook armchair is the kit lounge armchair (mid_century_lounge_chair), named in the caption — {"props1":"armchair:mid_century_lounge_chair,floor-lamp:lamp,shelves:steel_frame_shelves_03","c1":"A reading nook: armchair, floor lamp and shelves by the window."}
+PASS The reticle sits on the floor at the group (low in the ghost bounds, off every tag), not on a thing — {"anchor":"720,599","ghost":"551,268,874,591"}
+PASS One faint floor outline marks the scope of the whole change
+PASS The ghost tags never overlap each other — [[696,377,760,399],[630,342,704,364],[747,266,807,288]]
+PASS Every ghosted thing has a 12 px name tag matching the caption (Armchair, Floor lamp, Shelves) — {"tags1":[{"id":"armchair","text":"Armchair","on":"true","font":"12px","box":[696,377,760,399]},{"id":"floor-lamp","text":"Floor lamp","on":"true","font":"12px","box":[630,342,704,364]},{"id":"shelves","text":"Shelves","on":"true","font":"12px","box":[747,266,807,288]}],"c1":"A reading nook: armchai
+PASS Enter has one meaning: empty prompt Keep ↵; with text the hint says "Enter = refine" and Keep shows Ctrl ↵ — {"keys0":{"keep":"↵","hint":""},"keys1":{"keep":"Ctrl ↵","hint":"Enter = refine"}}
+PASS Refining replaces the ghost (bigger things, every one says big) — {"c1":"A reading nook: armchair, floor lamp and shelves by the window.","c2":"A reading nook: big armchair, big floor lamp and big shelves by the window.","d1":"+3 decor items","d2":"+3 decor items"}
+PASS Enter keeps: the nook exists in the saved world — ["armchair:sofa:1.4","floor-lamp:lamp:1.4","shelves:bookshelf:1.4"]
+PASS After Keep the camera eases back to the plain overview
+PASS After Keep the caption and the ghost tags are gone and the strip has 1 dot
+PASS Clicking a sofa adds it to the prompt as a pill — {"pickedId":"armchair","pill":{"id":"armchair","text":"Armchair"},"sofas":["armchair"]}
+PASS The proposal names the pointed entity — {"g3":{"ids":"armchair","diff":"1 changed"},"c3":"Moves Armchair."}
+PASS Esc undoes: no ghost, the world did not change — {"ids":"","diff":""}
+PASS Ctrl+Enter keeps even with text in the prompt (the text stays)
+PASS The history strip has the kept steps (2 dots) — 2
+PASS Hovering a dot shows its sentence and "Return to this point (you can redo)" — {"text":"1. A reading nook: big armchair, big floor lamp and big shelves by the window.Return to this point (you can redo)","opacity":"1"}
+PASS Clicking the first dot undoes back to before it — 6
+PASS Redo puts the taken-back changes back (2 dots, the nook and the plant exist again) — 10
+PASS Browse shows the old World Builder palette
+PASS Esc closes Shape: the HUD is back and build mode is off — {"shape":false,"hud":"1","building":false}
+PASS The top-bar Shape button opens Shape too
+PASS no page errors — []
+38/38 checks passed
+shape-real rc=0
+ 01:38:22 up 59 min,  4 users,  load average: 3.18, 3.67, 3.02

@@ -1,0 +1,10 @@
+PASS: Both physical computers have their own real projected screen targets
+PASS: First physical desk executes a real shell
+PASS: Second physical desk runs a different actual shell process
+PASS: Both physical monitor textures keep their independent live output
+PASS: Each physical desk has its own durable workspace, not just another view of one tab
+PASS: Walking back to the first desk preserves its PID and exported state
+PASS: Refresh restores both physical desks and their exact workspace bindings
+FINAL PASS: 7 real multi-station checks
+PASS: Actual Chrome page, physical web click, frame clearing and URL persistence
+PASS: Real terminal link opens real web wall only on explicit click

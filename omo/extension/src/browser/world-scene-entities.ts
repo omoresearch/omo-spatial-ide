@@ -28,7 +28,7 @@ export function placeRoot(root: THREE.Object3D, entity: WorldEntity): void {
     root.rotation.set(0, entity.transform.rotation, 0);
     if (entity.kind === 'decor') root.scale.setScalar(entity.scale ?? 1);
 }
-function rootFor(entity: WorldEntity, labelHeight?: number): THREE.Group {
+export function rootFor(entity: WorldEntity, labelHeight?: number): THREE.Group {
     const root = new THREE.Group(); root.name = `omo-entity:${entity.id}`;
     root.userData.entity = entity.id; root.userData.kind = entity.kind;
     if (entity.kind !== 'decor') root.userData.workstation = entity.id;
@@ -66,8 +66,8 @@ export function buildStation(entity: StationEntity, jungle: boolean, texture: TH
     return { root: group, screen, lamp };
 }
 
-/** The desk's name plate: on the front apron under the desk top, facing the walkway. */
-function namePlate(group: THREE.Object3D, entity: StationEntity): void {
+/** The desk's name plate: on the front apron under the desk top, facing the walkway. sky:merge — `at` places it on a kit desk. */
+export function namePlate(group: THREE.Object3D, entity: StationEntity, at: { y: number; z: number; scale: number } = { y: 0.99, z: 0.635, scale: 1 }): void {
     const { canvas, texture } = canvasTexture(512, 80);
     const c = canvas.getContext('2d');
     if (c) {
@@ -80,9 +80,10 @@ function namePlate(group: THREE.Object3D, entity: StationEntity): void {
         c.fillText(entity.station.locked ? 'LOCKED' : (entity.station.profile ?? entity.station.kind).slice(0, 18).toUpperCase(), 496, 42);
         texture.needsUpdate = true;
     }
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.15), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
-    plate.position.set(0, 0.99, 0.635); plate.userData.ownsMap = true; plate.userData.namePlate = entity.id; group.add(plate);
-    box(group, [1.0, 0.19, 0.03], [0, 0.99, 0.615], 0x2a3644);
+    const k = at.scale;
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.96 * k, 0.15 * k), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
+    plate.position.set(0, at.y, at.z); plate.userData.ownsMap = true; plate.userData.namePlate = entity.id; group.add(plate);
+    box(group, [1.0 * k, 0.19 * k, 0.03], [0, at.y, at.z - 0.02], 0x2a3644);
 }
 
 /** Video-wall look: one screen fitted 16:9 inside the wall, thin seams in a grid over it. */

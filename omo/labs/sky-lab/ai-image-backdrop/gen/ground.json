@@ -1,0 +1,13 @@
+{
+ "model": "segmind/tiny-sd",
+ "seed": 3,
+ "size": [
+  2048,
+  2048
+ ],
+ "prompt": "RAW photo, satellite view looking straight down on Manhattan at night, orthographic top-down aerial photograph, dense city blocks and flat rooftops, rooftop water tanks, avenues glowing with orange street lights, white and red car light trails on the streets, 8k, highly detailed, sharp focus",
+ "negative": "text, watermark, logo, letters, people, blurry, cartoon, painting, illustration, cgi, perspective, horizon, sky, skyline, tilt, fisheye, frame, border, low quality",
+ "cfg": 7.0,
+ "pass2_strength": 0.4,
+ "seconds": 115.2
+}
