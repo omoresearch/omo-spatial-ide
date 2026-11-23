@@ -40,6 +40,9 @@ import { decorKitPlan, fitKitDecor } from './world-scene-decor'; // beauty:found
 import { dressingBlocks, dressRoom, roomDressing } from './world-scene-dressing'; // beauty r2 (5): set-dressed rooms
 import { isKnownModule, ModuleRoomLoader, moduleBlocks } from './world-scene-module-room'; // room modules
 import { MODULES, pickModule } from '../common/room-modules'; // room modules
+import { arrivalPose, fadeGlide, floorAt, floorMover, FloorRail, floorVisibility, railEntries } from './world-scene-floors'; // HQ floors
+import { floorRooms } from '../common/world-model'; // HQ floors
+import { HQ_ID } from '../common/hq-floors'; // HQ floors
 import { LIGHT_RIG } from './world-look'; // beauty:foundation
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'; // beauty:foundation
 import type { StyleKit } from '../common/world-style-kits'; // sky:merge M1
@@ -290,6 +293,8 @@ export class RoomScene {
     private kitLoaders = new Map<string, SkylineKitLoader>();
     private moduleLoader?: ModuleRoomLoader; // room modules — the baked library/lounge/studio rooms
     private moduleErrors: string[] = [];
+    private rail?: FloorRail; // HQ floors — the left room rail
+    private floorId = HQ_ID; // HQ floors — where the camera is
     /** beauty:foundation — loads CC0 kit props for decor in EVERY world (not only kit worlds); never builds a shell. */
     private propLoader?: SkylineKitLoader;
     /** beauty:foundation — the one light rig's environment probe (reflections on brass, glass, oak) for non-kit worlds. */
@@ -576,7 +581,7 @@ export class RoomScene {
             }
             if (item) { this.worldRoot.remove(item.built.root); disposeTree(item.built.root); this.screens.delete(entity.id); this.lamps.delete(entity.id); }
             const built = this.buildEntity(entity, jungle, standing, onKit ? kit : undefined, kitShell ? kit : undefined, lines);
-            if (world.shell.theme === 'skyline' && !onKit) restyleForSkyline(built.root); // sky:render
+            if (world.shell.theme === 'skyline' && !onKit && !(entity.kind === 'station' && floorAt(world, entity.transform))) restyleForSkyline(built.root); // sky:render (HQ floors: module desks keep the kit screen)
             this.worldRoot.add(built.root); freezeTree(built.root);
             this.entities.set(entity.id, { entity, key, built, label: item?.label });
             if (built.screen) { built.screen.userData.screenOf = entity.id; built.screen.userData.screenKind = entity.kind; this.screens.set(entity.id, built.screen); }
@@ -598,6 +603,7 @@ export class RoomScene {
             this.walker.home = kitShell ? { x: kit!.spawn.x, z: kit!.spawn.z, yaw: kit!.spawn.yaw, pitch: kit!.spawn.pitch ?? 0 } : worldHome(world.shell, world.entities);
             const firstKit = !!kitShell && this.homeKey !== `kit:${world.name}`; // world-ui (2): a kit world starts at the kit's desk view once
             if (firstOpen || firstKit) { this.homeKey = firstKit ? `kit:${world.name}` : world.name; this.walker.pose = { ...this.walker.home }; this.walker.reset(); }
+            if (floorRooms(world).length) { const base = this.walker.mover, home = this.walker.home; const floorBase = worldMover({ ...world, shell: { ...world.shell, open: true, width: 1000, depth: 1000 } }, [...dressingBlocks({ ...world, entities: world.entities.filter(e => !(e.kind === 'room' && roomModule(e))) }), ...moduleRoomBlocks(world)]); this.walker.mover = floorMover(world, base, floorBase, () => ({ ...home }), () => queueMicrotask(() => this.floorChanged())); } // HQ floors
         }
         this.roomScale = worldScale(world.shell);
         this.shadowKey = ''; this.applyScaleView(); // w3:render — fog, clip planes and the sun's shadow box for this world size
@@ -609,6 +615,8 @@ export class RoomScene {
         canvas.dataset.worldShell = JSON.stringify({ width: world.shell.width, depth: world.shell.depth, open: !!world.shell.open }); // w3:test
         canvas.dataset.worldRooms = JSON.stringify(world.entities.filter(e => e.kind === 'room').map(e => e.id)); // w3:test
         this.publishModules(); // room modules test hook
+        if (this.renderer) { this.rail ??= new FloorRail(this.host, id => this.goFloor(id)); } // HQ floors
+        queueMicrotask(() => this.floorChanged()); // HQ floors: rail, visibility, city centre
         canvas.dataset.styleKit = kit ? (kitShell ? kit.id : this.kitMissing.has(kit.id) ? 'missing' : 'loading') : ''; // sky:merge M1 — test hook
         canvas.dataset.kitStations = JSON.stringify(kitShell ? stations.filter(e => this.onKitAnchor(kit!, e)).map(e => e.id) : []);
         canvas.dataset.deskPositions = JSON.stringify(Object.fromEntries(stations.map(e => [e.id, { x: e.transform.x, z: e.transform.z }])));
@@ -881,7 +889,9 @@ export class RoomScene {
                 if (!surface) { surface = this.terminalSurface(); this.terminalSurfaces.set(entity.id, surface); }
                 const card = { name: (entity.label ?? entity.station.name).slice(0, 26), tabs: entity.station.tabs.map(t => t.name).join(' · ').slice(0, 40), start: (entity.station.tabs[0]?.name ?? 'Shell').slice(0, 24) }; /* world-ui (g) */ const renamed = !!surface.card && (surface.card.name !== card.name || surface.card.tabs !== card.tabs || surface.card.start !== card.start);
                 if (surface.card?.name !== card.name || surface.card?.tabs !== card.tabs || surface.card?.start !== card.start) { surface.card = card; surface.layout = undefined; }
-                const built = deskKit ? buildKitStation(entity, deskKit, surface.texture) : buildStation(entity, jungle, surface.texture); // sky:merge M1
+                const floor = this.world ? floorAt(this.world, entity.transform) : undefined; // HQ floors: a studio desk is the baked bench seat; draw only its live screen
+                const moduleDesk = floor && roomModule(floor) === 'studio' ? { deskScreen: { y: 1.1, z: -0.236, width: 0.69, height: 0.4 } } : undefined;
+                const built = deskKit ? buildKitStation(entity, deskKit, surface.texture) : moduleDesk ? buildKitStation(entity, moduleDesk, surface.texture) : buildStation(entity, jungle, surface.texture); // sky:merge M1
                 // world-ui r4/3: a renamed desk (the starter world replacing the default one) repaints its card at once: one name, from the world model.
                 if (renamed) surface.frame = undefined;
                 if (!surface.frame) { this.terminalFrames[entity.id] ??= { lines: [] }; queueMicrotask(() => { if (!this.disposed && this.terminalSurfaces.get(entity.id) === surface) this.setTerminalFrame(this.terminalFrames[entity.id] ?? { lines: [] }, entity.id as TerminalWorkstation); }); }
@@ -919,6 +929,7 @@ export class RoomScene {
                         const sign = built.root.userData.roomSign as THREE.Object3D | undefined;
                         for (const c of [...built.root.children]) if (c !== sign) c.visible = false; // the code-built shell stays as the fallback only
                         root.traverse(n => { n.userData.entity = entity.id; });
+                        if (entity.floor) root.traverse(n => { if (n.userData.part === 'module-ext') n.visible = false; }); // HQ floors: never seen from outside; its back face would cover the glass
                         built.root.add(root); built.root.userData.moduleReady = moduleId; this.publishModules();
                         refreezeNode(built.root); this.applyKitView(); this.renderer.shadowMap.needsUpdate = true; this.invalidate();
                     }, error => { this.moduleErrors.push(`${moduleId}: ${error instanceof Error ? error.message : String(error)}`.slice(0, 200)); this.publishModules(); console.warn(`[omo] room module ${moduleId} not loaded, using the built room:`, error instanceof Error ? error.message : error); });
@@ -1174,6 +1185,7 @@ export class RoomScene {
     }
     /** After the player walked >= 1 m: move the sun's shadow box and repaint parked screens that are near again. No work (or allocation) in between. */
     private walked(pose: PlayerPose): void {
+        this.floorChanged(pose); // HQ floors
         if (Math.hypot(pose.x - this.parkCheck.x, pose.z - this.parkCheck.z) < 1) return;
         this.parkCheck.x = pose.x; this.parkCheck.z = pose.z;
         this.followSun();
@@ -1182,6 +1194,35 @@ export class RoomScene {
         for (const [id, surface] of this.linkedSurfaces) if (surface.parked && !this.farScreen(id, surface)) { surface.parked = false; linked = true; }
         if (linked) this.paintLinked();
         this.publishParked();
+    }
+    /** HQ floors — glide to the HQ (penthouse) or a floor: fade, stand at its door facing the glass, walk mode. */
+    goFloor(id: string): void {
+        const world = this.world; if (!world || !this.walker) return;
+        const hq = this.walker.home ?? PLAYER_HOME;
+        fadeGlide(this.host, () => {
+            if (this.navigation !== 'walk') (this.host.ownerDocument.querySelector('[data-testid="walk-mode"]') as HTMLElement | null)?.click();
+            if (this.navigation !== 'walk') this.setNavigation('walk');
+            this.standAt(arrivalPose(world, id, hq)); this.floorChanged();
+        });
+    }
+    /** HQ floors — which floor the camera is on; show only it (or the HQ), re-centre the city, repaint the rail. */
+    private floorChanged(pose?: PlayerPose): void {
+        const world = this.world; if (!world) return;
+        const floors = floorRooms(world);
+        const p = pose ?? (this.navigation === 'walk' && this.walker ? this.walker.pose : { x: this.camera.position.x, z: this.camera.position.z });
+        const here = floors.length ? floorAt(world, p) : undefined, id = here?.id ?? HQ_ID;
+        this.rail?.render(railEntries(world), id);
+        if (!floors.length) { this.floorId = HQ_ID; return; }
+        const roots = new Map([...this.entities].map(([k, v]) => [k, v.built.root] as const));
+        floorVisibility(world, here, roots);
+        for (const [k, v] of this.entities) if (v.label) v.label.style.visibility = roots.get(k)?.visible === false ? 'hidden' : '';
+        const kit = activeKit(world), shell = kit ? this.kitShells.get(kit.id) : undefined;
+        if (shell) {
+            const baked = shell.root.getObjectByName('omo-kit-baked'); if (baked) baked.visible = !here;
+            shell.root.userData.setPanoShift?.(here ? here.transform.x : 0, here ? here.transform.z : 0);
+        }
+        if (id !== this.floorId) { this.floorId = id; this.setData('floor', id); this.renderer.shadowMap.needsUpdate = true; }
+        this.invalidate();
     }
     /** room modules test hook: rooms that want a module and rooms whose module is on screen. */
     private publishModules(): void {
@@ -1758,6 +1799,7 @@ export class RoomScene {
         this.lookEnv?.dispose();this.lookEnv=undefined; // beauty:foundation
         this.neutralSky?.dispose();this.neutralSky=undefined; // promise:onboarding
         for(const k of this.kitShells.values()){if(k.root.parent!==this.worldRoot)disposeTree(k.root);k.env.dispose();}this.kitShells.clear(); // sky:merge M1
+        this.rail?.dispose(); // HQ floors
         if(this.renderer){this.renderer.dispose();this.renderer.domElement.remove();}
     }
 }

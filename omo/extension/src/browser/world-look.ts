@@ -553,7 +553,7 @@ export function lookCityBackdrop(colorTex: THREE.Texture, depthTex: THREE.Textur
     tag(mat, 'city', false);
     const m = new THREE.Mesh(new THREE.SphereGeometry(50, 64, 32), mat);
     m.name = 'omo-kit-backdrop'; m.frustumCulled = false; m.renderOrder = -10; m.raycast = () => undefined;
-    m.onBeforeRender = (_r, _s, camera) => { m.position.copy(camera.position); m.updateMatrix(); m.updateMatrixWorld(true); };
+    m.onBeforeRender = (_r, _s, camera) => { m.userData.drawn = (m.userData.drawn ?? 0) + 1; m.position.copy(camera.position); m.updateMatrix(); m.matrixWorld.copy(m.matrix); }; // HQ floors: the sphere sits on the camera in WORLD space (set directly: frozen trees skip updateMatrixWorld), so it surrounds the camera on any floor
     return m;
 }
 /** City panorama textures, prepared like the kit loader does (no mips, raw values; nearest for the depth). */

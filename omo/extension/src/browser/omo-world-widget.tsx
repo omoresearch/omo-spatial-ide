@@ -14,6 +14,7 @@ import { exportRoomPreset, parseRoomPreset, ROOM_PRESET_FILENAME, ROOM_PRESET_MA
 import { exportWorldPreset, exportStationSetupPreset, parseAnyRoomPreset, stationConfigFromSetup, WORLD_PRESET_FILENAME, WORLD_PRESET_MAX_BYTES } from '../common/world-preset'; // w2:templates
 import { validateWorld, worldFromRoomV1, worldStorageKey } from '../common/world-model'; // w2:templates
 import type { WorldOp, WorldSpec } from '../common/world-model'; // w2:templates; t2:regress WorldOp
+import { hqFloorOps, railEntries } from '../common/hq-floors'; // HQ floors
 import { WorldPresetPanel } from './world-preset-panel'; // w2:templates
 import { ROOM_LAYOUTS, ROOM_KITS } from '../common/player-state';
 import type { RoomLayoutId, RoomKitId, PlayerPose } from '../common/player-state';
@@ -422,7 +423,7 @@ export class OmoWorldWidget extends ReactWidget {
         // --- omo immersive lane (mount hook): the room fills the window while a saved room shows. ---
         const offImmersive = this.immersive.mode.subscribe(() => this.update());
         this.toDispose.push({ dispose: () => { offImmersive(); this.immersive.mode.setEngaged(false); } });
-        this.bindPaletteKeys(); // world-ui
+        this.bindPaletteKeys(); this.bindFloorKeys(); // world-ui; HQ floors
         // --- end omo immersive lane ---
         // --- omo parity2 lane (mount hook): read-only getters; goToDesk is the same path as clicking the desk. Starts nothing. ---
         // w2:agents: real agent signals (read-only) feed the notifications hub; the screen hint stays the fallback.
@@ -517,6 +518,22 @@ export class OmoWorldWidget extends ReactWidget {
         window.addEventListener('keydown', key, true); window.addEventListener(PALETTE_TOGGLE_EVENT, toggle);
         this.toDispose.push({ dispose: () => { window.removeEventListener('keydown', key, true); window.removeEventListener(PALETTE_TOGGLE_EVENT, toggle); } });
     }
+    /** HQ floors: add the seed floors (Library, Lounge, Studio with 3 live shell desks) in one undoable step, then glide to the first. */
+    private makeHqFloors = (): void => {
+        const store = this.currentWorldStore(); if (!store) return;
+        const ops = hqFloorOps(store.world); if (!ops.length) return;
+        const r = store.propose({ source: 'admin', summary: 'Make HQ floors', ops });
+        if (r.ok) { const a = store.apply(); if (!a.ok) this.error = a.error; else this.feedback = 'HQ floors added: Library, Lounge and Studio. Use the rail on the left.'; } else this.error = r.error;
+        this.closePalette(); this.update();
+    };
+    private bindFloorKeys(): void { // HQ floors: Ctrl/Cmd+1..9 = rail entry n
+        const key = (event: KeyboardEvent): void => {
+            if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || !/^[1-9]$/.test(event.key)) return;
+            const w = this.currentWorldStore()?.world; const entries = w ? railEntries(w) : []; const e = entries[Number(event.key) - 1];
+            if (!e) return; event.preventDefault(); event.stopImmediatePropagation(); this.worldScene?.goFloor(e.id);
+        };
+        window.addEventListener('keydown', key, true); this.toDispose.push({ dispose: () => window.removeEventListener('keydown', key, true) });
+    }
     // --- promise:share (L7): Share this world / Open a world file / Build a world from data. ---
     private dataDialogOpen = false;
     /** Shared room: only an owner or builder may change the world. Local: always. */
@@ -608,6 +625,9 @@ export class OmoWorldWidget extends ReactWidget {
             out.push({ id: 'world-share', group: 'World', label: 'Share this world', hint: 'Download a .omo-world.json file', icon: 'users', run: this.shareThisWorld },
                 { id: 'world-open', group: 'World', label: 'Open a world file', hint: why ?? 'Import as a new world (Apply keeps it)', icon: 'window', disabled: !edit, run: this.openWorldFilePicker },
                 { id: 'world-from-data', group: 'World', label: 'Build a world from data', hint: why ?? 'CSV file or repo folder', icon: 'plus', disabled: !edit, run: this.openDataDialog }); }
+        { const w = this.currentWorldStore()?.world; // HQ floors: seed the HQ floors; 'Go to <room>' for each floor
+            if (w) out.push({ id: 'hq-floors', group: 'World', label: 'Make HQ floors', hint: 'Library, Lounge and Studio, each its own floor above the city', icon: 'plus', disabled: !this.canEditWorld() || !hqFloorOps(w).length, run: this.makeHqFloors });
+            for (const e of w ? railEntries(w) : []) out.push({ id: `go-floor-${e.id}`, group: 'Rooms', label: `Go to ${e.label}`, icon: 'walk', run: () => this.worldScene?.goFloor(e.id) }); }
         out.push(
             { id: 'chat', group: 'People', label: 'Room chat', keys: 'Enter', icon: 'chat', disabled: !this.hudHub, run: () => { this.hudHub?.chat.setOpen(true); this.hudHub?.focusChat?.(); } },
             { id: 'voice', group: 'Voice', label: voiceOn ? (v?.voice.muted ? 'Unmute' : 'Mute') : 'Turn on voice', keys: voiceOn ? 'M' : undefined, icon: 'mic',

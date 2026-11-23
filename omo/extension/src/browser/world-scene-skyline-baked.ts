@@ -177,6 +177,7 @@ export class SkylineKitLoader {
         const bu = (backdrop.material as THREE.ShaderMaterial).uniforms;
         root.userData.setOverview = (on: boolean): void => { bu.knee.value = on ? 2.6 : 0; if (!on) bu.horizon.value = 2; }; // world-ui r4/5
         root.userData.setHorizon = (y: number): void => { bu.horizon.value = y; };
+        { const c0 = (bu.C.value as THREE.Vector3).clone(); root.userData.setPanoShift = (dx: number, dz: number): void => { (bu.C.value as THREE.Vector3).set(c0.x + dx, c0.y, c0.z + dz); }; } // HQ floors: the city panorama re-centred on the floor you stand on
         const off = lookScreenOff();
         const cache = new Map<string, THREE.Material>();
         let triangles = 0;

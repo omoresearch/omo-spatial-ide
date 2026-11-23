@@ -79,7 +79,7 @@ export class ModuleRoomLoader {
             mesh.raycast = () => undefined; // the IDE entities (desks, boards, signs) own every click and sightline; baked walls never block them
             if (/^EmitScreen/.test(m0.name)) { mesh.material = off; return; }
             if (grp === 'LM_SHEER') { const s = m0.clone(); s.transparent = true; s.opacity = Math.min(s.opacity, 0.55); s.depthWrite = false; s.clippingPlanes = [this.wallCut]; mesh.material = adoptKitMaterial(s, 'sheer'); return; }
-            if (grp === 'LM_ARCH' || grp === 'LM_EXT' || grp === 'LM_FLOOR') mesh.userData.part = grp === 'LM_FLOOR' ? 'module-floor' : 'module-arch'; // LM_EXT: outer wall faces (no bake: plain material)
+            if (grp === 'LM_ARCH' || grp === 'LM_EXT' || grp === 'LM_FLOOR') mesh.userData.part = grp === 'LM_FLOOR' ? 'module-floor' : grp === 'LM_EXT' ? 'module-ext' : 'module-arch'; // LM_EXT: outer wall faces (no bake: plain material)
             const key = `${grp}/${m0.name}`;
             if (!cache.has(key)) { const m = bakedMaterial(m0, grp, maps); m.envMap = env; m.clippingPlanes = [grp === 'LM_ARCH' || grp === 'LM_EXT' ? this.wallCut : this.cut]; cache.set(key, m); }
             mesh.material = cache.get(key)!;
