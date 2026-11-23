@@ -21,7 +21,7 @@ import type { Footprint } from './world-scene-collision';
 import { entityRect } from './world-scene-collision';
 import { ROOM_DOOR_WIDTH, ROOM_WALL_THICKNESS, roomDoors } from './world-scene-rooms';
 import { buildDecor, fitKitDecor, KitPlace, seeded } from './world-scene-decor';
-import { lightPool } from './world-look';
+import { lampLight, lightPool } from './world-look';
 
 export type DressPreset = 'library' | 'lounge' | 'work' | 'garden' | 'generic';
 
@@ -266,7 +266,7 @@ export async function dressRoom(root: THREE.Object3D, dressing: RoomDressing, pr
         } else {
             const plan = p.plan, models = await Promise.all(plan.map(k => props.prop(k.id)));
             fitKitDecor(holder, plan, models); n += plan.length;
-            if (p.lamp) { const pool = lightPool(0.9); pool.position.set(0.55, 0, 0); holder.add(pool); }
+            if (p.lamp) { const pool = lightPool(0.9); pool.position.set(0.1, 0, 0.15); holder.add(pool); const l = lampLight(); l.position.set(0.05, 1.25, 0.15); holder.add(l); } // beauty r3 (1): the lamp emits
         }
         if (p.hang) holder.userData.part = 'wall-art';
         holder.traverse(o => { o.raycast = () => undefined; });

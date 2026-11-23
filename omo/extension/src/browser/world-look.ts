@@ -64,8 +64,24 @@ export const LIGHT_RIG = {
     hemi: { sky: 0xdfe8f0, ground: 0x3a3128, intensity: 1.6 },
     key: { color: 0xffe2bf, intensity: 3.2 },
     fill: { color: 0xffc690, intensity: 16 },
-    skyline: { hemiSky: 0x8fa2d8, hemiGround: 0x2a2020, hemi: 1.4, key: 0xffb27a, keyIntensity: 2.0, fill: 0xffc68a, fillIntensity: 16, exposure: 1.0, env: 0.5 }
+    // beauty r3 (1): a warm key (the sun through the glass, soft shadows) against a cool, LOW-saturation sky fill, so a
+    // wall facing the key and a wall facing away differ in brightness, not in hue; AgX tone mapping (filmic, no hue skew).
+    skyline: { hemiSky: 0xc4cddb, hemiGround: 0x4a3c30, hemi: 1.25, key: 0xffd6b0, keyIntensity: 2.4, fill: 0xffcf9e, fillIntensity: 14, exposure: 1.3, env: 0.5 },
+    /** beauty r3 (1): every lamp prop emits — a warm point light at its shade (candela, metres). */
+    lamp: { color: 0xffc483, intensity: 4.2, distance: 5.5, decay: 2, bulb: 6 },
+    /** beauty r3 (1): one tone mapping for every runtime world. */
+    toneMapping: THREE.AgXToneMapping
 } as const;
+
+/** beauty r3 (1) — a loaded kit lamp's bulb glows (its '_light' material: emissive, above the bloom threshold). */
+export function lampGlow(root: THREE.Object3D): void {
+    root.traverse(o => { const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (m && !Array.isArray(m) && /_light$/.test(m.name) && m.emissive) { m.emissive.setHex(LIGHT_RIG.lamp.color); m.emissiveIntensity = LIGHT_RIG.lamp.bulb; } });
+}
+/** beauty r3 (1) — the light a lamp prop gives off (warm, short reach, no shadow map: contact shadows come from AO). */
+export function lampLight(): THREE.PointLight {
+    const L = LIGHT_RIG.lamp, p = new THREE.PointLight(L.color, L.intensity, L.distance, L.decay);
+    p.name = 'omo-lamp-light'; p.userData.part = 'lamp-light'; return p;
+}
 
 /** Scene background / light colours of the classic (closed) shells. */
 export const SHELL_COLORS = {

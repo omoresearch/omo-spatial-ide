@@ -332,7 +332,7 @@ export class RoomScene {
         // The room is static: draw the shadow map once, and again only when something that casts moves.
         this.renderer.shadowMap.autoUpdate = false; this.renderer.shadowMap.needsUpdate = true;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMapping = LIGHT_RIG.toneMapping; // beauty r3 (1): AgX everywhere at runtime (the baked kit keeps its tuned ACES)
         this.renderer.toneMappingExposure = LIGHT_RIG.exposure; // beauty:foundation — one exposure
         const canvas = this.renderer.domElement;
         canvas.dataset.testid = 'omo-world-canvas';
@@ -345,7 +345,7 @@ export class RoomScene {
         const hemi = new THREE.HemisphereLight(colors.hemiSky, 0x283136, 2.3); this.scene.add(hemi);
         const sun = new THREE.DirectionalLight(colors.sun, 4);
         sun.position.set(-5, 12, 8); sun.castShadow = true;
-        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.mapSize.set(4096, 4096); // beauty r3 (1): crisper soft furniture shadows (the map is redrawn only on change)
         Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
         sun.shadow.bias = -0.001; sun.shadow.normalBias = 0.025;
         this.scene.add(sun);
@@ -779,7 +779,7 @@ export class RoomScene {
     private applySkyline(on: boolean): void {
         if (on && !this.skyFx && this.renderer) {
             this.skyFx = new SkylineFx(this.renderer, this.scene, this.camera);
-            this.renderer.toneMappingExposure = 1.0;
+            this.renderer.toneMappingExposure = LIGHT_RIG.skyline.exposure;
         } else if (!on && this.skyFx) { this.skyFx.dispose(); this.skyFx = undefined; this.renderer.toneMappingExposure = LIGHT_RIG.exposure; }
         // beauty:foundation — the one light rig (world-look LIGHT_RIG): every non-kit world gets the same probe, key, fill and exposure.
         if (!on) this.useLookEnvironment();
@@ -817,7 +817,10 @@ export class RoomScene {
         shell?.root.userData.setOverview?.(overview); // world-ui r4/5: city backdrop below the floor only, highlights compressed
         if (this.skyFx) {
             this.skyFx.setBloom(kit ? (overview ? kit.render.overviewBloom : kit.render.bloom) : { strength: 0.3, radius: 0.4, threshold: 1.8 });
-            this.renderer.toneMappingExposure = kit && shell ? kit.render.exposure : 1.0;
+            this.renderer.toneMappingExposure = kit && shell ? kit.render.exposure : LIGHT_RIG.skyline.exposure;
+            this.renderer.toneMapping = kit && shell ? THREE.ACESFilmicToneMapping : LIGHT_RIG.toneMapping;
+            this.skyFx.setAO(!(kit && shell)); // beauty r3 (1): screen-space AO for runtime worlds; the baked kit has its own AO
+            this.renderer.domElement.dataset.ao = this.skyFx.aoOn ? 'gtao' : 'baked';
         }
         this.invalidate();
     }

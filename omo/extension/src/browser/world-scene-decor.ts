@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import type { DecorKind } from '../common/world-model';
 import { kitProp } from '../common/world-style-kits';
 import { mesh, part, rod, slab } from './world-scene-kit';
-import { aoDecal, lightPool, look, lookInk, lookPaper, lookPlate, paintNote, paintWindowView } from './world-look';
+import { aoDecal, lampGlow, lampLight, lightPool, look, lookInk, lookPaper, lookPlate, paintNote, paintWindowView } from './world-look';
 
 /** Small deterministic PRNG from an id. */
 export function seeded(id: string): () => number {
@@ -66,6 +66,7 @@ export function fitKitDecor(group: THREE.Object3D, plan: readonly KitPlace[], mo
         shelf = holder;
     });
     group.userData.kitProps = plan.map(p => p.id);
+    lampGlow(group);
 }
 /** Book sets on every shelf board of a shelving unit (found by casting rays down through it). */
 function shelveBooks(group: THREE.Object3D, shelf: THREE.Object3D, books: THREE.Object3D): void {
@@ -103,7 +104,7 @@ export function buildDecor(kind: DecorKind, id: string, jungle: boolean, note?: 
     const f = new THREE.Group(); f.userData.fallback = !APPROVED_FALLBACK.has(kind); f.name = 'omo-decor-standin'; g.add(f);
     switch (kind) {
         case 'plant': plant(f, rnd); g.add(aoDecal(1.0, 1.0)); break;
-        case 'lamp': lamp(f); g.add(lightPool(0.9)); break;
+        case 'lamp': { lamp(f); g.add(lightPool(0.9)); const l = lampLight(); l.position.set(0.05, 1.3, 0.12); g.add(l); break; } // beauty r3 (1): the lamp emits
         case 'crystal': crystal(f, rnd); g.add(aoDecal(1.1, 1.0)); break;
         case 'sofa': sofa(f); g.add(aoDecal(2.8, 1.4)); break;
         case 'bookshelf': bookshelf(f, rnd); g.add(aoDecal(2.0, 0.8)); break;
