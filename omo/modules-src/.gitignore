@@ -3,3 +3,4 @@ logs/
 __pycache__/
 assets/city.exr
 *.blend1
+gen/city_clean.exr
