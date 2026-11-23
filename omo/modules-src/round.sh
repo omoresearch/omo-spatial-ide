@@ -7,6 +7,6 @@ for id in ${IDS:-lounge studio library}; do
   $B -b --factory-startup -P build_module.py -- $id > logs/build_${id}_${TAG}.log 2>&1
   grep -E "BUILD OK|Error|Traceback" logs/build_${id}_${TAG}.log | head -5
   grep -q "BUILD OK" logs/build_${id}_${TAG}.log || { echo "BUILD FAILED $id"; continue; }
-  $B -b work/$id/scene.blend -P preview.py -- previews/${id}_${TAG}.png $S door ${YAW:-0} 2>&1 | grep -E "PREVIEW|Error|falling back"
+  $B -b work/$id/scene.blend -P preview.py -- previews/${id}_${TAG}.png $S door ${YAW:-auto} 2>&1 | grep -E "PREVIEW|Error|falling back"
 done
 echo ALLDONE

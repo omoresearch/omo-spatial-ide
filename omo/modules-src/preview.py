@@ -7,7 +7,10 @@ import bpy, sys, os, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import gpu_setup
 a = sys.argv[sys.argv.index('--') + 1:]
-out = a[0]; S = int(a[1]) if len(a) > 1 else 128; view = a[2] if len(a) > 2 else 'door'; YAW = float(a[3]) if len(a) > 3 else 0.0
+out = a[0]; S = int(a[1]) if len(a) > 1 else 128; view = a[2] if len(a) > 2 else 'door'
+MOD = os.path.basename(os.path.dirname(os.path.abspath(bpy.data.filepath)))
+# r5d: 'auto' (default) = per-module yaw: the lounge turns 6 deg left to centre its conversation group
+YAW = float(a[3]) if len(a) > 3 and a[3] != 'auto' else {'lounge': 6.0}.get(MOD, 0.0)
 sc = bpy.context.scene; gpu_setup(sc, S)
 sc.cycles.max_bounces = 8; sc.cycles.diffuse_bounces = 5; sc.cycles.glossy_bounces = 3; sc.cycles.sample_clamp_indirect = 8.0
 sc.cycles.use_denoising = True
@@ -19,7 +22,7 @@ else:
     co.location = (7.3, 0.6, 1.7); co.rotation_euler = (math.radians(82), 0, math.radians(38))
 sc.render.resolution_x, sc.render.resolution_y, sc.render.resolution_percentage = 1440, 900, 100
 sc.view_settings.view_transform = 'AgX'; sc.view_settings.look = os.environ.get('LOOK', 'AgX - Medium High Contrast')
-sc.view_settings.exposure = float(os.environ.get('EXPO', '0.25'))
+sc.view_settings.exposure = float(os.environ.get('EXPO', '0.1'))
 AO = float(os.environ.get('AO_MIX', '0.55'))
 if AO > 0:
     vl = sc.view_layers[0]; vl.use_pass_ambient_occlusion = True
