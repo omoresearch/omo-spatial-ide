@@ -326,12 +326,14 @@ def downlight(x, y, power=6.0, cone=70):
     cyl(f'DLtrim_{x:.2f}_{y:.2f}', (x, y, H - 0.004), 0.045, 0.008, 'EmitDown', 'EMIT', seg=24)
     light(f'DL_{x:.2f}_{y:.2f}', 'SPOT', (x, y, H - 0.01), power, (1.0, 0.62, 0.36), soft=0.03, cone=cone, blend=0.7)
 
-def pendant(k, x, y, z=1.65, r=0.24, energy=45):
-    """A drum pendant hung by a cord right over what it lights; the light is inside the open-bottom shade."""
-    cyl(f'Pend{k}', (x, y, z), r, 0.24, 'EmitShade', 'EMIT', seg=48, r2=r * 0.96, caps=False)
-    cyl(f'PendTop{k}', (x, y, z + 0.118), r * 0.96, 0.006, 'BlackMetal', seg=48)
-    cyl(f'PendDiff{k}', (x, y, z - 0.08), r * 0.85, 0.004, 'EmitDown', 'EMIT', seg=48)
-    cyl(f'PendCord{k}', (x, y, (H + z + 0.12) / 2), 0.002, H - z - 0.12, 'Ceiling', seg=8)   # pale cord: reads against the bright glass   # r5d: hair-thin bronze, not a black line on the glass
+def pendant(k, x, y, z=1.65, r=0.24, energy=45, h=0.24):
+    """A drum pendant hung by a cord right over what it lights; the light is inside the open-bottom shade.
+    z = shade centre, h = shade height (bottom at z - h/2; a taller drum = a shorter visible cord)."""
+    hh = h / 2
+    cyl(f'Pend{k}', (x, y, z), r, h, 'EmitShade', 'EMIT', seg=48, r2=r * 0.96, caps=False)
+    cyl(f'PendTop{k}', (x, y, z + hh - 0.002), r * 0.96, 0.006, 'BlackMetal', seg=48)
+    cyl(f'PendDiff{k}', (x, y, z - hh + 0.04), r * 0.85, 0.004, 'EmitDown', 'EMIT', seg=48)
+    cyl(f'PendCord{k}', (x, y, (H + z + hh) / 2), 0.002, H - z - hh, 'Ceiling', seg=8)   # pale cord: reads against the bright glass   # r5d: hair-thin bronze, not a black line on the glass
     cyl(f'PendCanopy{k}', (x, y, H - 0.015), 0.06, 0.03, 'BlackMetal', seg=24)
     light(f'PendLight{k}', 'POINT', (x, y, z + 0.02), energy, WARM, soft=0.08)
 
@@ -674,7 +676,7 @@ elif MID == 'lounge':
     table_lamp(1, GX - 1.95, SY - 0.10, 0.55, energy=40)
     cc0('side_table_01', (GX + 1.92, SY - 0.10, 0), math.pi / 2)
     cc0('ceramic_vase_01', (GX + 1.92, SY - 0.10, 0.55), 0.0, 0.7)
-    pendant(0, CTX, CTY, 2.30, 0.36, 75)
+    pendant(0, CTX, CTY, 2.30, 0.36, 75, h=0.40)   # r6: bottom at 2.10 m, taller drum -> cord 0.90 m (was 0.98)
     canvas_on_wall('CanvasSofa', 'left', 3.60, 1.60, 1.15, 1.70, 'CanvasW'); WALL_ART = 'left'
     # a slim walnut bench under the artwork (grounds it on the wall) with a stack of books
     box('ArtBench', (IX0 + 0.22, 3.60, 0.22), (0.36, 1.6, 0.04), 'Walnut', bevel=0.004)
