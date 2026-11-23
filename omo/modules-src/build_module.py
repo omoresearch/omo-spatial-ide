@@ -298,7 +298,7 @@ def light(name, kind, loc, energy, color, soft=0.08, **kw):
     if kind == 'AREA': ld.shape = 'RECTANGLE'; ld.size = kw.get('sx', 1.0); ld.size_y = kw.get('sy', 0.05)
     lo = bpy.data.objects.new(name, ld); lo.location = loc; ROOM.objects.link(lo)
     if 'rot' in kw: lo.rotation_euler = kw['rot']
-    if kind == 'AREA': lo.visible_camera = False; lo.visible_glossy = False
+    if kind == 'AREA': lo.visible_camera = False; lo.visible_glossy = False; lo.visible_transmission = False   # r5g: the SkyFill plane showed through the glass as haze
     return lo
 
 def empty(name, loc, rotz, props=None):
@@ -331,7 +331,7 @@ def pendant(k, x, y, z=1.65, r=0.24, energy=45):
     cyl(f'Pend{k}', (x, y, z), r, 0.24, 'EmitShade', 'EMIT', seg=48, r2=r * 0.96, caps=False)
     cyl(f'PendTop{k}', (x, y, z + 0.118), r * 0.96, 0.006, 'BlackMetal', seg=48)
     cyl(f'PendDiff{k}', (x, y, z - 0.08), r * 0.85, 0.004, 'EmitDown', 'EMIT', seg=48)
-    cyl(f'PendCord{k}', (x, y, (H + z + 0.12) / 2), 0.0025, H - z - 0.12, 'Bronze', seg=8)   # r5d: hair-thin bronze, not a black line on the glass
+    cyl(f'PendCord{k}', (x, y, (H + z + 0.12) / 2), 0.002, H - z - 0.12, 'Ceiling', seg=8)   # pale cord: reads against the bright glass   # r5d: hair-thin bronze, not a black line on the glass
     cyl(f'PendCanopy{k}', (x, y, H - 0.015), 0.06, 0.03, 'BlackMetal', seg=24)
     light(f'PendLight{k}', 'POINT', (x, y, z + 0.02), energy, WARM, soft=0.08)
 
